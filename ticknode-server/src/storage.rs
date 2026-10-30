@@ -20,18 +20,18 @@ impl Storage {
     /// a corrupted file returns an error rather than overwriting it with an empty graph.
     pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<HashMap<NodeId, Position>> {
         if !self.path.exists() {
-            info!(path = %self.path.display(), "Файл графа не знайдено, починаємо з порожнього");
+            info!(path = %self.path.display(), "Graph file not found, starting with an empty graph");
             return Ok(HashMap::new());
         }
         let text = std::fs::read_to_string(&self.path)
-            .with_context(|| format!("не вдалось прочитати {}", self.path.display()))?;
+            .with_context(|| format!("failed to read {}", self.path.display()))?;
         let graph: GraphModel = serde_json::from_str(&text)
-            .with_context(|| format!("некоректний JSON графа у {}", self.path.display()))?;
+            .with_context(|| format!("invalid graph JSON in {}", self.path.display()))?;
 
         for warning in engine.load_graph(&graph) {
             warn!("{}", warning);
         }
-        info!(nodes = graph.nodes.len(), path = %self.path.display(), "Граф завантажено");
+        info!(nodes = graph.nodes.len(), path = %self.path.display(), "Graph loaded");
         Ok(graph.nodes.iter().map(|n| (n.id, n.position)).collect())
     }
 
@@ -47,8 +47,8 @@ impl Storage {
 /// Writes via a temporary file and rename so a crash mid-write does not corrupt the graph.
 fn write_atomic(path: &Path, contents: &str) -> anyhow::Result<()> {
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, contents).with_context(|| format!("не вдалось записати {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("не вдалось замінити {}", path.display()))?;
+    std::fs::write(&tmp, contents).with_context(|| format!("failed to write {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("failed to replace {}", path.display()))?;
     Ok(())
 }
 

@@ -246,11 +246,11 @@ pub fn Canvas() -> impl IntoView {
                     return;
                 }
                 if to.dir == from.dir {
-                    ed.log(LogKind::Error, t!("log-error-connect-same-dir"));
+                    ed.log(LogKind::Error, "[ERROR] Only an output can be connected to an input");
                     return;
                 }
                 if to.exec != from.exec {
-                    ed.log(LogKind::Error, t!("log-error-connect-exec-mismatch"));
+                    ed.log(LogKind::Error, "[ERROR] An exec pin can only be connected to an exec pin");
                     return;
                 }
                 let (out, inp) = if from.dir == PinDirection::Output { (from, to) } else { (to, from) };
@@ -677,7 +677,7 @@ fn NodeView(id: NodeId) -> impl IntoView {
         <div
             class="node"
             class:unavailable=move || unavailable.with(Option::is_some)
-            title=move || unavailable.get().unwrap_or_default()
+            title=move || unavailable.get().map(|m| i18n::ui_text(&m)).unwrap_or_default()
             data-node=id.0.to_string()
             class:missing=move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))
             class:selected=move || ed.is_selected(id)

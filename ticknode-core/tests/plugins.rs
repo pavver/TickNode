@@ -17,7 +17,7 @@ fn plugin_bytes(name: &str) -> Option<Vec<u8>> {
     match std::fs::read(&path) {
         Ok(bytes) => Some(bytes),
         Err(_) if std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none() => {
-            eprintln!("{} не знайдено — тест пропущено", path.display());
+            eprintln!("{} not found - test skipped", path.display());
             None
         }
         Err(e) => panic!("{}: {e}", path.display()),
@@ -193,7 +193,7 @@ fn run_until(engine: &mut TickEngine, mut done: impl FnMut(&TickEngine) -> bool)
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    panic!("умова не виконалась за 200 тактів");
+    panic!("the condition was not met within 200 ticks");
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn http_redirects_are_not_followed() {
     engine.trigger_node(weather, PinId(0));
     run_until(&mut engine, |e| e.execution_queue.contains(&(failure, PinId(0))));
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == weather && m.contains("HTTP 302")), "{:?}", engine.host_state.logs);
-    assert!(target_requests.try_recv().is_err(), "хост пішов за перенаправленням");
+    assert!(target_requests.try_recv().is_err(), "the host followed the redirect");
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn http_outside_granted_domains_is_denied() {
 
     assert!(engine.host_state.active_tasks.is_empty());
     assert!(engine.execution_queue.contains(&(failure, PinId(0))));
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == weather && m.contains("не має права")));
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == weather && m.contains("not allowed")));
 }
 
 fn crash_setup() -> Option<(TickEngine, NodeId, NodeId)> {
@@ -273,7 +273,7 @@ fn assert_recovers(trigger_pin: u32, reason: &str) {
     // A crash does not bring down the engine: the error is logged to the node's console.
     engine.trigger_node(crash, PinId(trigger_pin));
     engine.tick();
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Аварія плагіна") && m.contains(reason)), "{:?}", engine.host_state.logs);
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Plugin crashed") && m.contains(reason)), "{:?}", engine.host_state.logs);
 
     // Instance recreated: counter is reconstructed from properties (step 5) with fresh state.
     engine.trigger_node(counter, PinId(0));
@@ -284,7 +284,7 @@ fn assert_recovers(trigger_pin: u32, reason: &str) {
     engine.host_state.logs.clear();
     engine.trigger_node(crash, PinId(trigger_pin));
     engine.tick();
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("зупинена")));
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("stopped")));
 }
 
 #[test]
@@ -323,12 +323,12 @@ fn only_polling_plugin_nodes_are_polled() {
 
 #[test]
 fn plugin_panic_restarts_instance() {
-    assert_recovers(0, "паніка");
+    assert_recovers(0, "panic");
 }
 
 #[test]
 fn infinite_loop_is_stopped_by_fuel() {
-    assert_recovers(1, "ліміт обчислень");
+    assert_recovers(1, "compute limit");
 }
 
 #[test]
@@ -340,13 +340,13 @@ fn storage_is_isolated_plugin_directory() {
 
     let storage = NodeId::generate();
     engine.create_node(storage, "test/storage", &[]).unwrap();
-    constant(&mut engine, DataValue::String("привіт".into()), storage, 1);
+    constant(&mut engine, DataValue::String("hello".into()), storage, 1);
     engine.trigger_node(storage, PinId(0));
     engine.tick();
 
-    assert_eq!(output(&engine, storage, 2), Some(DataValue::String("привіт".into())));
+    assert_eq!(output(&engine, storage, 2), Some(DataValue::String("hello".into())));
     let file = root.path().join("test_plugin/note.txt");
-    assert_eq!(std::fs::read_to_string(file).unwrap(), "привіт");
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "hello");
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn storage_without_grant_is_unavailable() {
     engine.trigger_node(storage, PinId(0));
     engine.tick();
 
-    let Some(DataValue::String(result)) = output(&engine, storage, 2) else { panic!("немає результату") };
+    let Some(DataValue::String(result)) = output(&engine, storage, 2) else { panic!("no result") };
     assert!(result.starts_with("error:"), "{result}");
     assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
 }
@@ -379,7 +379,7 @@ fn mode_type() -> DataType {
 #[test]
 fn plugin_types_are_registered_with_make_and_break_nodes() {
     let Some(engine) = engine_with("test_plugin", vec![]) else { return };
-    let point = engine.types.get("test.point").expect("тип зареєстровано");
+    let point = engine.types.get("test.point").expect("the type is registered");
     assert!(point.is_struct());
     assert_eq!(point.color.as_deref(), Some("#e0a030"));
     assert_eq!(engine.types.get("test.mode").unwrap().values().len(), 2);
@@ -533,9 +533,9 @@ fn break_skips_missing_optional_field() {
     engine.connect_data(brk, PinId(3), probe, PinId(1)).unwrap();
     engine.trigger_node(probe, PinId(0));
     engine.tick();
-    let trace = engine.executed.iter().find(|t| t.node_id == probe).expect("debug виконався");
+    let trace = engine.executed.iter().find(|t| t.node_id == probe).expect("debug has run");
     assert_eq!(trace.inputs, vec![(PinId(1), None)]);
-    let trace = engine.executed.iter().find(|t| t.node_id == brk).expect("break обчислено");
+    let trace = engine.executed.iter().find(|t| t.node_id == brk).expect("break was evaluated");
     assert!(trace.outputs.iter().any(|(p, _)| *p == PinId(1)));
     assert!(!trace.outputs.iter().any(|(p, _)| *p == PinId(3)));
 }
@@ -607,7 +607,7 @@ fn make_requires_its_required_fields() {
     engine.create_node(make, "type/make/test.point", &[]).unwrap();
     let def = engine.node_definition(make).unwrap();
     let required: Vec<_> = def.pins.iter().filter(|p| p.required).map(|p| p.id).collect();
-    assert_eq!(required, [PinId(1), PinId(2)], "x і y обов'язкові, label — ні");
+    assert_eq!(required, [PinId(1), PinId(2)], "x and y are required, label is not");
 
     let probe = NodeId::generate();
     engine.create_node(probe, "test/debug", &[]).unwrap();
@@ -619,9 +619,9 @@ fn make_requires_its_required_fields() {
         engine.trigger_node(probe, PinId(0));
         engine.tick();
     }
-    let errors: Vec<_> = engine.host_state.logs.iter().filter(|(n, m)| *n == make && m.contains("обов'язковий вхід")).collect();
+    let errors: Vec<_> = engine.host_state.logs.iter().filter(|(n, m)| *n == make && m.contains("Required input")).collect();
     assert_eq!(errors.len(), 1, "{:?}", engine.host_state.logs);
-    assert!(errors[0].1.contains("«Y»"));
+    assert!(errors[0].1.contains("\"Y\""));
     let trace = engine.executed.iter().find(|t| t.node_id == probe).unwrap();
     assert_eq!(trace.inputs, vec![(PinId(1), None)]);
 
@@ -671,7 +671,7 @@ fn plugin_required_pin_is_respected() {
     engine.trigger_node(sink, PinId(0));
     engine.tick();
     assert_eq!(output(&engine, sink, 3), None);
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == sink && m.contains("«Point»")), "{:?}", engine.host_state.logs);
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == sink && m.contains("\"Point\"")), "{:?}", engine.host_state.logs);
 }
 
 #[test]
@@ -736,20 +736,22 @@ fn configure_is_called_and_its_error_is_reported() {
     // Enabling without token: configure rejects it, but the plugin remains operational
     let defaults = effective_settings(&manifest, &[]);
     engine.enable_plugin("test_plugin", &defaults).unwrap();
-    assert_eq!(engine.plugin_settings_error("test_plugin").as_deref(), Some("token не задано"));
+    assert_eq!(engine.plugin_settings_error("test_plugin").map(|e| e.key).as_deref(), Some("test-plugin-error-no-token"));
     let greeter = NodeId::generate();
     engine.create_node(greeter, "test/greeter", &[]).unwrap();
     assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Hello|quiet|no-token".into())));
 
     // New settings are applied without a restart
-    engine.configure_plugin("test_plugin", &effective_settings(&manifest, &test_settings("Привіт", "good"))).unwrap();
+    engine.configure_plugin("test_plugin", &effective_settings(&manifest, &test_settings("Hello", "good"))).unwrap();
     assert_eq!(engine.plugin_settings_error("test_plugin"), None);
-    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Привіт|quiet|token".into())));
+    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Hello|quiet|token".into())));
 
     // Plugin response is returned as an error and recorded
     let err = engine.configure_plugin("test_plugin", &test_settings("x", "bad")).unwrap_err();
-    assert_eq!(err, "невірний токен");
-    assert_eq!(engine.plugin_settings_error("test_plugin").as_deref(), Some("невірний токен"));
+    assert_eq!(err.key, "test-plugin-error-bad-token");
+    assert_eq!(err.args, vec![("length".to_string(), "3".to_string())]);
+    assert_eq!(err.fallback, "Invalid token");
+    assert_eq!(engine.plugin_settings_error("test_plugin").map(|e| e.fallback), Some("Invalid token".to_string()));
     assert!(engine.plugin_active("test_plugin"));
 
     // Fixing the setting clears the error
@@ -760,19 +762,19 @@ fn configure_is_called_and_its_error_is_reported() {
 #[test]
 fn settings_survive_plugin_crash() {
     let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
-    engine.enable_plugin("test_plugin", &test_settings("Привіт", "good")).unwrap();
+    engine.enable_plugin("test_plugin", &test_settings("Hello", "good")).unwrap();
     let greeter = NodeId::generate();
     engine.create_node(greeter, "test/greeter", &[]).unwrap();
     let crash = NodeId::generate();
     engine.create_node(crash, "test/crash", &[]).unwrap();
-    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Привіт|quiet|token".into())));
+    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Hello|quiet|token".into())));
 
     engine.trigger_node(crash, PinId(0));
     engine.tick();
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Аварія плагіна")));
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Plugin crashed")));
 
     // Instance recreated: configure was re-run before recreating the node
-    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Привіт|quiet|token".into())));
+    assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Hello|quiet|token".into())));
 }
 
 // --- Disabling and enabling a plugin ---
@@ -812,14 +814,14 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     // Graph is identical: types, properties (including in:*), and connections
     assert_eq!(engine.export_graph(), before);
     // Stub: provides reason, rejects changes, does not execute
-    assert_eq!(engine.node_unavailable(source).as_deref(), Some("плагін test_plugin недоступний"));
+    assert_eq!(engine.node_unavailable(source).map(|e| e.fallback).as_deref(), Some("plugin test_plugin unavailable"));
     assert!(engine.node_unavailable(debug).is_none());
     assert!(matches!(engine.set_node_property(source, "x", number(9)), Err(EngineError::PluginUnavailable(_))));
     assert!(matches!(engine.set_input_value(sink_node, PinId(2), None), Err(EngineError::PluginUnavailable(_))));
     assert_eq!(engine.export_graph(), before);
     engine.trigger_node(source, PinId(0));
     engine.tick();
-    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == source && m.contains("плагін test_plugin недоступний")));
+    assert!(engine.host_state.logs.iter().any(|(n, m)| *n == source && m.contains("plugin test_plugin unavailable")));
     // Definition is no longer in the palette, but the node still retains its pins
     assert_eq!(engine.node_definition(source).unwrap().pins.len(), 2);
 
@@ -916,4 +918,65 @@ fn unknown_node_type_survives_load_and_save() {
     let pins = engine.node_definition(a).unwrap().pins;
     assert_eq!(pins.len(), 3);
     assert!(pins.iter().any(|p| p.id == PinId(0) && p.direction == PinDirection::Output && p.pin_type == PinType::Exec));
+}
+
+// --- Translations shipped by plugins ---
+
+fn locale_text(translations: &Translations, locale: &str) -> String {
+    translations.iter().find(|(l, _)| l == locale).map(|(_, t)| t.clone()).unwrap_or_default()
+}
+
+#[test]
+fn plugin_translations_are_validated_and_delivered() {
+    let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
+    // A disabled plugin contributes nothing; the core resources are always there
+    let before = engine.translations();
+    assert!(locale_text(&before, "uk").contains("node-const-title"));
+    assert!(!locale_text(&before, "uk").contains("node-test-greeter"));
+
+    engine.enable_plugin("test_plugin", &test_settings("Hello", "good")).unwrap();
+    let after = engine.translations();
+    let uk = locale_text(&after, "uk");
+    assert!(uk.contains("node-const-title"), "core resource first");
+    assert!(uk.contains("node-test-greeter-description") && uk.contains("type-test-mode-value-manual"), "{uk}");
+    assert!(uk.contains("test-plugin-error-bad-token"));
+    assert!(uk.contains("setting-test-plugin-mode-option-loud"));
+    // `node-math-add-title` is not the plugin's to define: dropped, the core text stays
+    assert!(!uk.contains("HIJACKED"), "{uk}");
+    assert!(uk.contains("node-math-add-title"), "the core definition is kept");
+    // A resource with a syntax error is rejected as a whole; an unknown locale is passed on
+    assert!(after.iter().all(|(l, _)| l != "de"), "{:?}", after.iter().map(|(l, _)| l).collect::<Vec<_>>());
+    assert!(locale_text(&after, "zz").contains("Counter (zz)"));
+
+    // Disabling removes the plugin's resources again
+    engine.disable_plugin("test_plugin").unwrap();
+    let off = engine.translations();
+    assert!(!locale_text(&off, "uk").contains("node-test-greeter"));
+    assert!(locale_text(&off, "zz").is_empty());
+}
+
+#[test]
+fn configure_errors_carry_translatable_messages() {
+    let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
+    engine.enable_plugin("test_plugin", &test_settings("x", "good")).unwrap();
+
+    // Own namespace: key and arguments pass through
+    let e = engine.configure_plugin("test_plugin", &test_settings("x", "bad")).unwrap_err();
+    assert_eq!((e.key.as_str(), e.fallback.as_str()), ("test-plugin-error-bad-token", "Invalid token"));
+    assert_eq!(e.args, vec![("length".to_string(), "3".to_string())]);
+
+    // A key outside the plugin namespace is dropped, the English fallback stays
+    let e = engine.configure_plugin("test_plugin", &test_settings("x", "foreign")).unwrap_err();
+    assert_eq!((e.key.as_str(), e.fallback.as_str()), ("", "Foreign key"));
+
+    // A plain `String` error has no key
+    let e = engine.configure_plugin("test_plugin", &test_settings("x", "plain")).unwrap_err();
+    assert_eq!((e.key.as_str(), e.fallback.as_str()), ("", "Plain error"));
+}
+
+#[test]
+fn engine_errors_have_ui_messages() {
+    let e = EngineError::UnknownNodeType("x/y".into()).ui_message();
+    assert_eq!((e.key.as_str(), e.args.clone()), ("error-unknown-node-type", vec![("type".to_string(), "x/y".to_string())]));
+    assert_eq!(e.fallback, "Unknown node type: x/y");
 }

@@ -161,10 +161,10 @@ impl TypeRegistry {
         let mut next = self.clone();
         for def in defs {
             if !is_type_name(&def.name) {
-                return Err(format!("Некоректна назва типу {:?}: очікується щось на кшталт «plugin.type»", def.name));
+                return Err(format!("Invalid type name {:?}: expected something like \"plugin.type\"", def.name));
             }
             if next.types.insert(def.name.clone(), def.clone()).is_some() {
-                return Err(format!("Тип даних {} уже зареєстровано", def.name));
+                return Err(format!("Data type {} is already registered", def.name));
             }
         }
         for def in defs {
@@ -173,20 +173,20 @@ impl TypeRegistry {
                     let mut seen = Vec::new();
                     for f in fields {
                         if f.name.is_empty() || seen.contains(&f.name) {
-                            return Err(format!("Тип {}: порожня або повторювана назва поля {:?}", def.name, f.name));
+                            return Err(format!("Type {}: empty or duplicate field name {:?}", def.name, f.name));
                         }
                         seen.push(f.name.clone());
-                        next.check_known(&f.data_type).map_err(|e| format!("Тип {}, поле {}: {e}", def.name, f.name))?;
+                        next.check_known(&f.data_type).map_err(|e| format!("Type {}, field {}: {e}", def.name, f.name))?;
                     }
                 }
                 TypeKind::Enum { values } => {
                     if values.is_empty() {
-                        return Err(format!("Тип {}: порожній перелік", def.name));
+                        return Err(format!("Type {}: empty enumeration", def.name));
                     }
                     let mut seen = Vec::new();
                     for v in values {
                         if seen.contains(&&v.value) {
-                            return Err(format!("Тип {}: значення {:?} повторюється", def.name, v.value));
+                            return Err(format!("Type {}: duplicate value {:?}", def.name, v.value));
                         }
                         seen.push(&v.value);
                     }
@@ -200,7 +200,7 @@ impl TypeRegistry {
     /// All `Named` types inside `t` must be registered.
     pub fn check_known(&self, t: &DataType) -> Result<(), String> {
         match t {
-            DataType::Named(name) if !self.types.contains_key(name) => Err(format!("невідомий тип даних {name}")),
+            DataType::Named(name) if !self.types.contains_key(name) => Err(format!("unknown data type {name}")),
             DataType::List(inner) => self.check_known(inner),
             _ => Ok(()),
         }
@@ -247,7 +247,7 @@ mod tests {
                 FieldDefinition::new("x", "X", DataType::Number),
                 FieldDefinition::new("label", "Label", DataType::String).optional(),
             ]),
-            TypeDefinition::new_enum("t.mode", "Mode", &[("auto", "Авто"), ("manual", "Вручну")]),
+            TypeDefinition::new_enum("t.mode", "Mode", &[("auto", "Auto"), ("manual", "Manual")]),
         ]).unwrap();
         r
     }
@@ -280,7 +280,7 @@ mod tests {
         let bad = TypeDefinition::new_struct("t.bad", "Bad", vec![FieldDefinition::new("p", "P", named("no.such"))]);
         let ok = TypeDefinition::new_enum("t.fine", "Fine", &[("a", "A")]);
         assert!(r.insert_all(&[ok, bad]).is_err());
-        assert!(r.get("t.fine").is_none(), "пачка або проходить цілком, або ні");
+        assert!(r.get("t.fine").is_none(), "a batch registers entirely or not at all");
         assert!(r.insert_all(&[TypeDefinition::new_enum("t.empty", "E", &[])]).is_err());
         assert!(r.insert_all(&[TypeDefinition::new_enum("NoDot", "E", &[("a", "A")])]).is_err());
         // A type may reference another type from the same batch
@@ -302,7 +302,7 @@ mod tests {
         let r = registry();
         let mode = named("t.mode");
         assert_eq!(text::parse_value_in(&r, "auto", &mode), Ok(DataValue::String("auto".into())));
-        assert_eq!(text::parse_value_in(&r, "Вручну", &mode), Ok(DataValue::String("manual".into())));
+        assert_eq!(text::parse_value_in(&r, "Manual", &mode), Ok(DataValue::String("manual".into())));
         assert!(text::parse_value_in(&r, "other", &mode).is_err());
         assert!(text::parse_value_in(&r, "1", &named("t.point")).is_err());
         assert!(input_value_editable(&r, &mode));

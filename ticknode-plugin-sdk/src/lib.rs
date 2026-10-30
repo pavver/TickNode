@@ -4,6 +4,41 @@
 //! the `wit/plugin.wit` contract. Implement [`Plugin`] and [`PluginNode`], then invoke [`export_plugin!`].
 //! Each graph node is a separate [`PluginNode`] instance, so state can be held directly in struct fields.
 //!
+//! # Language rules
+//!
+//! Definitions (titles, descriptions, help, pin names, type and setting texts) are written in
+//! **English**: they are the fallback shown when no translation exists. Translations are shipped as
+//! Fluent `.ftl` files via [`Plugin::TRANSLATIONS`]. **Logs are never translated**: everything passed
+//! to [`host::log`] / [`host::warn`] / [`host::error`] and every node error message must be English.
+//! Errors shown to the user in the UI (for example from [`Plugin::configure`]) are [`UiError`]s
+//! with a translation key and an English fallback.
+//!
+//! # Translation key conventions
+//!
+//! Fluent ids may contain only `[a-zA-Z0-9_-]`, so names are slugified: every character outside
+//! `[a-z0-9-]` (`/`, `.`, `_`, spaces) becomes `-` and letters are lowercased ([`slug`]).
+//!
+//! | what | key |
+//! |------|-----|
+//! | node title / description / help | `node-<type slug>-title`, `-description`, `-help` |
+//! | pin label | `node-<type slug>-pin-<pin name>`: the pin name as written when it consists of `[A-Za-z0-9_-]` (`pin-Val`), otherwise its slug (`Delay ms` -> `pin-delay-ms`) |
+//! | category | `category-<category slug>` (the first plugin that defines a category key wins) |
+//! | data type | `type-<type name slug>-title`, `-description`, `-field-<field>`, `-value-<enum value>` |
+//! | setting | `setting-<plugin slug>-<key slug>-title`, `-description`, `-option-<value>` |
+//! | free keys, e.g. `configure` errors | `<plugin slug>-...` (recommended: `<plugin slug>-error-...`; arguments are strings) |
+//!
+//! The host parses every `.ftl`; a resource with syntax errors is rejected (with a warning in the server
+//! log) and messages whose ids do not start with one of the plugin's own prefixes are dropped, so
+//! plugins cannot override each other's or the core's texts. Example (`include_str!` embeds the files):
+//!
+//! ```ignore
+//! impl Plugin for MyPlugin {
+//!     const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[
+//!         ("uk", include_str!("../locales/uk.ftl")),
+//!     ];
+//! }
+//! ```
+//!
 //! ```ignore
 //! use ticknode_plugin_sdk::*;
 //!
@@ -25,7 +60,13 @@ use std::collections::BTreeMap;
 pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
     PinDefinition, PinDirection, PinId, PinType, PluginManifest, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
+    UiMessage, fluent_slug as slug,
 };
+
+/// A translatable error for the user: `UiError::new("my-plugin-error-no-token", "Token is not set")`
+/// (key in the plugin's translations, English fallback), optionally with `.arg("name", value)`.
+/// `String` / `&str` convert into a fallback-only error.
+pub type UiError = UiMessage;
 
 #[doc(hidden)]
 pub mod bindings {
@@ -243,11 +284,16 @@ pub trait Plugin: 'static {
     /// Custom plugin data types (structs and enums); node pins can reference them
     /// via `DataType::Named`. The host automatically generates Make/Break nodes for each struct.
     fn types() -> Vec<TypeDefinition> { Vec::new() }
+    /// Translations shipped by the plugin: `(locale code, Fluent source)` pairs, usually
+    /// `include_str!("../locales/uk.ftl")`. See the crate docs for key conventions and validation.
+    /// The English texts live in the definitions, so an `en` resource is optional.
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[];
     /// Applies settings according to `manifest().settings` (values are saved or defaults).
     /// Called by the host after loading, on every change, and after recreating the instance
     /// (crash). There is one instance per plugin, so settings are typically stored in static state
-    /// (`thread_local!`). `Err` is shown to the user while the plugin remains loaded.
-    fn configure(_settings: &[(String, DataValue)]) -> Result<(), String> { Ok(()) }
+    /// (`thread_local!`). `Err` is shown to the user (translated through its key; the key must start
+    /// with the plugin name slug) while the plugin remains loaded. Texts logged here stay English.
+    fn configure(_settings: &[(String, DataValue)]) -> Result<(), UiError> { Ok(()) }
 }
 
 /// Looks up a setting value by key.
@@ -282,14 +328,17 @@ pub fn setting_bool(settings: &[(String, DataValue)], key: &str) -> Option<bool>
 pub mod host {
     use super::*;
 
+    /// Logs an info message to the node's console. Logs are always English and never translated.
     pub fn log(message: &str) {
         wit_host::log(wit::LogLevel::Info, message);
     }
 
+    /// Logs a warning (English, like every log).
     pub fn warn(message: &str) {
         wit_host::log(wit::LogLevel::Warn, message);
     }
 
+    /// Logs an error (English, like every log). Use [`UiError`] for errors the user must see in the UI.
     pub fn error(message: &str) {
         wit_host::log(wit::LogLevel::Error, message);
     }
@@ -362,9 +411,13 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
         }
     }
 
-    fn configure(settings: Vec<wit::Property>) -> Result<(), String> {
+    fn configure(settings: Vec<wit::Property>) -> Result<(), wit::UiError> {
         let settings: Vec<(String, DataValue)> = settings.into_iter().filter_map(|p| Some((p.name, decode(&p.value)?))).collect();
-        P::configure(&settings)
+        P::configure(&settings).map_err(|e| wit::UiError { key: e.key, args: e.args, fallback: e.fallback })
+    }
+
+    fn translations() -> Vec<(String, String)> {
+        P::TRANSLATIONS.iter().map(|(locale, ftl)| ((*locale).to_string(), (*ftl).to_string())).collect()
     }
 
     fn definitions() -> Vec<wit::NodeDefinition> {
@@ -378,7 +431,7 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
     fn create_node(type_name: String) -> Result<wit_nodes::Node, String> {
         P::create(&type_name)
             .map(|node| wit_nodes::Node::new(NodeHandle(RefCell::new(node))))
-            .ok_or_else(|| format!("Невідомий тип ноди: {type_name}"))
+            .ok_or_else(|| format!("Unknown node type: {type_name}"))
     }
 }
 
@@ -424,7 +477,7 @@ impl wit_nodes::GuestNode for NodeHandle {
 }
 
 fn encode(value: &DataValue) -> Vec<u8> {
-    postcard::to_allocvec(value).expect("DataValue завжди серіалізується")
+    postcard::to_allocvec(value).expect("DataValue always serializes")
 }
 
 fn decode(bytes: &[u8]) -> Option<DataValue> {
@@ -448,7 +501,7 @@ fn to_wit_data_type(mut t: &DataType) -> wit::DataType {
         DataType::Object => wit::ScalarType::Object,
         DataType::Any => wit::ScalarType::Any,
         DataType::Named(name) => wit::ScalarType::Named(name.clone()),
-        DataType::List(_) => unreachable!("списки розгорнуто вище"),
+        DataType::List(_) => unreachable!("lists are unwrapped above"),
     };
     wit::DataType { base, list_depth }
 }

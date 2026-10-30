@@ -49,11 +49,11 @@ impl CompareOp {
     pub fn symbol(self) -> &'static str {
         match self {
             Eq => "=", Ne => "≠", Lt => "<", Le => "≤", Gt => ">", Ge => "≥",
-            Contains => "містить", NotContains => "не містить", StartsWith => "починається з", EndsWith => "закінчується на",
-            IsEmpty => "порожній", NotEmpty => "не порожній", IsTrue => "= true", IsFalse => "= false",
-            HasField => "має поле", NoField => "без поля",
-            LenEq => "довжина =", LenGt => "довжина >", LenLt => "довжина <",
-            HasValue => "є значення", NoValue => "немає значення",
+            Contains => "contains", NotContains => "not contains", StartsWith => "starts with", EndsWith => "ends with",
+            IsEmpty => "is empty", NotEmpty => "is not empty", IsTrue => "= true", IsFalse => "= false",
+            HasField => "has field", NoField => "no field",
+            LenEq => "length =", LenGt => "length >", LenLt => "length <",
+            HasValue => "has value", NoValue => "no value",
         }
     }
 
@@ -61,12 +61,12 @@ impl CompareOp {
     pub fn label_for(self, t: &DataType) -> String {
         let time = matches!(t, DataType::Time | DataType::DateTime);
         match self {
-            Lt if time => "< раніше".into(),
-            Le if time => "≤ не пізніше".into(),
-            Gt if time => "> пізніше".into(),
-            Ge if time => "≥ не раніше".into(),
-            Lt if *t == DataType::Duration => "< коротша".into(),
-            Gt if *t == DataType::Duration => "> довша".into(),
+            Lt if time => "< earlier".into(),
+            Le if time => "≤ not later".into(),
+            Gt if time => "> later".into(),
+            Ge if time => "≥ not earlier".into(),
+            Lt if *t == DataType::Duration => "< shorter".into(),
+            Gt if *t == DataType::Duration => "> longer".into(),
             op => op.symbol().into(),
         }
     }
@@ -178,7 +178,7 @@ pub enum Join { And, Or }
 
 impl Join {
     pub fn symbol(self) -> &'static str {
-        match self { Self::And => "і", Self::Or => "або" }
+        match self { Self::And => "and", Self::Or => "or" }
     }
     fn text(self) -> &'static str {
         match self { Self::And => "and", Self::Or => "or" }
@@ -301,8 +301,8 @@ pub struct MatchCase {
 
 impl MatchCase {
     pub fn parse(text: &str) -> Result<MatchCase, String> {
-        let (pin, rest) = text.split_once(':').ok_or("немає номера піна («1: a > 0»)")?;
-        let pin: u32 = pin.trim().parse().map_err(|_| format!("«{}» — не номер піна", pin.trim()))?;
+        let (pin, rest) = text.split_once(':').ok_or("missing pin number (\"1: a > 0\")")?;
+        let pin: u32 = pin.trim().parse().map_err(|_| format!("\"{}\" is not a pin number", pin.trim()))?;
         Ok(MatchCase { pin, conditions: parse_conditions(rest)? })
     }
 
@@ -317,7 +317,7 @@ impl MatchCase {
     /// Human-readable display format using localized operator and join symbols.
     pub fn display(&self) -> String {
         if self.conditions.is_empty() {
-            return "завжди".into();
+            return "always".into();
         }
         self.conditions.iter().enumerate().map(|(i, c)| {
             let cond = c.to_text(|op| op.symbol().to_string(), Operand::to_text);
@@ -392,14 +392,14 @@ impl MatchInput {
     pub fn parse(text: &str) -> Result<MatchInput, String> {
         let mut parts = text.splitn(3, ':');
         let (Some(pin), Some(name), Some(ty)) = (parts.next(), parts.next(), parts.next()) else {
-            return Err(format!("«{text}»: вхід записується як «пін:ім'я:тип»"));
+            return Err(format!("\"{text}\": an input is written as \"pin:name:type\""));
         };
-        let pin: u32 = pin.trim().parse().map_err(|_| format!("«{}» — не номер піна", pin.trim()))?;
+        let pin: u32 = pin.trim().parse().map_err(|_| format!("\"{}\" is not a pin number", pin.trim()))?;
         let name = name.trim().to_string();
         if !is_input_name(&name) {
-            return Err(format!("«{name}» — некоректне ім'я входу"));
+            return Err(format!("\"{name}\" is not a valid input name"));
         }
-        let value_type = parse_input_type(ty).ok_or_else(|| format!("«{}» — невідомий тип", ty.trim()))?;
+        let value_type = parse_input_type(ty).ok_or_else(|| format!("\"{}\" is an unknown type", ty.trim()))?;
         Ok(MatchInput { pin, name, value_type })
     }
 
@@ -433,17 +433,17 @@ fn parse_conditions(text: &str) -> Result<Vec<Condition>, String> {
         } else {
             match tokens.next() {
                 Some(Token::Join(j)) => j,
-                other => return Err(format!("очікувалось «and» / «or», а не {}", describe(other.as_ref()))),
+                other => return Err(format!("expected \"and\" / \"or\", not {}", describe(other.as_ref()))),
             }
         };
         let operand = |token: Option<Token>| {
-            token.clone().and_then(Token::into_operand).ok_or_else(|| format!("очікувався операнд, а не {}", describe(token.as_ref())))
+            token.clone().and_then(Token::into_operand).ok_or_else(|| format!("expected an operand, not {}", describe(token.as_ref())))
         };
         let left = operand(tokens.next())?;
         let op = match tokens.next() {
             Some(Token::Op(op)) => op,
-            Some(Token::Ident(word)) => CompareOp::parse(&word).ok_or_else(|| format!("«{word}» — невідомий оператор"))?,
-            other => return Err(format!("очікувався оператор, а не {}", describe(other.as_ref()))),
+            Some(Token::Ident(word)) => CompareOp::parse(&word).ok_or_else(|| format!("\"{word}\" is an unknown operator"))?,
+            other => return Err(format!("expected an operator, not {}", describe(other.as_ref()))),
         };
         let right = if op.is_unary() { None } else { Some(operand(tokens.next())?) };
         conditions.push(Condition { join, left, op, right });
@@ -471,7 +471,7 @@ impl Token {
 
 fn describe(token: Option<&Token>) -> String {
     match token {
-        None => "кінець рядка".into(),
+        None => "end of text".into(),
         Some(Token::Ident(s)) => format!("«{s}»"),
         Some(Token::Value(v)) => format!("«{}»", Operand::Value(v.clone()).to_text()),
         Some(Token::Op(op)) => format!("«{}»", op.symbol()),
@@ -492,7 +492,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             i += 1;
             loop {
                 match chars.get(i) {
-                    None => return Err("незакриті лапки".into()),
+                    None => return Err("unclosed quote".into()),
                     Some('"') => break,
                     Some('\\') => {
                         s.extend(chars.get(i + 1));
@@ -513,7 +513,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
                 i += 1;
             }
             let s: String = chars[start..i].iter().collect();
-            let f: f64 = s.parse().map_err(|_| format!("«{s}» — не число"))?;
+            let f: f64 = s.parse().map_err(|_| format!("\"{s}\" is not a number"))?;
             tokens.push(Token::Value(DataValue::Number(NumberValue::Float(f).normalize())));
         } else if c.is_alphabetic() || c == '_' {
             let start = i;
@@ -530,7 +530,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             });
         } else if c == '&' || c == '|' {
             if chars.get(i + 1) != Some(&c) {
-                return Err(format!("«{c}» — мабуть, «{c}{c}»"));
+                return Err(format!("\"{c}\" — probably \"{c}{c}\""));
             }
             i += 2;
             tokens.push(Token::Join(if c == '&' { Join::And } else { Join::Or }));
@@ -538,7 +538,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             let two: String = chars[i..(i + 2).min(chars.len())].iter().collect();
             let (op, len) = match CompareOp::parse(&two) {
                 Some(op) if two.chars().count() == 2 => (op, 2),
-                _ => (CompareOp::parse(&c.to_string()).ok_or_else(|| format!("незрозумілий символ «{c}»"))?, 1),
+                _ => (CompareOp::parse(&c.to_string()).ok_or_else(|| format!("unexpected character \"{c}\""))?, 1),
             };
             i += len;
             tokens.push(Token::Op(op));
@@ -565,8 +565,8 @@ mod tests {
         assert_eq!(case.conditions[2].join, Join::Or);
         assert_eq!(case.conditions[4].right, None);
         assert_eq!(MatchCase::parse(&case.to_text()).unwrap(), case);
-        assert_eq!(case.display(), "a > 10 і b ≠ \"on \\\"x\\\"\" або c ≤ -2.5 або s містить \"x\" і l порожній");
-        assert_eq!(MatchCase::parse("7:").unwrap().display(), "завжди");
+        assert_eq!(case.display(), "a > 10 and b ≠ \"on \\\"x\\\"\" or c ≤ -2.5 or s contains \"x\" and l is empty");
+        assert_eq!(MatchCase::parse("7:").unwrap().display(), "always");
         assert_eq!(MatchCase::parse("1: t ≥ 5 && v == true").unwrap().to_text(), "1: t >= 5 and v = true");
         assert_eq!(MatchCase::parse("1: a = b").unwrap().inputs().collect::<Vec<_>>(), ["a", "b"]);
     }
@@ -578,7 +578,7 @@ mod tests {
         assert!(MatchCase::parse("1: a > 1 b < 2").is_err());
         assert!(MatchCase::parse("1: a ! 1").is_err());
         assert!(MatchCase::parse("1: a frobnicate 1").is_err());
-        assert!(MatchCase::parse("1: contains > 1").is_err(), "оператор не може бути іменем входу");
+        assert!(MatchCase::parse("1: contains > 1").is_err(), "an operator cannot be an input name");
         assert!(MatchInput::parse("1:a").is_err());
         assert!(MatchInput::parse("1:2a:number").is_err());
         assert!(MatchInput::parse("1:a:weird").is_err());
@@ -638,6 +638,6 @@ mod tests {
         assert_eq!(Contains.right_type(&DataType::List(Box::new(DataType::Number))), Some(DataType::Number));
         assert_eq!(LenGt.right_type(&DataType::String), Some(DataType::Number));
         assert_eq!(IsEmpty.right_type(&DataType::String), None);
-        assert_eq!(Lt.label_for(&DataType::Time), "< раніше");
+        assert_eq!(Lt.label_for(&DataType::Time), "< earlier");
     }
 }

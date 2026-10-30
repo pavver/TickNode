@@ -14,22 +14,33 @@ toolbar-console = Console
 toolbar-theme = Light / dark theme
 toolbar-language = Language: English / Українська
 
-# Editor messages in console
-log-ui-connected = [UI] Connected to server
-log-ui-graph-received =
-    { $count ->
-        [one] [UI] Graph received: { $count } node
-       *[other] [UI] Graph received: { $count } nodes
-    }
-log-ui-copied = [UI] Copied nodes: { $count }
-log-ui-cut = [UI] Cut nodes: { $count }
-log-error-offline-send = [ERROR] Disconnected from server — change was not sent
-log-error-bad-server-msg = [ERROR] Invalid server message: { $error }
-log-error-connection-lost = [ERROR] Connection to server lost, reconnecting…
-log-error-empty-clipboard = [ERROR] Clipboard does not contain TickNode nodes
-log-error-connect-same-dir = [ERROR] Only an output can be connected to an input
-log-error-connect-exec-mismatch = [ERROR] An exec pin can only be connected to an exec pin
-log-error-copy-blocked = [ERROR] Browser blocked copying — try Ctrl+C
+# Errors for the user (`UiMessage` keys sent by the server; arguments are strings)
+error-cycle-detected = Circular reference: node { $node } already depends on { $dependency }
+error-type-mismatch = Incompatible data types: cannot connect { $src } to { $dst }
+error-invalid-pin-connection = Invalid pin connection: one or both pins do not exist or have the wrong direction/type
+error-node-not-found = Node { $node } not found
+error-unknown-node-type = Unknown node type: { $type }
+error-node-plugin-unavailable = plugin { $plugin } unavailable
+error-node-type-unknown = node type { $type } is unknown: the required plugin is missing or disabled
+error-paste-too-many = Too many nodes to paste: { $count } (maximum { $max })
+error-paste-incomplete = Not everything was pasted: { $details }
+error-bad-message = Invalid message: { $error }
+error-setting-invalid = Setting "{ $setting }": invalid value
+error-setting-required = Required setting "{ $setting }" is not set
+error-setting-unknown = Unknown setting "{ $setting }"
+error-settings-not-saved = Failed to save the settings: { $details }
+error-plugin-not-found = Plugin { $plugin } not found
+error-plugin-not-loaded = Plugin { $plugin } is not loaded
+error-plugin-crash = Plugin crashed: { $reason }
+error-plugin-disable-blocked = Plugin "{ $plugin }" cannot be disabled: its data types are used by { $dependents }; disable them first
+error-plugin-config-corrupt = The plugin config is corrupted: { $details }. Saving settings or enabling the plugin will overwrite it
+error-plugin-config-not-saved = The plugin state was changed, but the config was not saved: { $details }
+
+# Automatic nodes of plugin data types
+custom-make-title = Make { $type }
+custom-make-description = Builds a "{ $type }" value from fields
+custom-break-title = Break { $type }
+custom-break-description = Breaks "{ $type }" into fields
 
 # Node categories
 category-events = Events

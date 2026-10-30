@@ -9,6 +9,7 @@ mod host;
 mod plugin;
 mod custom_types;
 mod stub;
+pub mod translations;
 
 pub use host::*;
 pub use plugin::*;
@@ -62,23 +63,40 @@ pub trait Node: Send + Sync {
     fn on_task(&mut self, _task: TaskId, _result: TaskResult, _ctx: &mut NodeContext) -> Vec<NodeOutput> { Vec::new() }
     /// Stub node (plugin for this type is unavailable): explanation for the editor. Such a node does not
     /// execute or accept property changes, but preserves pins and properties so the graph can be saved.
-    fn unavailable(&self) -> Option<String> { None }
+    fn unavailable(&self) -> Option<UiMessage> { None }
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineError {
-    #[error("Циклічне посилання: нода {0:?} вже залежить від {1:?}")]
+    #[error("Circular reference: node {0:?} already depends on {1:?}")]
     CycleDetected(NodeId, NodeId),
-    #[error("Несумісні типи даних: спроба з'єднати {0:?} з {1:?}")]
+    #[error("Incompatible data types: cannot connect {0:?} to {1:?}")]
     TypeMismatch(DataType, DataType),
-    #[error("Некоректне з'єднання пінів: один або обидва піни не існують або мають невірний напрямок/тип")]
+    #[error("Invalid pin connection: one or both pins do not exist or have the wrong direction/type")]
     InvalidPinConnection,
-    #[error("Ноду {0:?} не знайдено")]
+    #[error("Node {0:?} not found")]
     NodeNotFound(NodeId),
-    #[error("Невідомий тип ноди: {0}")]
+    #[error("Unknown node type: {0}")]
     UnknownNodeType(String),
-    #[error("Нода недоступна: {0}; змінити її не можна")]
-    PluginUnavailable(String),
+    #[error("Node unavailable: {0}; it cannot be changed")]
+    PluginUnavailable(UiMessage),
+}
+
+impl EngineError {
+    /// The error for the user in the editor: a key from the editor's `ui.ftl` (`error-...`) with arguments
+    /// and the English text (same as `Display`) as the fallback.
+    pub fn ui_message(&self) -> UiMessage {
+        let text = self.to_string();
+        match self {
+            Self::CycleDetected(a, b) => UiMessage::new("error-cycle-detected", text).arg("node", format!("{a:?}")).arg("dependency", format!("{b:?}")),
+            Self::TypeMismatch(a, b) => UiMessage::new("error-type-mismatch", text).arg("src", data_type_name(a)).arg("dst", data_type_name(b)),
+            Self::InvalidPinConnection => UiMessage::new("error-invalid-pin-connection", text),
+            Self::NodeNotFound(id) => UiMessage::new("error-node-not-found", text).arg("node", format!("{id:?}")),
+            Self::UnknownNodeType(name) => UiMessage::new("error-unknown-node-type", text).arg("type", name),
+            // The stub's own message already says which plugin is missing
+            Self::PluginUnavailable(reason) => reason.clone(),
+        }
+    }
 }
 
 pub type NodeCreator = Box<dyn Fn(NodeId) -> Box<dyn Node> + Send + Sync>;
@@ -285,7 +303,7 @@ impl TickEngine {
     }
 
     /// Why the node is unavailable (stub); `None` if it is a real node.
-    pub fn node_unavailable(&self, node_id: NodeId) -> Option<String> {
+    pub fn node_unavailable(&self, node_id: NodeId) -> Option<UiMessage> {
         self.nodes.get(&node_id)?.unavailable()
     }
 
@@ -545,7 +563,7 @@ impl TickEngine {
             match self.create_node(map_id(n.id), &n.type_name, &n.properties) {
                 Ok(()) => {}
                 Err(EngineError::UnknownNodeType(_)) => unknown.push(n),
-                Err(e) => warnings.push(format!("Нода {:?}: {}", n.id, e)),
+                Err(e) => warnings.push(format!("Node {:?}: {}", n.id, e)),
             }
         }
         // An unknown type (plugin disabled or not loaded) does not lose the node: a stub preserves
@@ -553,17 +571,17 @@ impl TickEngine {
         for n in unknown {
             let id = map_id(n.id);
             let pins = self.infer_stub_pins(id, graph, &map_id);
-            tracing::warn!(node = ?n.id, "Невідомий тип ноди {}: створено заглушку", n.type_name);
+            tracing::warn!(node = ?n.id, "Unknown node type {}: created a stub", n.type_name);
             self.add_node(Box::new(StubNode::new(id, StubNode::bare_definition(&n.type_name, pins), n.properties.clone(), None)));
         }
         for c in &graph.exec_connections {
             if let Err(e) = self.connect_exec(map_id(c.src_node), c.src_pin, map_id(c.dst_node), c.dst_pin) {
-                warnings.push(format!("Exec-з'єднання {:?}: {}", c, e));
+                warnings.push(format!("Exec connection {:?}: {}", c, e));
             }
         }
         for c in &graph.data_connections {
             if let Err(e) = self.connect_data(map_id(c.src_node), c.src_pin, map_id(c.dst_node), c.dst_pin) {
-                warnings.push(format!("З'єднання даних {:?}: {}", c, e));
+                warnings.push(format!("Data connection {:?}: {}", c, e));
             }
         }
         warnings
@@ -648,7 +666,7 @@ impl TickEngine {
                 Some(None) => pending = true,
                 None => {
                     if self.required_reported.insert(node_id) {
-                        self.host_state.log(node_id, format!("[ERROR] Не задано обов'язковий вхід «{}»", pin.name));
+                        self.host_state.log(node_id, format!("[ERROR] Required input \"{}\" is not set", pin.name));
                     }
                     return true;
                 }
@@ -793,8 +811,8 @@ impl Node for ConstNode {
             type_name: "const".to_string(),
             title: "Constant".to_string(),
             category: "Data".to_string(),
-            description: "Повертає константне значення".to_string(),
-            help: "Видає на вихід Val значення, задане прямо на ноді (рядок «Значення») або в правій панелі. Тип значення (число, рядок, логічне) обирається в правій панелі, і від нього залежить тип піна.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Returns a constant value".to_string(),
+            help: "Emits the value set directly on the node (\"Value\" row) or in the right panel on output Val. The value type (number, string, boolean, etc.) is chosen on the node, and the pin type follows it.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![PinDefinition {
                 id: PinId(0),
                 name: "Val".to_string(),
@@ -830,13 +848,13 @@ impl Node for PureMathNode {
             type_name: name.to_string(),
             title: title.to_string(),
             category: "Math".to_string(),
-            description: "Математична операція над двома числами".to_string(),
+            description: "Arithmetic operation on two numbers".to_string(),
             help: match self.op {
                 MathOp::Add => "Res = A + B.",
                 MathOp::Sub => "Res = A − B.",
                 MathOp::Mul => "Res = A × B.",
-                MathOp::Div => "Res = A ÷ B. Ділення на 0 дає нескінченність.",
-            }.to_string() + "\n\nНепід'єднаний вхід бере значення, задане біля піна на ноді, а без нього вважається нулем. Ціле число лишається цілим, якщо результат цілий.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.",
+                MathOp::Div => "Res = A ÷ B. Division by 0 yields infinity.",
+            }.to_string() + "\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",
             pins: vec![
                 PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "B".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -881,8 +899,8 @@ impl Node for MathExpressionNode {
             type_name: "math/expression".to_string(),
             title: "Expression".to_string(),
             category: "Math".to_string(),
-            description: "Обчислює довільну математичну формулу".to_string(),
-            help: "Обчислює формулу, задану прямо на ноді (рядок «Формула»), наприклад `(a + b) / 2` або `x * x - 1`.\n\nКожна змінна у формулі автоматично стає вхідним піном (в абетковому порядку). Непід'єднана змінна бере значення, задане біля піна, а без нього дорівнює 0. Якщо формула некоректна — результат 0.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Evaluates an arbitrary mathematical formula".to_string(),
+            help: "Evaluates the formula set directly on the node (\"Formula\" row), such as `(a + b) / 2` or `x * x - 1`.\n\nEach variable in the formula automatically becomes an input pin (in alphabetical order). An unconnected variable uses the value set next to the pin, or defaults to 0. If the formula is invalid, the result is 0.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins,
         }
     }
@@ -952,12 +970,12 @@ impl Node for LogicalNode {
             type_name: name.to_string(),
             title: title.to_string(),
             category: "Logic".to_string(),
-            description: "Логічна операція".to_string(),
+            description: "Logical operation".to_string(),
             help: match self.op {
-                LogOp::And => "Res = true, лише якщо і A, і B істинні.",
-                LogOp::Or => "Res = true, якщо істинний хоча б один із A, B.",
-                LogOp::Not => "Res — протилежне значення до A.",
-            }.to_string() + "\n\nНепід'єднаний вхід бере значення, задане біля піна на ноді, а без нього вважається false.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.",
+                LogOp::And => "Res = true only if both A and B are true.",
+                LogOp::Or => "Res = true if at least one of A or B is true.",
+                LogOp::Not => "Res is the logical negation of A.",
+            }.to_string() + "\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to false.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",
             pins,
         }
     }
@@ -978,8 +996,8 @@ impl Node for VariableGetNode {
             type_name: "variable/get".to_string(),
             title: format!("Get {}", self.var_name),
             category: "Data".to_string(),
-            description: "Повертає значення змінної за її назвою".to_string(),
-            help: "Читає глобальну змінну з назвою з властивості «Змінна» і видає її на Val. Змінні спільні для всього графа, записує їх нода Set. Поки змінну не записано — видає 0.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Returns the value of a variable by name".to_string(),
+            help: "Reads the global variable named in the \"Variable\" property and outputs it on Val. Variables are shared across the entire graph and written by the Set node. Until the variable is written, outputs 0.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![PinDefinition {
                 id: PinId(0),
                 name: "Val".to_string(),
@@ -1011,8 +1029,8 @@ impl Node for VariableSetNode {
             type_name: "variable/set".to_string(),
             title: format!("Set {}", self.var_name),
             category: "Data".to_string(),
-            description: "Записує значення у змінну".to_string(),
-            help: "За сигналом на In записує значення з Val у глобальну змінну (назва — у властивості «Змінна») і передає виконання на Out.\n\nЗмінну бачать усі ноди Get з тією ж назвою в усьому графі.".to_string(),
+            description: "Writes a value to a variable".to_string(),
+            help: "On a signal at In, writes the value from Val to the global variable (named in the \"Variable\" property) and passes execution to Out.\n\nThe variable is visible to all Get nodes with the same name across the entire graph.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(0), name: "Out".to_string(), pin_type: PinType::Exec, direction: PinDirection::Output, required: false },
@@ -1056,7 +1074,7 @@ impl MatchNode {
         // Default input `a` is inferred from the condition. While the node is being restored, cases without `inputs`
         // (legacy format) infer inputs; after `restored`, inputs are explicit — both for new and loaded nodes.
         let mut node = Self { id, cases: Vec::new(), all_matches: false, inputs: Vec::new(), explicit_inputs: false };
-        node.set_cases(vec![MatchCase::parse("1: a > 0").expect("типовий випадок коректний")]);
+        node.set_cases(vec![MatchCase::parse("1: a > 0").expect("the default case is valid")]);
         node
     }
 
@@ -1108,8 +1126,8 @@ impl Node for MatchNode {
             type_name: "match".to_string(),
             title: "Match".to_string(),
             category: "Control Flow".to_string(),
-            description: "Обирає вихід за умовами, як комбінатор-вирішувач".to_string(),
-            help: "За сигналом на In перевіряє випадки згори вниз і передає виконання на вихід першого, що збігся. Якщо не збігся жоден — на Else. З прапорцем «Усі збіги» спрацьовують усі випадки, що збіглись.\n\nВходи: «+ вхід» додає вхідний пін. Ім'я входу можна змінити (умови оновляться), тип — обрати; «auto» приймає будь-що, і тоді оператори підбираються за типом під'єднаного джерела. Непід'єднаному входу можна задати значення прямо на ноді.\n\nУмова — «вхід  оператор  операнд». Оператори залежать від типу входу:\n• числа, час, тривалість — =, ≠, <, ≤, >, ≥ (для часу — раніше / пізніше);\n• рядки — дорівнює, містить, починається з, закінчується на, порожній, довжина;\n• логічні — = true / = false;\n• списки — містить, порожній, довжина;\n• об'єкти — має поле;\n• будь-який — є значення / немає значення.\nПраворуч — значення або інший вхід (так порівнюються дві змінні). Значення приводиться до типу входу: «07:30» — час, «1h 30m» або 90 — тривалість, «#ff0000» — колір.\n\nУмови з'єднуються «і» / «або»; «і» зв'язує сильніше: «a > 1 і b > 1 або c» = «(a > 1 і b > 1) або c». Випадок без умов спрацьовує завжди. Вхід без значення умову не виконує (крім «немає значення»).".to_string(),
+            description: "Selects an output by conditions, like a decider combinator".to_string(),
+            help: "On a signal at In, checks cases from top to bottom and passes execution to the output of the first matching case. If none match — to Else. With \"All matches\" enabled, all matching cases fire.\n\nInputs: \"+ input\" adds an input pin. The input name can be renamed (conditions update automatically) and its type selected; \"auto\" accepts anything, picking operators based on the connected source type. An unconnected input can be given a value directly on the node.\n\nA condition is \"input  operator  operand\". Operators depend on the input type:\n• numbers, time, duration — =, ≠, <, ≤, >, ≥ (for time — earlier / later);\n• strings — equals, contains, starts with, ends with, is empty, length;\n• booleans — = true / = false;\n• lists — contains, is empty, length;\n• objects — has field;\n• any — has value / no value.\nThe right side is a value or another input (comparing two variables). Values are coerced to the input type: \"07:30\" — time, \"1h 30m\" or 90 — duration, \"#ff0000\" — color.\n\nConditions are joined with \"and\" / \"or\"; \"and\" binds tighter: \"a > 1 and b > 1 or c\" = \"(a > 1 and b > 1) or c\". A case with no conditions always matches. An input without a value does not satisfy a condition (except \"no value\").".to_string(),
             pins,
         }
     }
@@ -1148,20 +1166,20 @@ impl Node for MatchNode {
         match (name, value) {
             ("cases", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
-                    .ok_or_else(|| "випадок має бути рядком".to_string())
+                    .ok_or_else(|| "a case must be a string".to_string())
                     .and_then(|l| l.into_iter().map(MatchCase::parse).collect());
                 match parsed {
                     Ok(cases) => self.set_cases(cases),
-                    Err(e) => tracing::warn!("Match: некоректні випадки: {e}"),
+                    Err(e) => tracing::warn!("Match: invalid cases: {e}"),
                 }
             }
             ("inputs", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
-                    .ok_or_else(|| "вхід має бути рядком".to_string())
+                    .ok_or_else(|| "an input must be a string".to_string())
                     .and_then(|l| l.into_iter().map(MatchInput::parse).collect());
                 match parsed {
                     Ok(inputs) => self.set_inputs(inputs),
-                    Err(e) => tracing::warn!("Match: некоректні входи: {e}"),
+                    Err(e) => tracing::warn!("Match: invalid inputs: {e}"),
                 }
             }
             ("all_matches", DataValue::Bool(b)) => self.all_matches = b,
@@ -1181,8 +1199,8 @@ impl Node for ClockNode {
             type_name: "clock".to_string(),
             title: "Clock".to_string(),
             category: "Events".to_string(),
-            description: "Генерує імпульс виконання кожні interval_ticks тактів".to_string(),
-            help: "Запускає виконання сама: кожні N тактів (властивість «Інтервал») видає сигнал на Out.\n\nТакт сервера — 100 мс, тож 10 тактів ≈ 1 секунда. Це основне джерело подій: з нього починаються ланцюжки, що мають працювати постійно.".to_string(),
+            description: "Emits an execution pulse every interval_ticks ticks".to_string(),
+            help: "Triggers execution on its own: every N ticks (\"Interval\" property) it emits a signal on Out.\n\nThe server tick is 100 ms, so 10 ticks ≈ 1 second. This is the primary event source for chains that run continuously.".to_string(),
             pins: vec![PinDefinition {
                 id: PinId(0),
                 name: "Out".to_string(),
@@ -1216,8 +1234,8 @@ impl Node for ConsoleNode {
             type_name: "console".to_string(),
             title: "Console Log".to_string(),
             category: "Debug".to_string(),
-            description: "Виводить значення в консоль при отриманні сигналу виконання".to_string(),
-            help: "За сигналом на In виводить значення Val у консоль редактора й у лог сервера. Без під'єднаного Val виводить «None».\n\nВиходу немає — це кінцева нода ланцюжка. Щоб вивести значення посеред ланцюжка, використайте Debug Log.".to_string(),
+            description: "Prints a value to the console when triggered".to_string(),
+            help: "On a signal at In, prints the value of Val to the editor console and server log. Without Val connected, prints \"None\".\n\nHas no output — this is a terminal node in a chain. To log a value in the middle of a chain, use Debug Log.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Val".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
@@ -1246,8 +1264,8 @@ impl Node for ClickButtonNode {
             type_name: "test/click_button".to_string(),
             title: "Click Button".to_string(),
             category: "Events".to_string(),
-            description: "Генерує exec сигнал на наступному тіку після того як користувач клікне на кнопку".to_string(),
-            help: "Видає сигнал на Out, коли ви натискаєте «Запустити» в правій панелі.\n\nЗручно, щоб вручну запустити ланцюжок під час налагодження.".to_string(),
+            description: "Emits an exec signal on the next tick after the user clicks the button".to_string(),
+            help: "Emits a signal on Out when you click the Run button on the node.\n\nHandy for manually triggering a chain while debugging.".to_string(),
             pins: vec![
                 PinDefinition {
                     id: PinId(0),
@@ -1315,8 +1333,8 @@ impl Node for DebugNode {
             type_name: "test/debug".to_string(),
             title: "Debug Log".to_string(),
             category: "Debug".to_string(),
-            description: "Приймає будь-які дані та виводить їх у лог з текстовим описом".to_string(),
-            help: "За сигналом на In виводить у консоль «Префікс» (з правої панелі) разом зі значенням Val і передає виконання далі на Out.\n\nЇї можна вставити посеред ланцюжка, щоб подивитися, яке значення через нього проходить.".to_string(),
+            description: "Accepts any data and logs it with a text prefix".to_string(),
+            help: "On a signal at In, logs the \"Prefix\" together with the value of Val to the console and passes execution to Out.\n\nCan be inserted in the middle of a chain to inspect the value passing through it.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Val".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
@@ -1373,8 +1391,8 @@ impl Node for CompareNode {
             type_name: "compare".to_string(),
             title: "Compare".to_string(),
             category: "Logic".to_string(),
-            description: "Порівнює два числа".to_string(),
-            help: "Порівнює числа A і B:\n• Eq — A дорівнює B (з точністю до 1e-9);\n• Gt — A більше за B;\n• Lt — A менше за B.\n\nНепід'єднаний вхід бере значення, задане біля піна на ноді, а без нього вважається нулем.\n\nДля розгалуження виконання за умовою зручніша нода Match.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Compares two numbers".to_string(),
+            help: "Compares numbers A and B:\n• Eq — A equals B (within 1e-9);\n• Gt — A is greater than B;\n• Lt — A is less than B.\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to 0.\n\nFor branching execution on a condition, the Match node is more convenient.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "B".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -1408,8 +1426,8 @@ impl Node for ForLoopNode {
             type_name: "for_loop".to_string(),
             title: "For Loop".to_string(),
             category: "Control Flow".to_string(),
-            description: "Асинхронний цикл від 0 до Count-1 з кроком 1".to_string(),
-            help: "Покроковий цикл:\n1. Сигнал на In починає цикл з Index = 0 і видає сигнал на LoopBody.\n2. Коли тіло циклу відпрацювало, подайте сигнал на Next — Index збільшиться на 1, і LoopBody спрацює знову.\n3. Після Count ітерацій або сигналу на Break спрацьовує Completed.\n\nЯкщо Count ≤ 0, одразу спрацьовує Completed. Кожен крок займає щонайменше такт, тож цикл не блокує рушій.".to_string(),
+            description: "Asynchronous loop from 0 to Count-1 with step 1".to_string(),
+            help: "Step-by-step loop:\n1. A signal at In starts the loop with Index = 0 and fires LoopBody.\n2. When the loop body finishes, send a signal to Next — Index increments by 1 and LoopBody fires again.\n3. After Count iterations or a signal at Break, Completed fires.\n\nIf Count ≤ 0, Completed fires immediately. Each step takes at least one tick, so the loop never blocks the engine.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Count".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -1472,8 +1490,8 @@ impl Node for SleepNode {
             type_name: "sleep".to_string(),
             title: "Sleep".to_string(),
             category: "Time".to_string(),
-            description: "Затримує виконання на вказану кількість мілісекунд або тактів".to_string(),
-            help: "Сигнал на In запускає затримку, а коли вона мине — видає сигнал на Out.\n\n• Delay — тривалість у мілісекундах (округлюється вгору до цілих тактів).\n• UseTicks = true — Delay рахується в тактах.\n• TickDuration — тривалість такту в мс для розрахунку (типово — такт сервера).\n\nКожен сигнал на In запускає власну затримку, як у Queue Delay.".to_string(),
+            description: "Delays execution by the specified number of milliseconds or ticks".to_string(),
+            help: "A signal at In starts a delay, and when it elapses, emits a signal on Out.\n\n• Delay — duration in milliseconds (rounded up to whole ticks).\n• UseTicks = true — Delay is counted in ticks.\n• TickDuration — tick duration in ms for calculation (defaults to the server tick).\n\nEach signal at In starts its own independent delay, like Queue Delay.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Delay".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -1516,8 +1534,8 @@ impl Node for ListCreateNode {
             type_name: "list/create".to_string(),
             title: "Create List".to_string(),
             category: "Lists".to_string(),
-            description: "Створює порожній список".to_string(),
-            help: "Видає порожній список. Тип елементів обирається в правій панелі.\n\nДалі список наповнюють нодою List Add.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Creates an empty list".to_string(),
+            help: "Outputs an empty list. The element type is selected on the node.\n\nPopulate the list using the List Add node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition {
                     id: PinId(0),
@@ -1557,8 +1575,8 @@ impl Node for ListAddNode {
             type_name: "list/add".to_string(),
             title: "List Add".to_string(),
             category: "Lists".to_string(),
-            description: "Додає елемент до списку".to_string(),
-            help: "Видає OutList — копію списку List з елементом Item у кінці. Вхідний список не змінюється.\n\nТип елементів обирається в правій панелі й має збігатися з типом списку.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Appends an item to a list".to_string(),
+            help: "Outputs OutList — a copy of List with Item appended at the end. The input list is not modified.\n\nThe element type is selected on the node and must match the list type.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "List".to_string(), pin_type: PinType::Data(DataType::List(Box::new(self.element_type.clone()))), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Item".to_string(), pin_type: PinType::Data(self.element_type.clone()), direction: PinDirection::Input, required: false },
@@ -1597,8 +1615,8 @@ impl Node for ListRemoveNode {
             type_name: "list/remove".to_string(),
             title: "List Remove".to_string(),
             category: "Lists".to_string(),
-            description: "Вилучає елемент зі списку за індексом".to_string(),
-            help: "Видає OutList — копію списку без елемента з номером Index (рахунок від 0). Якщо такого номера немає, список повертається без змін.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Removes an item from a list by index".to_string(),
+            help: "Outputs OutList — a copy of the list without the element at Index (0-based). If the index is out of bounds, the list is returned unchanged.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "List".to_string(), pin_type: PinType::Data(DataType::List(Box::new(self.element_type.clone()))), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Index".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -1639,8 +1657,8 @@ impl Node for ListGetNode {
             type_name: "list/get".to_string(),
             title: "List Get".to_string(),
             category: "Lists".to_string(),
-            description: "Отримує елемент зі списку за індексом".to_string(),
-            help: "Видає Item — елемент списку з номером Index (рахунок від 0). Якщо такого номера немає, вихід не має значення.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Gets an item from a list by index".to_string(),
+            help: "Outputs Item — the list element at Index (0-based). If the index is out of bounds, the output has no value.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "List".to_string(), pin_type: PinType::Data(DataType::List(Box::new(self.element_type.clone()))), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Index".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
@@ -1682,8 +1700,8 @@ impl Node for ListLengthNode {
             type_name: "list/length".to_string(),
             title: "List Length".to_string(),
             category: "Lists".to_string(),
-            description: "Повертає довжину списку".to_string(),
-            help: "Видає Len — кількість елементів у списку. Без під'єднаного списку — 0.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Returns the length of a list".to_string(),
+            help: "Outputs Len — the number of elements in the list. If no list is connected, outputs 0.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "List".to_string(), pin_type: PinType::Data(DataType::List(Box::new(self.element_type.clone()))), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Len".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Output, required: false },
@@ -1719,8 +1737,8 @@ impl Node for ObjectCreateNode {
             type_name: "object/create".to_string(),
             title: "Create Object".to_string(),
             category: "Objects".to_string(),
-            description: "Створює порожній об'єкт".to_string(),
-            help: "Видає порожній об'єкт — набір іменованих полів.\n\nПоля додають нодою Set Object Field.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Creates an empty object".to_string(),
+            help: "Outputs an empty object — a collection of named fields.\n\nAdd fields using the Set Object Field node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Output, required: false },
             ],
@@ -1740,8 +1758,8 @@ impl Node for ObjectSetFieldNode {
             type_name: "object/set_field".to_string(),
             title: "Set Object Field".to_string(),
             category: "Objects".to_string(),
-            description: "Встановлює значення поля об'єкта".to_string(),
-            help: "Видає OutObj — копію об'єкта Obj, у якій поле Name має значення Val. Якщо поля не було, воно додається, інакше — замінюється.\n\nТип Val обирається в правій панелі. Поки не під'єднано всі входи, результату немає.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Sets the value of an object field".to_string(),
+            help: "Outputs OutObj — a copy of object Obj where field Name has value Val. If the field did not exist, it is added; otherwise it is replaced.\n\nThe type of Val is selected on the node. Until all inputs are provided, no output is produced.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
@@ -1786,8 +1804,8 @@ impl Node for ObjectGetFieldNode {
             type_name: "object/get_field".to_string(),
             title: "Get Object Field".to_string(),
             category: "Objects".to_string(),
-            description: "Отримує значення поля об'єкта".to_string(),
-            help: "Шукає в об'єкті Obj поле Name:\n• Val — значення поля;\n• Found — чи знайдено поле.\n\nТип Val обирається в правій панелі.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Gets the value of an object field".to_string(),
+            help: "Looks up field Name in object Obj:\n• Val — the field value;\n• Found — whether the field exists.\n\nThe type of Val is selected on the node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
@@ -1847,8 +1865,8 @@ impl Node for ObjectUnpackNode {
             type_name: "object/unpack".to_string(),
             title: "Unpack Object".to_string(),
             category: "Objects".to_string(),
-            description: "Розпаковує поля об'єкта".to_string(),
-            help: "Видає кілька полів об'єкта одразу. Поля перелічують на ноді або в правій панелі через кому у вигляді «назва:тип», наприклад `temp:number, city:string` (без типу — string).\n\nКожне поле стає окремим вихідним піном. Поле, якого немає в об'єкті, не має значення.\n\nЧиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.".to_string(),
+            description: "Unpacks fields of an object".to_string(),
+            help: "Outputs several object fields at once. Fields are listed on the node or in the right panel separated by commas as \"name:type\", for example `temp:number, city:string` (without a type — string).\n\nEach field becomes a separate output pin. A field missing from the object has no value.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins,
         }
     }
@@ -1915,13 +1933,13 @@ mod tests {
         let inputs: Vec<_> = def.pins.iter().filter(|p| p.direction == PinDirection::Input).map(|p| p.name.as_str()).collect();
         assert_eq!(inputs, ["In", "mode", "t"]);
         let outputs: Vec<_> = def.pins.iter().filter(|p| p.direction == PinDirection::Output).map(|p| p.name.as_str()).collect();
-        assert_eq!(outputs, ["t > 25", "t > 20 і mode = \"auto\"", "t < 0 або t > 100", "Else"]);
+        assert_eq!(outputs, ["t > 25", "t > 20 and mode = \"auto\"", "t < 0 or t > 100", "Else"]);
 
         // Inputs have no values — no condition matches
         assert_eq!(fire(&mut engine, id), [MatchNode::ELSE_PIN]);
 
         engine.set_input_value(id, PinId(2), Some(num(30))).unwrap();
-        assert_eq!(fire(&mut engine, id), [PinId(1)], "лише перший збіг");
+        assert_eq!(fire(&mut engine, id), [PinId(1)], "only the first match");
 
         engine.set_node_property(id, "all_matches", DataValue::Bool(true)).unwrap();
         engine.set_input_value(id, PinId(1), Some(DataValue::String("auto".into()))).unwrap();
@@ -2038,7 +2056,7 @@ mod tests {
     fn test_every_built_in_node_has_help() {
         let engine = TickEngine::new();
         for def in engine.registry.get_definitions() {
-            assert!(!def.help.trim().is_empty(), "нода {} без пояснення", def.type_name);
+            assert!(!def.help.trim().is_empty(), "node {} has no help", def.type_name);
         }
     }
 
@@ -2277,7 +2295,7 @@ mod tests {
         // 2. Create DebugNode and set prefix
         let debug_id = NodeId::generate();
         let mut debug_node = engine.registry.create_node("test/debug", debug_id).unwrap();
-        debug_node.set_property("prefix", DataValue::String("значення змінної: ".to_string()));
+        debug_node.set_property("prefix", DataValue::String("variable value: ".to_string()));
         engine.add_node(debug_node);
 
         // 3. Connect Exec: Button Out -> Debug In

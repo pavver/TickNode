@@ -91,7 +91,8 @@ pub fn InlineValue(
             >
                 {optional.then(|| view! { <option value="">"—"</option> })}
                 {def.values().iter().map(|v| {
-                    let label = if v.title.is_empty() { v.value.clone() } else { v.title.clone() };
+                    let (type_name, value) = (def.name.clone(), v.clone());
+                    let label = move || i18n::enum_value_title(&type_name, &value);
                     view! { <option value=v.value.clone()>{label}</option> }
                 }).collect_view()}
             </select>
@@ -175,7 +176,7 @@ fn default_value(type_name: &str) -> DataValue {
 fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
     let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect();
     ed.types.with_untracked(|types| {
-        options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", d.title, d.name))));
+        options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", i18n::type_def_title(&d), d.name))));
     });
     options
 }

@@ -28,8 +28,8 @@ impl PluginNode for Greeter {
             type_name: "test/greeter".into(),
             title: "Greeter".into(),
             category: "Test".into(),
-            description: "Видає привітання з налаштувань".into(),
-            help: "За сигналом на In видає на Text поточне привітання з налаштувань плагіна у вигляді «<привітання>|<режим>|<токен задано>». Перевіряє, що хост застосував налаштування.".into(),
+            description: "Emits the greeting from settings".into(),
+            help: "On a signal at In emits the current greeting from the plugin settings on Text as \"<greeting>|<mode>|<token set>\". Checks that the host applied the settings.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Text", DataType::String)],
         }
     }
@@ -55,8 +55,8 @@ impl PluginNode for Counter {
             type_name: "test/counter".into(),
             title: "Counter".into(),
             category: "Test".into(),
-            description: "Рахує імпульси".into(),
-            help: "Кожен сигнал на In збільшує лічильник Count на 1. Перевіряє, що стан ноди плагіна зберігається між викликами.".into(),
+            description: "Counts pulses".into(),
+            help: "Each signal on In increases the counter Count by 1. Checks that the plugin node state is kept between calls.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Count", DataType::Number)],
         }
     }
@@ -78,7 +78,7 @@ impl PluginNode for Counter {
 
     /// Not an event source: the host must not call `poll`.
     fn poll(&mut self, _: u64) -> Option<PinId> {
-        panic!("poll для ноди без polls")
+        panic!("poll called for a node without polls")
     }
 }
 
@@ -93,8 +93,8 @@ impl PluginNode for Ticker {
             type_name: "test/ticker".into(),
             title: "Ticker".into(),
             category: "Test".into(),
-            description: "Спрацьовує щотакту".into(),
-            help: "Джерело подій: хост опитує ноду щотакту, і вона щоразу видає сигнал на Out і кількість опитувань на Polls.".into(),
+            description: "Fires every tick".into(),
+            help: "Event source: the host polls the node every tick, and each time it emits a signal on Out and the number of polls on Polls.".into(),
             pins: vec![exec_out(0, "Out"), data_out(1, "Polls", DataType::Number)],
         }
     }
@@ -120,15 +120,15 @@ impl PluginNode for Crash {
             type_name: "test/crash".into(),
             title: "Crash".into(),
             category: "Test".into(),
-            description: "Аварійно завершує плагін".into(),
-            help: "Перевірка ізоляції плагінів: сигнал на Panic викликає паніку, на Spin — нескінченний цикл. Хост має перервати виконання й перезапустити плагін.".into(),
+            description: "Crashes the plugin".into(),
+            help: "Plugin isolation check: a signal on Panic causes a panic, on Spin an infinite loop. The host must interrupt execution and restart the plugin.".into(),
             pins: vec![exec_in(0, "Panic"), exec_in(1, "Spin")],
         }
     }
 
     fn execute(&mut self, trigger: Trigger, _: &Inputs) -> Vec<Output> {
         match trigger {
-            Trigger::Pin(PinId(0)) => panic!("навмисна паніка"),
+            Trigger::Pin(PinId(0)) => panic!("deliberate panic"),
             Trigger::Pin(PinId(1)) => {
                 let mut x: u64 = 0;
                 loop {
@@ -149,8 +149,8 @@ impl PluginNode for Storage {
             type_name: "test/storage".into(),
             title: "Storage".into(),
             category: "Test".into(),
-            description: "Перевіряє файлове сховище плагіна".into(),
-            help: "За сигналом на In записує Text у файл у власному каталозі плагіна й видає на Read прочитаний назад вміст. Перевіряє право Storage.".into(),
+            description: "Checks the plugin file storage".into(),
+            help: "On a signal at In writes Text to a file in the plugin's own directory and emits the content read back on Read. Checks the Storage permission.".into(),
             pins: vec![exec_in(0, "In"), data_in(1, "Text", DataType::String), data_out(2, "Read", DataType::String)],
         }
     }
@@ -178,8 +178,8 @@ impl PluginNode for PointSource {
             type_name: "test/point_source".into(),
             title: "Point Source".into(),
             category: "Test".into(),
-            description: "Видає точку test.point".into(),
-            help: "За сигналом на In видає на Point значення власного типу test.point з координатами X і Y (властивості). Поле label не заповнюється.".into(),
+            description: "Emits a test.point".into(),
+            help: "On a signal at In emits a value of the custom type test.point on Point with coordinates X and Y (properties). The label field is not filled.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Point", DataType::Named(POINT.into()))],
         }
     }
@@ -212,8 +212,8 @@ impl PluginNode for BadSource {
             type_name: "test/bad_source".into(),
             title: "Bad Source".into(),
             category: "Test".into(),
-            description: "Видає значення чужого типу".into(),
-            help: "Перевірка хоста: вихід оголошено як test.point, але нода видає об'єкт типу other.type. Хост має відкинути значення й записати помилку в лог.".into(),
+            description: "Emits a value of a foreign type".into(),
+            help: "Host check: the output is declared as test.point, but the node emits an object of type other.type. The host must drop the value and log an error.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Point", DataType::Named(POINT.into()))],
         }
     }
@@ -232,8 +232,8 @@ impl PluginNode for PointSink {
             type_name: "test/point_sink".into(),
             title: "Point Sink".into(),
             category: "Test".into(),
-            description: "Приймає точку й режим".into(),
-            help: "Приймає значення типів test.point і test.mode. На Text видає «<режим>:<x>,<y>[:<label>]», на Sum — x + y.".into(),
+            description: "Accepts a point and a mode".into(),
+            help: "Accepts values of types test.point and test.mode. Emits \"<mode>:<x>,<y>[:<label>]\" on Text and x + y on Sum.".into(),
             pins: vec![
                 exec_in(0, "In"),
                 data_in(1, "Point", DataType::Named(POINT.into())).required(),
@@ -259,8 +259,11 @@ impl PluginNode for PointSink {
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] =
         &["test/bad_source", "test/counter", "test/crash", "test/greeter", "test/point_sink", "test/point_source", "test/storage", "test/ticker"];
+    /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
+        &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
 
-    fn configure(settings: &[(String, DataValue)]) -> Result<(), String> {
+    fn configure(settings: &[(String, DataValue)]) -> Result<(), UiError> {
         let token = setting_str(settings, "token").unwrap_or_default().to_string();
         CONFIG.with(|c| {
             let mut c = c.borrow_mut();
@@ -269,8 +272,11 @@ impl Plugin for TestPlugin {
             c.token = token.clone();
         });
         match token.as_str() {
-            "" => Err("token не задано".into()),
-            "bad" => Err("невірний токен".into()),
+            "" => Err(UiError::new("test-plugin-error-no-token", "Token is not set")),
+            "bad" => Err(UiError::new("test-plugin-error-bad-token", "Invalid token").arg("length", token.len())),
+            // A key outside the plugin namespace must be dropped by the host
+            "foreign" => Err(UiError::new("node-math-add-title", "Foreign key")),
+            "plain" => Err("Plain error".into()),
             _ => Ok(()),
         }
     }
@@ -281,17 +287,17 @@ impl Plugin for TestPlugin {
                 FieldDefinition::new("x", "X", DataType::Number),
                 FieldDefinition::new("y", "Y", DataType::Number),
                 FieldDefinition::new("label", "Label", DataType::String).optional(),
-            ]).described("Точка на площині").colored("#e0a030"),
-            TypeDefinition::new_enum(MODE, "Mode", &[("auto", "Авто"), ("manual", "Вручну")]),
+            ]).described("A point on a plane").colored("#e0a030"),
+            TypeDefinition::new_enum(MODE, "Mode", &[("auto", "Auto"), ("manual", "Manual")]),
         ]
     }
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("test_plugin", "0.1.0", "TickNode")
             .capability(Capability::Storage)
-            .setting(SettingDefinition::text("greeting", "Привітання").described("Що видає нода Greeter").default_value("Hello"))
-            .setting(SettingDefinition::secret("token", "Токен").described("Порожній чи «bad» плагін відхиляє").required())
-            .setting(SettingDefinition::select("mode", "Режим", &[("quiet", "Тихо"), ("loud", "Гучно")]).default_value("quiet"))
+            .setting(SettingDefinition::text("greeting", "Greeting").described("What the Greeter node emits").default_value("Hello"))
+            .setting(SettingDefinition::secret("token", "Token").described("The plugin rejects an empty token or \"bad\"").required())
+            .setting(SettingDefinition::select("mode", "Mode", &[("quiet", "Quiet"), ("loud", "Loud")]).default_value("quiet"))
     }
 
     fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {

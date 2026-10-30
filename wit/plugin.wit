@@ -169,6 +169,15 @@ interface types {
     }
 
     enum log-level { debug, info, warn, error }
+
+    /// Translatable message for the user (shown in the UI, e.g. a `configure` error). `key` is a Fluent
+    /// message id from the plugin's `translations` (it must start with the plugin name slug, otherwise
+    /// the host drops it); `fallback` is the final English text used when the key cannot be resolved.
+    record ui-error {
+        key: string,
+        args: list<tuple<string, string>>,
+        fallback: string,
+    }
 }
 
 /// Host services. Task-starting functions work only during `execute`/`poll`
@@ -176,7 +185,8 @@ interface types {
 interface host {
     use types.{log-level, task-id, http-request};
 
-    /// Log message to the editor console (on behalf of the current node).
+    /// Log message to the editor console (on behalf of the current node). Logs are never translated:
+    /// always write them in English.
     log: func(level: log-level, message: string);
 
     /// Current tick number.
@@ -196,20 +206,27 @@ interface host {
 }
 
 interface nodes {
-    use types.{plugin-manifest, node-definition, type-definition, property, value, trigger, output};
+    use types.{plugin-manifest, node-definition, type-definition, property, value, trigger, output, ui-error};
 
     manifest: func() -> plugin-manifest;
 
     /// Applies settings (following the manifest schema; values are saved or defaults). Called by the host
     /// after loading, on every settings change, and after recreating the plugin instance
-    /// (crash) — before recreating nodes. `err` is shown to the user; the plugin remains loaded.
-    configure: func(settings: list<property>) -> result<_, string>;
+    /// (crash) — before recreating nodes. `err` is shown to the user (translated via its `key`);
+    /// the plugin remains loaded.
+    configure: func(settings: list<property>) -> result<_, ui-error>;
 
     /// Definitions of all node types with default properties.
     definitions: func() -> list<node-definition>;
 
     /// Custom plugin data types (structs and enums). The host reads them alongside `definitions`.
     types: func() -> list<type-definition>;
+
+    /// Translations shipped by the plugin: `(locale code, Fluent source)` pairs, e.g. `("uk", "...")`.
+    /// Definition texts are the English fallback, so an `en` resource is optional. The host validates
+    /// the syntax and keeps only messages with the plugin's own id prefixes. The host reads them
+    /// alongside `definitions`.
+    translations: func() -> list<tuple<string, string>>;
 
     resource node {
         /// Pins may depend on properties.

@@ -38,38 +38,38 @@ impl PluginNode for StringNode {
     fn definition(&self) -> NodeDefinition {
         let b = self.0.base();
         let (type_name, title, description, data) = match self.0 {
-            Op::Concat => ("string/concat", "Concat Strings", "Об'єднує два текстові рядки", vec![
+            Op::Concat => ("string/concat", "Concat Strings", "Joins two strings", vec![
                 data_in(b + 2, "A", DataType::String),
                 data_in(b + 3, "B", DataType::String),
                 data_out(b + 4, "Res", DataType::String),
             ]),
-            Op::Length => ("string/length", "String Length", "Повертає довжину рядка", vec![
+            Op::Length => ("string/length", "String Length", "Returns the length of a string", vec![
                 data_in(b + 2, "Val", DataType::String),
                 data_out(b + 3, "Res", DataType::Number),
             ]),
-            Op::Substring => ("string/substring", "Substring", "Виділяє підрядок із рядка", vec![
+            Op::Substring => ("string/substring", "Substring", "Extracts a substring from a string", vec![
                 data_in(b + 2, "Val", DataType::String),
                 data_in(b + 3, "Start", DataType::Number),
                 data_in(b + 4, "Len", DataType::Number),
                 data_out(b + 5, "Res", DataType::String),
             ]),
-            Op::Contains => ("string/contains", "String Contains", "Перевіряє, чи містить рядок інший підрядок", vec![
+            Op::Contains => ("string/contains", "String Contains", "Checks whether a string contains another substring", vec![
                 data_in(b + 2, "Val", DataType::String),
                 data_in(b + 3, "Sub", DataType::String),
                 data_out(b + 4, "Res", DataType::Bool),
             ]),
-            Op::Split => ("string/split", "Split String", "Розбиває рядок за роздільником", vec![
+            Op::Split => ("string/split", "Split String", "Splits a string by a separator", vec![
                 data_in(b + 2, "Val", DataType::String),
                 data_in(b + 3, "Pat", DataType::String),
                 data_out(b + 4, "Res", string_list()),
             ]),
-            Op::Regex => ("string/regex", "Regex Match", "Перевіряє регулярний вираз та повертає збіг", vec![
+            Op::Regex => ("string/regex", "Regex Match", "Matches a regular expression and returns the match", vec![
                 data_in(b + 2, "Val", DataType::String),
                 data_in(b + 3, "Pat", DataType::String),
                 data_out(b + 4, "Matched", DataType::Bool),
                 data_out(b + 5, "Capture", DataType::String),
             ]),
-            Op::Aggregate => ("string/aggregate", "Aggregate Strings", "Об'єднує список рядків за роздільником", vec![
+            Op::Aggregate => ("string/aggregate", "Aggregate Strings", "Joins a list of strings with a separator", vec![
                 data_in(b + 2, "List", string_list()),
                 data_in(b + 3, "Sep", DataType::String),
                 data_out(b + 4, "Res", DataType::String),
@@ -83,14 +83,14 @@ impl PluginNode for StringNode {
             category: "String".into(),
             description: description.into(),
             help: match self.0 {
-                Op::Concat => "Res — рядок A, одразу за яким іде B.",
-                Op::Length => "Res — кількість символів (не байтів) у рядку Val.",
-                Op::Substring => "Res — Len символів рядка Val, починаючи з позиції Start (рахунок від 0). Що виходить за межі рядка, відкидається.",
-                Op::Contains => "Res = true, якщо Val містить підрядок Sub. Порожній Sub міститься в будь-якому рядку.",
-                Op::Split => "Res — список частин рядка Val, розбитого за роздільником Pat. Порожній Pat розбиває рядок на окремі символи.",
-                Op::Regex => "Шукає в Val регулярний вираз Pat (синтаксис Rust regex):\n• Matched — чи знайдено збіг;\n• Capture — перша група в дужках, а якщо груп немає — увесь збіг.\n\nНекоректний вираз дає Matched = false.",
-                Op::Aggregate => "Res — елементи списку List, з'єднані в один рядок через Sep. Нерядкові елементи пропускаються.",
-            }.to_string() + "\n\nНепід'єднаний рядковий вхід вважається порожнім рядком.\n\nВиконується за сигналом на In, після чого передає виконання на Out — результат доступний наступним нодам.",
+                Op::Concat => "Res is string A immediately followed by B.",
+                Op::Length => "Res is the number of characters (not bytes) in string Val.",
+                Op::Substring => "Res is Len characters of string Val starting at position Start (counting from 0). Anything beyond the end of the string is discarded.",
+                Op::Contains => "Res = true if Val contains the substring Sub. An empty Sub is contained in any string.",
+                Op::Split => "Res is a list of the parts of string Val split by the separator Pat. An empty Pat splits the string into single characters.",
+                Op::Regex => "Searches Val for the regular expression Pat (Rust regex syntax):\n• Matched — whether a match was found;\n• Capture — the first parenthesized group, or the whole match if there are no groups.\n\nAn invalid expression gives Matched = false.",
+                Op::Aggregate => "Res is the elements of List joined into one string with Sep. Non-string elements are skipped.",
+            }.to_string() + "\n\nAn unconnected string input is treated as an empty string.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes.",
             pins,
         }
     }
@@ -154,6 +154,7 @@ impl Plugin for StringPlugin {
         "string/concat", "string/length", "string/substring", "string/contains",
         "string/split", "string/regex", "string/aggregate",
     ];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {

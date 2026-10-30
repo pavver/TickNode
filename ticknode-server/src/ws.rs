@@ -2,7 +2,7 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use futures::{SinkExt, StreamExt};
-use ticknode_shared::{ClientMessage, ServerMessage};
+use ticknode_shared::{ClientMessage, ServerMessage, UiMessage};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, warn};
 
@@ -22,7 +22,7 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
     if sink.send(Message::Binary(encode(&snapshot))).await.is_err() {
         return;
     }
-    debug!("Редактор підключився");
+    debug!("Editor connected");
 
     loop {
         tokio::select! {
@@ -33,7 +33,7 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
                 Ok(bytes) => if sink.send(Message::Binary(bytes)).await.is_err() { break },
                 // Client fell behind: drop the connection so it receives a fresh snapshot on reconnect.
                 Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!(skipped = n, "Редактор відстав, розриваємо з'єднання");
+                    warn!(skipped = n, "Editor fell behind, dropping the connection");
                     break;
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
@@ -44,12 +44,12 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
             incoming = stream.next() => match incoming {
                 Some(Ok(Message::Binary(bytes))) => match postcard::from_bytes::<ClientMessage>(&bytes) {
                     Ok(msg) => engine.send(msg, reply_tx.clone()),
-                    Err(e) => { let _ = reply_tx.send(ServerMessage::Error(format!("Некоректне повідомлення: {}", e))); }
+                    Err(e) => { let _ = reply_tx.send(ServerMessage::Error(UiMessage::new("error-bad-message", format!("Invalid message: {e}")).arg("error", e))); }
                 },
                 Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
                 Some(Ok(_)) => {}
             },
         }
     }
-    debug!("Редактор відключився");
+    debug!("Editor disconnected");
 }

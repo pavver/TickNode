@@ -2900,6 +2900,7 @@ name = "ticknode-core"
 version = "0.1.0"
 dependencies = [
  "evalexpr",
+ "fluent-syntax",
  "futures",
  "postcard",
  "serde",

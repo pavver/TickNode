@@ -32,8 +32,8 @@ impl PluginNode for WeatherNode {
             type_name: "http/weather".into(),
             title: "Get Weather".into(),
             category: "Network".into(),
-            description: "Отримує температуру для міста".into(),
-            help: "За сигналом на Trigger робить HTTP-запит за адресою з властивості url: {city} замінюється на City (без City — Kyiv). Сервіс має відповісти текстом «температура,опис», наприклад `22.5,Sunny`.\n\n• Успіх — Temp, Description і сигнал на Success.\n• Помилка мережі, статус 4xx/5xx або незрозуміла відповідь — сигнал на Failure.\n\nНовий сигнал скасовує попередній незавершений запит. Плагін може звертатися лише до доменів, дозволених у його маніфесті.".into(),
+            description: "Fetches the temperature for a city".into(),
+            help: "On a signal at Trigger, makes an HTTP request to the address from the url property: {city} is replaced with City (without City — Kyiv). The service must respond with the text \"temperature,description\", for example `22.5,Sunny`.\n\n• Success — Temp, Description and a signal on Success.\n• A network error, a 4xx/5xx status or an unintelligible response — a signal on Failure.\n\nA new signal cancels the previous unfinished request. The plugin can only access the domains allowed in its manifest.".into(),
             pins: vec![
                 exec_in(TRIGGER.0, "Trigger"),
                 data_in(CITY.0, "City", DataType::String),
@@ -107,6 +107,7 @@ impl PluginNode for WeatherNode {
 
 impl Plugin for WeatherPlugin {
     const NODE_TYPES: &'static [&'static str] = &["http/weather"];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {

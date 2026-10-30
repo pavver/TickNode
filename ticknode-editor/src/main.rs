@@ -66,9 +66,9 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
         ed.log(
             LogKind::System,
             if cut {
-                t!("log-ui-cut", count = count)
+                format!("[UI] Cut nodes: {count}")
             } else {
-                t!("log-ui-copied", count = count)
+                format!("[UI] Copied nodes: {count}")
             },
         );
         if cut {

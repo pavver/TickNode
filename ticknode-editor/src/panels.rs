@@ -408,7 +408,7 @@ pub fn Inspector() -> impl IntoView {
         <aside class="panel right" class:hidden=hidden>
             {move || match ed.selection.get() {
                 Some(Selection::Nodes(ids)) if ids.len() == 1 => {
-                    let id = *ids.first().expect("одна нода");
+                    let id = *ids.first().expect("one node");
                     view! { <NodeInspector id=id /> }.into_any()
                 }
                 Some(Selection::Nodes(ids)) => view! { <GroupInspector count=ids.len() /> }.into_any(),
@@ -592,7 +592,7 @@ fn GroupInspector(count: usize) -> impl IntoView {
                 full=true
                 flash_on_click=true
                 on_click=Callback::new(move |_| if !clipboard::copy_via_command() {
-                    ed.log(LogKind::Error, t!("log-error-copy-blocked"));
+                    ed.log(LogKind::Error, "[ERROR] Browser blocked copying - try Ctrl+C");
                 })
             />
             <ActionButton

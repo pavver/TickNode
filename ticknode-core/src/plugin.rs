@@ -15,6 +15,7 @@ use wasmtime::component::{Component, HasSelf, Linker, ResourceAny, ResourceTable
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
+use crate::translations::{AllowedIds, filter_plugin_resource, normalize_locale, sanitize_ui_message};
 use crate::host::{HostState, HttpRequest, TaskId, TaskOutput, TaskResult};
 use crate::{Node, NodeContext, RemovedConnections, TickEngine};
 
@@ -34,7 +35,7 @@ fn engine() -> &'static Engine {
     ENGINE.get_or_init(|| {
         let mut config = Config::new();
         config.consume_fuel(true);
-        Engine::new(&config).expect("конфігурація wasmtime коректна")
+        Engine::new(&config).expect("the wasmtime configuration is valid")
     })
 }
 
@@ -74,7 +75,7 @@ impl WasiView for PluginState {
 
 impl PluginState {
     fn call(&mut self) -> Result<&mut CallCtx, String> {
-        self.call.as_mut().ok_or_else(|| "Доступно лише під час execute/poll".to_string())
+        self.call.as_mut().ok_or_else(|| "Only available during execute/poll".to_string())
     }
 }
 
@@ -107,13 +108,13 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     }
 
     fn start_http(&mut self, request: wit::HttpRequest) -> Result<TaskId, String> {
-        let url = url::Url::parse(&request.url).map_err(|e| format!("Некоректний URL: {e}"))?;
+        let url = url::Url::parse(&request.url).map_err(|e| format!("Invalid URL: {e}"))?;
         if !matches!(url.scheme(), "http" | "https") {
-            return Err(format!("Непідтримувана схема: {}", url.scheme()));
+            return Err(format!("Unsupported scheme: {}", url.scheme()));
         }
         let host = url.host_str().unwrap_or_default();
         if !self.grants.http_domains.iter().any(|d| domain_allowed(host, d)) {
-            return Err(format!("Плагін не має права на HTTP до {host}"));
+            return Err(format!("The plugin is not allowed to make HTTP requests to {host}"));
         }
         let request = HttpRequest {
             method: request.method,
@@ -141,6 +142,8 @@ fn domain_allowed(host: &str, allowed: &str) -> bool {
 struct Runtime {
     pre: bindings::PluginPre<PluginState>,
     grants: Arc<Grants>,
+    /// Which Fluent ids the plugin may define; also its UI error key namespace.
+    allowed: AllowedIds,
     /// `None` after a trap: a new instance is created on the next call.
     instance: Option<(Store<PluginState>, bindings::Plugin)>,
     /// Incremented with each new instance; resources from older instances are invalid.
@@ -148,7 +151,7 @@ struct Runtime {
     /// Settings to apply to each new instance (`configure`) before recreating nodes.
     settings: Option<Vec<wit::Property>>,
     /// Result of the last `configure` called during instance creation.
-    configure_error: Option<String>,
+    configure_error: Option<UiMessage>,
 }
 
 impl Runtime {
@@ -174,7 +177,7 @@ impl Runtime {
             // A recreated instance after a crash receives settings first — otherwise it would lose its config
             if let Some(settings) = &self.settings {
                 store.set_fuel(FUEL_PER_CALL)?;
-                self.configure_error = plugin.ticknode_plugin_nodes().call_configure(&mut store, settings)?.err();
+                self.configure_error = plugin.ticknode_plugin_nodes().call_configure(&mut store, settings)?.err().map(|e| self.ui_error(e));
             }
             self.instance = Some((store, plugin));
             self.generation += 1;
@@ -184,20 +187,20 @@ impl Runtime {
 
     fn api(&mut self) -> wasmtime::Result<(&mut Store<PluginState>, &NodesApi)> {
         self.instantiate()?;
-        let (store, plugin) = self.instance.as_mut().expect("екземпляр щойно створено");
+        let (store, plugin) = self.instance.as_mut().expect("the instance was just created");
         store.set_fuel(FUEL_PER_CALL)?;
         Ok((store, plugin.ticknode_plugin_nodes()))
     }
 
     /// Stores settings and applies them: to an existing instance via `configure`,
     /// while a new instance receives them upon creation. `Err` is the plugin's response (or a trap).
-    fn configure(&mut self, settings: &[(String, DataValue)]) -> Result<(), String> {
+    fn configure(&mut self, settings: &[(String, DataValue)]) -> Result<(), UiMessage> {
         let props: Vec<wit::Property> = settings.iter()
             .map(|(name, value)| wit::Property { name: name.clone(), value: encode_value(value) })
             .collect();
         self.settings = Some(props.clone());
         let fresh = self.instance.is_none();
-        self.instantiate().map_err(|e| format!("Аварія плагіна: {}", short_error(&e)))?;
+        self.instantiate().map_err(|e| crash_message(&short_error(&e)))?;
         if fresh {
             return self.configure_error.clone().map_or(Ok(()), Err);
         }
@@ -207,16 +210,23 @@ impl Runtime {
         };
         match outcome {
             Ok(result) => {
+                let result = result.map_err(|e| self.ui_error(e));
                 self.configure_error = result.clone().err();
                 result
             }
             Err(e) => {
-                warn!("Аварія плагіна під час configure: {e:?}");
+                warn!("Plugin crashed during configure: {e:?}");
                 let reason = short_error(&e);
                 self.discard();
-                Err(format!("Аварія плагіна: {reason}"))
+                Err(crash_message(&reason))
             }
         }
+    }
+
+    /// A `configure` error from the plugin; its key is restricted to the plugin's own namespace.
+    fn ui_error(&self, e: wit::UiError) -> UiMessage {
+        let message = UiMessage { key: e.key, args: e.args, fallback: e.fallback };
+        sanitize_ui_message(message, &self.allowed)
     }
 
     /// Discards the instance after a trap. The generation number is incremented immediately so resources
@@ -251,14 +261,14 @@ enum CallError {
 
 /// Concise explanation for the editor console; full wasm backtrace goes to the server log.
 fn trap_error(e: wasmtime::Error) -> CallError {
-    warn!("Аварія плагіна: {e:?}");
+    warn!("Plugin crashed: {e:?}");
     CallError::Trap(short_error(&e))
 }
 
 fn short_error(e: &wasmtime::Error) -> String {
     match e.downcast_ref::<wasmtime::Trap>() {
-        Some(wasmtime::Trap::OutOfFuel) => "перевищено ліміт обчислень за один виклик (нескінченний цикл?)".to_string(),
-        Some(wasmtime::Trap::UnreachableCodeReached) => "паніка в плагіні (повідомлення — у лозі сервера)".to_string(),
+        Some(wasmtime::Trap::OutOfFuel) => "per-call compute limit exceeded (infinite loop?)".to_string(),
+        Some(wasmtime::Trap::UnreachableCodeReached) => "panic in the plugin (see the server log for details)".to_string(),
         Some(trap) => trap.to_string(),
         None => e.root_cause().to_string(),
     }
@@ -267,7 +277,7 @@ fn short_error(e: &wasmtime::Error) -> String {
 impl std::fmt::Display for CallError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CallError::Trap(e) => write!(f, "Аварія плагіна: {e}"),
+            CallError::Trap(e) => write!(f, "Plugin crashed: {e}"),
             CallError::Rejected(e) => write!(f, "{e}"),
         }
     }
@@ -286,7 +296,7 @@ impl WasmNode {
         f: impl FnOnce(&mut Store<PluginState>, &NodesApi, ResourceAny) -> wasmtime::Result<R>,
     ) -> Result<R, CallError> {
         if self.failed {
-            return Err(CallError::Rejected("Нода зупинена після помилки плагіна; змініть властивість, щоб перезапустити".into()));
+            return Err(CallError::Rejected("The node is stopped after a plugin error; change a property to restart it".into()));
         }
         let runtime = self.runtime.clone();
         let mut rt = lock(&runtime);
@@ -305,7 +315,7 @@ impl WasmNode {
                 }
                 let result = f(store, api, resource);
                 if let Some(h) = host {
-                    *h = store.data_mut().call.take().expect("контекст виклику на місці").host;
+                    *h = store.data_mut().call.take().expect("the call context is in place").host;
                 }
                 result.map_err(trap_error)
             }
@@ -331,8 +341,8 @@ impl WasmNode {
             });
         match (declared, value) {
             (Some(name), DataValue::Object { type_name, .. }) if type_name.as_deref() != Some(name) => Err(format!(
-                "Плагін видав на вихід типу {name} значення {}: значення відкинуто",
-                type_name.as_deref().map_or("без типу".to_string(), |t| format!("типу {t}")),
+                "The plugin emitted a value {} on an output of type {name}: the value was dropped",
+                type_name.as_deref().map_or("without a type".to_string(), |t| format!("of type {t}")),
             )),
             _ => Ok(()),
         }
@@ -433,7 +443,7 @@ impl Node for WasmNode {
         let result = self.call(None, |store, api, node| api.node().call_set_property(store, node, name, &encoded))
             .and_then(|()| self.refresh());
         if let Err(e) = result {
-            warn!(node = ?self.id, r#type = %self.type_name, "Плагін не прийняв властивість {name}: {e}");
+            warn!(node = ?self.id, r#type = %self.type_name, "The plugin did not accept property {name}: {e}");
         }
     }
 
@@ -461,7 +471,9 @@ pub(crate) struct PluginSlot {
     runtime: Arc<Mutex<Runtime>>,
     active: bool,
     /// Result of the last `configure` call (settings error).
-    settings_error: Option<String>,
+    settings_error: Option<UiMessage>,
+    /// Validated translation resources of the plugin: `(locale, Fluent source)`.
+    translations: Vec<(String, String)>,
 }
 
 /// Graph changes after enabling or disabling a plugin.
@@ -483,10 +495,36 @@ pub fn effective_settings(manifest: &PluginManifest, stored: &[(String, DataValu
 }
 
 /// First required setting that has no value.
-pub fn missing_required(manifest: &PluginManifest, effective: &[(String, DataValue)]) -> Option<String> {
+pub fn missing_required(manifest: &PluginManifest, effective: &[(String, DataValue)]) -> Option<UiMessage> {
     manifest.settings.iter()
         .find(|d| d.required && !effective.iter().any(|(k, _)| *k == d.key))
-        .map(|d| format!("Не задано обов'язкове налаштування «{}»", d.title))
+        .map(|d| UiMessage::new("error-setting-required", format!("Required setting \"{}\" is not set", d.title)).arg("setting", &d.title))
+}
+
+/// A plugin crash reported to the user.
+fn crash_message(reason: &str) -> UiMessage {
+    UiMessage::new("error-plugin-crash", format!("Plugin crashed: {reason}")).arg("reason", reason)
+}
+
+fn plugin_not_loaded(name: &str) -> UiMessage {
+    UiMessage::new("error-plugin-not-loaded", format!("Plugin {name} is not loaded")).arg("plugin", name)
+}
+
+/// Validates the translations a plugin ships: normalizes locale codes, rejects resources with syntax
+/// errors and drops ids outside the plugin's namespace. Problems are logged (in English) and never fatal.
+fn validate_translations(plugin: &str, raw: Vec<(String, String)>, allowed: &AllowedIds) -> Vec<(String, String)> {
+    let mut valid = Vec::new();
+    for (locale, source) in raw {
+        let Some(code) = normalize_locale(&locale) else {
+            warn!(plugin, locale = %locale, "Ignoring translations with an invalid locale code");
+            continue;
+        };
+        match filter_plugin_resource(plugin, &code, &source, allowed) {
+            Ok(filtered) => valid.push((code, filtered)),
+            Err(e) => warn!(plugin, locale = %code, "Rejected a translation resource: {e}"),
+        }
+    }
+    valid
 }
 
 fn named_types(t: &DataType, out: &mut Vec<String>) {
@@ -508,7 +546,7 @@ impl TickEngine {
         wasm: &[u8],
         storage_root: Option<&Path>,
         grant: impl FnOnce(&PluginManifest) -> Vec<Capability>,
-    ) -> Result<PluginManifest, String> {
+    ) -> Result<PluginManifest, UiMessage> {
         let manifest = self.add_plugin(wasm, storage_root, grant)?;
         let settings = effective_settings(&manifest, &[]);
         if let Err(e) = self.enable_plugin(&manifest.name, &settings) {
@@ -524,34 +562,41 @@ impl TickEngine {
         wasm: &[u8],
         storage_root: Option<&Path>,
         grant: impl FnOnce(&PluginManifest) -> Vec<Capability>,
-    ) -> Result<PluginManifest, String> {
-        let component = Component::new(engine(), wasm).map_err(|e| format!("Некоректний компонент: {e:#}"))?;
+    ) -> Result<PluginManifest, UiMessage> {
+        let component = Component::new(engine(), wasm).map_err(|e| UiMessage::plain(format!("Invalid component: {e:#}")))?;
         let mut linker = Linker::new(engine());
-        wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| e.to_string())?;
-        bindings::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker, |s| s).map_err(|e| e.to_string())?;
+        wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| UiMessage::plain(e.to_string()))?;
+        bindings::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker, |s| s).map_err(|e| UiMessage::plain(e.to_string()))?;
         let pre = linker.instantiate_pre(&component)
             .and_then(bindings::PluginPre::new)
-            .map_err(|e| format!("Плагін несумісний з хостом: {e:#}"))?;
+            .map_err(|e| UiMessage::plain(format!("The plugin is incompatible with the host: {e:#}")))?;
 
         // Manifest and definitions are read from a temporary unprivileged instance.
-        let mut runtime = Runtime { pre, grants: Arc::default(), instance: None, generation: 0, settings: None, configure_error: None };
-        let (manifest, definitions, types) = runtime.api()
-            .and_then(|(store, api)| Ok((api.call_manifest(&mut *store)?, api.call_definitions(&mut *store)?, api.call_types(&mut *store)?)))
-            .map_err(|e| format!("Помилка ініціалізації плагіна: {e:#}"))?;
+        let mut runtime = Runtime {
+            pre, grants: Arc::default(), allowed: AllowedIds::default(), instance: None, generation: 0, settings: None, configure_error: None,
+        };
+        let (manifest, definitions, types, translations) = runtime.api()
+            .and_then(|(store, api)| Ok((
+                api.call_manifest(&mut *store)?,
+                api.call_definitions(&mut *store)?,
+                api.call_types(&mut *store)?,
+                api.call_translations(&mut *store)?,
+            )))
+            .map_err(|e| UiMessage::plain(format!("Plugin initialization failed: {e:#}")))?;
         runtime.instance = None;
 
         let manifest = from_wit_manifest(manifest);
         if manifest.name.is_empty() || !manifest.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-            return Err(format!("Некоректна назва плагіна: {:?}", manifest.name));
+            return Err(UiMessage::plain(format!("Invalid plugin name: {:?}", manifest.name)));
         }
         if self.plugins.contains_key(&manifest.name) {
-            return Err(format!("Плагін {} уже завантажено", manifest.name));
+            return Err(UiMessage::plain(format!("Plugin {} is already loaded", manifest.name)));
         }
         let definitions: Vec<(NodeDefinition, bool)> = definitions.into_iter().map(from_wit_definition).collect();
         let types: Vec<TypeDefinition> = types.into_iter().map(from_wit_type_definition).collect();
         for (def, _) in &definitions {
             if self.registry.get_definition(&def.type_name).is_some() {
-                return Err(format!("Тип ноди {} уже зареєстровано", def.type_name));
+                return Err(UiMessage::plain(format!("Node type {} is already registered", def.type_name)));
             }
         }
 
@@ -562,13 +607,19 @@ impl TickEngine {
                 Capability::Storage => {
                     if let Some(root) = storage_root {
                         let dir = root.join(&manifest.name);
-                        std::fs::create_dir_all(&dir).map_err(|e| format!("Каталог плагіна {}: {e}", dir.display()))?;
+                        std::fs::create_dir_all(&dir).map_err(|e| UiMessage::plain(format!("Plugin directory {}: {e}", dir.display())))?;
                         grants.storage_dir = Some(dir);
                     }
                 }
             }
         }
         runtime.grants = Arc::new(grants);
+
+        let node_types: Vec<String> = definitions.iter().map(|(d, _)| d.type_name.clone()).collect();
+        let type_names: Vec<String> = types.iter().map(|t| t.name.clone()).collect();
+        let allowed = AllowedIds::new(&manifest.name, &node_types, &type_names);
+        runtime.allowed = allowed.clone();
+        let translations = validate_translations(&manifest.name, translations, &allowed);
 
         self.plugins.insert(manifest.name.clone(), PluginSlot {
             manifest: manifest.clone(),
@@ -577,8 +628,19 @@ impl TickEngine {
             runtime: Arc::new(Mutex::new(runtime)),
             active: false,
             settings_error: None,
+            translations,
         });
         Ok(manifest)
+    }
+
+    /// Translation resources of the core and of every enabled plugin, merged per locale
+    /// (core first, then plugins in name order; the first definition of an id wins).
+    pub fn translations(&self) -> Translations {
+        let plugin_sources = self.plugins.values().filter(|p| p.active).flat_map(|p| p.translations.iter());
+        crate::translations::merge_resources(
+            crate::translations::CORE_TRANSLATIONS.iter().copied()
+                .chain(plugin_sources.map(|(l, s)| (l.as_str(), s.as_str()))),
+        )
     }
 
     pub fn plugin_names(&self) -> Vec<String> {
@@ -594,32 +656,32 @@ impl TickEngine {
     }
 
     /// Error from the last `configure` call ("settings error"); the plugin remains loaded.
-    pub fn plugin_settings_error(&self, name: &str) -> Option<String> {
+    pub fn plugin_settings_error(&self, name: &str) -> Option<UiMessage> {
         self.plugins.get(name)?.settings_error.clone()
     }
 
     /// Enables a plugin: registers its types, applies settings (`settings` already includes defaults,
     /// see `effective_settings`), and revives stubs of its types into real nodes.
-    pub fn enable_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<PluginChange, String> {
-        let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
+    pub fn enable_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<PluginChange, UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
         if slot.active {
-            return Err(format!("Плагін {name} уже увімкнено"));
+            return Err(UiMessage::plain(format!("Plugin {name} is already enabled")));
         }
         let (definitions, types, runtime) = (slot.definitions.clone(), slot.types.clone(), slot.runtime.clone());
         for (def, _) in &definitions {
             if self.registry.get_definition(&def.type_name).is_some() {
-                return Err(format!("Тип ноди {} уже зареєстровано", def.type_name));
+                return Err(UiMessage::plain(format!("Node type {} is already registered", def.type_name)));
             }
         }
         let node_definitions: Vec<NodeDefinition> = definitions.iter().map(|(d, _)| d.clone()).collect();
-        self.register_types_owned(Some(name), &types, &node_definitions).map_err(|e| format!("Плагін {name}: {e}"))?;
+        self.register_types_owned(Some(name), &types, &node_definitions).map_err(|e| UiMessage::plain(format!("Plugin {name}: {e}")))?;
         for (def, polls) in definitions {
             let runtime = runtime.clone();
             self.registry.register_owned(name, Box::new(move |id| Box::new(WasmNode::new(id, def.clone(), polls, runtime.clone()))));
         }
 
         let settings_error = Self::apply_settings(&self.plugins[name].manifest, &runtime, settings);
-        let slot = self.plugins.get_mut(name).expect("плагін щойно знайдено");
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.active = true;
         slot.settings_error = settings_error;
 
@@ -630,10 +692,10 @@ impl TickEngine {
     /// Disables a plugin: its nodes become stubs (connections and properties are preserved), node
     /// and data types are unregistered, and the plugin instance is dropped. Rejected if another
     /// enabled plugin uses this plugin's data types.
-    pub fn disable_plugin(&mut self, name: &str) -> Result<PluginChange, String> {
-        let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
+    pub fn disable_plugin(&mut self, name: &str) -> Result<PluginChange, UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
         if !slot.active {
-            return Err(format!("Плагін {name} уже вимкнено"));
+            return Err(UiMessage::plain(format!("Plugin {name} is already disabled")));
         }
         let owned: Vec<&String> = self.type_owners.iter().filter(|(_, o)| *o == name).map(|(t, _)| t).collect();
         let dependents: Vec<&str> = self.plugins.iter()
@@ -657,11 +719,11 @@ impl TickEngine {
             .map(|(other, _)| other.as_str())
             .collect();
         if !dependents.is_empty() {
-            return Err(format!(
-                "Плагін «{name}» не можна вимкнути: його типи даних використовує {} — спершу вимкніть {}",
-                dependents.iter().map(|d| format!("«{d}»")).collect::<Vec<_>>().join(", "),
-                if dependents.len() == 1 { "його" } else { "їх" },
-            ));
+            let list = dependents.iter().map(|d| format!("\"{d}\"")).collect::<Vec<_>>().join(", ");
+            return Err(UiMessage::new(
+                "error-plugin-disable-blocked",
+                format!("Plugin \"{name}\" cannot be disabled: its data types are used by {list}; disable {} first", if dependents.len() == 1 { "it" } else { "them" }),
+            ).arg("plugin", name).arg("dependents", list));
         }
 
         let node_types: std::collections::HashSet<String> = self.registry.types_owned_by(name).into_iter().collect();
@@ -672,7 +734,7 @@ impl TickEngine {
             self.type_owners.remove(&t);
             self.types.remove(&t);
         }
-        let slot = self.plugins.get_mut(name).expect("плагін щойно знайдено");
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.active = false;
         slot.settings_error = None;
         // Node resources were already dropped when replaced with stubs; the instance is no longer needed
@@ -683,18 +745,18 @@ impl TickEngine {
     /// Passes new settings to the plugin (`settings` already includes defaults). Does nothing for a
     /// disabled plugin: settings will be applied when enabled. `Err` is the plugin's response, which
     /// is also recorded as the settings error.
-    pub fn configure_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<(), String> {
-        let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
+    pub fn configure_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<(), UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
         if !slot.active {
             return Ok(());
         }
         let error = Self::apply_settings(&slot.manifest, &slot.runtime.clone(), settings);
-        let slot = self.plugins.get_mut(name).expect("плагін щойно знайдено");
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.settings_error = error.clone();
         error.map_or(Ok(()), Err)
     }
 
-    fn apply_settings(manifest: &PluginManifest, runtime: &Arc<Mutex<Runtime>>, settings: &[(String, DataValue)]) -> Option<String> {
+    fn apply_settings(manifest: &PluginManifest, runtime: &Arc<Mutex<Runtime>>, settings: &[(String, DataValue)]) -> Option<UiMessage> {
         lock(runtime).configure(settings).err().or_else(|| missing_required(manifest, settings))
     }
 }
@@ -702,11 +764,11 @@ impl TickEngine {
 // --- WIT ↔ ticknode-shared conversion ---
 
 fn encode_value(value: &DataValue) -> wit::Value {
-    postcard::to_allocvec(value).expect("DataValue завжди серіалізується")
+    postcard::to_allocvec(value).expect("DataValue always serializes")
 }
 
 fn decode_value(bytes: &[u8]) -> Option<DataValue> {
-    postcard::from_bytes(bytes).inspect_err(|e| warn!("Плагін повернув некоректне значення: {e}")).ok()
+    postcard::from_bytes(bytes).inspect_err(|e| warn!("The plugin returned an invalid value: {e}")).ok()
 }
 
 fn from_wit_data_type(t: wit::DataType) -> DataType {
@@ -830,6 +892,7 @@ mod tests {
             runtime,
             active: true,
             settings_error: None,
+            translations: Vec::new(),
         }
     }
 
@@ -840,7 +903,7 @@ mod tests {
     fn disabling_is_rejected_while_another_plugin_uses_its_types() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
         let Ok(bytes) = std::fs::read(&path) else {
-            assert!(std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none(), "{} не знайдено", path.display());
+            assert!(std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none(), "{} not found", path.display());
             return;
         };
         let mut engine = TickEngine::new();
@@ -852,6 +915,7 @@ mod tests {
         let pin = PinDefinition { id: PinId(0), name: "P".into(), pin_type: PinType::Data(DataType::List(Box::new(point.clone()))), direction: PinDirection::Input, required: false };
         engine.plugins.insert("consumer".into(), consumer_slot(runtime.clone(), vec![pin], vec![]));
         let err = engine.disable_plugin("test_plugin").unwrap_err();
+        let err = err.to_string();
         assert!(err.contains("consumer") && err.contains("test_plugin"), "{err}");
         assert!(engine.plugin_active("test_plugin") && engine.types.get("test.point").is_some());
 

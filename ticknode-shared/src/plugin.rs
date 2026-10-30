@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Capability, DataValue};
+use crate::{Capability, DataValue, UiMessage};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SettingKind {
@@ -64,7 +64,7 @@ impl SettingDefinition {
     }
 
     /// Validates that the value matches the schema kind.
-    pub fn check(&self, value: &DataValue) -> Result<(), String> {
+    pub fn check(&self, value: &DataValue) -> Result<(), UiMessage> {
         let ok = match (&self.kind, value) {
             (SettingKind::Text | SettingKind::Secret, DataValue::String(_)) => true,
             (SettingKind::Url, DataValue::String(s)) => s.is_empty() || s.starts_with("http://") || s.starts_with("https://") || s.starts_with("ws://") || s.starts_with("wss://"),
@@ -73,7 +73,11 @@ impl SettingDefinition {
             (SettingKind::Select(options), DataValue::String(s)) => options.iter().any(|(v, _)| v == s),
             _ => false,
         };
-        if ok { Ok(()) } else { Err(format!("Налаштування «{}»: недопустиме значення", self.title)) }
+        if ok {
+            Ok(())
+        } else {
+            Err(UiMessage::new("error-setting-invalid", format!("Setting \"{}\": invalid value", self.title)).arg("setting", &self.title))
+        }
     }
 
     pub fn is_secret(&self) -> bool {
@@ -118,9 +122,9 @@ pub struct PluginInfo {
     pub file: String,
     pub state: PluginState,
     /// Reason for the `Error` state.
-    pub error: Option<String>,
+    pub error: Option<UiMessage>,
     /// Error from the last `configure` call (the plugin remains loaded).
-    pub settings_error: Option<String>,
+    pub settings_error: Option<UiMessage>,
     /// Permissions requested by the plugin (granted by the server).
     pub capabilities: Vec<Capability>,
     pub settings: Vec<SettingDefinition>,
@@ -136,7 +140,7 @@ mod tests {
         let url = SettingDefinition::url("url", "URL");
         assert!(url.check(&DataValue::String("http://homeassistant.local:8123".into())).is_ok());
         assert!(url.check(&DataValue::String("ftp://x".into())).is_err());
-        let select = SettingDefinition::select("mode", "Режим", &[("a", "A"), ("b", "B")]);
+        let select = SettingDefinition::select("mode", "Mode", &[("a", "A"), ("b", "B")]);
         assert!(select.check(&DataValue::String("a".into())).is_ok());
         assert!(select.check(&DataValue::String("c".into())).is_err());
         assert!(SettingDefinition::number("n", "N").check(&DataValue::String("1".into())).is_err());
@@ -148,9 +152,9 @@ mod tests {
     fn plugin_info_roundtrips_through_postcard() {
         let info = PluginInfo {
             name: "p".into(), version: "1".into(), author: "a".into(), file: "p.wasm".into(),
-            state: PluginState::Enabled, error: None, settings_error: Some("e".into()),
+            state: PluginState::Enabled, error: None, settings_error: Some(UiMessage::new("p-error", "e").arg("a", "b")),
             capabilities: vec![Capability::Storage],
-            settings: vec![SettingDefinition::secret("token", "Токен").required()],
+            settings: vec![SettingDefinition::secret("token", "Token").required()],
             values: vec![("token".into(), SettingValueView::Secret { is_set: true })],
         };
         let back: PluginInfo = postcard::from_bytes(&postcard::to_allocvec(&info).unwrap()).unwrap();

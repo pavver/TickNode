@@ -171,13 +171,13 @@ node-console-pin-In = In
 node-console-pin-Val = Val
 
 # test/click_button
-node-test-click_button-title = Click Button
-node-test-click_button-description = Emits an exec signal on the next tick after the user clicks the button
-node-test-click_button-help =
+node-test-click-button-title = Click Button
+node-test-click-button-description = Emits an exec signal on the next tick after the user clicks the button
+node-test-click-button-help =
     Emits a signal on Out when you click the Run button on the node.
 
     Handy for manually triggering a chain while debugging.
-node-test-click_button-pin-Out = Out
+node-test-click-button-pin-Out = Out
 
 # test/debug
 node-test-debug-title = Debug Log
@@ -211,22 +211,22 @@ node-compare-pin-Gt = Gt
 node-compare-pin-Lt = Lt
 
 # for_loop
-node-for_loop-title = For Loop
-node-for_loop-description = Asynchronous loop from 0 to Count-1 with step 1
-node-for_loop-help =
+node-for-loop-title = For Loop
+node-for-loop-description = Asynchronous loop from 0 to Count-1 with step 1
+node-for-loop-help =
     Step-by-step loop:
     1. A signal at In starts the loop with Index = 0 and fires LoopBody.
     2. When the loop body finishes, send a signal to Next — Index increments by 1 and LoopBody fires again.
     3. After Count iterations or a signal at Break, Completed fires.
 
     If Count ≤ 0, Completed fires immediately. Each step takes at least one tick, so the loop never blocks the engine.
-node-for_loop-pin-In = In
-node-for_loop-pin-Count = Count
-node-for_loop-pin-Break = Break
-node-for_loop-pin-Next = Next
-node-for_loop-pin-LoopBody = LoopBody
-node-for_loop-pin-Index = Index
-node-for_loop-pin-Completed = Completed
+node-for-loop-pin-In = In
+node-for-loop-pin-Count = Count
+node-for-loop-pin-Break = Break
+node-for-loop-pin-Next = Next
+node-for-loop-pin-LoopBody = LoopBody
+node-for-loop-pin-Index = Index
+node-for-loop-pin-Completed = Completed
 
 # sleep
 node-sleep-title = Sleep
@@ -313,23 +313,23 @@ node-object-create-help =
 node-object-create-pin-Obj = Obj
 
 # object/set_field
-node-object-set_field-title = Set Object Field
-node-object-set_field-description = Sets the value of an object field
-node-object-set_field-help =
+node-object-set-field-title = Set Object Field
+node-object-set-field-description = Sets the value of an object field
+node-object-set-field-help =
     Outputs OutObj — a copy of object Obj where field Name has value Val. If the field did not exist, it is added; otherwise it is replaced.
 
     The type of Val is selected on the node. Until all inputs are provided, no output is produced.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
-node-object-set_field-pin-Obj = Obj
-node-object-set_field-pin-Name = Name
-node-object-set_field-pin-Val = Val
-node-object-set_field-pin-OutObj = OutObj
+node-object-set-field-pin-Obj = Obj
+node-object-set-field-pin-Name = Name
+node-object-set-field-pin-Val = Val
+node-object-set-field-pin-OutObj = OutObj
 
 # object/get_field
-node-object-get_field-title = Get Object Field
-node-object-get_field-description = Gets the value of an object field
-node-object-get_field-help =
+node-object-get-field-title = Get Object Field
+node-object-get-field-description = Gets the value of an object field
+node-object-get-field-help =
     Looks up field Name in object Obj:
     • Val — the field value;
     • Found — whether the field exists.
@@ -337,10 +337,10 @@ node-object-get_field-help =
     The type of Val is selected on the node.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
-node-object-get_field-pin-Obj = Obj
-node-object-get_field-pin-Name = Name
-node-object-get_field-pin-Val = Val
-node-object-get_field-pin-Found = Found
+node-object-get-field-pin-Obj = Obj
+node-object-get-field-pin-Name = Name
+node-object-get-field-pin-Val = Val
+node-object-get-field-pin-Found = Found
 
 # object/unpack
 node-object-unpack-title = Unpack Object

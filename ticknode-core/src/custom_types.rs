@@ -53,10 +53,10 @@ impl Node for TypeMakeNode {
             type_name: make_node_type(&self.def.name),
             title: format!("Make {}", self.def.title),
             category: "Data".into(),
-            description: format!("Збирає значення «{}» з полів", self.def.title),
+            description: format!("Builds a \"{}\" value from fields", self.def.title),
             help: format!(
-                "Збирає значення типу «{}» ({}) з окремих полів.\n\nКожне поле — вхід: під'єднайте джерело або задайте значення прямо на ноді. \
-                 Обов'язкові поля — обов'язкові входи: без них значення не створюється (у лозі ноди з'явиться помилка). Необов'язкове поле без значення пропускається.\n\nЧиста нода: обчислюється щоразу, коли результат потрібен іншій ноді.\n\n{}",
+                "Builds a value of type \"{}\" ({}) from individual fields.\n\nEach field is an input: connect a source or set the value right on the node. \
+                 Required fields are required inputs: without them no value is created (an error appears in the node's log). An optional field without a value is skipped.\n\nPure node: evaluated whenever its result is needed by another node.\n\n{}",
                 self.def.title, self.def.name, self.def.description
             ).trim_end().to_string(),
             pins,
@@ -100,10 +100,10 @@ impl Node for TypeBreakNode {
             type_name: break_node_type(&self.def.name),
             title: format!("Break {}", self.def.title),
             category: "Data".into(),
-            description: format!("Розбирає «{}» на поля", self.def.title),
+            description: format!("Breaks \"{}\" into fields", self.def.title),
             help: format!(
-                "Розбирає значення типу «{}» ({}) на окремі поля: кожне поле — вихідний пін.\n\n\
-                 Необов'язкове поле, якого у значенні немає, не має значення (пін порожній).\n\nЧиста нода: обчислюється щоразу, коли результат потрібен іншій ноді.\n\n{}",
+                "Breaks a value of type \"{}\" ({}) into individual fields: each field is an output pin.\n\n\
+                 An optional field that is absent from the value has no value (the pin is empty).\n\nPure node: evaluated whenever its result is needed by another node.\n\n{}",
                 self.def.title, self.def.name, self.def.description
             ).trim_end().to_string(),
             pins,
@@ -132,7 +132,7 @@ impl TickEngine {
         for node in nodes {
             for pin in &node.pins {
                 if let PinType::Data(t) = &pin.pin_type {
-                    types.check_known(t).map_err(|e| format!("Нода {}, пін {}: {e}", node.type_name, pin.name))?;
+                    types.check_known(t).map_err(|e| format!("Node {}, pin {}: {e}", node.type_name, pin.name))?;
                 }
             }
         }
@@ -141,11 +141,11 @@ impl TickEngine {
             .collect();
         for name in &generated {
             if self.registry.get_definition(name).is_some() {
-                return Err(format!("Тип ноди {name} уже зареєстровано"));
+                return Err(format!("Node type {name} is already registered"));
             }
         }
         if let Some(clash) = nodes.iter().find(|n| generated.contains(&n.type_name)) {
-            return Err(format!("Тип ноди {} зарезервовано для автоматичних нод структур", clash.type_name));
+            return Err(format!("Node type {} is reserved for automatic struct nodes", clash.type_name));
         }
 
         self.types = types;

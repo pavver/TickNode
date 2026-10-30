@@ -21,7 +21,7 @@ fn draft_of(view: &SettingValueView) -> String {
 }
 
 /// Update to send to the server for a field: `Err` if the text fails type validation.
-fn update_of(def: &SettingDefinition, draft: &str, cleared: bool) -> Result<SettingUpdate, String> {
+fn update_of(plugin: &str, def: &SettingDefinition, draft: &str, cleared: bool) -> Result<SettingUpdate, String> {
     Ok(match &def.kind {
         SettingKind::Secret if cleared => SettingUpdate::Clear,
         SettingKind::Secret if draft.is_empty() => SettingUpdate::Keep,
@@ -29,7 +29,7 @@ fn update_of(def: &SettingDefinition, draft: &str, cleared: bool) -> Result<Sett
         SettingKind::Number if draft.trim().is_empty() => SettingUpdate::Clear,
         SettingKind::Number => SettingUpdate::Set(
             i18n::parse_value_localized(draft, &DataType::Number)
-                .map_err(|e| t!("plugins-field-error", field = def.title.clone(), error = e))?,
+                .map_err(|e| t!("plugins-field-error", field = i18n::setting_title(plugin, def), error = e))?,
         ),
         _ if draft.is_empty() => SettingUpdate::Clear,
         _ => SettingUpdate::Set(DataValue::String(draft.to_string())),
@@ -129,7 +129,7 @@ fn PluginCard(name: String) -> impl IntoView {
         for def in &save_defs {
             let draft = drafts.with_untracked(|d| d.get(&def.key).cloned().unwrap_or_default());
             let is_cleared = cleared.with_untracked(|c| c.contains(&def.key));
-            match update_of(def, &draft, is_cleared) {
+            match update_of(&save_name, def, &draft, is_cleared) {
                 Ok(update) => updates.push((def.key.clone(), update)),
                 Err(e) => {
                     ed.log(LogKind::Error, format!("[ERROR] {e}"));
@@ -142,7 +142,7 @@ fn PluginCard(name: String) -> impl IntoView {
         ed.send(ClientMessage::ConfigurePlugin { name: save_name.clone(), values: updates });
     });
 
-    let fields = initial.settings.iter().cloned().map(|def| view! { <SettingField def=def drafts=drafts cleared=cleared values=values /> }).collect_view();
+    let fields = initial.settings.iter().cloned().map(|def| view! { <SettingField plugin=name.clone() def=def drafts=drafts cleared=cleared values=values /> }).collect_view();
     let has_settings = !initial.settings.is_empty();
     let caps = initial.capabilities.clone();
 
@@ -165,7 +165,7 @@ fn PluginCard(name: String) -> impl IntoView {
                 <span class=move || format!("chip {}", chip().0.class())>{move || chip().1}</span>
                 {move || settings_error().map(|_| view! { <span class="chip st-error" title=move || t!("plugins-settings-error-title")>{move || t!("plugins-settings-error-chip")}</span> })}
             </div>
-            {move || load_error().map(|e| view! { <div class="plugin-error">{e}</div> })}
+            {move || load_error().map(|e| view! { <div class="plugin-error">{i18n::ui_text(&e)}</div> })}
             {(!caps.is_empty()).then(|| view! {
                 <div class="caps">
                     <span class="field-label">{move || t!("plugins-capabilities")}</span>
@@ -182,7 +182,7 @@ fn PluginCard(name: String) -> impl IntoView {
                 <div class="plugin-form" class:hidden=move || !expanded.get()>
                     {fields}
                     <ActionButton text=Signal::derive(move || t!("plugins-save")) icon=icons::CHECK full=true state=Signal::derive(move || saving.get()) on_click=save />
-                    {move || settings_error().map(|e| view! { <div class="plugin-error">{e}</div> })}
+                    {move || settings_error().map(|e| view! { <div class="plugin-error">{i18n::ui_text(&e)}</div> })}
                 </div>
             })}
         </section>
@@ -193,6 +193,7 @@ fn PluginCard(name: String) -> impl IntoView {
 /// Single form field rendered according to the setting kind.
 #[component]
 fn SettingField(
+    plugin: String,
     def: SettingDefinition,
     drafts: RwSignal<BTreeMap<String, String>>,
     cleared: RwSignal<BTreeSet<String>>,
@@ -214,10 +215,16 @@ fn SettingField(
         .into_any(),
         SettingKind::Select(options) => {
             let unset = draft.get_untracked().is_empty();
+            let option_plugin = plugin.clone();
+            let option_def = def.clone();
             view! {
                 <select class="form-input" prop:value=move || draft.get() on:change=move |ev| set_draft(event_target_value(&ev))>
                     {unset.then(|| view! { <option value="">"—"</option> })}
-                    {options.into_iter().map(|(value, title)| view! { <option value=value.clone()>{title}</option> }).collect_view()}
+                    {options.into_iter().map(|(value, title)| {
+                        let (plugin, def) = (option_plugin.clone(), option_def.clone());
+                        let label = { let value = value.clone(); move || i18n::setting_option_label(&plugin, &def, &value, &title) };
+                        view! { <option value=value.clone()>{label}</option> }
+                    }).collect_view()}
                 </select>
             }
             .into_any()
@@ -265,11 +272,13 @@ fn SettingField(
         }
         .into_any(),
     };
+    let (title_plugin, title_def) = (plugin.clone(), def.clone());
+    let (desc_plugin, desc_def) = (plugin, def.clone());
     view! {
         <div class="field">
-            <label class="field-label">{def.title.clone()}{def.required.then_some(" *")}</label>
+            <label class="field-label">{move || i18n::setting_title(&title_plugin, &title_def)}{def.required.then_some(" *")}</label>
             {control}
-            {(!def.description.is_empty()).then(|| view! { <span class="t-caption">{def.description.clone()}</span> })}
+            {move || Some(i18n::setting_description(&desc_plugin, &desc_def)).filter(|d| !d.is_empty()).map(|d| view! { <span class="t-caption">{d}</span> })}
         </div>
     }
 }
@@ -280,21 +289,21 @@ mod tests {
 
     #[test]
     fn form_values_map_to_updates() {
-        let text = SettingDefinition::text("greeting", "Привітання");
-        let secret = SettingDefinition::secret("token", "Токен");
-        let number = SettingDefinition::number("port", "Порт");
+        let text = SettingDefinition::text("greeting", "Greeting");
+        let secret = SettingDefinition::secret("token", "Token");
+        let number = SettingDefinition::number("port", "Port");
         let flag = SettingDefinition::bool("tls", "TLS");
-        assert_eq!(update_of(&text, "hi", false), Ok(SettingUpdate::Set(DataValue::String("hi".into()))));
-        assert_eq!(update_of(&text, "", false), Ok(SettingUpdate::Clear));
+        assert_eq!(update_of("p", &text, "hi", false), Ok(SettingUpdate::Set(DataValue::String("hi".into()))));
+        assert_eq!(update_of("p", &text, "", false), Ok(SettingUpdate::Clear));
         // Secret: empty field means "keep unchanged", explicit clear means Clear
-        assert_eq!(update_of(&secret, "", false), Ok(SettingUpdate::Keep));
-        assert_eq!(update_of(&secret, "", true), Ok(SettingUpdate::Clear));
-        assert_eq!(update_of(&secret, "abc", false), Ok(SettingUpdate::Set(DataValue::String("abc".into()))));
-        assert_eq!(update_of(&number, "8123", false), Ok(SettingUpdate::Set(DataValue::Number(NumberValue::Int(8123)))));
-        assert!(update_of(&number, "abc", false).is_err());
-        assert_eq!(update_of(&number, " ", false), Ok(SettingUpdate::Clear));
-        assert_eq!(update_of(&flag, "true", false), Ok(SettingUpdate::Set(DataValue::Bool(true))));
-        assert_eq!(update_of(&flag, "", false), Ok(SettingUpdate::Set(DataValue::Bool(false))));
+        assert_eq!(update_of("p", &secret, "", false), Ok(SettingUpdate::Keep));
+        assert_eq!(update_of("p", &secret, "", true), Ok(SettingUpdate::Clear));
+        assert_eq!(update_of("p", &secret, "abc", false), Ok(SettingUpdate::Set(DataValue::String("abc".into()))));
+        assert_eq!(update_of("p", &number, "8123", false), Ok(SettingUpdate::Set(DataValue::Number(NumberValue::Int(8123)))));
+        assert!(update_of("p", &number, "abc", false).is_err());
+        assert_eq!(update_of("p", &number, " ", false), Ok(SettingUpdate::Clear));
+        assert_eq!(update_of("p", &flag, "true", false), Ok(SettingUpdate::Set(DataValue::Bool(true))));
+        assert_eq!(update_of("p", &flag, "", false), Ok(SettingUpdate::Set(DataValue::Bool(false))));
     }
 
     #[test]

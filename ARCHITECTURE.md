@@ -109,7 +109,8 @@ Plugins are written in Rust with [`ticknode-plugin-sdk`](ticknode-plugin-sdk); s
 
 - Built with Leptos, compiled to WebAssembly and served by the server.
 - All node settings are edited on the node itself; the inspector shows the description, the last execution (inputs, outputs, fired pins) and actions.
-- Localized with Mozilla Fluent (English and Ukrainian). Logs are deliberately not translated: they stay in English so that a problem report from any locale can be read as-is.
+- Localized with Mozilla Fluent (English and Ukrainian). The editor owns only its UI texts (`ui.ftl`). Texts of nodes, data types, categories and plugin settings come from the server as Fluent resources: the core embeds the translations of the built-in nodes, every plugin ships its own (the `translations` export). The server validates plugin resources (syntax, and every message id must start with one of the plugin's own prefixes), merges them per locale and sends them in `Init` and `Catalog`. Lookup order in the editor: active locale, `en`, then the English text in the definition.
+- Errors for the user travel as a `UiMessage` (translation key, string arguments, English fallback); the editor resolves the key in its own and the server-provided texts. Logs are deliberately not translated: they stay in English so that a problem report from any locale can be read as-is.
 
 ## 6. Home Assistant
 

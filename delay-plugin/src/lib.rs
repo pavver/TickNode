@@ -25,9 +25,9 @@ impl DelayNode {
     /// (type, title, description, base pin ID: +0 In, +1 Out, +2 Delay).
     fn info(&self) -> (&'static str, &'static str, &'static str, u32) {
         match self.mode {
-            Mode::Queue => ("delay/queue", "Queue Delay", "Кожен імпульс запускає незалежну затримку", 0),
-            Mode::Ignore => ("delay/ignore", "Ignore Delay", "Ігнорує нові імпульси, поки затримка триває", 10),
-            Mode::Reset => ("delay/reset", "Reset Delay", "Новий імпульс скидає затримку й починає відлік заново", 20),
+            Mode::Queue => ("delay/queue", "Queue Delay", "Each pulse starts an independent delay", 0),
+            Mode::Ignore => ("delay/ignore", "Ignore Delay", "Ignores new pulses while the delay is running", 10),
+            Mode::Reset => ("delay/reset", "Reset Delay", "A new pulse cancels the delay and restarts the countdown", 20),
         }
     }
 }
@@ -41,10 +41,10 @@ impl PluginNode for DelayNode {
             category: "Time".into(),
             description: description.into(),
             help: match self.mode {
-                Mode::Queue => "Кожен сигнал на In запускає власну затримку на «Delay ms» мілісекунд, а по її завершенні видає сигнал на Out.\n\nКілька сигналів поспіль дадуть стільки ж сигналів на виході з тими самими інтервалами.",
-                Mode::Ignore => "Сигнал на In запускає затримку на «Delay ms» мілісекунд, а по її завершенні видає сигнал на Out. Поки затримка триває, нові сигнали ігноруються.\n\nКорисно, щоб не реагувати на часті повтори події.",
-                Mode::Reset => "Кожен сигнал на In скасовує поточну затримку й починає відлік заново. Out спрацює лише після паузи без сигналів довжиною «Delay ms».\n\nНаприклад: вимкнути світло через 5 хвилин після останнього руху.",
-            }.to_string() + "\n\nЗатримка округлюється вгору до цілих тактів (такт сервера — 100 мс).",
+                Mode::Queue => "Each signal on In starts its own delay of \"Delay ms\" milliseconds and fires Out when it finishes.\n\nSeveral signals in a row produce as many signals on the output, with the same intervals.",
+                Mode::Ignore => "A signal on In starts a delay of \"Delay ms\" milliseconds and fires Out when it finishes. While the delay is running, new signals are ignored.\n\nUseful to avoid reacting to frequent repeats of an event.",
+                Mode::Reset => "Each signal on In cancels the current delay and restarts the countdown. Out fires only after a pause without signals lasting \"Delay ms\".\n\nFor example: turn the light off 5 minutes after the last motion.",
+            }.to_string() + "\n\nThe delay is rounded up to whole ticks (the server tick is 100 ms).",
             pins: vec![
                 exec_in(base, "In"),
                 data_in(base + 2, "Delay ms", DataType::Number),
@@ -83,6 +83,7 @@ impl PluginNode for DelayNode {
 
 impl Plugin for DelayPlugin {
     const NODE_TYPES: &'static [&'static str] = &["delay/queue", "delay/ignore", "delay/reset"];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {

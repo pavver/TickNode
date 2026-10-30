@@ -55,13 +55,13 @@ async fn main() -> anyhow::Result<()> {
     let app = router(handle.clone(), &config.web_dir);
 
     let listener = tokio::net::TcpListener::bind(&config.bind).await?;
-    info!(bind = %config.bind, data = %config.data_dir.display(), "TickNode сервер запущено");
+    info!(bind = %config.bind, data = %config.data_dir.display(), "TickNode server started");
 
     let shutdown_handle = handle.clone();
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
-            info!("Отримано сигнал зупинки, зберігаємо граф");
+            info!("Stop signal received, saving the graph");
             shutdown_handle.shutdown().await;
             // Open WebSocket connections must not keep the process alive.
             tokio::spawn(async {
@@ -143,7 +143,7 @@ mod tests {
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir.path())).into_future());
 
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
-        let ServerMessage::Init { definitions, nodes, .. } = recv(&mut ws).await else { panic!("очікували Init") };
+        let ServerMessage::Init { definitions, nodes, .. } = recv(&mut ws).await else { panic!("expected Init") };
         assert!(definitions.iter().any(|d| d.type_name == "const"));
         assert!(nodes.is_empty());
 
@@ -187,7 +187,7 @@ mod tests {
 
         // A newly connected editor receives the latest execution traces in its snapshot
         let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
-        let ServerMessage::Init { traces, .. } = recv(&mut ws2).await else { panic!("очікували Init") };
+        let ServerMessage::Init { traces, .. } = recv(&mut ws2).await else { panic!("expected Init") };
         assert!(traces.iter().any(|(t, _)| t.node_id == dbg.model.id));
 
         // Paste a copy of both nodes with their connection: new IDs, preserved positions, Created sent only to initiator and after NodeAdded
@@ -202,7 +202,7 @@ mod tests {
         while pasted.is_none() || added.len() < 2 || connected.is_none() {
             match recv_any(&mut ws).await {
                 ServerMessage::Created(ids) => {
-                    assert_eq!(added.len(), 2, "Created раніше за NodeAdded");
+                    assert_eq!(added.len(), 2, "Created before NodeAdded");
                     pasted = Some(ids);
                 }
                 ServerMessage::NodeAdded(n) => added.push(n),
@@ -267,8 +267,8 @@ mod tests {
     fn test_plugin_dir() -> Option<tempfile::TempDir> {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
         let Ok(bytes) = std::fs::read(&path) else {
-            assert!(std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none(), "{} не знайдено", path.display());
-            eprintln!("{} не знайдено — тест пропущено", path.display());
+            assert!(std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none(), "{} not found", path.display());
+            eprintln!("{} not found - test skipped", path.display());
             return None;
         };
         let dir = tempfile::tempdir().unwrap();
@@ -278,7 +278,7 @@ mod tests {
     }
 
     fn plugin_of(plugins: &[ticknode_shared::PluginInfo]) -> &ticknode_shared::PluginInfo {
-        plugins.iter().find(|p| p.name == "test_plugin").expect("test_plugin у списку")
+        plugins.iter().find(|p| p.name == "test_plugin").expect("test_plugin is listed")
     }
 
     #[tokio::test]
@@ -290,26 +290,28 @@ mod tests {
         let mut seen = Vec::new();
 
         // Init: plugin is enabled, but configure rejected the empty token
-        let ServerMessage::Init { plugins, definitions, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("очікували Init") };
+        let ServerMessage::Init { plugins, definitions, translations, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
         let info = plugin_of(&plugins);
         assert_eq!((info.state, info.file.as_str()), (PluginState::Enabled, "test_plugin.wasm"));
-        assert_eq!(info.settings_error.as_deref(), Some("token не задано"));
+        assert_eq!(info.settings_error.as_ref().map(|e| e.key.as_str()), Some("test-plugin-error-no-token"));
+        // Core and plugin translations arrive with Init
+        assert!(translations.iter().any(|(l, t)| l == "uk" && t.contains("node-const-title") && t.contains("node-test-greeter-description")));
         assert_eq!(info.settings.len(), 3);
         assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: false })));
         assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Hello".into())))));
         assert!(definitions.iter().any(|d| d.type_name == "test/greeter"));
-        assert!(!dir.path().join("plugin-config/test_plugin.json").exists(), "без дій користувача файлу конфігурації немає");
+        assert!(!dir.path().join("plugin-config/test_plugin.json").exists(), "no config file without user actions");
 
         // Save settings: secret in the response only indicates that it is set
         let secret = "s3cret-token-value";
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
             ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
-            ("greeting".into(), SettingUpdate::Set(DataValue::String("Привіт".into()))),
+            ("greeting".into(), SettingUpdate::Set(DataValue::String("Hello there".into()))),
         ] }).await;
-        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!("очікували PluginUpdated") };
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!("expected PluginUpdated") };
         assert_eq!(info.settings_error, None);
         assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: true })));
-        assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Привіт".into())))));
+        assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Hello there".into())))));
 
         // Config file: token is saved, permissions are 0600
         let config_path = dir.path().join("plugin-config/test_plugin.json");
@@ -331,7 +333,7 @@ mod tests {
         loop {
             if let ServerMessage::Executed(traces) = recv_any(&mut ws).await {
                 if let Some(t) = traces.iter().find(|t| t.node_id == greeter.model.id) {
-                    assert_eq!(t.outputs, vec![(PinId(1), DataValue::String("Привіт|quiet|token".into()))]);
+                    assert_eq!(t.outputs, vec![(PinId(1), DataValue::String("Hello there|quiet|token".into()))]);
                     break;
                 }
             }
@@ -340,27 +342,31 @@ mod tests {
         // configure error: plugin stays loaded, error is reported in PluginUpdated
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String("bad".into())))] }).await;
         let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
-        assert_eq!((info.state, info.settings_error.as_deref()), (PluginState::Enabled, Some("невірний токен")));
+        assert_eq!((info.state, info.settings_error.as_ref().map(|e| e.fallback.as_str())), (PluginState::Enabled, Some("Invalid token")));
         // `Keep` preserves the secret; validation error goes only to the initiator
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
             ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
             ("greeting".into(), SettingUpdate::Set(DataValue::Number(ticknode_shared::NumberValue::Int(1)))),
         ] }).await;
-        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Error(_)));
+        let ServerMessage::Error(e) = recv_logged(&mut ws, &mut seen).await else { panic!("expected Error") };
+        assert_eq!(e.key, "error-setting-invalid");
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Keep)] }).await;
         let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
-        assert_eq!(info.settings_error.as_deref(), Some("невірний токен"), "Keep не змінює збережений токен");
+        assert_eq!(info.settings_error.as_ref().map(|e| e.fallback.as_str()), Some("Invalid token"), "Keep does not change the saved token");
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "nope".into(), values: vec![] }).await;
-        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Error(_)));
+        let ServerMessage::Error(e) = recv_logged(&mut ws, &mut seen).await else { panic!("expected Error") };
+        assert_eq!((e.key.as_str(), e.args.clone()), ("error-plugin-not-found", vec![("plugin".to_string(), "nope".to_string())]));
 
         // Disabling: catalog drops plugin types, node becomes a stub, followed by PluginUpdated
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String(secret.into())))] }).await;
         assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::PluginUpdated(_)));
         send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: false }).await;
-        let ServerMessage::Catalog { definitions, types } = recv_logged(&mut ws, &mut seen).await else { panic!("очікували Catalog") };
+        let ServerMessage::Catalog { definitions, types, translations } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Catalog") };
         assert!(!definitions.iter().any(|d| d.type_name == "test/greeter" || d.type_name.starts_with("type/make/")) && types.is_empty());
-        let ServerMessage::NodeUpdated(stub) = recv_logged(&mut ws, &mut seen).await else { panic!("очікували NodeUpdated") };
-        assert_eq!(stub.unavailable.as_deref(), Some("плагін test_plugin недоступний"));
+        assert!(!translations.iter().any(|(_, t)| t.contains("node-test-greeter")), "the disabled plugin takes its translations away");
+        let ServerMessage::NodeUpdated(stub) = recv_logged(&mut ws, &mut seen).await else { panic!("expected NodeUpdated") };
+        let unavailable = stub.unavailable.as_ref().expect("stub");
+        assert_eq!((unavailable.key.as_str(), unavailable.fallback.as_str()), ("error-node-plugin-unavailable", "plugin test_plugin unavailable"));
         assert_eq!(stub.model.type_name, "test/greeter");
         assert_eq!(stub.definition.pins.len(), 2);
         let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
@@ -369,7 +375,7 @@ mod tests {
         assert_eq!(saved["enabled"], false);
 
         // Secret never appeared in any server messages
-        assert!(!contains(&seen, secret.as_bytes()), "секрет у повідомленнях редактору");
+        assert!(!contains(&seen, secret.as_bytes()), "the secret leaked into messages to the editor");
 
         // Restart: plugin stays disabled, graph preserves the plugin node as a stub
         server.handle.shutdown().await;

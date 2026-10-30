@@ -169,8 +169,8 @@ pub fn is_text_type_in(types: &TypeRegistry, t: &DataType) -> bool {
 /// Placeholder hint for an input field of this type.
 pub fn type_hint(t: &DataType) -> &'static str {
     match t {
-        DataType::Time => "ГГ:ХХ",
-        DataType::DateTime => "РРРР-ММ-ДД ГГ:ХХ",
+        DataType::Time => "HH:MM",
+        DataType::DateTime => "YYYY-MM-DD HH:MM",
         DataType::Duration => "1h 30m / 45s",
         DataType::Color => "#rrggbb",
         _ => "—",
@@ -194,21 +194,21 @@ pub fn default_of(t: &DataType) -> DataValue {
 
 /// Parses text as a value of type `t`.
 pub fn parse_value(text: &str, t: &DataType) -> Result<DataValue, String> {
-    let bad = |what: &str| format!("«{}» — не {what}", text.trim());
+    let bad = |what: &str| format!("\"{}\" is not {what}", text.trim());
     Ok(match t {
-        DataType::Number => DataValue::Number(parse_number(text).ok_or_else(|| bad("число"))?),
+        DataType::Number => DataValue::Number(parse_number(text).ok_or_else(|| bad("a number"))?),
         DataType::String => DataValue::String(text.to_string()),
         DataType::Bool => match text.trim() {
             "true" | "так" | "1" => DataValue::Bool(true),
             "false" | "ні" | "0" => DataValue::Bool(false),
             _ => return Err(bad("true/false")),
         },
-        DataType::Time => DataValue::Time(parse_time(text).ok_or_else(|| bad("час (ГГ:ХХ або ГГ:ХХ:СС)"))?),
-        DataType::DateTime => DataValue::DateTime(parse_datetime(text).ok_or_else(|| bad("дата-час (РРРР-ММ-ДД ГГ:ХХ)"))?),
-        DataType::Duration => DataValue::Duration(parse_duration(text).ok_or_else(|| bad("тривалість (90, 1h 30m, 500ms)"))?),
-        DataType::Color => DataValue::Color(parse_color(text).ok_or_else(|| bad("колір (#rrggbb)"))?),
+        DataType::Time => DataValue::Time(parse_time(text).ok_or_else(|| bad("a time (HH:MM or HH:MM:SS)"))?),
+        DataType::DateTime => DataValue::DateTime(parse_datetime(text).ok_or_else(|| bad("a date-time (YYYY-MM-DD HH:MM)"))?),
+        DataType::Duration => DataValue::Duration(parse_duration(text).ok_or_else(|| bad("a duration (90, 1h 30m, 500ms)"))?),
+        DataType::Color => DataValue::Color(parse_color(text).ok_or_else(|| bad("a color (#rrggbb)"))?),
         DataType::Any => parse_any(text),
-        DataType::List(_) | DataType::Object | DataType::Named(_) => return Err(format!("значення типу {} не набирається текстом", crate::data_type_name(t))),
+        DataType::List(_) | DataType::Object | DataType::Named(_) => return Err(format!("a value of type {} cannot be entered as text", crate::data_type_name(t))),
     })
 }
 
@@ -224,10 +224,10 @@ pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<
                 .map(|v| DataValue::String(v.value.clone()))
                 .ok_or_else(|| {
                     let all: Vec<_> = def.values().iter().map(|v| v.value.as_str()).collect();
-                    format!("«{wanted}» — не значення {} (допустимі: {})", def.title, all.join(", "))
+                    format!("\"{wanted}\" is not a value of {} (allowed: {})", def.title, all.join(", "))
                 })
         }
-        Some(def) => Err(format!("значення типу {} не набирається текстом", def.title)),
+        Some(def) => Err(format!("a value of type {} cannot be entered as text", def.title)),
         None => parse_value(text, t),
     }
 }

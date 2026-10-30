@@ -10,18 +10,33 @@ toolbar-console = Консоль
 toolbar-theme = Світла / темна тема
 toolbar-language = Мова: Українська / English
 
-# Editor messages in console
-log-ui-connected = [UI] Підключено до сервера
-log-ui-graph-received = [UI] Граф отримано: { $count } нод
-log-ui-copied = [UI] Скопійовано нод: { $count }
-log-ui-cut = [UI] Вирізано нод: { $count }
-log-error-offline-send = [ERROR] Немає з'єднання з сервером — зміну не надіслано
-log-error-bad-server-msg = [ERROR] Некоректне повідомлення сервера: { $error }
-log-error-connection-lost = [ERROR] З'єднання з сервером втрачено, перепідключення…
-log-error-empty-clipboard = [ERROR] У буфері обміну немає нод TickNode
-log-error-connect-same-dir = [ERROR] З'єднувати можна лише вихід із входом
-log-error-connect-exec-mismatch = [ERROR] Exec-пін з'єднується лише з exec-піном
-log-error-copy-blocked = [ERROR] Браузер не дозволив копіювання — спробуйте Ctrl+C
+# Помилки для користувача (ключі `UiMessage` від сервера; аргументи — рядки)
+error-cycle-detected = Циклічне посилання: нода { $node } вже залежить від { $dependency }
+error-type-mismatch = Несумісні типи даних: не можна з'єднати { $src } з { $dst }
+error-invalid-pin-connection = Некоректне з'єднання пінів: один або обидва піни не існують або мають невірний напрямок чи тип
+error-node-not-found = Ноду { $node } не знайдено
+error-unknown-node-type = Невідомий тип ноди: { $type }
+error-node-plugin-unavailable = плагін { $plugin } недоступний
+error-node-type-unknown = тип ноди { $type } невідомий: потрібного плагіна немає або його вимкнено
+error-paste-too-many = Забагато нод для вставки: { $count } (максимум { $max })
+error-paste-incomplete = Вставлено не все: { $details }
+error-bad-message = Некоректне повідомлення: { $error }
+error-setting-invalid = Налаштування «{ $setting }»: недопустиме значення
+error-setting-required = Не задано обов'язкове налаштування «{ $setting }»
+error-setting-unknown = Невідоме налаштування «{ $setting }»
+error-settings-not-saved = Не вдалось зберегти налаштування: { $details }
+error-plugin-not-found = Плагін { $plugin } не знайдено
+error-plugin-not-loaded = Плагін { $plugin } не завантажено
+error-plugin-crash = Аварія плагіна: { $reason }
+error-plugin-disable-blocked = Плагін «{ $plugin }» не можна вимкнути: його типи даних використовує { $dependents } — спершу вимкніть їх
+error-plugin-config-corrupt = Конфігурація плагіна пошкоджена: { $details }. Збереження налаштувань чи вмикання перезапише її
+error-plugin-config-not-saved = Стан плагіна змінено, але конфігурацію не збережено: { $details }
+
+# Автоматичні ноди типів даних плагінів
+custom-make-title = Створити { $type }
+custom-make-description = Збирає значення «{ $type }» з полів
+custom-break-title = Розібрати { $type }
+custom-break-description = Розбирає «{ $type }» на поля
 
 # Node categories
 category-events = Події

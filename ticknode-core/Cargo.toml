@@ -16,6 +16,7 @@ evalexpr = "11.3.0"
 ureq = { version = "2.10.1", features = ["json"] }
 futures = { workspace = true }
 url = "2.5.4"
+fluent-syntax = "0.12.0"
 wasmtime = "50"
 wasmtime-wasi = "50"
 

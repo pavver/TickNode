@@ -9,9 +9,11 @@ pub mod condition;
 pub mod text;
 pub mod plugin;
 pub mod types;
+pub mod ui_message;
 
 pub use plugin::*;
 pub use types::*;
+pub use ui_message::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub Uuid);
@@ -292,10 +294,10 @@ pub struct GraphModel {
 pub struct NodeInstance {
     pub model: NodeModel,
     pub definition: NodeDefinition,
-    /// Stub node: the plugin for its type is unavailable (disabled or not loaded). The text is an explanation
+    /// Stub node: the plugin for its type is unavailable (disabled or not loaded). The message is an explanation
     /// for the editor. Properties and pins are preserved, but the node cannot execute or be edited.
     #[serde(default)]
-    pub unavailable: Option<String>,
+    pub unavailable: Option<UiMessage>,
 }
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
@@ -349,6 +351,8 @@ pub enum ServerMessage {
         types: Vec<TypeDefinition>,
         /// All discovered plugins with their state and settings (secrets only indicate whether set).
         plugins: Vec<PluginInfo>,
+        /// Translation resources of the engine core and every enabled plugin, merged per locale.
+        translations: Translations,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -369,8 +373,9 @@ pub enum ServerMessage {
     PluginUpdated(PluginInfo),
     /// The set of node and data types changed (plugin enabled or disabled): new definitions for the palette.
     /// Affected nodes arrive separately as `NodeUpdated`.
-    Catalog { definitions: Vec<NodeDefinition>, types: Vec<TypeDefinition> },
-    Error(String),
+    Catalog { definitions: Vec<NodeDefinition>, types: Vec<TypeDefinition>, translations: Translations },
+    /// Error for the client that caused it; translatable.
+    Error(UiMessage),
 }
 
 pub fn parse_data_type(s: &str) -> Option<DataType> {

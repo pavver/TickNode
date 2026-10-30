@@ -7,7 +7,7 @@ use ticknode_shared::*;
 use web_sys::WebSocket;
 
 use crate::geometry::Camera;
-use crate::i18n::{self, Locale, t};
+use crate::i18n::{self, Locale};
 
 const MAX_LOG_LINES: usize = 500;
 /// Duration (ms) a node stays highlighted after execution.
@@ -224,7 +224,7 @@ impl Editor {
             _ => false,
         });
         if !sent {
-            self.log(LogKind::Error, t!("log-error-offline-send"));
+            self.log(LogKind::Error, "[ERROR] Disconnected from server - change was not sent");
         }
     }
 
@@ -329,9 +329,15 @@ impl Editor {
         id
     }
 
+    fn set_types(&self, types: Vec<TypeDefinition>) {
+        let registry = TypeRegistry::from_definitions(types);
+        i18n::set_known_types(&registry);
+        self.types.set(registry);
+    }
+
     pub fn apply(&self, msg: ServerMessage) {
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations } => {
                 // Update existing nodes in place (keeping open inspector and inline fields alive
                 // across reconnects) and remove any that disappeared
                 let fresh: BTreeSet<NodeId> = nodes.iter().map(|i| i.model.id).collect();
@@ -340,7 +346,8 @@ impl Editor {
                     ids.iter().filter_map(|id| map.remove(id)).collect()
                 }).unwrap_or_default();
                 let count = nodes.len();
-                self.types.set(TypeRegistry::from_definitions(types));
+                i18n::set_runtime_translations(&translations);
+                self.set_types(types);
                 self.definitions.set(definitions);
                 self.plugins.set(plugins);
                 for instance in nodes {
@@ -356,7 +363,7 @@ impl Editor {
                     }
                 }
                 self.prune_selection();
-                self.log(LogKind::System, t!("log-ui-graph-received", count = count));
+                self.log(LogKind::System, format!("[UI] Graph received: {count} {}", if count == 1 { "node" } else { "nodes" }));
                 if !self.fitted.get_value() {
                     self.fitted.set_value(true);
                     let ed = *self;
@@ -420,18 +427,24 @@ impl Editor {
                 }
             }),
             // Plugin enabled or disabled: refresh palette and type colors from the updated catalog
-            ServerMessage::Catalog { definitions, types } => {
-                self.types.set(TypeRegistry::from_definitions(types));
+            ServerMessage::Catalog { definitions, types, translations } => {
+                i18n::set_runtime_translations(&translations);
+                self.set_types(types);
                 self.definitions.set(definitions);
             }
             // Nodes created in response to our AddNode / Paste (sent by the server after their NodeAdded messages)
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => {
-                self.log(LogKind::Node, format!("[{}] {}", self.node_title(node_id), message));
+                // Logs stay English: the node is named by its definition title, not a translation
+                let title = self.node(node_id)
+                    .map(|n| n.instance.with_untracked(|i| i.definition.title.clone()))
+                    .unwrap_or_else(|| "?".to_string());
+                self.log(LogKind::Node, format!("[{title}] {message}"));
             }
-            ServerMessage::Error(text) => {
+            ServerMessage::Error(message) => {
                 self.error_seq.update(|n| *n += 1);
-                self.log(LogKind::Error, format!("[ERROR] {}", text));
+                // The answer to the user's action: translated, unlike technical log lines
+                self.log(LogKind::Error, format!("[ERROR] {}", i18n::ui_text(&message)));
             }
         }
     }

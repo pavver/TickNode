@@ -8,8 +8,8 @@ use std::sync::mpsc as std_mpsc;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use ticknode_core::{RemovedConnections, TickEngine};
-use ticknode_shared::{ClientMessage, NodeId, NodeInstance, NodeTrace, Position, ServerMessage};
+use ticknode_core::{EngineError, RemovedConnections, TickEngine};
+use ticknode_shared::{ClientMessage, NodeId, NodeInstance, NodeTrace, Position, ServerMessage, UiMessage};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
 
@@ -59,7 +59,7 @@ impl EngineHandle {
 }
 
 pub fn encode(msg: &ServerMessage) -> Bytes {
-    Bytes::from(postcard::to_allocvec(msg).expect("ServerMessage завжди серіалізується"))
+    Bytes::from(postcard::to_allocvec(msg).expect("ServerMessage always serializes"))
 }
 
 pub fn spawn(
@@ -124,7 +124,7 @@ impl Actor {
                 Ok(Command::Snapshot(tx)) => { let _ = tx.send(self.snapshot()); }
                 Ok(Command::Shutdown(done)) => {
                     self.save();
-                    info!("Рушій зупинено");
+                    info!("Engine stopped");
                     let _ = done.send(());
                     return;
                 }
@@ -167,7 +167,7 @@ impl Actor {
         match self.storage.save(&self.engine, &self.positions) {
             Ok(()) => self.dirty_since = None,
             Err(e) => {
-                error!("Не вдалось зберегти граф: {:#}", e);
+                error!("Failed to save the graph: {:#}", e);
                 // Retry after the next debounce interval.
                 self.dirty_since = Some(Instant::now());
             }
@@ -186,6 +186,7 @@ impl Actor {
             definitions: self.engine.registry.get_definitions(),
             types: self.engine.types.definitions(),
             plugins: self.plugins.infos(&self.engine),
+            translations: self.engine.translations(),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,
@@ -196,11 +197,15 @@ impl Actor {
     }
 
     fn catalog(&self) -> ServerMessage {
-        ServerMessage::Catalog { definitions: self.engine.registry.get_definitions(), types: self.engine.types.definitions() }
+        ServerMessage::Catalog {
+            definitions: self.engine.registry.get_definitions(),
+            types: self.engine.types.definitions(),
+            translations: self.engine.translations(),
+        }
     }
 
-    fn require_node(&self, id: NodeId) -> Result<(), String> {
-        if self.engine.has_node(id) { Ok(()) } else { Err(format!("Ноду {:?} не знайдено", id)) }
+    fn require_node(&self, id: NodeId) -> Result<(), UiMessage> {
+        if self.engine.has_node(id) { Ok(()) } else { Err(EngineError::NodeNotFound(id).ui_message()) }
     }
 
     /// Applies an editor command; returns events to broadcast to all editors and the IDs of nodes
@@ -209,16 +214,16 @@ impl Actor {
         &mut self,
         msg: ClientMessage,
         reply: &mpsc::UnboundedSender<ServerMessage>,
-    ) -> Result<(Vec<ServerMessage>, Option<Vec<NodeId>>), String> {
+    ) -> Result<(Vec<ServerMessage>, Option<Vec<NodeId>>), UiMessage> {
         let mutates = !matches!(msg, ClientMessage::TriggerNode { .. } | ClientMessage::SetPluginEnabled { .. } | ClientMessage::ConfigurePlugin { .. });
         let mut created = None;
         let events = match msg {
             ClientMessage::AddNode { type_name, position } => {
                 let id = NodeId::generate();
-                self.engine.create_node(id, &type_name, &[]).map_err(|e| e.to_string())?;
+                self.engine.create_node(id, &type_name, &[]).map_err(|e| e.ui_message())?;
                 self.positions.insert(id, position);
                 created = Some(vec![id]);
-                vec![ServerMessage::NodeAdded(self.instance(id).expect("нода щойно створена"))]
+                vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))]
             }
             ClientMessage::RemoveNode(id) => {
                 self.require_node(id)?;
@@ -233,17 +238,17 @@ impl Actor {
                 vec![ServerMessage::NodeMoved { id, position }]
             }
             ClientMessage::SetProperty { id, name, value } => {
-                let removed = self.engine.set_node_property(id, &name, value).map_err(|e| e.to_string())?;
+                let removed = self.engine.set_node_property(id, &name, value).map_err(|e| e.ui_message())?;
                 let mut events = removed_events(removed);
-                events.push(ServerMessage::NodeUpdated(self.instance(id).expect("нода існує")));
+                events.push(ServerMessage::NodeUpdated(self.instance(id).expect("the node exists")));
                 events
             }
             ClientMessage::SetInputValue { id, pin, value } => {
-                self.engine.set_input_value(id, pin, value).map_err(|e| e.to_string())?;
-                vec![ServerMessage::NodeUpdated(self.instance(id).expect("нода існує"))]
+                self.engine.set_input_value(id, pin, value).map_err(|e| e.ui_message())?;
+                vec![ServerMessage::NodeUpdated(self.instance(id).expect("the node exists"))]
             }
             ClientMessage::ConnectExec(c) => {
-                self.engine.connect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.to_string())?;
+                self.engine.connect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
                 vec![ServerMessage::ExecConnected(c)]
             }
             ClientMessage::DisconnectExec(c) => {
@@ -254,7 +259,7 @@ impl Actor {
                 }
             }
             ClientMessage::ConnectData(c) => {
-                self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.to_string())?;
+                self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
                 vec![ServerMessage::DataConnected(c)]
             }
             ClientMessage::DisconnectData { dst_node, dst_pin } => {
@@ -271,11 +276,17 @@ impl Actor {
             }
             ClientMessage::Paste(snippet) => {
                 if snippet.nodes.len() > MAX_PASTE_NODES {
-                    return Err(format!("Забагато нод для вставки: {} (максимум {})", snippet.nodes.len(), MAX_PASTE_NODES));
+                    return Err(UiMessage::new(
+                        "error-paste-too-many",
+                        format!("Too many nodes to paste: {} (maximum {})", snippet.nodes.len(), MAX_PASTE_NODES),
+                    ).arg("count", snippet.nodes.len()).arg("max", MAX_PASTE_NODES));
                 }
                 let (imported, warnings) = self.engine.import_snippet(&snippet);
                 if !warnings.is_empty() {
-                    let _ = reply.send(ServerMessage::Error(format!("Вставлено не все: {}", warnings.join("; "))));
+                    let details = warnings.join("; ");
+                    let _ = reply.send(ServerMessage::Error(
+                        UiMessage::new("error-paste-incomplete", format!("Not everything was pasted: {details}")).arg("details", details),
+                    ));
                 }
                 let positions: HashMap<NodeId, Position> = snippet.nodes.iter().map(|n| (n.id, n.position)).collect();
                 let ids: Vec<NodeId> = imported.iter().map(|(_, new)| *new).collect();

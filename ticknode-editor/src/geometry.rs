@@ -281,8 +281,8 @@ mod tests {
         let color = |n: &str| type_color(&types, &DataType::Named(n.into()));
         assert_eq!(color("p.colored"), "#e0a030");
         assert!(color("p.plain").starts_with("hsl("));
-        assert_eq!(color("p.plain"), color("p.plain"), "колір стабільний");
-        assert!(color("p.evil").starts_with("hsl("), "некоректний колір не потрапляє в CSS");
+        assert_eq!(color("p.plain"), color("p.plain"), "the color is stable");
+        assert!(color("p.evil").starts_with("hsl("), "an invalid color does not reach the CSS");
         assert_ne!(color("p.plain"), color("p.evil"));
         assert_eq!(type_color(&types, &DataType::Number), "var(--accent)");
     }

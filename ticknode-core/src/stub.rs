@@ -30,16 +30,19 @@ impl StubNode {
             type_name: type_name.into(),
             title: type_name.into(),
             category: "Unavailable".into(),
-            description: "Тип ноди недоступний".into(),
+            description: "Node type unavailable".into(),
             help: String::new(),
             pins,
         }
     }
 
-    pub fn message(&self) -> String {
+    pub fn message(&self) -> UiMessage {
         match &self.plugin {
-            Some(plugin) => format!("плагін {plugin} недоступний"),
-            None => format!("тип ноди {} невідомий: потрібного плагіна немає або його вимкнено", self.definition.type_name),
+            Some(plugin) => UiMessage::new("error-node-plugin-unavailable", format!("plugin {plugin} unavailable")).arg("plugin", plugin),
+            None => UiMessage::new(
+                "error-node-type-unknown",
+                format!("node type {} is unknown: the required plugin is missing or disabled", self.definition.type_name),
+            ).arg("type", &self.definition.type_name),
         }
     }
 }
@@ -49,12 +52,12 @@ impl Node for StubNode {
     fn definition(&self) -> NodeDefinition { self.definition.clone() }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        ctx.host_state.log(self.id, format!("[ERROR] Нода не виконується: {}", self.message()));
+        ctx.host_state.log(self.id, format!("[ERROR] Node is not executed: {}", self.message()));
         Vec::new()
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> { self.properties.clone() }
-    fn unavailable(&self) -> Option<String> { Some(self.message()) }
+    fn unavailable(&self) -> Option<UiMessage> { Some(self.message()) }
 }
 
 impl TickEngine {
@@ -128,7 +131,7 @@ impl TickEngine {
             match self.create_node(id, &model.type_name, &model.properties) {
                 Ok(()) => revived.push(id),
                 Err(EngineError::UnknownNodeType(_)) => {}
-                Err(e) => tracing::warn!(node = ?id, "Не вдалось відновити ноду {}: {e}", model.type_name),
+                Err(e) => tracing::warn!(node = ?id, "Failed to restore node {}: {e}", model.type_name),
             }
         }
         self.pure_cache.clear();

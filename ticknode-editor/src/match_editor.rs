@@ -85,7 +85,7 @@ fn free_name(inputs: &[MatchInput]) -> String {
     ('a'..='z').map(String::from)
         .chain((1..).map(|i| format!("in{i}")))
         .find(|n| !taken(n))
-        .expect("нескінченний ряд імен")
+        .expect("an endless sequence of names")
 }
 
 fn add_input(s: &mut MatchState) -> String {
@@ -288,7 +288,7 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
                 }
             >
                 {move || INPUT_TYPES.iter().map(|t| (t.to_string(), if *t == "any" { i18n::type_name_label("auto") } else { i18n::type_name_label(t) }))
-                    .chain(ed.types.with(|r| r.definitions()).into_iter().map(|d| (d.name.clone(), d.title.clone())))
+                    .chain(ed.types.with(|r| r.definitions()).into_iter().map(|d| (d.name.clone(), i18n::type_def_title(&d))))
                     .map(|(t, label)| {
                         let value = t.clone();
                         view! { <option value=value selected=move || input_type_name(&declared.get()) == t>{label}</option> }

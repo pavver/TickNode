@@ -123,7 +123,7 @@ export_plugin!(DoublePlugin);
 
 Build it with `cargo build --release --target wasm32-wasip2` and drop the `.wasm` into `data/plugins/`. Plugins can also declare data types, settings, capabilities (HTTP, storage) and start host tasks (delays, HTTP requests); see [`delay-plugin`](delay-plugin), [`http-weather-plugin`](http-weather-plugin) and [`test-plugin`](test-plugin).
 
-Plugin log messages and errors written to logs must be in English (the UI is translated, logs are not).
+Write definitions (titles, descriptions, help, pin names) in English: they are the fallback text. A plugin ships translations as Fluent files (`const TRANSLATIONS = &[("uk", include_str!("../locales/uk.ftl"))]`, key conventions are in the [`ticknode-plugin-sdk`](ticknode-plugin-sdk) docs), and errors the user must see in the UI (for example from `configure`) are `UiError`s with a translation key and an English fallback. Plugin log messages must be in English (the UI is translated, logs are not).
 
 ## Repository layout
 
@@ -145,7 +145,7 @@ How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).
 - [x] Plugin-defined data types, required inputs
 - [x] Plugins panel: enable, disable, configure
 - [x] English and Ukrainian UI
-- [ ] Translations shipped by plugins; translatable UI errors
+- [x] Translations shipped by plugins; translatable UI errors
 - [ ] WebSocket capability for plugins
 - [ ] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client))
 - [ ] Home Assistant add-on: install by adding this repository to the add-on store

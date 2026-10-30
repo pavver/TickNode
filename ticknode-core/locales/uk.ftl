@@ -171,13 +171,13 @@ node-console-pin-In = In
 node-console-pin-Val = Val
 
 # test/click_button
-node-test-click_button-title = Click Button
-node-test-click_button-description = Генерує exec сигнал на наступному тіку після того як користувач клікне на кнопку
-node-test-click_button-help =
+node-test-click-button-title = Click Button
+node-test-click-button-description = Генерує exec сигнал на наступному тіку після того як користувач клікне на кнопку
+node-test-click-button-help =
     Видає сигнал на Out, коли ви натискаєте «Запустити» в правій панелі.
 
     Зручно, щоб вручну запустити ланцюжок під час налагодження.
-node-test-click_button-pin-Out = Out
+node-test-click-button-pin-Out = Out
 
 # test/debug
 node-test-debug-title = Debug Log
@@ -211,22 +211,22 @@ node-compare-pin-Gt = Gt
 node-compare-pin-Lt = Lt
 
 # for_loop
-node-for_loop-title = For Loop
-node-for_loop-description = Асинхронний цикл від 0 до Count-1 з кроком 1
-node-for_loop-help =
+node-for-loop-title = For Loop
+node-for-loop-description = Асинхронний цикл від 0 до Count-1 з кроком 1
+node-for-loop-help =
     Покроковий цикл:
     1. Сигнал на In починає цикл з Index = 0 і видає сигнал на LoopBody.
     2. Коли тіло циклу відпрацювало, подайте сигнал на Next — Index збільшиться на 1, і LoopBody спрацює знову.
     3. Після Count ітерацій або сигналу на Break спрацьовує Completed.
 
     Якщо Count ≤ 0, одразу спрацьовує Completed. Кожен крок займає щонайменше такт, тож цикл не блокує рушій.
-node-for_loop-pin-In = In
-node-for_loop-pin-Count = Count
-node-for_loop-pin-Break = Break
-node-for_loop-pin-Next = Next
-node-for_loop-pin-LoopBody = LoopBody
-node-for_loop-pin-Index = Index
-node-for_loop-pin-Completed = Completed
+node-for-loop-pin-In = In
+node-for-loop-pin-Count = Count
+node-for-loop-pin-Break = Break
+node-for-loop-pin-Next = Next
+node-for-loop-pin-LoopBody = LoopBody
+node-for-loop-pin-Index = Index
+node-for-loop-pin-Completed = Completed
 
 # sleep
 node-sleep-title = Sleep
@@ -313,23 +313,23 @@ node-object-create-help =
 node-object-create-pin-Obj = Obj
 
 # object/set_field
-node-object-set_field-title = Set Object Field
-node-object-set_field-description = Встановлює значення поля об'єкта
-node-object-set_field-help =
+node-object-set-field-title = Set Object Field
+node-object-set-field-description = Встановлює значення поля об'єкта
+node-object-set-field-help =
     Видає OutObj — копію об'єкта Obj, у якій поле Name має значення Val. Якщо поля не було, воно додається, інакше — замінюється.
 
     Тип Val обирається в правій панелі. Поки не під'єднано всі входи, результату немає.
 
     Чиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.
-node-object-set_field-pin-Obj = Obj
-node-object-set_field-pin-Name = Name
-node-object-set_field-pin-Val = Val
-node-object-set_field-pin-OutObj = OutObj
+node-object-set-field-pin-Obj = Obj
+node-object-set-field-pin-Name = Name
+node-object-set-field-pin-Val = Val
+node-object-set-field-pin-OutObj = OutObj
 
 # object/get_field
-node-object-get_field-title = Get Object Field
-node-object-get_field-description = Отримує значення поля об'єкта
-node-object-get_field-help =
+node-object-get-field-title = Get Object Field
+node-object-get-field-description = Отримує значення поля об'єкта
+node-object-get-field-help =
     Шукає в об'єкті Obj поле Name:
     • Val — значення поля;
     • Found — чи знайдено поле.
@@ -337,10 +337,10 @@ node-object-get_field-help =
     Тип Val обирається в правій панелі.
 
     Чиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.
-node-object-get_field-pin-Obj = Obj
-node-object-get_field-pin-Name = Name
-node-object-get_field-pin-Val = Val
-node-object-get_field-pin-Found = Found
+node-object-get-field-pin-Obj = Obj
+node-object-get-field-pin-Name = Name
+node-object-get-field-pin-Val = Val
+node-object-get-field-pin-Found = Found
 
 # object/unpack
 node-object-unpack-title = Unpack Object

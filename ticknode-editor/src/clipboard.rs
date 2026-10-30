@@ -8,7 +8,6 @@ use ticknode_shared::*;
 
 use crate::canvas::view_center;
 use crate::geometry::DU;
-use crate::i18n::t;
 use crate::state::{Editor, LogKind, PendingPaste};
 
 const FORMAT: &str = "ticknode/snippet@1";
@@ -40,7 +39,7 @@ pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
 }
 
 pub fn to_text(graph: GraphModel) -> String {
-    serde_json::to_string(&Envelope { format: FORMAT.into(), graph }).expect("фрагмент серіалізується")
+    serde_json::to_string(&Envelope { format: FORMAT.into(), graph }).expect("the fragment serializes")
 }
 
 pub fn from_text(text: &str) -> Option<GraphModel> {
@@ -70,7 +69,7 @@ pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
 /// viewport center) and follow it until confirmed (`place_paste`) or cancelled (`cancel_paste`).
 pub fn paste_text(ed: Editor, text: &str) {
     let Some(mut graph) = from_text(text) else {
-        ed.log(LogKind::Error, t!("log-error-empty-clipboard"));
+        ed.log(LogKind::Error, "[ERROR] Clipboard does not contain TickNode nodes");
         return;
     };
     let min_x = graph.nodes.iter().map(|n| n.position.x).fold(f32::INFINITY, f32::min);

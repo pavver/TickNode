@@ -99,7 +99,7 @@ impl HostState {
     pub fn start_http(&mut self, node_id: NodeId, request: HttpRequest) -> Result<TaskId, String> {
         let runtime = self.runtime.clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
-            .ok_or("HTTP недоступний: рушій запущено без tokio runtime")?;
+            .ok_or("HTTP unavailable: the engine is running without a tokio runtime")?;
         let handle = runtime.spawn_blocking(move || perform_http_request(request));
         Ok(self.insert(node_id, TaskState::Spawned(handle)))
     }
@@ -141,7 +141,7 @@ impl HostState {
                     TaskState::Delay { .. } => Ok(TaskOutput::Delay),
                     // The task has already finished, so block_on does not wait.
                     TaskState::Spawned(handle) => futures::executor::block_on(handle)
-                        .unwrap_or_else(|e| Err(format!("Задача аварійно завершилась: {}", e))),
+                        .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {}", e))),
                 };
                 (task.node_id, id, result)
             })

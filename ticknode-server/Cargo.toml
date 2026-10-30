@@ -1,0 +1,24 @@
+[package]
+name = "ticknode-server"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+
+[dependencies]
+ticknode-core = { path = "../ticknode-core" }
+ticknode-shared = { path = "../ticknode-shared" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+serde = { workspace = true }
+serde_json = "1.0"
+axum = { version = "0.8.4", features = ["ws"] }
+tower-http = { version = "0.6.6", features = ["fs"] }
+bytes = "1"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-tungstenite = "0.28"

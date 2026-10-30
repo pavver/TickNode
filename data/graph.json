@@ -1,0 +1,119 @@
+{
+  "nodes": [
+    {
+      "id": "0d9464ad-9676-4812-8ff2-c6f7b884bf6a",
+      "type_name": "math/expression",
+      "properties": [
+        [
+          "expression",
+          {
+            "String": "a + b - cos(c)"
+          }
+        ]
+      ],
+      "position": {
+        "x": -36.0,
+        "y": 704.0
+      }
+    },
+    {
+      "id": "59ce9421-ae42-4bbf-a0d3-b6958b8c990b",
+      "type_name": "console",
+      "properties": [
+        [
+          "in:1",
+          {
+            "String": "т1"
+          }
+        ]
+      ],
+      "position": {
+        "x": 700.0,
+        "y": 472.0
+      }
+    },
+    {
+      "id": "5c1e5f72-94f7-4f6e-9c20-59096a1bb0fc",
+      "type_name": "console",
+      "properties": [
+        [
+          "in:1",
+          {
+            "String": "т2"
+          }
+        ]
+      ],
+      "position": {
+        "x": 828.0,
+        "y": 648.0
+      }
+    },
+    {
+      "id": "e76f0fd7-ff91-4553-9df7-b7f868d5f614",
+      "type_name": "match",
+      "properties": [
+        [
+          "inputs",
+          {
+            "List": {
+              "element_type": "String",
+              "elements": [
+                {
+                  "String": "1:a:any"
+                },
+                {
+                  "String": "2:b:any"
+                }
+              ]
+            }
+          }
+        ],
+        [
+          "cases",
+          {
+            "List": {
+              "element_type": "String",
+              "elements": [
+                {
+                  "String": "1: a > a and a = 0"
+                }
+              ]
+            }
+          }
+        ],
+        [
+          "all_matches",
+          {
+            "Bool": false
+          }
+        ]
+      ],
+      "position": {
+        "x": 260.0,
+        "y": 648.0
+      }
+    }
+  ],
+  "exec_connections": [
+    {
+      "src_node": "e76f0fd7-ff91-4553-9df7-b7f868d5f614",
+      "src_pin": 0,
+      "dst_node": "5c1e5f72-94f7-4f6e-9c20-59096a1bb0fc",
+      "dst_pin": 0
+    },
+    {
+      "src_node": "e76f0fd7-ff91-4553-9df7-b7f868d5f614",
+      "src_pin": 1,
+      "dst_node": "59ce9421-ae42-4bbf-a0d3-b6958b8c990b",
+      "dst_pin": 0
+    }
+  ],
+  "data_connections": [
+    {
+      "src_node": "0d9464ad-9676-4812-8ff2-c6f7b884bf6a",
+      "src_pin": 0,
+      "dst_node": "e76f0fd7-ff91-4553-9df7-b7f868d5f614",
+      "dst_pin": 1
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[package]
+name = "http-weather-plugin"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ticknode-plugin-sdk = { path = "../ticknode-plugin-sdk" }

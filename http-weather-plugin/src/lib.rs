@@ -1,0 +1,141 @@
+//! Приклад мережевого плагіна: температура для міста через HTTP.
+//!
+//! Сервіс за адресою з властивості `url` (`{city}` замінюється назвою міста) має відповідати
+//! текстом `температура,опис`, наприклад `22.5,Sunny`.
+
+use ticknode_plugin_sdk::*;
+
+const DEFAULT_URL: &str = "http://localhost/weather?city={city}";
+
+struct WeatherPlugin;
+
+struct WeatherNode {
+    url: String,
+    pending: Option<TaskId>,
+}
+
+const TRIGGER: PinId = PinId(0);
+const CITY: PinId = PinId(1);
+const SUCCESS: PinId = PinId(2);
+const FAILURE: PinId = PinId(3);
+const TEMP: PinId = PinId(4);
+const DESCRIPTION: PinId = PinId(5);
+
+fn parse(body: &str) -> Option<(f64, String)> {
+    let (temp, description) = body.trim().split_once(',')?;
+    Some((temp.trim().parse().ok()?, description.trim().to_string()))
+}
+
+impl PluginNode for WeatherNode {
+    fn definition(&self) -> NodeDefinition {
+        NodeDefinition {
+            type_name: "http/weather".into(),
+            title: "Get Weather".into(),
+            category: "Network".into(),
+            description: "Отримує температуру для міста".into(),
+            help: "За сигналом на Trigger робить HTTP-запит за адресою з властивості url: {city} замінюється на City (без City — Kyiv). Сервіс має відповісти текстом «температура,опис», наприклад `22.5,Sunny`.\n\n• Успіх — Temp, Description і сигнал на Success.\n• Помилка мережі, статус 4xx/5xx або незрозуміла відповідь — сигнал на Failure.\n\nНовий сигнал скасовує попередній незавершений запит. Плагін може звертатися лише до доменів, дозволених у його маніфесті.".into(),
+            pins: vec![
+                exec_in(TRIGGER.0, "Trigger"),
+                data_in(CITY.0, "City", DataType::String),
+                exec_out(SUCCESS.0, "Success"),
+                exec_out(FAILURE.0, "Failure"),
+                data_out(TEMP.0, "Temp", DataType::Number),
+                data_out(DESCRIPTION.0, "Description", DataType::String),
+            ],
+        }
+    }
+
+    fn properties(&self) -> Vec<(String, DataValue)> {
+        vec![("url".into(), DataValue::String(self.url.clone()))]
+    }
+
+    fn set_property(&mut self, name: &str, value: DataValue) {
+        if let ("url", DataValue::String(url)) = (name, value) {
+            self.url = url;
+        }
+    }
+
+    fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output> {
+        match trigger {
+            Trigger::Pin(TRIGGER) => {
+                let city = match inputs.string(CITY) {
+                    c if c.is_empty() => "Kyiv".to_string(),
+                    c => c,
+                };
+                // Новий запит робить попередній неактуальним.
+                if let Some(task) = self.pending.take() {
+                    host::cancel(task);
+                }
+                match host::http(HttpRequest::get(self.url.replace("{city}", &encode_component(&city)))) {
+                    Ok(task) => {
+                        self.pending = Some(task);
+                        Vec::new()
+                    }
+                    Err(e) => {
+                        host::error(&e);
+                        vec![Output::Exec(FAILURE)]
+                    }
+                }
+            }
+            Trigger::Task { id, result } if self.pending == Some(id) => {
+                self.pending = None;
+                let parsed = match result {
+                    Ok(TaskOutput::Http(response)) if response.is_success() => parse(&response.text()),
+                    Ok(TaskOutput::Http(response)) => {
+                        host::error(&format!("HTTP {}", response.status));
+                        None
+                    }
+                    Ok(_) => None,
+                    Err(e) => {
+                        host::error(&e);
+                        None
+                    }
+                };
+                match parsed {
+                    Some((temp, description)) => vec![
+                        Output::Data(TEMP, DataValue::Number(NumberValue::Float(temp).normalize())),
+                        Output::Data(DESCRIPTION, DataValue::String(description)),
+                        Output::Exec(SUCCESS),
+                    ],
+                    None => vec![Output::Exec(FAILURE)],
+                }
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl Plugin for WeatherPlugin {
+    const NODE_TYPES: &'static [&'static str] = &["http/weather"];
+
+    fn manifest() -> PluginManifest {
+        PluginManifest {
+            name: "weather_plugin".into(),
+            version: "0.2.0".into(),
+            author: "TickNode".into(),
+            requested_capabilities: vec![Capability::Http {
+                allowed_domains: vec!["api.openweathermap.org".into(), "localhost".into()],
+            }],
+            settings: vec![],
+        }
+    }
+
+    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+        (type_name == "http/weather")
+            .then(|| Box::new(WeatherNode { url: DEFAULT_URL.into(), pending: None }) as Box<dyn PluginNode>)
+    }
+}
+
+export_plugin!(WeatherPlugin);
+
+/// Percent-encoding компонента URL: `Kyiv&units=imperial` лишається значенням, а не новими параметрами.
+fn encode_component(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => out.push(byte as char),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}

@@ -1,0 +1,13 @@
+[build]
+target = "index.html"
+dist = "dist"
+# Відносні шляхи: редактор відкривається через HA ingress під довільним префіксом
+public_url = "./"
+
+[serve]
+port = 8080
+
+# Під час розробки `trunk serve` проксіює WebSocket на запущений ticknode-server
+[[proxy]]
+backend = "ws://127.0.0.1:8099/ws"
+ws = true

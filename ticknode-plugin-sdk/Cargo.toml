@@ -1,0 +1,10 @@
+[package]
+name = "ticknode-plugin-sdk"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+
+[dependencies]
+ticknode-shared = { path = "../ticknode-shared" }
+postcard = { workspace = true, features = ["alloc"] }
+wit-bindgen = "0.63"

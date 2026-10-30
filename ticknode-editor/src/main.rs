@@ -1,0 +1,239 @@
+//! Веб-редактор TickNode на Leptos (CSR). Рушій працює на сервері; редактор лише показує граф
+//! і надсилає зміни через WebSocket.
+
+mod canvas;
+mod categories;
+mod clipboard;
+mod connection;
+mod geometry;
+mod inline;
+mod match_editor;
+mod panels;
+mod plugins_panel;
+mod state;
+mod ui;
+
+use std::time::Duration;
+
+use leptos::ev;
+use leptos::prelude::*;
+use wasm_bindgen::JsCast;
+
+use crate::canvas::{Canvas, fit_view};
+use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
+use crate::plugins_panel::PluginsPanel;
+use crate::state::{ConnStatus, Editor, LogKind, Theme, now_ms, use_editor};
+use crate::ui::{IconButton, StatusDot, icons};
+
+/// Ширина, нижче якої панелі стають висувними шарами (див. @media у style.css).
+const NARROW_WIDTH: f64 = 900.0;
+const THEME_KEY: &str = "ticknode.theme";
+/// Подія `paste` протягом цього часу після середньої кнопки — вставка первинного виділення.
+const MIDDLE_PASTE_WINDOW_MS: f64 = 500.0;
+
+fn window_width() -> f64 {
+    window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1280.0)
+}
+
+fn local_storage() -> Option<web_sys::Storage> {
+    window().local_storage().ok().flatten()
+}
+
+fn load_theme() -> Theme {
+    match local_storage().and_then(|s| s.get_item(THEME_KEY).ok().flatten()).as_deref() {
+        Some("light") => Theme::Light,
+        _ => Theme::Dark,
+    }
+}
+
+/// Гарячі клавіші й буфер обміну не перехоплюються, поки фокус у полі вводу.
+fn typing_in_field(ev: &web_sys::Event) -> bool {
+    ev.target()
+        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        .is_some_and(|el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
+}
+
+fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
+    if typing_in_field(ev) {
+        return;
+    }
+    let (Some(graph), Some(data)) = (clipboard::selection_snippet(ed), ev.clipboard_data()) else { return };
+    let count = graph.nodes.len();
+    if data.set_data("text/plain", &clipboard::to_text(graph)).is_ok() {
+        ev.prevent_default();
+        ed.log(LogKind::System, format!("[UI] {} нод: {}", if cut { "Вирізано" } else { "Скопійовано" }, count));
+        if cut {
+            clipboard::delete_selection(ed);
+        }
+    }
+}
+
+#[component]
+fn App() -> impl IntoView {
+    let editor = Editor::new(load_theme(), window_width() > NARROW_WIDTH);
+    provide_context(editor);
+
+    Effect::new(move |_| {
+        let name = match editor.theme.get() {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        };
+        if let Some(root) = document().document_element() {
+            let _ = root.set_attribute("data-theme", name);
+        }
+        if let Some(storage) = local_storage() {
+            let _ = storage.set_item(THEME_KEY, name);
+        }
+    });
+
+    set_interval(move || editor.now.set(now_ms()), Duration::from_millis(100));
+
+    let resize = window_event_listener(ev::resize, move |_| {
+        editor.narrow.set(window_width() <= NARROW_WIDTH);
+    });
+    let keys = window_event_listener(ev::keydown, move |ev| {
+        if typing_in_field(&ev) {
+            return;
+        }
+        let ctrl = ev.ctrl_key() || ev.meta_key();
+        if ctrl {
+            // Вставка з клавіатури — не первинне виділення, навіть якщо відпускання середньої кнопки загубилось
+            editor.middle_button_at.set_value(f64::NEG_INFINITY);
+        }
+        match (ctrl, ev.key().to_lowercase().as_str()) {
+            (false, "delete" | "backspace") => clipboard::delete_selection(editor),
+            (false, "escape") => {
+                if !clipboard::cancel_paste(editor) {
+                    editor.selection.set(None);
+                }
+            }
+            (false, "f" | "а") => fit_view(editor),
+            (true, "a" | "ф") => {
+                ev.prevent_default();
+                editor.select_nodes(editor.nodes.with_untracked(|n| n.keys().copied().collect::<Vec<_>>()));
+            }
+            (true, "d" | "в") => {
+                ev.prevent_default();
+                clipboard::duplicate(editor);
+            }
+            _ => {}
+        }
+    });
+    // Копіювання/вставка — через події буфера: працюють і без HTTPS, і між вкладками.
+    let copy = window_event_listener(ev::copy, move |ev| copy_selection(editor, &ev, false));
+    let cut = window_event_listener(ev::cut, move |ev| copy_selection(editor, &ev, true));
+    // Середня кнопка: запам'ятовуємо час, щоб відсіяти вставку первинного виділення (Linux).
+    // Саме pointer-події: полотно скасовує pointerdown, і тоді mousedown/mouseup не надходять.
+    let middle_down = window_event_listener(ev::pointerdown, move |ev| {
+        if ev.button() == 1 {
+            editor.middle_button_at.set_value(f64::INFINITY);
+        }
+    });
+    let middle_up = window_event_listener(ev::pointerup, move |ev| {
+        if ev.button() == 1 {
+            editor.middle_button_at.set_value(now_ms());
+        }
+    });
+    // Підказку «інфо» ховає натискання будь-де, крім самої кнопки
+    let hide_tooltip = window_event_listener(ev::pointerdown, move |ev| {
+        let on_info = ev.target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .and_then(|el| el.closest(".info-btn").ok().flatten())
+            .is_some();
+        if !on_info && editor.tooltip.with_untracked(|t| t.is_some()) {
+            editor.tooltip.set(None);
+        }
+    });
+    let paste = window_event_listener(ev::paste, move |ev| {
+        if typing_in_field(&ev) {
+            return;
+        }
+        if now_ms() - editor.middle_button_at.get_value() < MIDDLE_PASTE_WINDOW_MS {
+            ev.prevent_default();
+            return;
+        }
+        if let Some(text) = ev.clipboard_data().and_then(|d| d.get_data("text/plain").ok()) {
+            ev.prevent_default();
+            clipboard::paste_text(editor, &text);
+        }
+    });
+    on_cleanup(move || {
+        resize.remove();
+        keys.remove();
+        copy.remove();
+        cut.remove();
+        paste.remove();
+        hide_tooltip.remove();
+        middle_down.remove();
+        middle_up.remove();
+    });
+
+    connection::connect(editor);
+
+    view! {
+        <div class="app">
+            <Header />
+            <div class="workspace">
+                <Palette />
+                <div class="canvas-wrap"><Canvas /></div>
+                <Inspector />
+                <PluginsPanel />
+            </div>
+            <ConsolePanel />
+            <PaletteGhost />
+            <TooltipLayer />
+        </div>
+    }
+}
+
+#[component]
+fn Header() -> impl IntoView {
+    let ed = use_editor();
+    let status = move || match ed.status.get() {
+        ConnStatus::Online => ("online", format!("підключено · {} нод", ed.nodes.with(|n| n.len()))),
+        ConnStatus::Connecting => ("connecting", "підключення…".to_string()),
+        ConnStatus::Offline => ("offline", "немає з'єднання з сервером".to_string()),
+    };
+    view! {
+        <header class="header">
+            <div class="titles">
+                <span class="t-app-title ellipsis">"TickNode"</span>
+                <span class="subtitle t-caption">
+                    <StatusDot class=Signal::derive(move || status().0) />
+                    <span class="ellipsis">{move || status().1}</span>
+                </span>
+            </div>
+            <div class="actions">
+                <IconButton
+                    icon=icons::ADD
+                    title="Палітра нод"
+                    selected=Signal::derive(move || ed.show_palette.get())
+                    on_click=Callback::new(move |_| ed.show_palette.update(|v| *v = !*v))
+                />
+                <IconButton
+                    icon=icons::EXTENSION
+                    title="Плагіни"
+                    selected=Signal::derive(move || ed.show_plugins.get())
+                    on_click=Callback::new(move |_| ed.show_plugins.update(|v| *v = !*v))
+                />
+                <IconButton icon=icons::FIT title="Показати весь граф (F)" on_click=Callback::new(move |_| fit_view(ed)) />
+                <IconButton
+                    icon=icons::TERMINAL
+                    title="Консоль"
+                    selected=Signal::derive(move || ed.show_console.get())
+                    on_click=Callback::new(move |_| ed.show_console.update(|v| *v = !*v))
+                />
+                <IconButton
+                    icon=icons::THEME
+                    title="Світла / темна тема"
+                    on_click=Callback::new(move |_| ed.theme.update(|t| *t = if *t == Theme::Dark { Theme::Light } else { Theme::Dark }))
+                />
+            </div>
+        </header>
+    }
+}
+
+fn main() {
+    console_error_panic_hook::set_once();
+    leptos::mount::mount_to_body(App);
+}

@@ -1,0 +1,396 @@
+mod actor;
+mod plugins;
+mod storage;
+mod ws;
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use axum::Router;
+use axum::routing::get;
+use ticknode_core::TickEngine;
+use tower_http::services::{ServeDir, ServeFile};
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+
+use crate::storage::Storage;
+
+struct Config {
+    bind: String,
+    data_dir: PathBuf,
+    web_dir: PathBuf,
+    tick: Duration,
+}
+
+impl Config {
+    fn from_env() -> Self {
+        let var = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.to_string());
+        Self {
+            bind: var("TICKNODE_BIND", "0.0.0.0:8099"),
+            data_dir: var("TICKNODE_DATA_DIR", "data").into(),
+            web_dir: var("TICKNODE_WEB_DIR", "ticknode-editor/dist").into(),
+            tick: Duration::from_millis(var("TICKNODE_TICK_MS", "100").parse().unwrap_or(100)),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .init();
+
+    let config = Config::from_env();
+    std::fs::create_dir_all(&config.data_dir)?;
+
+    let mut engine = TickEngine::new();
+    // Плагіни — до графа: так ноди їхніх типів одразу справжні, а не заглушки
+    let mut plugins = plugins::Plugins::new(&config.data_dir);
+    plugins.load_all(&mut engine);
+
+    let storage = Storage::new(config.data_dir.join("graph.json"));
+    let positions = storage.load(&mut engine)?;
+    let handle = actor::spawn(engine, positions, storage, plugins, config.tick)?;
+
+    let app = router(handle.clone(), &config.web_dir);
+
+    let listener = tokio::net::TcpListener::bind(&config.bind).await?;
+    info!(bind = %config.bind, data = %config.data_dir.display(), "TickNode сервер запущено");
+
+    let shutdown_handle = handle.clone();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            info!("Отримано сигнал зупинки, зберігаємо граф");
+            shutdown_handle.shutdown().await;
+            // Відкриті WebSocket-з'єднання не повинні тримати процес.
+            tokio::spawn(async {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                std::process::exit(0);
+            });
+        })
+        .await?;
+    Ok(())
+}
+
+fn router(handle: actor::EngineHandle, web_dir: &Path) -> Router {
+    let index = web_dir.join("index.html");
+    Router::new()
+        .route("/ws", get(ws::handler))
+        .fallback_service(ServeDir::new(web_dir).fallback(ServeFile::new(index)))
+        .with_state(handle)
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async { let _ = tokio::signal::ctrl_c().await; };
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut s) => { s.recv().await; }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! { _ = ctrl_c => {}, _ = terminate => {} }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::{SinkExt, StreamExt};
+    use ticknode_shared::{ClientMessage, ConnectionModel, DataValue, PinId, Position, ServerMessage};
+    use std::path::PathBuf;
+    use tokio_tungstenite::tungstenite::Message;
+
+    type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+    async fn send(ws: &mut Socket, msg: ClientMessage) {
+        ws.send(Message::Binary(postcard::to_allocvec(&msg).unwrap().into())).await.unwrap();
+    }
+
+    /// Наступне повідомлення, що не є телеметрією.
+    async fn recv(ws: &mut Socket) -> ServerMessage {
+        loop {
+            let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
+            if let Message::Binary(b) = msg {
+                let msg: ServerMessage = postcard::from_bytes(&b).unwrap();
+                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. }) {
+                    return msg;
+                }
+            }
+        }
+    }
+
+    /// Наступне повідомлення будь-якого типу (з тайм-аутом).
+    async fn recv_any(ws: &mut Socket) -> ServerMessage {
+        loop {
+            let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
+            if let Message::Binary(b) = msg {
+                return postcard::from_bytes(&b).unwrap();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn editor_session_over_websocket_persists_graph() {
+        let dir = tempfile::tempdir().unwrap();
+        let graph_path = dir.path().join("graph.json");
+        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), Duration::from_millis(10)).unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(axum::serve(listener, router(handle.clone(), dir.path())).into_future());
+
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
+        let ServerMessage::Init { definitions, nodes, .. } = recv(&mut ws).await else { panic!("очікували Init") };
+        assert!(definitions.iter().any(|d| d.type_name == "const"));
+        assert!(nodes.is_empty());
+
+        send(&mut ws, ClientMessage::AddNode { type_name: "const".into(), position: Position { x: 1.0, y: 2.0 } }).await;
+        let ServerMessage::NodeAdded(c) = recv(&mut ws).await else { panic!() };
+        // Ініціатор дізнається, яку ноду створено, — після NodeAdded
+        assert_eq!(recv(&mut ws).await, ServerMessage::Created(vec![c.model.id]));
+        send(&mut ws, ClientMessage::AddNode { type_name: "test/debug".into(), position: Position::default() }).await;
+        let ServerMessage::NodeAdded(dbg) = recv(&mut ws).await else { panic!() };
+        assert_eq!(recv(&mut ws).await, ServerMessage::Created(vec![dbg.model.id]));
+
+        send(&mut ws, ClientMessage::SetProperty { id: c.model.id, name: "value".into(), value: DataValue::String("hi".into()) }).await;
+        let ServerMessage::NodeUpdated(updated) = recv(&mut ws).await else { panic!() };
+        assert_eq!(updated.model.properties, vec![("value".to_string(), DataValue::String("hi".into()))]);
+
+        let conn = ConnectionModel { src_node: c.model.id, src_pin: PinId(0), dst_node: dbg.model.id, dst_pin: PinId(1) };
+        send(&mut ws, ClientMessage::ConnectData(conn)).await;
+        assert_eq!(recv(&mut ws).await, ServerMessage::DataConnected(conn));
+
+        // Невалідне з'єднання — помилка лише цьому клієнту
+        send(&mut ws, ClientMessage::ConnectExec(conn)).await;
+        assert!(matches!(recv(&mut ws).await, ServerMessage::Error(_)));
+
+        // Тригер ноди: Debug пише лог, а сервер розсилає трасу з входами
+        send(&mut ws, ClientMessage::TriggerNode { id: dbg.model.id, pin: PinId(0) }).await;
+        let (mut traced, mut logged) = (false, false);
+        while !(traced && logged) {
+            match recv_any(&mut ws).await {
+                ServerMessage::Executed(traces) => {
+                    let t = traces.iter().find(|t| t.node_id == dbg.model.id).unwrap();
+                    assert_eq!(t.inputs, vec![(PinId(1), Some(DataValue::String("hi".into())))]);
+                    traced = true;
+                }
+                ServerMessage::Log { node_id, message } => {
+                    assert_eq!((node_id, message.as_str()), (dbg.model.id, "hi"));
+                    logged = true;
+                }
+                _ => {}
+            }
+        }
+
+        // Новий редактор отримує останні виконання в знімку
+        let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
+        let ServerMessage::Init { traces, .. } = recv(&mut ws2).await else { panic!("очікували Init") };
+        assert!(traces.iter().any(|(t, _)| t.node_id == dbg.model.id));
+
+        // Вставка копії обох нод зі з'єднанням: нові ID, задані позиції, Created — лише ініціатору й після NodeAdded
+        let mut snippet = ticknode_shared::GraphModel {
+            nodes: vec![updated.model.clone(), dbg.model.clone()],
+            exec_connections: vec![],
+            data_connections: vec![conn],
+        };
+        snippet.nodes[0].position = Position { x: 100.0, y: 200.0 };
+        send(&mut ws, ClientMessage::Paste(snippet)).await;
+        let (mut pasted, mut added, mut connected) = (None, Vec::new(), None);
+        while pasted.is_none() || added.len() < 2 || connected.is_none() {
+            match recv_any(&mut ws).await {
+                ServerMessage::Created(ids) => {
+                    assert_eq!(added.len(), 2, "Created раніше за NodeAdded");
+                    pasted = Some(ids);
+                }
+                ServerMessage::NodeAdded(n) => added.push(n),
+                ServerMessage::DataConnected(c) => connected = Some(c),
+                _ => {}
+            }
+        }
+        let ids = pasted.unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(!ids.contains(&c.model.id) && !ids.contains(&dbg.model.id));
+        let copy = added.iter().find(|n| n.model.id == ids[0]).unwrap();
+        assert_eq!(copy.model.position, Position { x: 100.0, y: 200.0 });
+        assert_eq!(copy.model.properties, vec![("value".to_string(), DataValue::String("hi".into()))]);
+        assert_eq!(connected.unwrap(), ConnectionModel { src_node: ids[0], src_pin: PinId(0), dst_node: ids[1], dst_pin: PinId(1) });
+
+        handle.shutdown().await;
+        let saved: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(graph_path).unwrap()).unwrap();
+        assert_eq!(saved.nodes.len(), 4);
+        assert_eq!(saved.data_connections.len(), 2);
+        assert!(saved.data_connections.contains(&conn));
+        let saved_const = saved.nodes.iter().find(|n| n.id == c.model.id).unwrap();
+        assert_eq!(saved_const.position, Position { x: 1.0, y: 2.0 });
+    }
+
+    /// Збирає сирі байти всіх отриманих повідомлень (щоб перевірити, що секрет не витікає).
+    async fn recv_logged(ws: &mut Socket, seen: &mut Vec<u8>) -> ServerMessage {
+        loop {
+            let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
+            if let Message::Binary(b) = msg {
+                seen.extend_from_slice(&b);
+                let msg: ServerMessage = postcard::from_bytes(&b).unwrap();
+                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. }) {
+                    return msg;
+                }
+            }
+        }
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    struct Server {
+        addr: std::net::SocketAddr,
+        handle: actor::EngineHandle,
+    }
+
+    /// Сервер на каталозі даних `dir` (як `main`: плагіни — до графа).
+    async fn start(dir: &Path) -> Server {
+        let mut engine = TickEngine::new();
+        let mut plugins = plugins::Plugins::new(dir);
+        plugins.load_all(&mut engine);
+        let storage = Storage::new(dir.join("graph.json"));
+        let positions = storage.load(&mut engine).unwrap();
+        let handle = actor::spawn(engine, positions, storage, plugins, Duration::from_millis(10)).unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());
+        Server { addr, handle }
+    }
+
+    fn test_plugin_dir() -> Option<tempfile::TempDir> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
+        let Ok(bytes) = std::fs::read(&path) else {
+            assert!(std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none(), "{} не знайдено", path.display());
+            eprintln!("{} не знайдено — тест пропущено", path.display());
+            return None;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("plugins")).unwrap();
+        std::fs::write(dir.path().join("plugins/test_plugin.wasm"), bytes).unwrap();
+        Some(dir)
+    }
+
+    fn plugin_of(plugins: &[ticknode_shared::PluginInfo]) -> &ticknode_shared::PluginInfo {
+        plugins.iter().find(|p| p.name == "test_plugin").expect("test_plugin у списку")
+    }
+
+    #[tokio::test]
+    async fn plugins_are_managed_over_websocket() {
+        use ticknode_shared::{PluginState, SettingUpdate, SettingValueView};
+        let Some(dir) = test_plugin_dir() else { return };
+        let server = start(dir.path()).await;
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", server.addr)).await.unwrap();
+        let mut seen = Vec::new();
+
+        // Init: плагін ввімкнено, але configure відхилив порожній токен
+        let ServerMessage::Init { plugins, definitions, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("очікували Init") };
+        let info = plugin_of(&plugins);
+        assert_eq!((info.state, info.file.as_str()), (PluginState::Enabled, "test_plugin.wasm"));
+        assert_eq!(info.settings_error.as_deref(), Some("token не задано"));
+        assert_eq!(info.settings.len(), 3);
+        assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: false })));
+        assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Hello".into())))));
+        assert!(definitions.iter().any(|d| d.type_name == "test/greeter"));
+        assert!(!dir.path().join("plugin-config/test_plugin.json").exists(), "без дій користувача файлу конфігурації немає");
+
+        // Збереження налаштувань: секрет у відповіді — лише «задано»
+        let secret = "s3cret-token-value";
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
+            ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
+            ("greeting".into(), SettingUpdate::Set(DataValue::String("Привіт".into()))),
+        ] }).await;
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!("очікували PluginUpdated") };
+        assert_eq!(info.settings_error, None);
+        assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: true })));
+        assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Привіт".into())))));
+
+        // Файл конфігурації: токен збережено, права 0600
+        let config_path = dir.path().join("plugin-config/test_plugin.json");
+        let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(saved["enabled"], true);
+        assert!(saved["settings"]["token"].to_string().contains(secret));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&config_path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+
+        // Нода плагіна бачить нові налаштування без перезапуску
+        send(&mut ws, ClientMessage::AddNode { type_name: "test/greeter".into(), position: Position { x: 3.0, y: 4.0 } }).await;
+        let ServerMessage::NodeAdded(greeter) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!(greeter.unavailable, None);
+        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Created(_)));
+        send(&mut ws, ClientMessage::TriggerNode { id: greeter.model.id, pin: PinId(0) }).await;
+        loop {
+            if let ServerMessage::Executed(traces) = recv_any(&mut ws).await {
+                if let Some(t) = traces.iter().find(|t| t.node_id == greeter.model.id) {
+                    assert_eq!(t.outputs, vec![(PinId(1), DataValue::String("Привіт|quiet|token".into()))]);
+                    break;
+                }
+            }
+        }
+
+        // Помилка configure: плагін лишається завантаженим, помилка в PluginUpdated
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String("bad".into())))] }).await;
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!((info.state, info.settings_error.as_deref()), (PluginState::Enabled, Some("невірний токен")));
+        // «Не змінювати» лишає секрет; помилка лише ініціатору
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
+            ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
+            ("greeting".into(), SettingUpdate::Set(DataValue::Number(ticknode_shared::NumberValue::Int(1)))),
+        ] }).await;
+        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Error(_)));
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Keep)] }).await;
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!(info.settings_error.as_deref(), Some("невірний токен"), "Keep не змінює збережений токен");
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "nope".into(), values: vec![] }).await;
+        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Error(_)));
+
+        // Вимкнення: каталог без типів плагіна, нода — заглушка, потім PluginUpdated
+        send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String(secret.into())))] }).await;
+        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::PluginUpdated(_)));
+        send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: false }).await;
+        let ServerMessage::Catalog { definitions, types } = recv_logged(&mut ws, &mut seen).await else { panic!("очікували Catalog") };
+        assert!(!definitions.iter().any(|d| d.type_name == "test/greeter" || d.type_name.starts_with("type/make/")) && types.is_empty());
+        let ServerMessage::NodeUpdated(stub) = recv_logged(&mut ws, &mut seen).await else { panic!("очікували NodeUpdated") };
+        assert_eq!(stub.unavailable.as_deref(), Some("плагін test_plugin недоступний"));
+        assert_eq!(stub.model.type_name, "test/greeter");
+        assert_eq!(stub.definition.pins.len(), 2);
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!(info.state, PluginState::Disabled);
+        let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(saved["enabled"], false);
+
+        // Секрет нікуди не потрапив із повідомлень сервера
+        assert!(!contains(&seen, secret.as_bytes()), "секрет у повідомленнях редактору");
+
+        // Перезапуск: плагін лишається вимкненим, граф зберігає ноду плагіна як заглушку
+        server.handle.shutdown().await;
+        let on_disk: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(dir.path().join("graph.json")).unwrap()).unwrap();
+        assert_eq!(on_disk.nodes.len(), 1);
+        assert_eq!(on_disk.nodes[0].position, Position { x: 3.0, y: 4.0 });
+        let server = start(dir.path()).await;
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", server.addr)).await.unwrap();
+        let ServerMessage::Init { plugins, nodes, .. } = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!(plugin_of(&plugins).state, PluginState::Disabled);
+        assert_eq!(nodes.len(), 1);
+        assert!(nodes[0].unavailable.is_some());
+
+        // Увімкнення на льоту оживляє ноду з тими ж налаштуваннями
+        send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: true }).await;
+        assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Catalog { .. }));
+        let ServerMessage::NodeUpdated(live) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!(live.unavailable, None);
+        let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        assert_eq!((info.state, info.settings_error), (PluginState::Enabled, None));
+        assert!(!contains(&seen, secret.as_bytes()));
+        server.handle.shutdown().await;
+    }
+}

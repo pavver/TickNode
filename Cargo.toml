@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "ticknode-shared",
+    "ticknode-core",
+    "ticknode-server",
+    "ticknode-editor",
+    "ticknode-plugin-sdk",
+    "http-weather-plugin",
+    "math-plugin",
+    "string-plugin",
+    "delay-plugin",
+    "test-plugin",
+]
+# Редактор і плагіни збираються лише під wasm32 (trunk / --target), тому за замовчуванням — тільки хост-крейти.
+default-members = ["ticknode-shared", "ticknode-core", "ticknode-server"]
+resolver = "2"
+
+[workspace.dependencies]
+postcard = "1.0.10"
+serde = { version = "1.0.217", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["full"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+anyhow = "1.0.95"
+thiserror = "2.0.9"
+uuid = { version = "1.11.0", features = ["v4", "serde", "js"] }
+futures = "0.3.31"
+chrono = { version = "0.4.39", features = ["serde", "wasmbind"] }
+
+# wasmtime (Cranelift) компілює плагіни під час завантаження; неоптимізований — у десятки разів повільніше.
+[profile.dev.package."*"]
+opt-level = 2

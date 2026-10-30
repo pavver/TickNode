@@ -1,0 +1,1034 @@
+/* Operator UI (NotifiApp design system) для веб-редактора TickNode.
+   Токени — з OperatorTheme.kt, розміри — у DU (1 DU = 4px), кути — 0. */
+
+@font-face {
+    font-family: "Cascadia Code";
+    src: url("CascadiaCode.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+:root {
+    --du: 4px;
+    --border-w: calc(var(--du) * 0.25);
+    --border-thick: calc(var(--du) * 0.5);
+
+    --font: "Cascadia Code", "Cascadia Mono", ui-monospace, monospace;
+
+    --terminal-background: #0C0C0C;
+    --terminal-foreground: #CCCCCC;
+    --terminal-bright-red: #E74856;
+    --terminal-bright-green: #16C60C;
+    --terminal-bright-yellow: #F9F1A5;
+    --terminal-bright-blue: #3B78FF;
+    --terminal-bright-cyan: #61D6D6;
+    --terminal-bright-black: #767676;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --background: #0E1116;
+    --surface: #151A21;
+    --surface-alt: #1B222B;
+    --border: #3E4A5C;
+    --border-strong: #3A4656;
+    --divider: #252C36;
+    --text-primary: #E6EDF3;
+    --text-secondary: #9AA7B4;
+    --text-disabled: #5F6B78;
+    --icon: #D7E0EA;
+    --accent: #00B7C2;
+    --accent-muted: #164D55;
+    --success: #3DDC84;
+    --warning: #FFB020;
+    --error: #FF5C5C;
+    --info: #4DA3FF;
+    --pending: #00B7C2;
+    --pressed: #22313D;
+    --selection: #193B45;
+    --disabled-surface: #151A21;
+    --disabled-border: #1F252E;
+    --switch-checked-track: #193B2D;
+    --switch-unchecked-track: #3B1E1E;
+    --grid: #1A2029;
+    --magenta: #C678DD;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --background: #F4F6F8;
+    --surface: #FFFFFF;
+    --surface-alt: #EAEFF4;
+    --border: #B2C0CE;
+    --border-strong: #9EADBC;
+    --divider: #DDE3EA;
+    --text-primary: #1B1F24;
+    --text-secondary: #5E6B78;
+    --text-disabled: #9AA3AD;
+    --icon: #2B333C;
+    --accent: #007C89;
+    --accent-muted: #D4F1F4;
+    --success: #15803D;
+    --warning: #B7791F;
+    --error: #C62828;
+    --info: #1976D2;
+    --pending: #007C89;
+    --pressed: #E0EEF2;
+    --selection: #D4F1F4;
+    --disabled-surface: #F4F6F8;
+    --disabled-border: #D9E0E7;
+    --switch-checked-track: #C8E6C9;
+    --switch-unchecked-track: #FFCDD2;
+    --grid: #E3E8EE;
+    --magenta: #9C27B0;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 18px;
+    -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; color: inherit; }
+
+/* --- Типографіка --- */
+.t-app-title { font-size: 20px; line-height: 26px; font-weight: 700; }
+.t-section { font-size: 14px; line-height: 18px; font-weight: 500; }
+.t-row { font-size: 15px; line-height: 20px; font-weight: 500; }
+.t-body-small { font-size: 13px; line-height: 16px; }
+.t-caption { font-size: 12px; line-height: 15px; color: var(--text-secondary); }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* --- Іконки --- */
+.icon { width: calc(var(--du) * 4); height: calc(var(--du) * 4); fill: currentColor; flex: none; display: block; }
+
+/* --- Межа стану (operatorStateBorder) ---
+   Базова рамка — ::after всередині елемента (не змінює розмір),
+   Pending — біжучий сегмент SVG, Success/Error — пульс товстої рамки. */
+.ctl { position: relative; }
+.ctl::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: var(--border-w) solid var(--sb-color, var(--border));
+    pointer-events: none;
+    transition: border-color 500ms cubic-bezier(.4, 0, .2, 1);
+}
+.ctl.st-focused::after, .ctl:focus-within::after { --sb-color: var(--border-strong); }
+.ctl.st-selected::after { --sb-color: var(--accent); }
+.ctl.st-success::after { border-width: var(--border-thick); --sb-color: var(--success); animation: sb-pulse 800ms ease-in-out infinite; }
+.ctl.st-error::after { border-width: var(--border-thick); --sb-color: var(--error); animation: sb-pulse 800ms ease-in-out infinite; }
+.ctl.st-disabled::after { --sb-color: var(--disabled-border); }
+
+@keyframes sb-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .55; }
+}
+
+.sb-run {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+.sb-run rect {
+    fill: none;
+    stroke: var(--pending);
+    stroke-width: calc(var(--border-w) * 3);
+    stroke-dasharray: 25 75;
+    animation: sb-run 1200ms linear infinite;
+}
+@keyframes sb-run {
+    from { stroke-dashoffset: 100; }
+    to { stroke-dashoffset: 0; }
+}
+
+.spinner {
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    border: calc(var(--du) * 0.375) solid transparent;
+    border-top-color: var(--pending);
+    border-right-color: var(--pending);
+    border-radius: 50%;
+    animation: spin 800ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- OperatorActionButton --- */
+.btn {
+    height: calc(var(--du) * 10);
+    min-width: max-content;
+    padding: 0 calc(var(--du) * 4);
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--du) * 1.5);
+    cursor: pointer;
+    transition: background-color 150ms cubic-bezier(.4, 0, .2, 1), color 150ms;
+    user-select: none;
+}
+.btn:active:not(.st-pending):not(.st-disabled) { background: var(--pressed); }
+.btn:active:not(.st-pending):not(.st-disabled)::after { --sb-color: var(--border-strong); }
+.btn .btn-content { display: inline-flex; align-items: center; gap: calc(var(--du) * 1.5); }
+.btn .btn-overlay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; }
+.btn.st-pending { cursor: default; }
+.btn.st-pending .btn-content, .btn.st-success .btn-content, .btn.st-error .btn-content { opacity: 0; }
+.btn.st-success { background: color-mix(in srgb, var(--success) 15%, var(--surface)); color: var(--success); }
+.btn.st-error { background: color-mix(in srgb, var(--error) 15%, var(--surface)); color: var(--error); }
+.btn.danger { background: color-mix(in srgb, var(--error) 15%, var(--surface)); color: var(--error); }
+.btn.danger:active:not(.st-pending) { background: color-mix(in srgb, var(--error) 30%, var(--surface)); }
+.btn.st-disabled { background: var(--disabled-surface); color: var(--text-disabled); cursor: default; }
+.btn.full { width: 100%; }
+
+/* --- OperatorIconButton --- */
+.icon-btn {
+    width: calc(var(--du) * 9);
+    height: calc(var(--du) * 9);
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: var(--surface);
+    color: var(--icon);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: none;
+    transition: background-color 150ms;
+}
+.icon-btn:active { background: var(--pressed); }
+.icon-btn:active::after { --sb-color: var(--border-strong); }
+.icon-btn.st-selected { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+
+/* --- OperatorTextField --- */
+.text-field {
+    display: flex;
+    height: calc(var(--du) * 10);
+    background: var(--surface);
+    width: 100%;
+}
+.text-field input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    padding: 0 0 0 calc(var(--du) * 3);
+}
+.text-field input::placeholder { color: var(--text-disabled); }
+.text-field .icon-slot { display: flex; align-items: center; padding: 0 calc(var(--du) * 2); color: var(--text-secondary); }
+.text-field .save-btn {
+    height: 100%;
+    max-width: calc(var(--du) * 30);
+    border: 0;
+    border-left: var(--border-w) solid var(--border);
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 700;
+    padding: 0 calc(var(--du) * 3);
+    cursor: pointer;
+}
+.text-field .save-btn:active { background: var(--pressed); }
+
+/* --- OperatorAsyncSwitch --- */
+.switch {
+    width: calc(var(--du) * 13);
+    height: calc(var(--du) * 8);
+    border-radius: calc(var(--du) * 4);
+    background: var(--switch-unchecked-track);
+    border: var(--border-w) solid var(--border);
+    position: relative;
+    cursor: pointer;
+    flex: none;
+    padding: 0;
+    transition: background-color 150ms;
+}
+.switch.on { background: var(--switch-checked-track); border-color: var(--accent); }
+.switch .thumb {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--du) * 1);
+    width: calc(var(--du) * 6);
+    height: calc(var(--du) * 6);
+    margin-top: calc(var(--du) * -3);
+    border-radius: 50%;
+    background: var(--error);
+    border: var(--border-w) solid var(--border-strong);
+    transition: transform 200ms cubic-bezier(.4, 0, .2, 1), background-color 150ms;
+}
+.switch.on .thumb { transform: translateX(calc(var(--du) * 4.5)); background: var(--success); }
+.switch.st-pending { border-color: var(--pending); }
+.switch.st-pending .thumb { background: transparent; transform: translateX(calc(var(--du) * 2.25)); }
+/* Компактний — на ноді (рядок 6DU) */
+.switch.small { width: calc(var(--du) * 8.5); height: calc(var(--du) * 4.5); border-radius: calc(var(--du) * 2.25); }
+.switch.small .thumb { left: calc(var(--du) * 0.5); width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); margin-top: calc(var(--du) * -1.75); }
+.switch.small.on .thumb { transform: translateX(calc(var(--du) * 3.75)); }
+.switch.small.st-pending .thumb { transform: translateX(calc(var(--du) * 1.9)); }
+
+/* --- OperatorStatusBadge (точка) --- */
+.status-dot {
+    width: calc(var(--du) * 2.5);
+    height: calc(var(--du) * 2.5);
+    border-radius: 50%;
+    border: var(--border-w) solid var(--border-strong);
+    flex: none;
+}
+.status-dot.online { background: var(--success); }
+.status-dot.offline { background: var(--error); animation: sb-pulse 800ms ease-in-out infinite; }
+.status-dot.connecting { background: var(--warning); }
+
+/* --- Каркас --- */
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.header {
+    flex: none;
+    height: calc(var(--du) * 13.5);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: 0 calc(var(--du) * 2) 0 calc(var(--du) * 4);
+    background: var(--surface);
+    border-bottom: var(--border-w) solid var(--border);
+}
+.header .titles { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.header .subtitle { display: flex; align-items: center; gap: calc(var(--du) * 1.5); }
+.header .actions { display: flex; gap: calc(var(--du) * 1); }
+
+.workspace { flex: 1; display: flex; min-height: 0; position: relative; }
+
+.panel {
+    flex: none;
+    width: calc(var(--du) * 72);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+/* У прокручуваній колонці рядки не стискаються — інакше текст накладається */
+.panel > * { flex-shrink: 0; }
+.panel.left { border-right: var(--border-w) solid var(--border); }
+.panel.right { border-left: var(--border-w) solid var(--border); }
+.panel-section { padding: calc(var(--du) * 3); display: flex; flex-direction: column; gap: calc(var(--du) * 2); }
+.panel-section + .panel-section { border-top: var(--border-w) solid var(--divider); }
+.section-title {
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: calc(var(--du) * 3) calc(var(--du) * 3) calc(var(--du) * 1);
+}
+.field { display: flex; flex-direction: column; gap: calc(var(--du) * 1); }
+.field-label { font-size: 12px; line-height: 15px; color: var(--text-secondary); }
+.field-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--du) * 2); min-height: calc(var(--du) * 12); }
+.empty { color: var(--text-secondary); padding: calc(var(--du) * 3); }
+
+/* --- OperatorListItem --- */
+.list-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(var(--du) * 13);
+    padding: calc(var(--du) * 2) calc(var(--du) * 3);
+    border-bottom: var(--border-w) solid var(--divider);
+    cursor: pointer;
+    user-select: none;
+}
+.list-item:active { background: var(--pressed); }
+.list-item:hover { background: color-mix(in srgb, var(--pressed) 50%, transparent); }
+.list-item .subtitle {
+    font-size: 12px;
+    line-height: 15px;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.dense-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    min-height: calc(var(--du) * 6);
+    font-size: 12px;
+}
+
+/* --- Полотно --- */
+.canvas-wrap { flex: 1; position: relative; min-width: 0; display: flex; flex-direction: column; }
+.canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--background);
+    background-image:
+        linear-gradient(var(--grid) var(--border-w), transparent var(--border-w)),
+        linear-gradient(90deg, var(--grid) var(--border-w), transparent var(--border-w));
+    touch-action: none;
+    cursor: default;
+    user-select: none;
+}
+.canvas.panning { cursor: grabbing; }
+.viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+.wire { fill: none; stroke-width: calc(var(--du) * 0.5); }
+.wire.exec { stroke: var(--text-secondary); }
+.wire.selected { stroke: var(--accent); stroke-width: calc(var(--du) * 0.75); }
+.wire.pending { stroke: var(--accent); stroke-dasharray: 6 4; }
+.wire-hit { fill: none; stroke: transparent; stroke-width: calc(var(--du) * 3); cursor: pointer; pointer-events: stroke; }
+
+.canvas-hint {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-secondary);
+    pointer-events: none;
+    max-width: calc(var(--du) * 90);
+}
+
+.zoom-badge {
+    position: absolute;
+    right: calc(var(--du) * 3);
+    bottom: calc(var(--du) * 3);
+    background: var(--surface);
+    padding: calc(var(--du) * 1) calc(var(--du) * 2);
+    font-size: 12px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+/* --- Нода --- */
+.node {
+    position: absolute;
+    background: var(--surface);
+    cursor: grab;
+}
+.node::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: var(--border-w) solid var(--sb-color, var(--border));
+    pointer-events: none;
+    transition: border-color 500ms cubic-bezier(.4, 0, .2, 1);
+}
+/* Бордер ноди — лише стан виконання. Виділення показуємо інакше:
+   акцентна назва і смуга зліва та пунктирна рамка з «ручками» в кутах, як у CAD (`.selection-bounds`). */
+.node.selected { z-index: 2; }
+.node.selected .node-header { box-shadow: inset calc(var(--du) * 1) 0 0 var(--accent); }
+.node.selected .node-title { color: var(--accent); }
+/* У групі кожна виділена нода має власну пунктирну рамку (одиночну обводить `.selection-bounds`) */
+.viewport.multi-select .node.selected::before {
+    content: "";
+    position: absolute;
+    inset: calc(var(--du) * -1.5);
+    pointer-events: none;
+    border: var(--border-w) dashed var(--accent);
+}
+.node.active::after { --sb-color: var(--success); border-width: var(--border-thick); transition: none; }
+.node-header {
+    height: calc(var(--du) * 8);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1.5);
+    padding: 0 calc(var(--du) * 2.5);
+    background: var(--surface-alt);
+    border-bottom: var(--border-w) solid var(--divider);
+}
+.node-title { font-size: 13px; line-height: 16px; font-weight: 700; flex: 1; }
+.node-cat { font-size: 11px; line-height: 14px; font-weight: 700; color: var(--cat-color, var(--text-secondary)); flex: none; max-width: 40%; }
+.pins { position: absolute; top: calc(var(--du) * 9); display: flex; flex-direction: column; }
+/* Рядки властивостей між заголовком і пінами: висота рядка = ROW_H (geometry.rs) */
+.node-props { position: absolute; top: calc(var(--du) * 9); left: 0; right: 0; display: flex; flex-direction: column; }
+.prop-row {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: 0 calc(var(--du) * 2.5);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.prop-row > .prop-label { flex: 1 1 auto; max-width: 45%; }
+.prop-row .inline-value { flex: 1 1 0; width: 0; max-width: none; }
+.prop-row .inline-value.select { flex: 0 1 auto; width: auto; min-width: calc(var(--du) * 18); }
+.prop-row .switch { margin-left: auto; }
+.inline-value.select { cursor: pointer; padding: 0 calc(var(--du) * 0.5); }
+.pins.in { left: 0; align-items: flex-start; }
+.pins.out { right: 0; align-items: flex-end; }
+.pin {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1.5);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: crosshair;
+    max-width: calc(var(--du) * 32);
+}
+.pin.in { padding-right: calc(var(--du) * 1); max-width: calc(var(--du) * 30); }
+.pin.out { flex-direction: row-reverse; padding-left: calc(var(--du) * 1); }
+.socket {
+    width: calc(var(--du) * 2.5);
+    height: calc(var(--du) * 2.5);
+    flex: none;
+    border: var(--border-thick) solid var(--pin-color);
+    background: var(--surface);
+}
+.pin.in .socket { margin-left: calc(var(--du) * -1.25); }
+.pin.out .socket { margin-right: calc(var(--du) * -1.25); }
+.socket.connected { background: var(--pin-color); }
+/* Незаданий обов'язковий вхід — стан Error: червона мітка піна й позначка на ноді */
+.pin.missing { color: var(--error); }
+.pin.missing .socket { border-color: var(--error); outline: var(--border-w) solid var(--error); outline-offset: var(--border-w); }
+.node.missing .node-header { box-shadow: inset 0 calc(var(--du) * -0.5) 0 var(--error); }
+.node-warn { margin-left: auto; padding: 0 calc(var(--du) * 1); color: var(--error); font-weight: 700; }
+.socket.exec { clip-path: polygon(0 0, 100% 50%, 0 100%); border: 0; background: var(--pin-color); opacity: .45; }
+.socket.exec.connected { opacity: 1; }
+.pin:hover .socket { outline: var(--border-w) solid var(--accent); outline-offset: var(--border-w); }
+
+/* Значення прямо на ноді (властивість або непід'єднаний вхід) */
+.inline-value {
+    height: calc(var(--du) * 4.5);
+    width: calc(var(--du) * 13);
+    max-width: calc(var(--du) * 13);
+    flex: none;
+    padding: 0 calc(var(--du) * 1);
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    outline: none;
+    cursor: text;
+    text-overflow: ellipsis;
+}
+.inline-value:hover { border-color: var(--border-strong); }
+.inline-value:focus { border-color: var(--accent); }
+.inline-value::placeholder { color: var(--text-disabled); }
+.inline-value.st-error { border-color: var(--error); }
+.inline-value.bool { cursor: pointer; text-align: left; color: var(--text-secondary); }
+.inline-value.bool.on { color: var(--success); border-color: color-mix(in srgb, var(--success) 50%, var(--divider)); }
+.inline-value.bool.unset { color: var(--text-disabled); }
+.pin .inline-value { margin-left: auto; }
+
+/* --- Випадки Match на ноді (як вікно комбінатора-вирішувача); висота рядка = ROW_H --- */
+.match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
+.case-row {
+    height: calc(var(--du) * 6);
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1);
+    padding: 0 0 0 calc(var(--du) * 2);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.case-head { border-top: var(--border-w) solid var(--divider); background: color-mix(in srgb, var(--cat-color) 6%, transparent); }
+.case-head .pin, .case-foot .pin { margin-left: auto; min-width: 0; }
+.case-foot { border-top: var(--border-w) solid var(--divider); }
+.cond-row { padding-right: calc(var(--du) * 2); }
+.cond-row.always { padding-left: calc(var(--du) * 9); font-style: italic; color: var(--text-disabled); }
+.case-index {
+    min-width: calc(var(--du) * 4.5);
+    height: calc(var(--du) * 4.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cat-color, var(--accent));
+    border: var(--border-w) solid var(--cat-color, var(--accent));
+}
+.mini-btn, .join-btn {
+    height: calc(var(--du) * 4.5);
+    flex: none;
+    padding: 0 calc(var(--du) * 1.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.mini-btn.icon { width: calc(var(--du) * 4.5); padding: 0; border-color: transparent; background: transparent; }
+.mini-btn .icon { width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); }
+.mini-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+.mini-btn.danger:hover { color: var(--error); }
+.mini-btn:disabled { opacity: .3; cursor: default; }
+.join-label, .join-btn { width: calc(var(--du) * 9); flex: none; padding: 0; }
+.join-label { font-size: 11px; color: var(--text-disabled); text-align: center; }
+.join-btn { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--divider)); }
+.join-btn.or { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--divider)); }
+.operand, .op-select {
+    height: calc(var(--du) * 4.5);
+    min-width: 0;
+    font-size: 12px;
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    outline: none;
+    color: var(--text-primary);
+}
+.operand { flex: 1 1 0; width: 0; padding: 0 calc(var(--du) * 1); }
+.operand.input-ref { color: var(--accent); font-weight: 700; }
+.operand:focus, .op-select:focus { border-color: var(--accent); }
+.operand.st-error { border-color: var(--error); }
+.op-select { flex: none; width: calc(var(--du) * 9); padding: 0; text-align: center; font-weight: 700; cursor: pointer; }
+
+/* Входи Match: сокет на краю, ім'я, тип, значення */
+.match-in, .input-row { padding-left: 0; }
+.match-in .pin { flex: none; }
+.input-row { padding-right: calc(var(--du) * 1); background: color-mix(in srgb, var(--surface-alt) 50%, transparent); }
+.input-foot { padding-right: calc(var(--du) * 2); }
+.match-section {
+    margin-left: auto;
+    padding-right: calc(var(--du) * 2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-disabled);
+}
+.input-foot .match-section { padding-right: 0; }
+.match-socket { flex: none; padding-right: calc(var(--du) * 1); }
+.input-name { flex: 0 0 calc(var(--du) * 22); width: calc(var(--du) * 22); color: var(--accent); font-weight: 700; }
+.type-select { width: calc(var(--du) * 20); text-align: left; padding: 0 calc(var(--du) * 0.5); font-weight: 400; }
+.input-row .inline-value { flex: 1 1 0; width: 0; max-width: none; margin-left: 0; }
+.input-src { flex: 1 1 0; width: 0; font-size: 11px; color: var(--text-disabled); }
+
+/* Випадки: смуга ліворуч об'єднує заголовок і його умови */
+.case-head, .cond-row { box-shadow: inset calc(var(--du) * 0.75) 0 0 color-mix(in srgb, var(--cat-color, var(--accent)) 55%, transparent); }
+.case-head .pin { font-weight: 700; color: var(--text-primary); }
+.case-foot .pin { font-style: italic; }
+.cond-left, .cond-src {
+    height: calc(var(--du) * 4.5);
+    flex: none;
+    width: calc(var(--du) * 18);
+    min-width: 0;
+    padding: 0 calc(var(--du) * 0.5);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-left: calc(var(--du) * 0.75) solid var(--pin-color, var(--divider));
+    border-radius: 0;
+    outline: none;
+    cursor: pointer;
+}
+.cond-src { flex: 1 1 0; width: 0; border-left-width: var(--border-w); }
+.cond-src.value { flex: none; width: calc(var(--du) * 9); color: var(--text-secondary); font-weight: 400; }
+.cond-op { width: calc(var(--du) * 24); text-align: left; padding: 0 calc(var(--du) * 0.5); }
+.cond-row .inline-value { flex: 1 1 0; width: 0; max-width: none; }
+.cond-fill { flex: 1 1 0; }
+.cond-left:focus, .cond-src:focus { border-color: var(--accent); }
+
+/* Запуск ноди з заголовка */
+.node-run {
+    width: calc(var(--du) * 5);
+    height: calc(var(--du) * 5);
+    flex: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--success);
+    cursor: pointer;
+}
+.node-run .icon { width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); }
+.node-run.always, .node:hover .node-run, .node.selected .node-run { display: inline-flex; }
+.node-run:hover { border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
+.node-run:active { background: color-mix(in srgb, var(--success) 25%, var(--surface)); }
+
+/* --- OperatorConsoleTerminal --- */
+.console {
+    flex: none;
+    height: calc(var(--du) * 40);
+    display: flex;
+    flex-direction: column;
+    border-top: var(--border-w) solid var(--border);
+    background: var(--surface);
+}
+.console-bar {
+    height: calc(var(--du) * 8);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: 0 calc(var(--du) * 1) 0 calc(var(--du) * 3);
+    border-bottom: var(--border-w) solid var(--divider);
+}
+.console-bar .icon-btn { width: calc(var(--du) * 7); height: calc(var(--du) * 7); }
+.terminal {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--terminal-background);
+    color: var(--terminal-foreground);
+    font-size: 12px;
+    line-height: 16px;
+    padding: calc(var(--du) * 2);
+    user-select: text;
+}
+.terminal-line { white-space: pre-wrap; word-break: break-word; }
+.terminal-line .ts { color: var(--terminal-bright-black); }
+.terminal-line.error { color: var(--terminal-bright-red); }
+.terminal-line.system { color: var(--terminal-bright-cyan); }
+.terminal-line.success { color: var(--terminal-bright-green); }
+
+/* --- Рамка виділення (як у CAD): вікно — суцільна, перетин — пунктир --- */
+.select-box {
+    position: absolute;
+    pointer-events: none;
+    border: var(--border-w) solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* Вставка, що чекає на розміщення */
+.paste-ghost { pointer-events: none; opacity: .6; }
+.node.paste-ghost::after { --sb-color: var(--accent); border-style: dashed; }
+.canvas.placing { cursor: copy; }
+.canvas.placing .node { cursor: copy; }
+
+/* Пунктирна рамка навколо виділеної ноди чи групи */
+.selection-bounds {
+    position: absolute;
+    pointer-events: none;
+    border: var(--border-w) dashed var(--accent);
+}
+.selection-bounds::before {
+    --grip: calc(var(--du) * 2);
+    content: "";
+    position: absolute;
+    /* Центр «ручки» — на куті рамки */
+    inset: calc(var(--grip) / -2 - var(--border-w) / 2);
+    background:
+        linear-gradient(var(--accent), var(--accent)) left top / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) right top / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) left bottom / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) right bottom / var(--grip) var(--grip) no-repeat;
+}
+.selection-count {
+    position: absolute;
+    left: calc(var(--du) * 2);
+    bottom: 100%;
+    padding: 0 calc(var(--du) * 1.5);
+    font-size: 11px;
+    line-height: calc(var(--du) * 5);
+    font-weight: 700;
+    color: var(--background);
+    background: var(--accent);
+}
+.select-box.crossing {
+    border-style: dashed;
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+/* --- Палітра (як у Scratch): смуга категорій + кольорові блоки --- */
+.panel.left.palette { flex-direction: row; overflow: hidden; width: calc(var(--du) * 94); }
+.palette-rail {
+    flex: none;
+    width: calc(var(--du) * 20);
+    overflow-y: auto;
+    scrollbar-width: none;
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--du) * 1) 0;
+    border-right: var(--border-w) solid var(--divider);
+    background: var(--background);
+}
+.rail-item {
+    position: relative;
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 10px;
+    line-height: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--du) * 1);
+    padding: calc(var(--du) * 2) calc(var(--du) * 1);
+    text-align: center;
+    cursor: pointer;
+}
+.rail-item:hover { color: var(--text-primary); background: var(--surface-alt); }
+.rail-item.active { color: var(--text-primary); background: color-mix(in srgb, var(--cat-color) 16%, var(--surface)); }
+.rail-item.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--du) * 1);
+    background: var(--cat-color);
+}
+.rail-swatch {
+    flex: none;
+    width: calc(var(--du) * 7);
+    height: calc(var(--du) * 7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cat-color);
+    color: #fff;
+}
+.rail-swatch .icon { width: calc(var(--du) * 5); height: calc(var(--du) * 5); fill: currentColor; }
+.group-icon { display: flex; color: var(--cat-color); }
+.group-icon .icon { width: calc(var(--du) * 4.5); height: calc(var(--du) * 4.5); fill: currentColor; }
+.rail-label { overflow-wrap: anywhere; }
+.palette-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.palette-search { flex: none; border-bottom: var(--border-w) solid var(--divider); }
+.palette-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+/* Запас унизу, щоб і останню категорію можна було прокрутити до верху */
+.palette-list::after { content: ""; display: block; height: 50vh; }
+.palette-group { padding: 0 calc(var(--du) * 3) calc(var(--du) * 1); }
+.palette-group-title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: calc(var(--du) * 3) 0 calc(var(--du) * 2);
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-secondary);
+}
+.palette-block {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--du) * 1);
+    margin-bottom: calc(var(--du) * 2);
+    padding: calc(var(--du) * 2) calc(var(--du) * 2.5);
+    background: var(--surface-alt);
+    border-left: calc(var(--du) * 1.5) solid var(--cat-color);
+    cursor: grab;
+    user-select: none;
+}
+.palette-block:hover {
+    background: color-mix(in srgb, var(--cat-color) 12%, var(--surface-alt));
+    box-shadow: inset 0 0 0 var(--border-w) var(--cat-color);
+}
+.palette-block:active { cursor: grabbing; }
+.block-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
+.block-head .block-title { flex: 1; min-width: 0; }
+.inspector-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
+.inspector-head .t-row { flex: 1; min-width: 0; }
+
+/* --- Кнопка «інфо» і підказка --- */
+.info-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--du) * 6);
+    height: calc(var(--du) * 6);
+    margin: calc(var(--du) * -1) 0;
+    color: var(--text-secondary);
+    cursor: help;
+}
+.info-btn .icon { width: calc(var(--du) * 4.5); height: calc(var(--du) * 4.5); fill: currentColor; }
+.info-btn:hover { color: var(--accent); }
+.tooltip {
+    position: fixed;
+    z-index: 200;
+    pointer-events: none;
+    max-height: calc(100vh - var(--du) * 4);
+    overflow: hidden;
+    padding: calc(var(--du) * 3);
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--accent);
+    box-shadow: 0 calc(var(--du) * 2) calc(var(--du) * 6) rgb(0 0 0 / .35);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--du) * 2);
+}
+.tooltip-title { font-size: 13px; line-height: 16px; font-weight: 700; color: var(--text-primary); }
+.tooltip-text { font-size: 12px; line-height: 17px; color: var(--text-primary); white-space: pre-line; }
+
+.block-title { font-size: 13px; line-height: 16px; font-weight: 700; color: var(--text-primary); }
+.block-pins { display: flex; justify-content: space-between; gap: calc(var(--du) * 3); font-size: 11px; line-height: 14px; color: var(--text-secondary); }
+.block-pins:empty { display: none; }
+.block-pins-side { display: flex; flex-wrap: wrap; gap: calc(var(--du) * 1) calc(var(--du) * 2); min-width: 0; }
+.block-pins-side.out { justify-content: flex-end; }
+.block-pin { display: inline-flex; align-items: center; gap: calc(var(--du) * 1); white-space: nowrap; }
+.block-desc {
+    font-size: 11px;
+    line-height: 14px;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* --- Перетягування з палітри --- */
+.palette-item { touch-action: pan-y; }
+/* Під час перетягування палітра «прозора» для курсора: на вузькому екрані вона накриває полотно */
+.panel.dragging-out { pointer-events: none; opacity: .35; }
+.palette-ghost {
+    position: fixed;
+    z-index: 100;
+    pointer-events: none;
+    width: calc(var(--du) * 52);
+    height: calc(var(--du) * 8);
+    transform: translate(calc(var(--du) * -8), calc(var(--du) * -4));
+    display: flex;
+    align-items: center;
+    padding: 0 calc(var(--du) * 2.5);
+    background: var(--surface-alt);
+    border: var(--border-thick) solid var(--cat-color, var(--accent));
+    color: var(--text-primary);
+    opacity: .9;
+}
+body:has(.palette-ghost) { cursor: copy; }
+
+/* --- Значення пінів в інспекторі --- */
+.io-row { display: flex; flex-direction: column; gap: calc(var(--du) * .5); }
+.io-row + .io-row { padding-top: calc(var(--du) * 1); border-top: var(--border-w) solid var(--divider); }
+.io-value {
+    padding-left: calc(var(--du) * 5);
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.io-value.muted { color: var(--text-secondary); }
+
+/* --- Вузькі екрани: панелі як висувні шари над полотном --- */
+/* --- Ноди-заглушки (плагін недоступний) --- */
+.node.unavailable { cursor: grab; }
+.node.unavailable .node-header { background: repeating-linear-gradient(135deg, var(--surface-alt) 0 calc(var(--du) * 2), var(--surface) calc(var(--du) * 2) calc(var(--du) * 4)); }
+.node.unavailable .node-title, .node.unavailable .pin, .node.unavailable .prop-row { color: var(--text-disabled); }
+.node.unavailable .node-props, .node.unavailable .pins .inline-value { pointer-events: none; opacity: .55; }
+.node.unavailable .socket { opacity: .55; }
+.node-cat.node-unavailable { color: var(--warning); }
+
+/* --- Панель плагінів --- */
+.panel.plugins { width: calc(var(--du) * 90); }
+.plugin-card { gap: calc(var(--du) * 2.5); }
+.plugin-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
+.plugin-title { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: calc(var(--du) * 1.5); }
+.chip {
+    display: inline-flex;
+    align-items: center;
+    height: calc(var(--du) * 5);
+    padding: 0 calc(var(--du) * 2);
+    font-size: 12px;
+    border: var(--border-w) solid var(--border);
+    color: var(--text-secondary);
+    background: var(--surface);
+}
+.chip.st-success { color: var(--success); border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
+.chip.st-error { color: var(--error); border-color: var(--error); background: color-mix(in srgb, var(--error) 12%, var(--surface)); }
+.chip.st-idle { color: var(--text-secondary); }
+.caps { display: flex; flex-direction: column; gap: calc(var(--du) * 0.5); }
+.plugin-error {
+    padding: calc(var(--du) * 2);
+    font-size: 13px;
+    line-height: 16px;
+    color: var(--error);
+    border: var(--border-w) solid var(--error);
+    background: color-mix(in srgb, var(--error) 10%, var(--surface));
+    overflow-wrap: anywhere;
+}
+.section-toggle {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    height: calc(var(--du) * 8);
+    padding: 0 calc(var(--du) * 1);
+    background: none;
+    border: 0;
+    border-top: var(--border-w) solid var(--divider);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    cursor: pointer;
+}
+.section-toggle:hover { color: var(--text-primary); }
+.plugin-form { display: flex; flex-direction: column; gap: calc(var(--du) * 3); }
+.form-input {
+    width: 100%;
+    height: calc(var(--du) * 10);
+    padding: 0 calc(var(--du) * 3);
+    background: var(--surface);
+    border: var(--border-w) solid var(--border);
+    outline: none;
+    border-radius: 0;
+    min-width: 0;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text-disabled); }
+.secret-row { display: flex; align-items: center; gap: calc(var(--du) * 2); }
+.link-btn {
+    flex: none;
+    background: none;
+    border: 0;
+    padding: 0 calc(var(--du) * 1);
+    height: calc(var(--du) * 8);
+    color: var(--accent);
+    cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+    .panel {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 10;
+        width: min(85vw, calc(var(--du) * 80));
+    }
+    .panel.left { left: 0; }
+    .panel.left.palette { width: min(92vw, calc(var(--du) * 94)); }
+    .panel.right { right: 0; }
+    .panel.plugins { width: min(95vw, calc(var(--du) * 90)); }
+    .console { height: calc(var(--du) * 32); }
+}
+.hidden { display: none !important; }

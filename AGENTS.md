@@ -30,6 +30,9 @@ cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plug
 # The server uses release builds copied to data/plugins/
 cargo build --release --target wasm32-wasip2 -p math-plugin && cp target/wasm32-wasip2/release/math_plugin.wasm data/plugins/
 
+# Local dev loop: rebuild plugins/editor/server and restart the server on .dev-data/ (reload the browser)
+./dev.sh                 # or a subset: ./dev.sh editor server
+
 # Server (env: TICKNODE_BIND=0.0.0.0:8099, TICKNODE_DATA_DIR=data, TICKNODE_WEB_DIR=ticknode-editor/dist, TICKNODE_TICK_MS=100, RUST_LOG)
 cargo run -p ticknode-server
 

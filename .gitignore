@@ -10,3 +10,6 @@ pkg/
 *.json.tmp
 # Plugin settings may contain tokens and passwords
 /data/plugin-config/
+
+# Local dev server data (dev.sh)
+/.dev-data/

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: build + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2, wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # Plugin integration tests load these components; with TICKNODE_REQUIRE_PLUGINS they fail instead of skipping.
+      - name: Build plugins (wasm32-wasip2)
+        run: cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin
+      - name: Engine, shared types and server tests
+        run: cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
+        env:
+          TICKNODE_REQUIRE_PLUGINS: "1"
+      - name: Editor tests (host)
+        run: cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu
+      - name: Editor build (wasm32-unknown-unknown)
+        run: cargo check -p ticknode-editor --target wasm32-unknown-unknown

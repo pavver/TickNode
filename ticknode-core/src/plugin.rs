@@ -540,6 +540,16 @@ impl Node for WasmNode {
 
     fn properties(&self) -> Vec<(String, DataValue)> { self.properties.clone() }
 
+    /// A node created without properties (from the palette) would otherwise expose none until the first
+    /// `set_property`: read the plugin's full set, defaults included, so the editor can show and edit them.
+    fn restored(&mut self) {
+        if self.handle.is_none()
+            && let Err(e) = self.refresh()
+        {
+            warn!(node = ?self.id, r#type = %self.type_name, "Could not read the node's properties: {e}");
+        }
+    }
+
     fn ensure_live(&mut self) {
         if self.failed {
             return;

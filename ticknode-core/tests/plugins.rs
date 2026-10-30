@@ -1343,6 +1343,12 @@ fn ha_plugin_declares_its_nodes_and_type() {
         assert!(!definition.help.is_empty());
     }
     assert!(engine.types.get("ha.state").is_some());
+    // A node added from the palette (no properties) exposes the plugin's defaults, so the editor shows them
+    let node = NodeId::generate();
+    engine.create_node(node, "ha/state_changed", &[]).unwrap();
+    let properties = &engine.export_graph().nodes.into_iter().find(|n| n.id == node).unwrap().properties;
+    assert!(properties.iter().any(|(k, v)| k == "entity_id" && *v == DataValue::String(String::new())), "{properties:?}");
+    assert!(properties.iter().any(|(k, v)| k == "mode" && *v == DataValue::String("every".into())), "{properties:?}");
     // Every message the plugin ships is kept by the host (nothing is dropped as foreign)
     let translations = engine.translations();
     let merged = &translations.iter().find(|(locale, _)| locale == "uk").expect("the uk resource").1;

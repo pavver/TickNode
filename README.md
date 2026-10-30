@@ -39,3 +39,7 @@ cargo run -p ticknode-server   # http://localhost:8099
 [Mozilla Public License 2.0](LICENSE) (`MPL-2.0`). Змінені файли самого TickNode мають лишатися під MPL-2.0 і бути доступними у вихідному коді, якщо ви їх розповсюджуєте. Плагіни, написані на `ticknode-plugin-sdk`, — окремі твори: їх можна випускати під будь-якою ліцензією, зокрема закритою.
 
 Шрифт редактора Cascadia Code (`ticknode-editor/assets/CascadiaCode.ttf`) — © Microsoft Corporation, під [SIL Open Font License 1.1](ticknode-editor/assets/CascadiaCode-OFL.txt).
+
+## Участь у розробці
+
+Див. [CONTRIBUTING.md](CONTRIBUTING.md). Pull request-и приймаються лише на його умовах, які дозволяють мейнтейнеру змінювати ліцензію внесків.

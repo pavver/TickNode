@@ -19,6 +19,7 @@ struct Config {
     bind: String,
     data_dir: PathBuf,
     web_dir: PathBuf,
+    bundled_plugins_dir: Option<PathBuf>,
     tick: Duration,
 }
 
@@ -29,6 +30,7 @@ impl Config {
             bind: var("TICKNODE_BIND", "0.0.0.0:8099"),
             data_dir: var("TICKNODE_DATA_DIR", "data").into(),
             web_dir: var("TICKNODE_WEB_DIR", "ticknode-editor/dist").into(),
+            bundled_plugins_dir: std::env::var("TICKNODE_BUNDLED_PLUGINS_DIR").ok().filter(|v| !v.is_empty()).map(PathBuf::from),
             tick: Duration::from_millis(var("TICKNODE_TICK_MS", "100").parse().unwrap_or(100)),
         }
     }
@@ -45,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut engine = TickEngine::new();
     // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
-    let mut plugins = plugins::Plugins::new(&config.data_dir);
+    let mut plugins = plugins::Plugins::new(&config.data_dir).with_bundled_dir(config.bundled_plugins_dir.clone());
     plugins.load_all(&mut engine);
 
     let storage = Storage::new(config.data_dir.join("graph.json"));

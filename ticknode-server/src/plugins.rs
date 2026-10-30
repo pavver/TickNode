@@ -62,6 +62,8 @@ pub struct Outcome {
 
 pub struct Plugins {
     plugins_dir: PathBuf,
+    /// Optional read-only directory with plugins shipped alongside the server (`TICKNODE_BUNDLED_PLUGINS_DIR`).
+    bundled_dir: Option<PathBuf>,
     plugin_data: PathBuf,
     config_dir: PathBuf,
     entries: BTreeMap<String, Entry>,
@@ -71,10 +73,17 @@ impl Plugins {
     pub fn new(data_dir: &Path) -> Self {
         Self {
             plugins_dir: data_dir.join("plugins"),
+            bundled_dir: None,
             plugin_data: data_dir.join("plugin-data"),
             config_dir: data_dir.join("plugin-config"),
             entries: BTreeMap::new(),
         }
+    }
+
+    /// Scans `dir` for plugins in addition to `<data>/plugins`. A file of the same name in `<data>/plugins` wins.
+    pub fn with_bundled_dir(mut self, dir: Option<PathBuf>) -> Self {
+        self.bundled_dir = dir;
+        self
     }
 
     fn config_path(&self, name: &str) -> PathBuf {
@@ -96,10 +105,7 @@ impl Plugins {
 
     /// Discovers `*.wasm` files, reads manifests, and enables plugins that are not disabled in config.
     pub fn load_all(&mut self, engine: &mut TickEngine) {
-        let Ok(dir) = std::fs::read_dir(&self.plugins_dir) else { return };
-        let mut paths: Vec<_> = dir.filter_map(|e| e.ok().map(|e| e.path())).collect();
-        paths.sort();
-        for path in paths.into_iter().filter(|p| p.extension().is_some_and(|e| e == "wasm")) {
+        for path in plugin_paths(&self.plugins_dir, self.bundled_dir.as_deref()) {
             let file = path.file_name().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
             let stem = path.file_stem().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
             let loaded = std::fs::read(&path)
@@ -269,6 +275,27 @@ fn stored(manifest: &PluginManifest, config: &PluginConfig) -> Vec<(String, Data
 }
 
 /// Name of the environment variable that supplies setting `key` of `plugin`:
+/// `*.wasm` files of the user directory plus the bundled one, sorted by path; on a file name clash the user's file wins.
+fn plugin_paths(user_dir: &Path, bundled_dir: Option<&Path>) -> Vec<PathBuf> {
+    let scan = |dir: &Path| -> Vec<PathBuf> {
+        let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+        let mut paths: Vec<_> = entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|e| e == "wasm")).collect();
+        paths.sort();
+        paths
+    };
+    let mut paths = scan(user_dir);
+    if let Some(bundled) = bundled_dir {
+        for path in scan(bundled) {
+            if paths.iter().any(|p| p.file_name() == path.file_name()) {
+                info!(path = %path.display(), "A plugin with the same file name exists in the data directory, skipping the bundled one");
+            } else {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+
 /// `TICKNODE_PLUGIN_<PLUGIN>_<KEY>`, both uppercased with every non-alphanumeric character turned into `_`.
 fn env_var_name(plugin: &str, key: &str) -> String {
     let norm = |s: &str| s.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect::<String>();
@@ -341,6 +368,17 @@ fn write_private(dir: &Path, path: &Path, contents: &str) -> anyhow::Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_plugin_overrides_bundled_one() {
+        let (user, bundled) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        for (dir, name) in [(&user, "a.wasm"), (&bundled, "a.wasm"), (&bundled, "b.wasm"), (&bundled, "notes.txt")] {
+            std::fs::write(dir.path().join(name), b"").unwrap();
+        }
+        let paths = plugin_paths(user.path(), Some(bundled.path()));
+        assert_eq!(paths, vec![user.path().join("a.wasm"), bundled.path().join("b.wasm")]);
+        assert_eq!(plugin_paths(user.path(), None), vec![user.path().join("a.wasm")]);
+    }
 
     #[test]
     fn config_file_is_private_and_atomic() {

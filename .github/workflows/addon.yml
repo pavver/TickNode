@@ -1,0 +1,37 @@
+name: Home Assistant add-on image
+
+# This workflow only BUILDS the add-on images (amd64, aarch64) to check that they build.
+# Pushing to ghcr.io is intentionally disabled (push: false, no registry login) until the first
+# release: the product is not ready to be published yet.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ha-addon/**"
+      - ".github/workflows/addon.yml"
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ha-addon/ticknode
+          file: ha-addon/ticknode/Dockerfile
+          # Build the checked-out workspace instead of cloning master from GitHub.
+          build-contexts: source=.
+          platforms: ${{ matrix.platform }}
+          push: false
+          tags: ticknode-${{ matrix.arch }}:ci

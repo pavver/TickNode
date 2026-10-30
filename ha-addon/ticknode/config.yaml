@@ -1,0 +1,24 @@
+name: TickNode
+slug: ticknode
+version: "0.1.0"
+description: Node-based visual automation editor and engine with a Home Assistant integration
+url: https://github.com/pavver/TickNode
+arch:
+  - amd64
+  - aarch64
+# The editor is shown in the Home Assistant sidebar through ingress; no host port is exposed.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:graph-outline
+panel_title: TickNode
+# Access to Home Assistant Core through the Supervisor proxy (SUPERVISOR_TOKEN).
+homeassistant_api: true
+# The Dockerfile uses a plain entrypoint (CMD), not s6-overlay.
+init: false
+startup: services
+boot: auto
+# /data (graph, plugin settings and plugin files) is persistent and included in backups.
+# Prebuilt images are not published yet, so `image:` is omitted and Home Assistant builds
+# the add-on locally from the Dockerfile. Enable the line below when images are published
+# to ghcr.io (and bump `version` for every release, the tag of the image is the version):
+# image: ghcr.io/pavver/ticknode-{arch}

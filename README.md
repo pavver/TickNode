@@ -62,8 +62,17 @@ The server is configured with environment variables:
 | `TICKNODE_BIND` | `0.0.0.0:8099` | listen address |
 | `TICKNODE_DATA_DIR` | `data` | graph, plugins, plugin data and settings |
 | `TICKNODE_WEB_DIR` | `ticknode-editor/dist` | the built editor |
+| `TICKNODE_BUNDLED_PLUGINS_DIR` | | extra read-only directory with `*.wasm` plugins, scanned in addition to `<data>/plugins` (a same-named file in `<data>/plugins` wins) |
 | `TICKNODE_TICK_MS` | `100` | tick length |
 | `RUST_LOG` | | log filter |
+
+## Home Assistant add-on
+
+TickNode can run as a Home Assistant add-on with the editor in the sidebar (ingress) and an automatic
+connection to Home Assistant. In Home Assistant open **Settings > Add-ons > Add-on store**, menu
+(three dots) **> Repositories**, add `https://github.com/pavver/TickNode`, then install **TickNode**.
+Prebuilt images are not published yet, so Home Assistant builds the add-on locally on install
+(several minutes, network required). See [`ha-addon/ticknode/DOCS.md`](ha-addon/ticknode/DOCS.md).
 
 ## Writing a plugin
 

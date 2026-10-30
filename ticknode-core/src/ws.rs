@@ -65,6 +65,14 @@ impl WsHub {
         Self { handle, next_id: 1, connections: HashMap::new(), inbox_tx, inbox_rx }
     }
 
+    /// Sets the runtime for new connections. The instance may be created before the engine gets its runtime
+    /// (the server loads plugins first), so the host refreshes it on every call.
+    pub fn set_runtime(&mut self, handle: Option<Handle>) {
+        if handle.is_some() {
+            self.handle = handle;
+        }
+    }
+
     /// Starts connecting. URL scheme and headers are validated here; the host check belongs to the caller.
     pub fn connect(&mut self, url: &str, headers: &[(String, String)]) -> Result<WsId, String> {
         if self.connections.len() >= MAX_CONNECTIONS {

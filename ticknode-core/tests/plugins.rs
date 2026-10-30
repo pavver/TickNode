@@ -1073,6 +1073,23 @@ fn websocket_roundtrip_reaches_node_outputs_through_plugin_tick() {
 }
 
 #[test]
+fn websocket_works_when_the_runtime_is_set_after_the_plugin_is_loaded() {
+    // The server loads plugins before the engine thread gets its runtime: the existing instance must
+    // pick the runtime up later instead of failing with "running without a tokio runtime".
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let server = echo_server();
+    let Some(bytes) = plugin_bytes("test_plugin") else { return };
+    let mut engine = TickEngine::new();
+    engine.add_plugin(&bytes, None, |_| vec![Capability::WebSocket { allowed_hosts: vec!["*".into()] }]).unwrap();
+    engine.enable_plugin("test_plugin", &ws_settings("")).unwrap();
+    engine.host_state.runtime = Some(runtime.handle().clone());
+    engine.configure_plugin("test_plugin", &ws_settings(&format!("ws://127.0.0.1:{}/", server.port))).unwrap();
+    let probe = NodeId::generate();
+    engine.create_node(probe, "test/ws_probe", &[]).unwrap();
+    run_until(&mut engine, |e| status(e, probe) == Some(DataValue::String("open".into())));
+}
+
+#[test]
 fn websocket_emission_trace_is_recorded() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let server = echo_server();

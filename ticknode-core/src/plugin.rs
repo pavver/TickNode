@@ -220,6 +220,7 @@ impl Runtime {
     fn api(&mut self) -> wasmtime::Result<(&mut Store<PluginState>, &NodesApi)> {
         self.instantiate()?;
         let (store, plugin) = self.instance.as_mut().expect("the instance was just created");
+        store.data_mut().ws.set_runtime(self.tokio.clone());
         store.set_fuel(FUEL_PER_CALL)?;
         Ok((store, plugin.ticknode_plugin_nodes()))
     }

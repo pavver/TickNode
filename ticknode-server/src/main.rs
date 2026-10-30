@@ -46,6 +46,8 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
 
     let mut engine = TickEngine::new();
+    // Plugins may open connections already in `configure` while loading
+    engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
     let mut plugins = plugins::Plugins::new(&config.data_dir).with_bundled_dir(config.bundled_plugins_dir.clone());
     plugins.load_all(&mut engine);

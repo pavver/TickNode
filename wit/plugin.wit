@@ -88,6 +88,8 @@ interface types {
         http(list<string>),
         /// Plugin's own directory, accessible via `std::fs` (WASI) as the current working directory.
         storage,
+        /// Persistent WebSocket connections (`ws://`, `wss://`) to listed hosts and their subdomains; `*` — any host.
+        websocket(list<string>),
     }
 
     record property {
@@ -153,6 +155,20 @@ interface types {
         %result: result<task-output, string>,
     }
 
+    /// Handle of a plugin-owned WebSocket connection. Valid only within one plugin instance:
+    /// after a crash (instance recreated) all connections are closed and old ids are void.
+    type ws-id = u64;
+
+    /// Connection event delivered to `plugin-tick`.
+    variant ws-event {
+        /// The connection is established.
+        opened(ws-id),
+        /// A text frame was received.
+        message(tuple<ws-id, string>),
+        /// The connection ended (or could not be opened); carries the reason.
+        closed(tuple<ws-id, string>),
+    }
+
     /// Reason for calling `node.execute`.
     variant trigger {
         /// Pulse on an input exec pin (or manual trigger from the editor).
@@ -166,6 +182,16 @@ interface types {
         exec(u32),
         /// New value on an output data pin.
         data(tuple<u32, value>),
+    }
+
+    /// Graph node id: the (high, low) 64-bit halves of its UUID (WIT has no 128-bit integer).
+    type node-id = tuple<u64, u64>;
+
+    /// Outputs produced by a node outside of its own `execute`/`poll` (see `plugin-tick`).
+    record emission {
+        /// Graph node id (as given to `create-node`).
+        node: node-id,
+        outputs: list<output>,
     }
 
     enum log-level { debug, info, warn, error }
@@ -183,7 +209,7 @@ interface types {
 /// Host services. Task-starting functions work only during `execute`/`poll`
 /// (the task belongs to the currently executing node).
 interface host {
-    use types.{log-level, task-id, http-request};
+    use types.{log-level, task-id, http-request, ws-id};
 
     /// Log message to the editor console (on behalf of the current node). Logs are never translated:
     /// always write them in English.
@@ -203,10 +229,22 @@ interface host {
 
     /// Cancels a task belonging to this node. `false` if the task no longer exists.
     cancel-task: func(id: task-id) -> bool;
+
+    /// Opens a WebSocket connection owned by the plugin (not by a node); usable from any plugin call.
+    /// Requires `capability::websocket` for the host. Returns immediately: the connection is opened
+    /// asynchronously and the plugin receives `ws-event::opened` (or `closed` on failure) in `plugin-tick`.
+    /// At most 4 connections per plugin.
+    ws-connect: func(url: string, headers: list<tuple<string, string>>) -> result<ws-id, string>;
+
+    /// Sends a text frame (max 16 MiB). An error if the connection is unknown or closed.
+    ws-send: func(id: ws-id, text: string) -> result<_, string>;
+
+    /// Closes the connection; no `closed` event is delivered for it afterwards.
+    ws-close: func(id: ws-id);
 }
 
 interface nodes {
-    use types.{plugin-manifest, node-definition, type-definition, property, value, trigger, output, ui-error};
+    use types.{plugin-manifest, node-definition, type-definition, property, value, trigger, output, ui-error, ws-event, emission, node-id};
 
     manifest: func() -> plugin-manifest;
 
@@ -239,7 +277,15 @@ interface nodes {
         poll: func(tick: u64) -> option<u32>;
     }
 
-    create-node: func(type-name: string) -> result<node, string>;
+    /// `node` is the graph node id (UUID halves); the plugin uses it to address `emission`s.
+    create-node: func(type-name: string, node: node-id) -> result<node, string>;
+
+    /// Called by the host once per tick for every enabled plugin (even with no events, so the plugin can
+    /// drive timers and keep-alives), after finished tasks are delivered and before event sources are
+    /// polled. `events` are the WebSocket events since the previous tick (at most 1000 per tick; the rest
+    /// stays queued). Returned emissions are applied as if the target node had executed; the host drops
+    /// emissions for nodes that do not exist or belong to another plugin, and invalid pins or values.
+    plugin-tick: func(events: list<ws-event>) -> list<emission>;
 }
 
 world plugin {

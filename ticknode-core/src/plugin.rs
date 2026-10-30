@@ -16,6 +16,7 @@ use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use crate::translations::{AllowedIds, filter_plugin_resource, normalize_locale, sanitize_ui_message};
+use crate::ws::{self, WsHub};
 use crate::host::{HostState, HttpRequest, TaskId, TaskOutput, TaskResult};
 use crate::{Node, NodeContext, RemovedConnections, TickEngine};
 
@@ -29,6 +30,8 @@ use bindings::ticknode::plugin::types as wit;
 /// Instruction budget per plugin call (guards against infinite loops).
 const FUEL_PER_CALL: u64 = 2_000_000_000;
 const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
+/// Pause before `plugin-tick` is called again after the plugin trapped in it.
+const TICK_BACKOFF_TICKS: u64 = 50;
 
 fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -50,6 +53,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 struct Grants {
     name: String,
     http_domains: Vec<String>,
+    ws_hosts: Vec<String>,
     storage_dir: Option<PathBuf>,
 }
 
@@ -65,6 +69,8 @@ struct PluginState {
     limits: StoreLimits,
     grants: Arc<Grants>,
     call: Option<CallCtx>,
+    /// Plugin-owned WebSocket connections; they die with this instance.
+    ws: WsHub,
 }
 
 impl WasiView for PluginState {
@@ -130,6 +136,26 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     fn cancel_task(&mut self, id: TaskId) -> bool {
         self.call().is_ok_and(|c| c.host.cancel_task(c.node_id, id))
     }
+
+    fn ws_connect(&mut self, url: String, headers: Vec<(String, String)>) -> Result<wit::WsId, String> {
+        let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+        if !matches!(parsed.scheme(), "ws" | "wss") {
+            return Err(format!("Unsupported scheme: {} (expected ws or wss)", parsed.scheme()));
+        }
+        let host = parsed.host_str().unwrap_or_default();
+        if !self.grants.ws_hosts.iter().any(|d| domain_allowed(host, d)) {
+            return Err(format!("The plugin is not allowed to open WebSocket connections to {host}"));
+        }
+        self.ws.connect(&url, &headers)
+    }
+
+    fn ws_send(&mut self, id: wit::WsId, text: String) -> Result<(), String> {
+        self.ws.send(id, text)
+    }
+
+    fn ws_close(&mut self, id: wit::WsId) {
+        self.ws.close(id);
+    }
 }
 
 /// `example.com` allows the domain itself and its subdomains, but not `evilexample.com`.
@@ -152,6 +178,11 @@ struct Runtime {
     settings: Option<Vec<wit::Property>>,
     /// Result of the last `configure` called during instance creation.
     configure_error: Option<UiMessage>,
+    /// Runtime for the instance's WebSocket tasks (`HostState::runtime`, refreshed by the engine).
+    tokio: Option<tokio::runtime::Handle>,
+    /// After a trap in `plugin-tick`, the next call is made no earlier than this tick (a plugin that traps
+    /// on every tick would otherwise be recreated and reconnected every tick).
+    tick_backoff_until: u64,
 }
 
 impl Runtime {
@@ -169,6 +200,7 @@ impl Runtime {
                 limits: StoreLimitsBuilder::new().memory_size(MEMORY_LIMIT).build(),
                 grants: self.grants.clone(),
                 call: None,
+                ws: WsHub::new(self.tokio.clone()),
             };
             let mut store = Store::new(engine(), state);
             store.limiter(|s| &mut s.limits);
@@ -194,7 +226,8 @@ impl Runtime {
 
     /// Stores settings and applies them: to an existing instance via `configure`,
     /// while a new instance receives them upon creation. `Err` is the plugin's response (or a trap).
-    fn configure(&mut self, settings: &[(String, DataValue)]) -> Result<(), UiMessage> {
+    fn configure(&mut self, settings: &[(String, DataValue)], tokio: Option<tokio::runtime::Handle>) -> Result<(), UiMessage> {
+        self.tokio = tokio;
         let props: Vec<wit::Property> = settings.iter()
             .map(|(name, value)| wit::Property { name: name.clone(), value: encode_value(value) })
             .collect();
@@ -221,6 +254,35 @@ impl Runtime {
                 Err(crash_message(&reason))
             }
         }
+    }
+
+    /// Delivers connection events and collects the plugin's emissions. On a trap the instance is discarded
+    /// (its connections close, `configure` runs again on the next instance).
+    fn plugin_tick(&mut self, host: &mut HostState) -> Result<Vec<wit::Emission>, String> {
+        if host.current_tick < self.tick_backoff_until {
+            return Ok(Vec::new());
+        }
+        self.tokio = host.runtime.clone();
+        let outcome = self.api().map(|_| ()).and_then(|()| {
+            let (store, plugin) = self.instance.as_mut().expect("api() creates the instance");
+            let events: Vec<wit::WsEvent> = store.data_mut().ws.drain(ws::MAX_EVENTS_PER_TICK).into_iter().map(|e| match e {
+                ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
+                ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
+                ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
+            }).collect();
+            store.set_fuel(FUEL_PER_CALL)?;
+            // Plugin-level logs are not tied to a node: they carry the nil node id
+            store.data_mut().call = Some(CallCtx { node_id: NodeId(uuid::Uuid::nil()), host: std::mem::take(host) });
+            let result = plugin.ticknode_plugin_nodes().call_plugin_tick(&mut *store, &events);
+            *host = store.data_mut().call.take().expect("the call context is in place").host;
+            result
+        });
+        outcome.map_err(|e| {
+            warn!("Plugin crashed during plugin-tick: {e:?}");
+            self.discard();
+            self.tick_backoff_until = host.current_tick + TICK_BACKOFF_TICKS;
+            short_error(&e)
+        })
     }
 
     /// A `configure` error from the plugin; its key is restricted to the plugin's own namespace.
@@ -305,7 +367,7 @@ impl WasmNode {
 
         let resource = match self.handle {
             Some((g, r)) if g == generation => Ok(r),
-            _ => create_resource(store, api, &self.type_name, &self.properties),
+            _ => create_resource(store, api, &self.type_name, self.id, &self.properties),
         };
         let result = match resource {
             Ok(resource) => {
@@ -330,24 +392,6 @@ impl WasmNode {
         result
     }
 
-    /// A value emitted on a custom struct output pin must carry the tag of that exact type: a plugin
-    /// cannot emit another type or an untyped object disguised as `Named`.
-    fn check_output_type(&self, pin: PinId, value: &DataValue) -> Result<(), String> {
-        let declared = self.definition.pins.iter()
-            .find(|p| p.id == pin && p.direction == PinDirection::Output)
-            .and_then(|p| match &p.pin_type {
-                PinType::Data(DataType::Named(name)) => Some(name),
-                _ => None,
-            });
-        match (declared, value) {
-            (Some(name), DataValue::Object { type_name, .. }) if type_name.as_deref() != Some(name) => Err(format!(
-                "The plugin emitted a value {} on an output of type {name}: the value was dropped",
-                type_name.as_deref().map_or("without a type".to_string(), |t| format!("of type {t}")),
-            )),
-            _ => Ok(()),
-        }
-    }
-
     fn refresh(&mut self) -> Result<(), CallError> {
         let (definition, properties) = self.call(None, |store, api, node| {
             Ok((api.node().call_definition(&mut *store, node)?, api.node().call_properties(&mut *store, node)?))
@@ -367,7 +411,7 @@ impl WasmNode {
                 wit::Output::Exec(pin) => Some(NodeOutput::Execution(PinId(pin))),
                 wit::Output::Data((pin, value)) => {
                     let value = decode_value(&value)?;
-                    match self.check_output_type(PinId(pin), &value) {
+                    match check_output_type(&self.definition, PinId(pin), &value) {
                         Ok(()) => Some(NodeOutput::Data(PinId(pin), value)),
                         Err(e) => {
                             ctx.host_state.log(self.id, format!("[ERROR] {e}"));
@@ -384,13 +428,59 @@ impl WasmNode {
     }
 }
 
+/// A value emitted on a custom struct output pin must carry the tag of that exact type: a plugin
+/// cannot emit another type or an untyped object disguised as `Named`.
+fn check_output_type(definition: &NodeDefinition, pin: PinId, value: &DataValue) -> Result<(), String> {
+    let declared = definition.pins.iter()
+        .find(|p| p.id == pin && p.direction == PinDirection::Output)
+        .and_then(|p| match &p.pin_type {
+            PinType::Data(DataType::Named(name)) => Some(name),
+            _ => None,
+        });
+    match (declared, value) {
+        (Some(name), DataValue::Object { type_name, .. }) if type_name.as_deref() != Some(name) => Err(format!(
+            "The plugin emitted a value {} on an output of type {name}: the value was dropped",
+            type_name.as_deref().map_or("without a type".to_string(), |t| format!("of type {t}")),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Checks the outputs a plugin pushed for a node outside of `execute`: each pin must be an output pin of the
+/// matching kind (exec or data) and values must pass `check_output_type`. Returns the valid outputs and an
+/// English error for every rejected one.
+fn validate_emission_outputs(definition: &NodeDefinition, outputs: Vec<wit::Output>) -> (Vec<NodeOutput>, Vec<String>) {
+    let output_pin = |pin: u32| definition.pins.iter().find(|p| p.id == PinId(pin) && p.direction == PinDirection::Output);
+    let (mut valid, mut errors) = (Vec::new(), Vec::new());
+    for output in outputs {
+        match output {
+            wit::Output::Exec(pin) => match output_pin(pin) {
+                Some(p) if p.pin_type == PinType::Exec => valid.push(NodeOutput::Execution(PinId(pin))),
+                _ => errors.push(format!("The plugin emitted an exec pulse on pin {pin}, which is not an exec output of {}", definition.type_name)),
+            },
+            wit::Output::Data((pin, bytes)) => match output_pin(pin) {
+                Some(p) if p.pin_type != PinType::Exec => {
+                    let Some(value) = decode_value(&bytes) else { continue };
+                    match check_output_type(definition, PinId(pin), &value) {
+                        Ok(()) => valid.push(NodeOutput::Data(PinId(pin), value)),
+                        Err(e) => errors.push(e),
+                    }
+                }
+                _ => errors.push(format!("The plugin emitted a value on pin {pin}, which is not a data output of {}", definition.type_name)),
+            },
+        }
+    }
+    (valid, errors)
+}
+
 fn create_resource(
     store: &mut Store<PluginState>,
     api: &NodesApi,
     type_name: &str,
+    id: NodeId,
     properties: &[(String, DataValue)],
 ) -> Result<ResourceAny, CallError> {
-    let node = api.call_create_node(&mut *store, type_name).map_err(trap_error)?.map_err(CallError::Rejected)?;
+    let node = api.call_create_node(&mut *store, type_name, id.0.as_u64_pair()).map_err(trap_error)?.map_err(CallError::Rejected)?;
     for (name, value) in properties {
         api.node().call_set_property(&mut *store, node, name, &encode_value(value)).map_err(trap_error)?;
     }
@@ -448,6 +538,14 @@ impl Node for WasmNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> { self.properties.clone() }
+
+    fn ensure_live(&mut self) {
+        if self.failed {
+            return;
+        }
+        // Creates the resource when it is missing or belongs to a dead instance (a trap is handled by `call`)
+        let _ = self.call(None, |_, _, _| Ok(()));
+    }
 }
 
 impl Drop for WasmNode {
@@ -573,7 +671,7 @@ impl TickEngine {
 
         // Manifest and definitions are read from a temporary unprivileged instance.
         let mut runtime = Runtime {
-            pre, grants: Arc::default(), allowed: AllowedIds::default(), instance: None, generation: 0, settings: None, configure_error: None,
+            pre, grants: Arc::default(), allowed: AllowedIds::default(), instance: None, generation: 0, settings: None, configure_error: None, tokio: None, tick_backoff_until: 0,
         };
         let (manifest, definitions, types, translations) = runtime.api()
             .and_then(|(store, api)| Ok((
@@ -604,6 +702,7 @@ impl TickEngine {
         for capability in grant(&manifest) {
             match capability {
                 Capability::Http { allowed_domains } => grants.http_domains.extend(allowed_domains),
+                Capability::WebSocket { allowed_hosts } => grants.ws_hosts.extend(allowed_hosts),
                 Capability::Storage => {
                     if let Some(root) = storage_root {
                         let dir = root.join(&manifest.name);
@@ -631,6 +730,42 @@ impl TickEngine {
             translations,
         });
         Ok(manifest)
+    }
+
+    /// Calls `plugin-tick` of every enabled plugin and applies the returned emissions. Runs once per tick,
+    /// after finished tasks are delivered and before event sources are polled.
+    pub(crate) fn tick_plugins(&mut self, next_tick_queue: &mut std::collections::VecDeque<(NodeId, PinId)>) {
+        let active: Vec<(String, Arc<Mutex<Runtime>>)> = self.plugins.iter()
+            .filter(|(_, p)| p.active)
+            .map(|(name, p)| (name.clone(), p.runtime.clone()))
+            .collect();
+        for (name, runtime) in active {
+            let result = lock(&runtime).plugin_tick(&mut self.host_state);
+            match result {
+                Ok(emissions) => self.apply_emissions(&name, emissions, next_tick_queue),
+                Err(reason) => self.host_state.log(NodeId(uuid::Uuid::nil()), format!("[ERROR] Plugin {name} crashed in plugin-tick: {reason}")),
+            }
+        }
+    }
+
+    /// Applies emissions as if the target nodes had executed. An emission for a node that does not exist,
+    /// belongs to another plugin (or is a stub) is dropped, as is every invalid pin or value; each drop logs an error.
+    fn apply_emissions(&mut self, plugin: &str, emissions: Vec<wit::Emission>, next_tick_queue: &mut std::collections::VecDeque<(NodeId, PinId)>) {
+        for emission in emissions {
+            let id = NodeId(uuid::Uuid::from_u64_pair(emission.node.0, emission.node.1));
+            let definition = self.nodes.get(&id).map(|n| n.definition());
+            let Some(definition) = definition.filter(|d| self.registry.owner_of(&d.type_name) == Some(plugin)) else {
+                self.host_state.log(id, format!("[ERROR] Plugin {plugin} emitted outputs for node {id:?}, which is not one of its nodes: dropped"));
+                continue;
+            };
+            let (outputs, errors) = validate_emission_outputs(&definition, emission.outputs);
+            for e in errors {
+                self.host_state.log(id, format!("[ERROR] {e}"));
+            }
+            if !outputs.is_empty() {
+                self.apply_outputs(id, Vec::new(), outputs, next_tick_queue);
+            }
+        }
     }
 
     /// Translation resources of the core and of every enabled plugin, merged per locale
@@ -680,7 +815,7 @@ impl TickEngine {
             self.registry.register_owned(name, Box::new(move |id| Box::new(WasmNode::new(id, def.clone(), polls, runtime.clone()))));
         }
 
-        let settings_error = Self::apply_settings(&self.plugins[name].manifest, &runtime, settings);
+        let settings_error = self.apply_settings(name, settings);
         let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.active = true;
         slot.settings_error = settings_error;
@@ -750,14 +885,15 @@ impl TickEngine {
         if !slot.active {
             return Ok(());
         }
-        let error = Self::apply_settings(&slot.manifest, &slot.runtime.clone(), settings);
+        let error = self.apply_settings(name, settings);
         let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.settings_error = error.clone();
         error.map_or(Ok(()), Err)
     }
 
-    fn apply_settings(manifest: &PluginManifest, runtime: &Arc<Mutex<Runtime>>, settings: &[(String, DataValue)]) -> Option<UiMessage> {
-        lock(runtime).configure(settings).err().or_else(|| missing_required(manifest, settings))
+    fn apply_settings(&self, name: &str, settings: &[(String, DataValue)]) -> Option<UiMessage> {
+        let slot = &self.plugins[name];
+        lock(&slot.runtime).configure(settings, self.host_state.runtime.clone()).err().or_else(|| missing_required(&slot.manifest, settings))
     }
 }
 
@@ -845,6 +981,7 @@ fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
         requested_capabilities: m.capabilities.into_iter().map(|c| match c {
             wit::Capability::Http(allowed_domains) => Capability::Http { allowed_domains },
             wit::Capability::Storage => Capability::Storage,
+            wit::Capability::Websocket(allowed_hosts) => Capability::WebSocket { allowed_hosts },
         }).collect(),
         settings: m.settings.into_iter().map(|s| SettingDefinition {
             key: s.key,
@@ -927,6 +1064,52 @@ mod tests {
         engine.plugins.get_mut("consumer").unwrap().active = false;
         engine.disable_plugin("test_plugin").unwrap();
         assert!(engine.types.get("test.point").is_none());
+    }
+
+    fn data_emission(node: NodeId, pin: u32, value: DataValue) -> wit::Emission {
+        wit::Emission { node: node.0.as_u64_pair(), outputs: vec![wit::Output::Data((pin, encode_value(&value)))] }
+    }
+
+    /// Emissions are applied only to existing nodes of the emitting plugin: a built-in node, a node of
+    /// another plugin and an unknown id are dropped with an error log; invalid pins are dropped too.
+    #[test]
+    fn emissions_for_foreign_nodes_are_dropped() {
+        let mut engine = TickEngine::new();
+        let value = DataValue::Number(NumberValue::Int(7));
+        // A built-in node (no owner) and a `const` node whose type is registered as owned by plugin "mine"
+        let builtin = NodeId::generate();
+        engine.create_node(builtin, "test/debug", &[]).unwrap();
+        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: DataValue::Number(NumberValue::Int(0)) })));
+        let mine = NodeId::generate();
+        engine.create_node(mine, "const", &[]).unwrap();
+        let mut queue = std::collections::VecDeque::new();
+
+        // Rejected for "other" (foreign plugin) and for "mine" when the node is built-in
+        engine.apply_emissions("mine", vec![data_emission(builtin, 0, value.clone())], &mut queue);
+        assert!(engine.data_cache.is_empty());
+        engine.apply_emissions("other", vec![data_emission(mine, 0, value.clone())], &mut queue);
+        assert!(engine.data_cache.is_empty());
+        assert!(engine.host_state.logs.iter().any(|(n, m)| *n == mine && m.contains("not one of its nodes")), "{:?}", engine.host_state.logs);
+
+        // Unknown node
+        let ghost = NodeId::generate();
+        engine.apply_emissions("mine", vec![data_emission(ghost, 0, value.clone())], &mut queue);
+        assert!(!engine.data_cache.contains_key(&ghost));
+        assert!(engine.host_state.logs.iter().any(|(n, _)| *n == ghost));
+
+        // Invalid pins: a data value on a nonexistent pin and an exec pulse on a data pin
+        engine.host_state.logs.clear();
+        let bad = wit::Emission { node: mine.0.as_u64_pair(), outputs: vec![wit::Output::Exec(0), wit::Output::Data((99, encode_value(&value)))] };
+        engine.apply_emissions("mine", vec![bad], &mut queue);
+        assert_eq!(engine.host_state.logs.len(), 2, "{:?}", engine.host_state.logs);
+        assert!(engine.data_cache.is_empty());
+
+        // Valid emission is applied and traced like an execution
+        engine.host_state.logs.clear();
+        engine.apply_emissions("mine", vec![data_emission(mine, 0, value.clone())], &mut queue);
+        assert_eq!(engine.data_cache[&mine][&PinId(0)], value);
+        assert!(engine.executed.iter().any(|t| t.node_id == mine));
+        assert!(engine.host_state.logs.is_empty());
     }
 
     #[test]

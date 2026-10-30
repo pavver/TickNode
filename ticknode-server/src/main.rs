@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(info.settings_error.as_ref().map(|e| e.key.as_str()), Some("test-plugin-error-no-token"));
         // Core and plugin translations arrive with Init
         assert!(translations.iter().any(|(l, t)| l == "uk" && t.contains("node-const-title") && t.contains("node-test-greeter-description")));
-        assert_eq!(info.settings.len(), 3);
+        assert_eq!(info.settings.len(), 4);
         assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: false })));
         assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Hello".into())))));
         assert!(definitions.iter().any(|d| d.type_name == "test/greeter"));

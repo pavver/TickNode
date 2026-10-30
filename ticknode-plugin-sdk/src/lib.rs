@@ -46,10 +46,20 @@
 //! impl Plugin for MyPlugin {
 //!     const NODE_TYPES: &'static [&'static str] = &["my/node"];
 //!     fn manifest() -> PluginManifest { /* ... */ }
-//!     fn create(type_name: &str) -> Option<Box<dyn PluginNode>> { /* ... */ }
+//!     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> { /* ... */ }
 //! }
 //! export_plugin!(MyPlugin);
 //! ```
+//!
+//! # Plugin-level connections and events
+//!
+//! A plugin can own persistent WebSocket connections (capability [`Capability::WebSocket`]):
+//! [`host::ws_connect`] / [`host::ws_send`] / [`host::ws_close`] work from any plugin call
+//! ([`Plugin::configure`], [`Plugin::tick`], node `execute`/`poll`). The host calls [`Plugin::tick`]
+//! once per tick with the connection events ([`WsEvent`]); the plugin answers with [`Emission`]s: outputs
+//! pushed to any of its own nodes, as if that node had executed. A node learns its graph id in
+//! [`Plugin::create`], so the plugin keeps a `NodeId -> state` registry (in a `thread_local!`) to address
+//! emissions. Time can be measured with `std::time::Instant` (WASI clocks).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -59,7 +69,7 @@ use std::collections::BTreeMap;
 
 pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
-    PinDefinition, PinDirection, PinId, PinType, PluginManifest, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
+    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
     UiMessage, fluent_slug as slug,
 };
 
@@ -147,6 +157,48 @@ pub enum Output {
     Exec(PinId),
     /// Value on an output data pin.
     Data(PinId, DataValue),
+}
+
+/// Handle of a plugin-owned WebSocket connection (see [`host::ws_connect`]). Void after the plugin
+/// instance is recreated following a crash.
+pub type WsId = u64;
+
+/// Connection event delivered to [`Plugin::tick`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WsEvent {
+    /// The connection is established.
+    Opened(WsId),
+    /// A text frame was received (binary frames are never delivered).
+    Message(WsId, String),
+    /// The connection ended or could not be opened; carries the reason.
+    Closed(WsId, String),
+}
+
+/// Outputs for one node produced outside of its own `execute`/`poll`: applied by the host as if the
+/// node had executed (exec pulses queue downstream nodes for the next tick, data goes to the node's outputs).
+/// Emissions for foreign or unknown nodes and for invalid pins or values are dropped with an error log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Emission {
+    pub node: NodeId,
+    pub outputs: Vec<Output>,
+}
+
+impl Emission {
+    pub fn new(node: NodeId, outputs: Vec<Output>) -> Self {
+        Self { node, outputs }
+    }
+}
+
+fn node_id_from_wit((hi, lo): (u64, u64)) -> NodeId {
+    NodeId(uuid_from_halves(hi, lo))
+}
+
+fn node_id_to_wit(id: NodeId) -> (u64, u64) {
+    id.0.as_u64_pair()
+}
+
+fn uuid_from_halves(hi: u64, lo: u64) -> ticknode_shared::Uuid {
+    ticknode_shared::Uuid::from_u64_pair(hi, lo)
 }
 
 /// Values of connected input data pins.
@@ -280,7 +332,9 @@ pub trait Plugin: 'static {
     /// All node types provided by the plugin; palette definitions come from `create(type).definition()`.
     const NODE_TYPES: &'static [&'static str];
     fn manifest() -> PluginManifest;
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>>;
+    /// Creates a node; `node` is its graph id (the same id again after the node is recreated following a
+    /// crash). Definitions are read from nodes created with the nil id.
+    fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>>;
     /// Custom plugin data types (structs and enums); node pins can reference them
     /// via `DataType::Named`. The host automatically generates Make/Break nodes for each struct.
     fn types() -> Vec<TypeDefinition> { Vec::new() }
@@ -294,6 +348,11 @@ pub trait Plugin: 'static {
     /// (`thread_local!`). `Err` is shown to the user (translated through its key; the key must start
     /// with the plugin name slug) while the plugin remains loaded. Texts logged here stay English.
     fn configure(_settings: &[(String, DataValue)]) -> Result<(), UiError> { Ok(()) }
+    /// Called once per tick for the whole plugin, even without events (so it can drive timers and
+    /// keep-alives), after finished tasks are delivered and before event sources are polled. `events` are
+    /// the WebSocket events since the previous tick (the host delivers at most 1000 per tick). The returned
+    /// emissions are applied to the plugin's nodes. Runs under the per-call fuel limit.
+    fn tick(_events: Vec<WsEvent>) -> Vec<Emission> { Vec::new() }
 }
 
 /// Looks up a setting value by key.
@@ -371,6 +430,23 @@ pub mod host {
         })
     }
 
+    /// Opens a plugin-owned WebSocket (`ws://` or `wss://`; requires [`Capability::WebSocket`] for the host).
+    /// Returns at once: [`WsEvent::Opened`] (or [`WsEvent::Closed`] if connecting failed) arrives in
+    /// [`Plugin::tick`]. At most 4 connections per plugin.
+    pub fn ws_connect(url: &str, headers: &[(String, String)]) -> Result<WsId, String> {
+        wit_host::ws_connect(url, headers)
+    }
+
+    /// Sends a text frame. Fails if the connection is unknown or already closed.
+    pub fn ws_send(id: WsId, text: &str) -> Result<(), String> {
+        wit_host::ws_send(id, text)
+    }
+
+    /// Closes a connection; no [`WsEvent::Closed`] is delivered for it afterwards.
+    pub fn ws_close(id: WsId) {
+        wit_host::ws_close(id)
+    }
+
     /// Cancels a task belonging to this node. Returns `false` if the task has already finished.
     pub fn cancel(task: TaskId) -> bool {
         wit_host::cancel_task(task)
@@ -406,6 +482,7 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
             capabilities: m.requested_capabilities.into_iter().map(|c| match c {
                 Capability::Http { allowed_domains } => wit::Capability::Http(allowed_domains),
                 Capability::Storage => wit::Capability::Storage,
+                Capability::WebSocket { allowed_hosts } => wit::Capability::Websocket(allowed_hosts),
             }).collect(),
             settings: m.settings.into_iter().map(to_wit_setting).collect(),
         }
@@ -421,17 +498,32 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
     }
 
     fn definitions() -> Vec<wit::NodeDefinition> {
-        P::NODE_TYPES.iter().filter_map(|t| P::create(t)).map(|n| to_wit_definition(n.definition(), n.polls())).collect()
+        P::NODE_TYPES.iter().filter_map(|t| P::create(t, NodeId(ticknode_shared::Uuid::nil()))).map(|n| to_wit_definition(n.definition(), n.polls())).collect()
     }
 
     fn types() -> Vec<wit::TypeDefinition> {
         P::types().into_iter().map(to_wit_type_definition).collect()
     }
 
-    fn create_node(type_name: String) -> Result<wit_nodes::Node, String> {
-        P::create(&type_name)
+    fn create_node(type_name: String, node: wit::NodeId) -> Result<wit_nodes::Node, String> {
+        P::create(&type_name, node_id_from_wit(node))
             .map(|node| wit_nodes::Node::new(NodeHandle(RefCell::new(node))))
             .ok_or_else(|| format!("Unknown node type: {type_name}"))
+    }
+
+    fn plugin_tick(events: Vec<wit::WsEvent>) -> Vec<wit::Emission> {
+        let events = events.into_iter().map(|e| match e {
+            wit::WsEvent::Opened(id) => WsEvent::Opened(id),
+            wit::WsEvent::Message((id, text)) => WsEvent::Message(id, text),
+            wit::WsEvent::Closed((id, reason)) => WsEvent::Closed(id, reason),
+        }).collect();
+        P::tick(events).into_iter().map(|e| wit::Emission {
+            node: node_id_to_wit(e.node),
+            outputs: e.outputs.into_iter().map(|o| match o {
+                Output::Exec(pin) => wit::Output::Exec(pin.0),
+                Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
+            }).collect(),
+        }).collect()
     }
 }
 

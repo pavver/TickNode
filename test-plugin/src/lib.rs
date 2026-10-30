@@ -14,8 +14,70 @@ struct Config {
     token: String,
 }
 
+/// WebSocket probe state: the single connection (opened from the `ws_url` setting in `configure`)
+/// and the graph ids of live `test/ws_probe` nodes (targets of emissions).
+#[derive(Default)]
+struct Ws {
+    id: Option<WsId>,
+    probes: Vec<NodeId>,
+    events: i64,
+}
+
 thread_local! {
     static CONFIG: RefCell<Config> = RefCell::new(Config::default());
+    static WS: RefCell<Ws> = RefCell::new(Ws::default());
+}
+
+/// Plugin-level WebSocket check: the connection belongs to the plugin, `Plugin::tick` feeds incoming
+/// frames to every probe node as an emission (no `execute` involved).
+struct WsProbe {
+    node: NodeId,
+}
+
+impl WsProbe {
+    fn new(node: NodeId) -> Self {
+        if !node.0.is_nil() {
+            WS.with(|w| w.borrow_mut().probes.push(node));
+        }
+        Self { node }
+    }
+}
+
+impl Drop for WsProbe {
+    fn drop(&mut self) {
+        WS.with(|w| w.borrow_mut().probes.retain(|n| *n != self.node));
+    }
+}
+
+impl PluginNode for WsProbe {
+    fn definition(&self) -> NodeDefinition {
+        NodeDefinition {
+            type_name: "test/ws_probe".into(),
+            title: "WebSocket Probe".into(),
+            category: "Test".into(),
+            description: "Echoes through the plugin's WebSocket".into(),
+            help: "The plugin opens a WebSocket to the ws_url setting. A signal on Send sends Text through it. Every received frame is pushed by the plugin to Last (and a signal on Received), the connection state goes to Status.".into(),
+            pins: vec![
+                exec_in(0, "Send"),
+                data_in(1, "Text", DataType::String),
+                exec_out(2, "Received"),
+                data_out(3, "Last", DataType::String),
+                data_out(4, "Status", DataType::String),
+            ],
+        }
+    }
+
+    fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
+        let result = match WS.with(|w| w.borrow().id) {
+            Some(id) => host::ws_send(id, &inputs.string(PinId(1))).map(|()| "sent".to_string()),
+            None => Err("no connection".to_string()),
+        };
+        vec![Output::Data(PinId(4), result.unwrap_or_else(|e| format!("error: {e}")).into())]
+    }
+}
+
+fn ws_emit(outputs: Vec<Output>) -> Vec<Emission> {
+    WS.with(|w| w.borrow().probes.iter().map(|n| Emission::new(*n, outputs.clone())).collect())
 }
 
 /// Emits the current greeting from settings: verifies that the host calls `configure`
@@ -258,13 +320,26 @@ impl PluginNode for PointSink {
 
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] =
-        &["test/bad_source", "test/counter", "test/crash", "test/greeter", "test/point_sink", "test/point_source", "test/storage", "test/ticker"];
+        &["test/bad_source", "test/counter", "test/crash", "test/greeter", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
     /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
     const TRANSLATIONS: &'static [(&'static str, &'static str)] =
         &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
 
     fn configure(settings: &[(String, DataValue)]) -> Result<(), UiError> {
         let token = setting_str(settings, "token").unwrap_or_default().to_string();
+        // Reconnect on every configure (also after the instance is recreated following a crash)
+        let ws_result = WS.with(|w| {
+            let mut w = w.borrow_mut();
+            if let Some(id) = w.id.take() {
+                host::ws_close(id);
+            }
+            match setting_str(settings, "ws_url") {
+                Some(url) => host::ws_connect(url, &[("x-test".to_string(), "1".to_string())])
+                    .map(|id| w.id = Some(id))
+                    .map_err(|e| UiError::new("test-plugin-error-ws", format!("WebSocket: {e}")).arg("reason", e)),
+                None => Ok(()),
+            }
+        });
         CONFIG.with(|c| {
             let mut c = c.borrow_mut();
             c.greeting = setting_str(settings, "greeting").unwrap_or_default().to_string();
@@ -277,8 +352,29 @@ impl Plugin for TestPlugin {
             // A key outside the plugin namespace must be dropped by the host
             "foreign" => Err(UiError::new("node-math-add-title", "Foreign key")),
             "plain" => Err("Plain error".into()),
-            _ => Ok(()),
+            _ => ws_result,
         }
+    }
+
+    fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
+        WS.with(|w| w.borrow_mut().events += events.len() as i64);
+        let mut emissions = Vec::new();
+        for event in events {
+            match event {
+                WsEvent::Opened(_) => emissions.extend(ws_emit(vec![Output::Data(PinId(4), "open".into())])),
+                WsEvent::Message(_, text) => emissions.extend(ws_emit(vec![Output::Data(PinId(3), text.into()), Output::Exec(PinId(2))])),
+                WsEvent::Closed(id, reason) => {
+                    WS.with(|w| {
+                        let mut w = w.borrow_mut();
+                        if w.id == Some(id) {
+                            w.id = None;
+                        }
+                    });
+                    emissions.extend(ws_emit(vec![Output::Data(PinId(4), format!("closed: {reason}").into())]));
+                }
+            }
+        }
+        emissions
     }
 
     fn types() -> Vec<TypeDefinition> {
@@ -295,12 +391,14 @@ impl Plugin for TestPlugin {
     fn manifest() -> PluginManifest {
         PluginManifest::new("test_plugin", "0.1.0", "TickNode")
             .capability(Capability::Storage)
+            .capability(Capability::WebSocket { allowed_hosts: vec!["*".into()] })
             .setting(SettingDefinition::text("greeting", "Greeting").described("What the Greeter node emits").default_value("Hello"))
             .setting(SettingDefinition::secret("token", "Token").described("The plugin rejects an empty token or \"bad\"").required())
             .setting(SettingDefinition::select("mode", "Mode", &[("quiet", "Quiet"), ("loud", "Loud")]).default_value("quiet"))
+            .setting(SettingDefinition::text("ws_url", "WebSocket URL").described("Opened by the plugin for the ws_probe node"))
     }
 
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+    fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> {
         Some(match type_name {
             "test/counter" => Box::new(Counter { step: 1, count: 0 }),
             "test/crash" => Box::new(Crash),
@@ -310,6 +408,7 @@ impl Plugin for TestPlugin {
             "test/point_sink" => Box::new(PointSink),
             "test/storage" => Box::new(Storage),
             "test/ticker" => Box::new(Ticker { polls: 0 }),
+            "test/ws_probe" => Box::new(WsProbe::new(node)),
             _ => return None,
         })
     }

@@ -166,7 +166,7 @@ impl Plugin for StringPlugin {
         }
     }
 
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+    fn create(type_name: &str, _node: NodeId) -> Option<Box<dyn PluginNode>> {
         Op::from_type(type_name).map(|op| Box::new(StringNode(op)) as Box<dyn PluginNode>)
     }
 }

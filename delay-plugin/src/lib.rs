@@ -95,7 +95,7 @@ impl Plugin for DelayPlugin {
         }
     }
 
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+    fn create(type_name: &str, _node: NodeId) -> Option<Box<dyn PluginNode>> {
         let mode = match type_name {
             "delay/queue" => Mode::Queue,
             "delay/ignore" => Mode::Ignore,

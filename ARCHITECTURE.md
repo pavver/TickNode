@@ -37,7 +37,7 @@ flowchart LR
 Time is divided into ticks, 100 ms by default (`TICKNODE_TICK_MS`). One tick:
 
 1. Finished asynchronous tasks (delays, HTTP requests) are delivered to the nodes that started them.
-2. Event sources are polled (clocks, triggers, plugin nodes that declared `polls`).
+2. Every enabled plugin gets one `plugin-tick` call (WebSocket events in, emissions to its nodes out), then event sources are polled (clocks, triggers, plugin nodes that declared `polls`).
 3. The execution queue runs.
 
 ### Two flows
@@ -90,10 +90,11 @@ A pin can be marked as required (every non-optional field of a Make node is). A 
 
 Third-party nodes run only inside WebAssembly components ([`wit/plugin.wit`](wit/plugin.wit)), executed by wasmtime:
 
-- **Isolation.** A plugin gets no network, files or environment by default. It can only ask for **capabilities**: HTTP to listed domains (the host performs the request and does not follow redirects) or a private storage directory.
+- **Isolation.** A plugin gets no network, files or environment by default. It can only ask for **capabilities**: HTTP to listed domains (the host performs the request and does not follow redirects), WebSocket connections to listed hosts, or a private storage directory.
 - **Limits.** Every call into a plugin has a fuel (CPU) and memory budget. A crash or an endless loop recreates the plugin instance; the other nodes are rebuilt from their saved properties and the engine keeps running.
 - **Host-driven async.** Plugins never block: delays and HTTP requests are host tasks whose results arrive in a later tick.
-- **Nodes are resources.** Every node in the graph is a separate resource inside the plugin instance, with its own state.
+- **Nodes are resources.** Every node in the graph is a separate resource inside the plugin instance, with its own state; it is created knowing its graph node id.
+- **Plugin-level connections and events.** A plugin (not a node) can own up to 4 persistent WebSocket connections. The host runs them on its tokio runtime and, once per tick, calls the plugin's `plugin-tick` with the received events (text frames, opened/closed). The plugin answers with *emissions*: outputs for any of its own nodes, applied as if the node had executed. This lets one connection serve many nodes (for example a Home Assistant session). Connections die with the plugin instance (disable, crash); `configure` runs again on the new instance, which reconnects.
 - **Types and settings.** A plugin declares its node types, its data types and a settings schema. Settings are edited in the editor's *Plugins* panel, stored on the server (secrets never leave the server) and passed to the plugin through `configure`.
 - **Enable/disable at runtime.** Disabling a plugin turns its nodes into stubs that keep their properties and connections; enabling it brings them back. A graph that references a missing plugin keeps those nodes as stubs too, so nothing is lost on save.
 

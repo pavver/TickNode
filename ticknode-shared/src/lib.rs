@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+pub use uuid::Uuid;
 use chrono::{NaiveTime, DateTime, Utc};
 use std::time::Duration;
 use std::ops::{Add, Sub, Mul, Div};
@@ -424,6 +424,8 @@ pub enum Capability {
     Http { allowed_domains: Vec<String> },
     /// Plugin's own isolated directory (via the WASI filesystem).
     Storage,
+    /// Persistent `ws://` / `wss://` connections to listed hosts and their subdomains; `*` — any host.
+    WebSocket { allowed_hosts: Vec<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

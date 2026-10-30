@@ -121,7 +121,7 @@ impl Plugin for WeatherPlugin {
         }
     }
 
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+    fn create(type_name: &str, _node: NodeId) -> Option<Box<dyn PluginNode>> {
         (type_name == "http/weather")
             .then(|| Box::new(WeatherNode { url: DEFAULT_URL.into(), pending: None }) as Box<dyn PluginNode>)
     }

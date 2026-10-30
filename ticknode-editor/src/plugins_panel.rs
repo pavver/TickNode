@@ -41,6 +41,8 @@ fn capability_text(c: &Capability) -> String {
         Capability::Http { allowed_domains } if allowed_domains.iter().any(|d| d == "*") => t!("plugins-cap-http-any"),
         Capability::Http { allowed_domains } => t!("plugins-cap-http-domains", domains = allowed_domains.join(", ")),
         Capability::Storage => t!("plugins-cap-storage"),
+        Capability::WebSocket { allowed_hosts } if allowed_hosts.iter().any(|d| d == "*") => t!("plugins-cap-ws-any"),
+        Capability::WebSocket { allowed_hosts } => t!("plugins-cap-ws-hosts", hosts = allowed_hosts.join(", ")),
     }
 }
 

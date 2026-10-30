@@ -9,6 +9,7 @@ mod host;
 mod plugin;
 mod custom_types;
 mod stub;
+mod ws;
 pub mod translations;
 
 pub use host::*;
@@ -61,6 +62,10 @@ pub trait Node: Send + Sync {
     /// A task started by the node via `HostState` (delay, HTTP) has completed.
     /// Called on the completion tick, before executing the queue.
     fn on_task(&mut self, _task: TaskId, _result: TaskResult, _ctx: &mut NodeContext) -> Vec<NodeOutput> { Vec::new() }
+    /// Called at the start of every tick (before `plugin-tick`): a plugin node makes sure its resource exists in
+    /// the current plugin instance, so the plugin knows every live node (and its id) even before the node
+    /// has executed, and again after the instance was recreated following a crash.
+    fn ensure_live(&mut self) {}
     /// Stub node (plugin for this type is unavailable): explanation for the editor. Such a node does not
     /// execute or accept property changes, but preserves pins and properties so the graph can be saved.
     fn unavailable(&self) -> Option<UiMessage> { None }
@@ -695,6 +700,12 @@ impl TickEngine {
             let outputs = node.on_task(task, result, &mut ctx);
             self.apply_outputs(node_id, traced, outputs, &mut next_tick_queue);
         }
+
+        // Plugin-level events (connections) and emissions to the plugins' nodes.
+        for node in self.nodes.values_mut() {
+            node.ensure_live();
+        }
+        self.tick_plugins(&mut next_tick_queue);
 
         let mut fired = Vec::new();
         for (id, node) in self.nodes.iter_mut() {

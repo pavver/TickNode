@@ -1,14 +1,14 @@
-//! Умови ноди Match у стилі комбінатора-вирішувача Factorio. Нода має явні входи
-//! (`MatchInput`: пін, ім'я, тип) і випадки (`MatchCase`): кожен — рядки «вхід  оператор  операнд»,
-//! з'єднані «і» / «або» («і» зв'язує сильніше: `a і b або c` = `(a і b) або c`).
+//! Match node conditions in the style of Factorio's decider combinator. A node has explicit inputs
+//! (`MatchInput`: pin, name, type) and cases (`MatchCase`): each case is a list of "input  operator  operand"
+//! rows joined by "and" / "or" ("and" binds tighter: `a and b or c` = `(a and b) or c`).
 //!
-//! Оператори залежать від типу лівого входу (`ops_for`): для чисел і часу — порівняння, для рядків —
-//! «містить», «починається з», для списків — «містить», «довжина» тощо. Правий операнд — інший вхід
-//! або стала; стала приводиться до типу лівого значення (`text::coerce_to`), тож `"07:30"` порівнюється
-//! з часом як час. Унарні оператори («порожній», «є значення») правого операнда не мають.
+//! Operators depend on the left input's type (`ops_for`): comparisons for numbers and time,
+//! "contains" / "starts with" for strings, "contains" / "length" for lists, etc. The right operand is another
+//! input or a constant; a constant is coerced to the left value's type (`text::coerce_to`), so `"07:30"` is
+//! compared against a time value as time. Unary operators ("is empty", "has value") have no right operand.
 //!
-//! Текстова форма (так зберігається у властивостях ноди, читабельно в git):
-//! вхід — `"1:a:number"`, випадок — `"<пін>: a > 10 and s contains \"on\" or l is_empty"`.
+//! Text representation (stored in node properties, human-readable in git):
+//! input — `"1:a:number"`, case — `"<pin>: a > 10 and s contains \"on\" or l is_empty"`.
 
 use std::cmp::Ordering;
 
@@ -33,7 +33,7 @@ impl CompareOp {
         HasField, NoField, LenEq, LenGt, LenLt, HasValue, NoValue,
     ];
 
-    /// Як зберігати (і набирати).
+    /// Storage (and input) representation.
     pub fn text(self) -> &'static str {
         match self {
             Eq => "=", Ne => "!=", Lt => "<", Le => "<=", Gt => ">", Ge => ">=",
@@ -45,7 +45,7 @@ impl CompareOp {
         }
     }
 
-    /// Як показувати в умові на ноді.
+    /// Display symbol in a condition on a node.
     pub fn symbol(self) -> &'static str {
         match self {
             Eq => "=", Ne => "≠", Lt => "<", Le => "≤", Gt => ">", Ge => "≥",
@@ -57,7 +57,7 @@ impl CompareOp {
         }
     }
 
-    /// Підпис у списку операторів — з урахуванням типу (для часу `<` — «раніше»).
+    /// Label in the operator selector — type-aware (for time, `<` means "earlier").
     pub fn label_for(self, t: &DataType) -> String {
         let time = matches!(t, DataType::Time | DataType::DateTime);
         match self {
@@ -83,12 +83,12 @@ impl CompareOp {
         })
     }
 
-    /// Без правого операнда.
+    /// Whether the operator has no right operand.
     pub fn is_unary(self) -> bool {
         matches!(self, IsEmpty | NotEmpty | IsTrue | IsFalse | HasValue | NoValue)
     }
 
-    /// Тип правого операнда для лівого типу `left` (`None` — оператор унарний).
+    /// Type of the right operand for a left operand of type `left` (`None` if the operator is unary).
     pub fn right_type(self, left: &DataType) -> Option<DataType> {
         if self.is_unary() {
             return None;
@@ -118,7 +118,7 @@ impl CompareOp {
     }
 }
 
-/// Оператори, доречні для лівого входу цього типу (у порядку показу).
+/// Operators applicable to a left input of this type (in display order).
 pub fn ops_for(t: &DataType) -> &'static [CompareOp] {
     match t {
         DataType::Number | DataType::Time | DataType::DateTime | DataType::Duration => &[Eq, Ne, Lt, Le, Gt, Ge, HasValue, NoValue],
@@ -127,13 +127,13 @@ pub fn ops_for(t: &DataType) -> &'static [CompareOp] {
         DataType::Color => &[Eq, Ne, HasValue, NoValue],
         DataType::List(_) => &[Contains, NotContains, IsEmpty, NotEmpty, LenEq, LenGt, LenLt, Eq, Ne, HasValue, NoValue],
         DataType::Object => &[HasField, NoField, IsEmpty, NotEmpty, Eq, Ne, HasValue, NoValue],
-        // Власний тип без реєстру (переліки; структури — через `ops_in`): лише рівність і наявність
+        // Custom type without a registry (enums; structs go through `ops_in`): equality and presence only
         DataType::Named(_) => &[Eq, Ne, HasValue, NoValue],
         DataType::Any => &[Eq, Ne, Lt, Le, Gt, Ge, Contains, NotContains, IsEmpty, NotEmpty, IsTrue, IsFalse, HasValue, NoValue],
     }
 }
 
-/// Як `ops_for`, але структура з реєстру поводиться як об'єкт (`has_field`, `is_empty`…).
+/// Like `ops_for`, but a struct from the registry behaves like an object (`has_field`, `is_empty`, etc.).
 pub fn ops_in(types: &crate::TypeRegistry, t: &DataType) -> &'static [CompareOp] {
     match types.definition_of(t) {
         Some(def) if def.is_struct() => ops_for(&DataType::Object),
@@ -141,7 +141,7 @@ pub fn ops_in(types: &crate::TypeRegistry, t: &DataType) -> &'static [CompareOp]
     }
 }
 
-/// Операнд умови: вхід ноди або стала.
+/// Condition operand: a node input or a constant.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operand {
     Input(String),
@@ -156,7 +156,7 @@ impl Operand {
             Self::Value(DataValue::Number(NumberValue::Int(i))) => i.to_string(),
             Self::Value(DataValue::Number(NumberValue::Float(f))) => f.to_string(),
             Self::Value(DataValue::Bool(b)) => b.to_string(),
-            // Час, тривалість, колір тощо — рядком; при порівнянні рядок приводиться до типу входу
+            // Time, duration, color, etc. are formatted as strings and coerced back to the input type on comparison
             Self::Value(other) => quote(&format_value(other)),
         }
     }
@@ -187,17 +187,17 @@ impl Join {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Condition {
-    /// Як рядок приєднується до попереднього (у першого рядка ігнорується).
+    /// How this row joins with the previous one (ignored on the first row).
     pub join: Join,
     pub left: Operand,
     pub op: CompareOp,
-    /// `None` — для унарних операторів.
+    /// `None` for unary operators.
     pub right: Option<Operand>,
 }
 
 impl Condition {
-    /// Вхід без значення (непід'єднаний і без значення на ноді) — умова не виконується
-    /// (крім «немає значення»). Оператор, що не підходить до типу значення, — теж ні.
+    /// An input without a value (unconnected and without an inline value on the node) does not satisfy
+    /// the condition (except `NoValue`). An operator inapplicable to the value's type also evaluates to false.
     pub fn holds(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> bool {
         let a = self.left.resolve(value_of);
         match self.op {
@@ -242,7 +242,7 @@ fn unary(op: CompareOp, a: &DataValue) -> bool {
     }
 }
 
-/// Порядок для значень одного типу (числа Int/Float — разом).
+/// Ordering for values of the same type (Int/Float numbers are compared together).
 fn ordering(a: &DataValue, b: &DataValue) -> Option<Ordering> {
     match (a, b) {
         (DataValue::Number(x), DataValue::Number(y)) => x.to_f64().partial_cmp(&y.to_f64()),
@@ -255,7 +255,7 @@ fn ordering(a: &DataValue, b: &DataValue) -> Option<Ordering> {
     }
 }
 
-/// Рівність з приведенням `b` до типу `a` (`1` = `1.0`, `"07:30"` = час 07:30).
+/// Equality after coercing `b` to the type of `a` (`1` = `1.0`, `"07:30"` = time 07:30).
 pub fn loosely_equal(a: &DataValue, b: &DataValue) -> bool {
     let b = coerce_to(b.clone(), &a.get_type());
     match ordering(a, &b) {
@@ -292,7 +292,7 @@ fn binary(op: CompareOp, a: &DataValue, b: DataValue) -> bool {
     }
 }
 
-/// Один вихід ноди Match: exec-пін і умови, за яких він спрацьовує (порожні — завжди).
+/// A single output of a Match node: an exec pin and the conditions under which it fires (empty = always).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchCase {
     pub pin: u32,
@@ -314,7 +314,7 @@ impl MatchCase {
         format!("{}: {}", self.pin, body).trim_end().to_string()
     }
 
-    /// Як показувати: `a > 10 і s містить "on"`.
+    /// Human-readable display format using localized operator and join symbols.
     pub fn display(&self) -> String {
         if self.conditions.is_empty() {
             return "завжди".into();
@@ -325,7 +325,7 @@ impl MatchCase {
         }).collect::<Vec<_>>().join(" ")
     }
 
-    /// «Або» груп з «і»-рядків; без умов — завжди.
+    /// Disjunction ("or") of conjunction ("and") groups; empty conditions always match.
     pub fn matches(&self, value_of: impl Fn(&str) -> Option<DataValue>) -> bool {
         if self.conditions.is_empty() {
             return true;
@@ -342,7 +342,7 @@ impl MatchCase {
         any || group
     }
 
-    /// Імена входів, на які посилаються умови.
+    /// Input names referenced by the conditions.
     pub fn inputs(&self) -> impl Iterator<Item = &str> {
         self.conditions.iter().flat_map(|c| std::iter::once(&c.left).chain(c.right.as_ref())).filter_map(|o| match o {
             Operand::Input(name) => Some(name.as_str()),
@@ -350,7 +350,7 @@ impl MatchCase {
         })
     }
 
-    /// Перейменовує вхід в усіх умовах.
+    /// Renames an input across all conditions.
     pub fn rename_input(&mut self, from: &str, to: &str) {
         for c in &mut self.conditions {
             for o in std::iter::once(&mut c.left).chain(c.right.as_mut()) {
@@ -362,8 +362,8 @@ impl MatchCase {
     }
 }
 
-/// Явний вхід ноди Match: вхідний пін даних з ім'ям, на яке посилаються умови.
-/// Тип `Any` — «авто»: вхід приймає будь-що, оператори обираються за фактичним типом.
+/// Explicit input of a Match node: an input data pin with a name referenced by conditions.
+/// Type `Any` means "auto": the input accepts anything, and operators follow the actual connected type.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchInput {
     pub pin: u32,
@@ -371,7 +371,7 @@ pub struct MatchInput {
     pub value_type: DataType,
 }
 
-/// Типи, які можна задати входу Match (назви — як у `input_type_name`).
+/// Types selectable for a Match input (names match `input_type_name`).
 pub const INPUT_TYPES: [&str; 10] = ["any", "number", "string", "bool", "time", "datetime", "duration", "color", "list", "object"];
 
 pub fn input_type_name(t: &DataType) -> String {
@@ -408,7 +408,7 @@ impl MatchInput {
     }
 }
 
-/// Входи старих нод Match (без властивості `inputs`): імена з умов за абеткою, тип Any, піни 1..
+/// Inputs for legacy Match nodes (without an `inputs` property): sorted condition input names, type `Any`, pins `1..`.
 pub fn match_inputs(cases: &[MatchCase]) -> Vec<String> {
     let mut names: Vec<String> = cases.iter().flat_map(|c| c.inputs().map(str::to_string)).collect();
     names.sort();
@@ -613,21 +613,21 @@ mod tests {
             "f" => Some(DataValue::Bool(false)),
             _ => None,
         });
-        // Числа й два входи
+        // Numbers and two inputs
         assert!(holds("n >= 5") && holds("n = m") && holds("n != \"6\"") && !holds("n < \"5\""));
-        // Рядки
+        // Strings
         assert!(holds("s contains \"room\"") && holds("s starts_with \"living\"") && holds("s ends_with \"room\""));
         assert!(holds("s not_contains \"kitchen\"") && holds("s not_empty") && holds("s len_gt 5"));
-        // Час, тривалість — стала-рядок приводиться до типу входу
+        // Time, duration — string constant is coerced to the input type
         assert!(holds("t < \"08:00\"") && holds("t = \"07:30\"") && !holds("t > \"07:30:01\""));
         assert!(holds("d > \"1m\"") && holds("d = 90") && holds("d < \"2m\""));
-        // Списки, об'єкти, логічні
+        // Lists, objects, booleans
         assert!(holds("l contains 5") && holds("l not_contains 7") && holds("l len_eq 2") && !holds("l is_empty"));
         assert!(holds("o has_field \"temp\"") && holds("o no_field \"hum\""));
         assert!(holds("f is_false") && !holds("f is_true"));
-        // Значення немає
+        // Missing value
         assert!(!holds("missing = 0") && !holds("missing != 0") && holds("missing no_value") && holds("n has_value"));
-        // Оператор не до типу — не виконується
+        // Operator inapplicable to type — evaluates to false
         assert!(!holds("n starts_with \"5\"") && !holds("f contains 1"));
     }
 

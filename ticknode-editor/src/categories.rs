@@ -1,6 +1,6 @@
-//! Категорії нод у палітрі: порядок (як у Scratch — події й керування першими), локалізована
-//! назва, колір та іконка. Категорія — рядок із `NodeDefinition::category`; невідомі (з плагінів)
-//! показуються як є, з кольором із запасної палітри.
+//! Node categories in the palette: ordering (Scratch-style — events and control flow first),
+//! localized label, color, and icon. A category is the string from `NodeDefinition::category`;
+//! unknown ones (from plugins) are shown as-is with a color from the fallback palette.
 
 use crate::i18n::t;
 use crate::ui::icons;
@@ -30,14 +30,14 @@ const CATEGORIES: [Category; 13] = [
     cat("Debug", "#A0785A", icons::BUG),
     cat("Test", "#8A96A6", icons::SCIENCE),
 ];
-/// Для категорій плагінів, яких немає в списку.
+/// Fallback colors for plugin categories not listed above.
 const EXTRA_COLORS: [&str; 6] = ["#20A4A4", "#B5651D", "#D6336C", "#7950F2", "#2F9E44", "#1C7ED6"];
 
 fn known(category: &str) -> Option<(usize, &'static Category)> {
     CATEGORIES.iter().enumerate().find(|(_, c)| c.name == category)
 }
 
-/// Порядок категорії в палітрі: відомі — за списком, решта — після них за абеткою.
+/// Category sort rank in the palette: known ones in list order, others after them alphabetically.
 pub fn category_rank(category: &str) -> usize {
     known(category).map_or(CATEGORIES.len(), |(i, _)| i)
 }

@@ -1,4 +1,4 @@
-//! Математичні функції над числами.
+//! Mathematical functions on numbers.
 
 use ticknode_plugin_sdk::*;
 
@@ -22,8 +22,8 @@ impl Op {
         })
     }
 
-    /// (тип, назва, опис, назви аргументів, базовий ID пінів).
-    /// ID пінів: база+0 — In, +1 — Out, +2.. — аргументи, далі — Res.
+    /// (type, title, description, argument names, base pin ID).
+    /// Pin IDs: base+0 — In, +1 — Out, +2.. — arguments, followed by Res.
     fn info(self) -> (&'static str, &'static str, &'static str, &'static [&'static str], u32) {
         match self {
             Op::Sin => ("math/sin", "Sin", "Синус кута (в радіанах)", &["Val"], 0),

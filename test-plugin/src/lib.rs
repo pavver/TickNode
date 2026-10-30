@@ -1,4 +1,4 @@
-//! Плагін для інтеграційних тестів хоста (`ticknode-core/tests/plugins.rs`).
+//! Plugin for host integration tests (`ticknode-core/tests/plugins.rs`).
 
 use std::cell::RefCell;
 
@@ -6,7 +6,7 @@ use ticknode_plugin_sdk::*;
 
 struct TestPlugin;
 
-/// Налаштування плагіна: екземпляр один, тож вони живуть у статичному стані.
+/// Plugin settings: there is a single plugin instance, so settings live in static state.
 #[derive(Default)]
 struct Config {
     greeting: String,
@@ -18,8 +18,8 @@ thread_local! {
     static CONFIG: RefCell<Config> = RefCell::new(Config::default());
 }
 
-/// Видає поточне привітання з налаштувань: перевіряє, що хост викликає `configure`
-/// (зокрема після перестворення екземпляра).
+/// Emits the current greeting from settings: verifies that the host calls `configure`
+/// (including after recreating the plugin instance).
 struct Greeter;
 
 impl PluginNode for Greeter {
@@ -43,7 +43,7 @@ impl PluginNode for Greeter {
     }
 }
 
-/// Лічильник імпульсів: стан у полі ноди, крок — властивість.
+/// Pulse counter: state is held in a node field, step is a property.
 struct Counter {
     step: i64,
     count: i64,
@@ -76,13 +76,13 @@ impl PluginNode for Counter {
         vec![Output::Data(PinId(1), DataValue::Number(NumberValue::Int(self.count)))]
     }
 
-    /// Не джерело подій: хост не має викликати `poll`.
+    /// Not an event source: the host must not call `poll`.
     fn poll(&mut self, _: u64) -> Option<PinId> {
         panic!("poll для ноди без polls")
     }
 }
 
-/// Джерело подій: кожен `poll` спрацьовує й видає кількість опитувань на Polls.
+/// Event source: triggers on every `poll` and outputs the poll count on Polls.
 struct Ticker {
     polls: i64,
 }
@@ -111,7 +111,7 @@ impl PluginNode for Ticker {
     fn polls(&self) -> bool { true }
 }
 
-/// `panic` — паніка, `spin` — нескінченний цикл (має зупинитись лімітом пального).
+/// `panic` — panics, `spin` — infinite loop (must be terminated by the fuel limit).
 struct Crash;
 
 impl PluginNode for Crash {
@@ -140,7 +140,7 @@ impl PluginNode for Crash {
     }
 }
 
-/// Записує вхідний рядок у файл і читає назад (право `Storage`).
+/// Writes the input string to a file and reads it back (`Storage` capability).
 struct Storage;
 
 impl PluginNode for Storage {
@@ -166,7 +166,7 @@ impl PluginNode for Storage {
 const POINT: &str = "test.point";
 const MODE: &str = "test.mode";
 
-/// Видає `test.point` з координатами зі властивостей.
+/// Emits a `test.point` with coordinates from properties.
 struct PointSource {
     x: f64,
     y: f64,
@@ -203,7 +203,7 @@ impl PluginNode for PointSource {
     }
 }
 
-/// Порушник контракту: вихід оголошено як `test.point`, а видається об'єкт чужого типу.
+/// Contract violator: declares output as `test.point`, but emits an object of a foreign type.
 struct BadSource;
 
 impl PluginNode for BadSource {
@@ -223,7 +223,7 @@ impl PluginNode for BadSource {
     }
 }
 
-/// Приймає `test.point` і `test.mode`; видає опис і суму координат.
+/// Accepts `test.point` and `test.mode`; outputs a formatted description and the sum of coordinates.
 struct PointSink;
 
 impl PluginNode for PointSink {

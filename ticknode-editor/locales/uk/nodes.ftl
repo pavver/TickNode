@@ -1,4 +1,4 @@
-# Вбудовані ноди ядра (тексти з NodeDefinition у ticknode-core/src/lib.rs)
+# Built-in core nodes (texts from NodeDefinition in ticknode-core/src/lib.rs)
 
 # const
 node-const-title = Constant

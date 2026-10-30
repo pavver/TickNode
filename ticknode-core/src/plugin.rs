@@ -1,10 +1,10 @@
-//! WASM-плагіни: компоненти wasmtime з контрактом `wit/plugin.wit`.
+//! WASM plugins: wasmtime components implementing the `wit/plugin.wit` contract.
 //!
-//! Один екземпляр компонента (`Store`) на плагін; кожна нода графа — ресурс `node` у ньому,
-//! тож стан ноди живе між викликами. Виклики обмежені пальним і пам'яттю. Якщо плагін
-//! аварійно завершився (trap, вичерпане пальне), екземпляр перестворюється, а ноди відтворюються
-//! з властивостей під час наступного звернення. Нода, що спричинила аварію, зупиняється до зміни
-//! властивостей, щоб не падати щотакту.
+//! One component instance (`Store`) per plugin; each graph node is a `node` resource within it,
+//! so node state persists across calls. Calls are bounded by fuel and memory limits. If a plugin
+//! traps (crash, out of fuel), the instance is recreated and nodes are reconstructed from their
+//! properties on the next call. The node that caused the failure is halted until a property changes
+//! so it does not trap on every tick.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -25,7 +25,7 @@ mod bindings {
 use bindings::exports::ticknode::plugin::nodes::Guest as NodesApi;
 use bindings::ticknode::plugin::types as wit;
 
-/// Бюджет інструкцій на один виклик плагіна (захист від нескінченних циклів).
+/// Instruction budget per plugin call (guards against infinite loops).
 const FUEL_PER_CALL: u64 = 2_000_000_000;
 const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
 
@@ -42,9 +42,9 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-// --- Стан екземпляра плагіна ---
+// --- Plugin instance state ---
 
-/// Права, видані плагіну під час завантаження.
+/// Capabilities granted to the plugin at load time.
 #[derive(Default)]
 struct Grants {
     name: String,
@@ -52,7 +52,7 @@ struct Grants {
     storage_dir: Option<PathBuf>,
 }
 
-/// Нода, яку зараз виконують: їй належать запущені задачі й повідомлення.
+/// Currently executing node: owns spawned tasks and log messages.
 struct CallCtx {
     node_id: NodeId,
     host: HostState,
@@ -131,23 +131,23 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     }
 }
 
-/// `example.com` дозволяє сам домен і його піддомени, але не `evilexample.com`.
+/// `example.com` allows the domain itself and its subdomains, but not `evilexample.com`.
 fn domain_allowed(host: &str, allowed: &str) -> bool {
     allowed == "*" || host == allowed || host.ends_with(&format!(".{}", allowed))
 }
 
-// --- Екземпляр плагіна ---
+// --- Plugin instance ---
 
 struct Runtime {
     pre: bindings::PluginPre<PluginState>,
     grants: Arc<Grants>,
-    /// `None` після аварії: новий екземпляр створюється під час наступного звернення.
+    /// `None` after a trap: a new instance is created on the next call.
     instance: Option<(Store<PluginState>, bindings::Plugin)>,
-    /// Зростає з кожним новим екземпляром; ресурси старих екземплярів недійсні.
+    /// Incremented with each new instance; resources from older instances are invalid.
     generation: u64,
-    /// Налаштування, які треба застосувати до кожного нового екземпляра (`configure`) до відтворення нод.
+    /// Settings to apply to each new instance (`configure`) before recreating nodes.
     settings: Option<Vec<wit::Property>>,
-    /// Відповідь останнього `configure`, викликаного під час створення екземпляра.
+    /// Result of the last `configure` called during instance creation.
     configure_error: Option<String>,
 }
 
@@ -155,7 +155,7 @@ impl Runtime {
     fn instantiate(&mut self) -> wasmtime::Result<u64> {
         if self.instance.is_none() {
             let mut wasi = WasiCtxBuilder::new();
-            // Паніки плагінів (stderr) видно в лозі сервера.
+            // Plugin panics (stderr) are visible in the server log.
             wasi.inherit_stderr();
             if let Some(dir) = &self.grants.storage_dir {
                 wasi.preopened_dir(dir, ".", FsPerms::ReadWrite)?;
@@ -171,7 +171,7 @@ impl Runtime {
             store.limiter(|s| &mut s.limits);
             store.set_fuel(FUEL_PER_CALL)?;
             let plugin = self.pre.instantiate(&mut store)?;
-            // Перестворений після аварії екземпляр спершу отримує налаштування — інакше втратить конфіг
+            // A recreated instance after a crash receives settings first — otherwise it would lose its config
             if let Some(settings) = &self.settings {
                 store.set_fuel(FUEL_PER_CALL)?;
                 self.configure_error = plugin.ticknode_plugin_nodes().call_configure(&mut store, settings)?.err();
@@ -189,8 +189,8 @@ impl Runtime {
         Ok((store, plugin.ticknode_plugin_nodes()))
     }
 
-    /// Запам'ятовує налаштування й застосовує їх: до наявного екземпляра — викликом `configure`,
-    /// а новий отримує їх під час створення. `Err` — відповідь плагіна (або аварія).
+    /// Stores settings and applies them: to an existing instance via `configure`,
+    /// while a new instance receives them upon creation. `Err` is the plugin's response (or a trap).
     fn configure(&mut self, settings: &[(String, DataValue)]) -> Result<(), String> {
         let props: Vec<wit::Property> = settings.iter()
             .map(|(name, value)| wit::Property { name: name.clone(), value: encode_value(value) })
@@ -219,37 +219,37 @@ impl Runtime {
         }
     }
 
-    /// Відкидає екземпляр після аварії. Номер покоління змінюється одразу, щоб ресурси мертвого
-    /// `Store` не потрапили в новий екземпляр (зокрема з `WasmNode::drop`).
+    /// Discards the instance after a trap. The generation number is incremented immediately so resources
+    /// from the dead `Store` are never passed to a new instance (in particular from `WasmNode::drop`).
     fn discard(&mut self) {
         self.instance = None;
         self.generation += 1;
     }
 }
 
-// --- Нода плагіна ---
+// --- Plugin node ---
 
 pub struct WasmNode {
     id: NodeId,
     type_name: String,
     runtime: Arc<Mutex<Runtime>>,
-    /// Ресурс у екземплярі плагіна з номером `generation`; створюється під час першого звернення.
+    /// Resource in the plugin instance with its `generation`; created on first use.
     handle: Option<(u64, ResourceAny)>,
     definition: NodeDefinition,
-    /// Нода — джерело подій (`poll` щотакту). Інші ноди не платять за виклик WASM кожного такту.
+    /// Event source node (`poll` on every tick). Other nodes avoid paying WASM call overhead each tick.
     polls: bool,
     properties: Vec<(String, DataValue)>,
     failed: bool,
 }
 
 enum CallError {
-    /// Аварія екземпляра: його перестворено, нода зупинена.
+    /// Instance trapped: it has been discarded and the node is halted.
     Trap(String),
-    /// Плагін відмовив (напр. невідомий тип ноди).
+    /// Rejected by the plugin (e.g., unknown node type).
     Rejected(String),
 }
 
-/// Коротке пояснення для консолі редактора; повний wasm-backtrace — у лог сервера.
+/// Concise explanation for the editor console; full wasm backtrace goes to the server log.
 fn trap_error(e: wasmtime::Error) -> CallError {
     warn!("Аварія плагіна: {e:?}");
     CallError::Trap(short_error(&e))
@@ -278,8 +278,8 @@ impl WasmNode {
         Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, polls, properties: Vec::new(), failed: false }
     }
 
-    /// Викликає метод ресурсу ноди. Якщо `host` передано, на час виклику він переходить у плагін
-    /// (задачі, логи), а потім повертається назад.
+    /// Calls a method on the node resource. If `host` is passed, it is moved into the plugin for the
+    /// duration of the call (tasks, logs) and restored afterward.
     fn call<R>(
         &mut self,
         mut host: Option<&mut HostState>,
@@ -320,8 +320,8 @@ impl WasmNode {
         result
     }
 
-    /// Значення на виході власного типу-структури мусить мати тег саме цього типу: плагін не може
-    /// видати чужий тип чи безіменний об'єкт під виглядом `Named`.
+    /// A value emitted on a custom struct output pin must carry the tag of that exact type: a plugin
+    /// cannot emit another type or an untyped object disguised as `Named`.
     fn check_output_type(&self, pin: PinId, value: &DataValue) -> Result<(), String> {
         let declared = self.definition.pins.iter()
             .find(|p| p.id == pin && p.direction == PinDirection::Output)
@@ -423,7 +423,7 @@ impl Node for WasmNode {
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        // Значення зберігається одразу: з нього ноду відтворять після перезапуску плагіна.
+        // Store the value immediately: it is used to reconstruct the node after a plugin restart.
         match self.properties.iter_mut().find(|(n, _)| n == name) {
             Some((_, v)) => *v = value.clone(),
             None => self.properties.push((name.to_string(), value.clone())),
@@ -444,37 +444,37 @@ impl Drop for WasmNode {
     fn drop(&mut self) {
         let Some((generation, resource)) = self.handle else { return };
         let mut rt = lock(&self.runtime);
-        // Ресурс живе лише у своєму екземплярі; заради звільнення новий не створюється.
+        // The resource lives only in its own instance; do not instantiate a new one just to drop it.
         if rt.generation == generation && let Some((store, _)) = rt.instance.as_mut() {
             let _ = resource.resource_drop(store);
         }
     }
 }
 
-// --- Завантаження ---
+// --- Loading ---
 
-/// Завантажений плагін: відомий рушію, але його типи зареєстровано лише поки він увімкнений.
+/// Loaded plugin: known to the engine, but its types are registered only while enabled.
 pub(crate) struct PluginSlot {
     manifest: PluginManifest,
     definitions: Vec<(NodeDefinition, bool)>,
     types: Vec<TypeDefinition>,
     runtime: Arc<Mutex<Runtime>>,
     active: bool,
-    /// Відповідь останнього `configure` (помилка налаштувань).
+    /// Result of the last `configure` call (settings error).
     settings_error: Option<String>,
 }
 
-/// Що змінилось у графі після вмикання чи вимикання плагіна.
+/// Graph changes after enabling or disabling a plugin.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct PluginChange {
-    /// Ноди, що стали заглушками (вимкнення) або знову справжніми (вмикання).
+    /// Nodes turned into stubs (on disable) or restored to real nodes (on enable).
     pub replaced: Vec<NodeId>,
-    /// З'єднання, прибрані після відновлення нод (піни змінились).
+    /// Connections removed after restoring nodes (when pins changed).
     pub removed: RemovedConnections,
 }
 
-/// Значення налаштувань для плагіна: збережені, а для відсутніх — типові з маніфесту.
-/// Порожній рядок вважається незаданим значенням.
+/// Effective settings for a plugin: stored values, falling back to manifest defaults for missing ones.
+/// An empty string is treated as unset.
 pub fn effective_settings(manifest: &PluginManifest, stored: &[(String, DataValue)]) -> Vec<(String, DataValue)> {
     manifest.settings.iter().filter_map(|def| {
         let value = stored.iter().find(|(k, v)| *k == def.key && !matches!(v, DataValue::String(s) if s.is_empty())).map(|(_, v)| v.clone());
@@ -482,7 +482,7 @@ pub fn effective_settings(manifest: &PluginManifest, stored: &[(String, DataValu
     }).collect()
 }
 
-/// Перше обов'язкове налаштування без значення.
+/// First required setting that has no value.
 pub fn missing_required(manifest: &PluginManifest, effective: &[(String, DataValue)]) -> Option<String> {
     manifest.settings.iter()
         .find(|d| d.required && !effective.iter().any(|(k, _)| *k == d.key))
@@ -498,11 +498,11 @@ fn named_types(t: &DataType, out: &mut Vec<String>) {
 }
 
 impl TickEngine {
-    /// Завантажує плагін-компонент і реєструє його типи нод (`add_plugin` + `enable_plugin` з
-    /// налаштуваннями за замовчуванням).
+    /// Loads a plugin component and registers its node types (`add_plugin` + `enable_plugin` with
+    /// default settings).
     ///
-    /// `grant` вирішує, які права видати, після читання маніфесту. Право `Storage` дає плагіну
-    /// каталог `storage_root/<name>`; без `storage_root` воно ігнорується.
+    /// `grant` decides which capabilities to grant after reading the manifest. The `Storage` capability
+    /// gives the plugin the `storage_root/<name>` directory; without `storage_root` it is ignored.
     pub fn load_plugin(
         &mut self,
         wasm: &[u8],
@@ -518,7 +518,7 @@ impl TickEngine {
         Ok(manifest)
     }
 
-    /// Компілює плагін і читає маніфест, але не вмикає: типи нод ще не зареєстровано.
+    /// Compiles a plugin and reads its manifest without enabling it: node types are not registered yet.
     pub fn add_plugin(
         &mut self,
         wasm: &[u8],
@@ -533,7 +533,7 @@ impl TickEngine {
             .and_then(bindings::PluginPre::new)
             .map_err(|e| format!("Плагін несумісний з хостом: {e:#}"))?;
 
-        // Маніфест і дефініції читаються з тимчасового екземпляра без прав.
+        // Manifest and definitions are read from a temporary unprivileged instance.
         let mut runtime = Runtime { pre, grants: Arc::default(), instance: None, generation: 0, settings: None, configure_error: None };
         let (manifest, definitions, types) = runtime.api()
             .and_then(|(store, api)| Ok((api.call_manifest(&mut *store)?, api.call_definitions(&mut *store)?, api.call_types(&mut *store)?)))
@@ -593,13 +593,13 @@ impl TickEngine {
         self.plugins.get(name).is_some_and(|p| p.active)
     }
 
-    /// Помилка останнього `configure` («помилка налаштувань»); плагін при цьому лишається завантаженим.
+    /// Error from the last `configure` call ("settings error"); the plugin remains loaded.
     pub fn plugin_settings_error(&self, name: &str) -> Option<String> {
         self.plugins.get(name)?.settings_error.clone()
     }
 
-    /// Вмикає плагін: реєструє його типи, застосовує налаштування (`settings` — уже з типовими
-    /// значеннями, див. `effective_settings`) і перетворює заглушки його типів на справжні ноди.
+    /// Enables a plugin: registers its types, applies settings (`settings` already includes defaults,
+    /// see `effective_settings`), and revives stubs of its types into real nodes.
     pub fn enable_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<PluginChange, String> {
         let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
         if slot.active {
@@ -627,9 +627,9 @@ impl TickEngine {
         Ok(PluginChange { replaced, removed })
     }
 
-    /// Вимикає плагін: його ноди стають заглушками (з'єднання й властивості лишаються), типи
-    /// нод і даних знімаються з реєстрів, екземпляр плагіна звільняється. Якщо типи плагіна
-    /// використовує інший увімкнений плагін, вимкнення відхиляється.
+    /// Disables a plugin: its nodes become stubs (connections and properties are preserved), node
+    /// and data types are unregistered, and the plugin instance is dropped. Rejected if another
+    /// enabled plugin uses this plugin's data types.
     pub fn disable_plugin(&mut self, name: &str) -> Result<PluginChange, String> {
         let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
         if !slot.active {
@@ -675,14 +675,14 @@ impl TickEngine {
         let slot = self.plugins.get_mut(name).expect("плагін щойно знайдено");
         slot.active = false;
         slot.settings_error = None;
-        // Ноди-ресурси вже звільнено при заміні на заглушки; екземпляр більше не потрібен
+        // Node resources were already dropped when replaced with stubs; the instance is no longer needed
         lock(&slot.runtime).discard();
         Ok(PluginChange { replaced, removed: RemovedConnections::default() })
     }
 
-    /// Передає плагіну нові налаштування (`settings` — уже з типовими значеннями). Для вимкненого
-    /// плагіна нічого не робить: налаштування застосуються при вмиканні. `Err` — відповідь плагіна;
-    /// вона ж запам'ятовується як помилка налаштувань.
+    /// Passes new settings to the plugin (`settings` already includes defaults). Does nothing for a
+    /// disabled plugin: settings will be applied when enabled. `Err` is the plugin's response, which
+    /// is also recorded as the settings error.
     pub fn configure_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<(), String> {
         let slot = self.plugins.get(name).ok_or_else(|| format!("Плагін {name} не завантажено"))?;
         if !slot.active {
@@ -699,7 +699,7 @@ impl TickEngine {
     }
 }
 
-// --- Перетворення WIT ↔ ticknode-shared ---
+// --- WIT ↔ ticknode-shared conversion ---
 
 fn encode_value(value: &DataValue) -> wit::Value {
     postcard::to_allocvec(value).expect("DataValue завжди серіалізується")
@@ -751,7 +751,7 @@ fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition {
     }
 }
 
-/// Дефініція й прапорець `polls` (його немає в `NodeDefinition`: це справа хоста, не редактора).
+/// Definition and `polls` flag (not part of `NodeDefinition`: it concerns the host, not the editor).
 fn from_wit_definition(d: wit::NodeDefinition) -> (NodeDefinition, bool) {
     let definition = NodeDefinition {
         type_name: d.type_name,
@@ -833,9 +833,9 @@ mod tests {
         }
     }
 
-    /// Вимкнення плагіна, чиї типи використовує інший увімкнений плагін (у пінах чи полях типів),
-    /// відхиляється. Споживач фіктивний: він ділить екземпляр із test_plugin, бо перевірка читає лише
-    /// дефініції.
+    /// Disabling a plugin whose types are used by another enabled plugin (in pins or type fields)
+    /// is rejected. The consumer is a mock: it shares its runtime with test_plugin because the check
+    /// inspects only definitions.
     #[test]
     fn disabling_is_rejected_while_another_plugin_uses_its_types() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
@@ -859,7 +859,7 @@ mod tests {
         engine.plugins.insert("consumer".into(), consumer_slot(runtime.clone(), vec![], vec![field]));
         assert!(engine.disable_plugin("test_plugin").is_err());
 
-        // Споживач вимкнено — залежності немає
+        // Consumer disabled — no dependency left
         engine.plugins.get_mut("consumer").unwrap().active = false;
         engine.disable_plugin("test_plugin").unwrap();
         assert!(engine.types.get("test.point").is_none());

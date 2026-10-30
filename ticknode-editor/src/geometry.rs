@@ -1,6 +1,6 @@
-//! Геометрія нод у світових координатах. Значення мусять збігатися з `style.css`
-//! (`.node-header`, `.node-props`, `.pins`, `.pin`), бо дроти будуються за обчисленими, а не виміряними
-//! позиціями пінів.
+//! Node geometry in world coordinates. Values must match `style.css`
+//! (`.node-header`, `.node-props`, `.pins`, `.pin`) because wires are routed using computed
+//! rather than DOM-measured pin positions.
 
 use ticknode_shared::condition::{MatchCase, MatchInput};
 use ticknode_shared::{
@@ -10,12 +10,12 @@ use ticknode_shared::{
 
 pub const DU: f64 = 4.0;
 pub const NODE_WIDTH: f64 = 60.0 * DU;
-/// Match ширша: у рядку умови — вхід, оператор і операнд.
+/// Match is wider: each condition row holds an input, an operator, and an operand.
 pub const MATCH_WIDTH: f64 = 100.0 * DU;
 const HEADER_H: f64 = 8.0 * DU;
 const BODY_PAD: f64 = 1.0 * DU;
 pub const ROW_H: f64 = 6.0 * DU;
-/// Висота ноди з одним рядком пінів (або без дефініції).
+/// Height of a node with a single pin row (or without a definition).
 pub const MIN_NODE_HEIGHT: f64 = HEADER_H + 2.0 * BODY_PAD + ROW_H;
 
 pub const MIN_ZOOM: f64 = 0.25;
@@ -39,7 +39,7 @@ impl Camera {
         ((sx - self.x) / self.zoom, (sy - self.y) / self.zoom)
     }
 
-    /// Масштабування з нерухомою точкою під курсором.
+    /// Zooms while keeping the point under the cursor fixed.
     pub fn zoom_at(&self, sx: f64, sy: f64, factor: f64) -> Camera {
         let zoom = (self.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
         let (wx, wy) = self.to_world(sx, sy);
@@ -51,18 +51,18 @@ pub fn pins(def: &NodeDefinition, direction: PinDirection) -> impl Iterator<Item
     def.pins.iter().filter(move |p| p.direction == direction)
 }
 
-/// Властивість, яку видно й можна змінити прямо на ноді (рядок між заголовком і пінами).
-/// Значення входів (`in:*`) показуються біля пінів, випадки Match — окремим блоком.
+/// Property shown and editable directly on the node (a row between the header and pins).
+/// Input values (`in:*`) are rendered next to pins, and Match cases are rendered in their own block.
 pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
     ticknode_shared::text::is_text_type(&value.get_type()) && parse_input_value_property(name).is_none()
 }
 
-/// Скільки рядків властивостей має нода.
+/// Number of inline property rows on a node.
 pub fn prop_rows(properties: &[(String, DataValue)]) -> usize {
     properties.iter().filter(|(n, v)| is_inline_property(n, v)).count()
 }
 
-/// Випадки ноди Match з її властивостей (некоректні рядки пропускаються, як і на сервері).
+/// Match node cases extracted from its properties (invalid entries are skipped, just as on the server).
 pub fn match_cases(properties: &[(String, DataValue)]) -> Vec<MatchCase> {
     match properties.iter().find(|(n, _)| n == "cases").map(|(_, v)| v) {
         Some(DataValue::List { elements, .. }) => elements.iter().filter_map(|e| match e {
@@ -73,7 +73,7 @@ pub fn match_cases(properties: &[(String, DataValue)]) -> Vec<MatchCase> {
     }
 }
 
-/// Явні входи ноди Match (властивість `inputs`).
+/// Explicit inputs of a Match node (`inputs` property).
 pub fn match_inputs_of(properties: &[(String, DataValue)]) -> Vec<MatchInput> {
     match properties.iter().find(|(n, _)| n == "inputs").map(|(_, v)| v) {
         Some(DataValue::List { elements, .. }) => elements.iter().filter_map(|e| match e {
@@ -88,21 +88,21 @@ pub fn node_width(type_name: &str) -> f64 {
     if type_name == "match" { MATCH_WIDTH } else { NODE_WIDTH }
 }
 
-/// Рядків у блоці випадку Match: заголовок (з exec-виходом) + умови (без умов — рядок «завжди»).
+/// Row count in a Match case block: header (with exec output) + conditions (or an "always" row when empty).
 pub fn case_rows(case: &MatchCase) -> usize {
     1 + case.conditions.len().max(1)
 }
 
-/// Розкладка ноди: де стоять піни (y центру рядка від верху ноди) і яка вона заввишки.
-/// Звичайна нода: заголовок, рядки властивостей, рядки пінів (входи зліва, виходи справа).
-/// Match: In, рядки входів, рядок «+ вхід», далі блоки випадків — кожен вихід у заголовку
-/// свого блоку, Else — останній рядок.
+/// Node layout: pin y-offsets (row center from the node top) and total height.
+/// Regular node: header, property rows, pin rows (inputs on the left, outputs on the right).
+/// Match: In, input rows, "+ input" row, then case blocks — each output sits in its block header,
+/// and Else is on the last row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeLayout {
     pub width: f64,
     pub height: f64,
     pub pins_top: f64,
-    /// Верх блоку випадків Match.
+    /// Top offset of the Match cases block.
     pub cases_top: f64,
     inputs: Vec<(PinId, f64)>,
     outputs: Vec<(PinId, f64)>,
@@ -121,7 +121,7 @@ impl NodeLayout {
                 outputs.push((PinId(case.pin), y + ROW_H / 2.0));
                 y += case_rows(&case) as f64 * ROW_H;
             }
-            // Рядок «+ випадок» з виходом Else
+            // "+ case" row with the Else output
             outputs.push((PinId(0), y + ROW_H / 2.0));
             y += ROW_H;
             return Self { width: MATCH_WIDTH, height: y + BODY_PAD, pins_top, cases_top, inputs, outputs };
@@ -136,7 +136,7 @@ impl NodeLayout {
         Self::new(&instance.definition, &instance.model.properties)
     }
 
-    /// Точка під'єднання дроту до піна (центр сокета на краю ноди).
+    /// Wire attachment point for a pin (socket center on the node edge).
     pub fn anchor(&self, pos: Position, pin: PinId, direction: PinDirection) -> Option<(f64, f64)> {
         let (list, x) = match direction {
             PinDirection::Input => (&self.inputs, pos.x as f64),
@@ -146,7 +146,7 @@ impl NodeLayout {
     }
 }
 
-/// Ширина й висота ноди.
+/// Width and height of a node instance.
 pub fn instance_size(instance: &NodeInstance) -> (f64, f64) {
     let l = NodeLayout::of(instance);
     (l.width, l.height)
@@ -156,13 +156,13 @@ pub fn pin_type(def: &NodeDefinition, pin: PinId, direction: PinDirection) -> Op
     pins(def, direction).find(|p| p.id == pin).map(|p| &p.pin_type)
 }
 
-/// Горизонтальна крива Безьє від виходу до входу.
+/// Horizontal cubic Bézier curve from output to input.
 pub fn wire_path((x1, y1): (f64, f64), (x2, y2): (f64, f64)) -> String {
     let dx = ((x2 - x1).abs() / 2.0).max(10.0 * DU);
     format!("M {x1} {y1} C {} {y1}, {} {y2}, {x2} {y2}", x1 + dx, x2 - dx)
 }
 
-/// CSS-колір піна за типом.
+/// CSS color of a pin by its type.
 pub fn pin_color(types: &TypeRegistry, pin_type: &PinType) -> String {
     match pin_type {
         PinType::Exec => "var(--text-primary)".to_string(),
@@ -170,8 +170,8 @@ pub fn pin_color(types: &TypeRegistry, pin_type: &PinType) -> String {
     }
 }
 
-/// Колір типу даних: власні типи беруть `color` зі свого визначення, інакше — стабільний колір
-/// із хешу назви.
+/// Color of a data type: custom types use `color` from their definition, falling back to a
+/// deterministic color hashed from the type name.
 pub fn type_color(types: &TypeRegistry, t: &DataType) -> String {
     match t {
         DataType::Named(name) => types.get(name)
@@ -182,12 +182,12 @@ pub fn type_color(types: &TypeRegistry, t: &DataType) -> String {
     }
 }
 
-/// `#rrggbb` — лише такий колір потрапляє в CSS (визначення приходять від плагінів).
+/// Only `#rrggbb` colors are allowed into CSS (definitions come from plugins).
 fn is_hex_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
 }
 
-/// Колір за хешем назви (FNV-1a → відтінок).
+/// Deterministic color from a name hash (FNV-1a → hue).
 fn hash_color(name: &str) -> String {
     let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
     format!("hsl({} 55% 55%)", (hash >> 16) % 360)
@@ -260,10 +260,10 @@ mod tests {
         let layout = NodeLayout::new(&d, &[("cases".into(), cases)]);
         let y = |pin| layout.anchor(Position::default(), PinId(pin), PinDirection::Output).unwrap().1;
         let top = layout.cases_top;
-        // In, вхід, «+ вхід»
+        // In, input, "+ input"
         assert_eq!(top, layout.pins_top + 3.0 * ROW_H);
         assert_eq!(y(3), top + ROW_H / 2.0);
-        // Випадок 3: заголовок + 2 умови; випадок 7: заголовок + «завжди»
+        // Case 3: header + 2 conditions; case 7: header + "always"
         assert_eq!(y(7), top + 3.0 * ROW_H + ROW_H / 2.0);
         assert_eq!(y(0), top + 5.0 * ROW_H + ROW_H / 2.0);
         assert_eq!(layout.height, top + 6.0 * ROW_H + BODY_PAD);

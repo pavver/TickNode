@@ -1,8 +1,8 @@
-//! Плагіни на сервері: пошук `data/plugins/*.wasm`, стан «увімкнено / вимкнено / помилка» і
-//! налаштування, що зберігаються у `data/plugin-config/<назва>.json` (там можуть бути секрети:
-//! файл пишеться з правами 0600, а в редактор секрети не надсилаються).
+//! Server-side plugins: discovering `data/plugins/*.wasm`, tracking "enabled / disabled / error" state,
+//! and persisting settings in `data/plugin-config/<name>.json` (which may contain secrets:
+//! files are written with mode 0600, and secrets are never sent to the editor).
 //!
-//! Плагін без файлу конфігурації вважається увімкненим з налаштуваннями за замовчуванням.
+//! A plugin without a config file is treated as enabled with default settings.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -13,7 +13,7 @@ use ticknode_core::{PluginChange, TickEngine, effective_settings};
 use ticknode_shared::*;
 use tracing::{info, warn};
 
-/// Збережений стан одного плагіна.
+/// Persisted state of a single plugin.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PluginConfig {
     pub enabled: bool,
@@ -30,16 +30,16 @@ impl Default for PluginConfig {
 struct Entry {
     file: String,
     config: PluginConfig,
-    /// Не завантажився, не ввімкнувся чи пошкоджений файл конфігурації.
+    /// Failed to load, failed to enable, or has a corrupted config file.
     error: Option<String>,
-    /// Компонент завантажено в рушій (є маніфест).
+    /// Component is loaded into the engine (manifest is available).
     loaded: bool,
-    /// Для плагінів, що не завантажились (маніфесту немає).
+    /// Fallback metadata for plugins that failed to load (no manifest).
     version: String,
     author: String,
 }
 
-/// Результат вмикання/вимкнення: зміни графа й необов'язкове попередження ініціатору.
+/// Result of enabling/disabling a plugin: graph changes and an optional warning for the initiator.
 pub struct Outcome {
     pub change: PluginChange,
     pub warning: Option<String>,
@@ -79,7 +79,7 @@ impl Plugins {
         write_private(&self.config_dir, &self.config_path(name), &(serde_json::to_string_pretty(config)? + "\n"))
     }
 
-    /// Знаходить `*.wasm`, читає маніфести й вмикає плагіни, які не вимкнені в конфігурації.
+    /// Discovers `*.wasm` files, reads manifests, and enables plugins that are not disabled in config.
     pub fn load_all(&mut self, engine: &mut TickEngine) {
         let Ok(dir) = std::fs::read_dir(&self.plugins_dir) else { return };
         let mut paths: Vec<_> = dir.filter_map(|e| e.ok().map(|e| e.path())).collect();
@@ -134,7 +134,7 @@ impl Plugins {
         let manifest = engine.plugin_manifest(name).filter(|_| entry.loaded);
         let settings = manifest.map(|m| m.settings.clone()).unwrap_or_default();
         let effective = manifest.map(|m| effective_settings(m, &stored(&entry.config))).unwrap_or_default();
-        // Секрет у повідомлення не потрапляє ніколи: лише чи задано
+        // Secrets never leave the server: only whether each secret is set
         let values = settings.iter().map(|def| {
             let value = effective.iter().find(|(k, _)| *k == def.key).map(|(_, v)| v.clone());
             let view = match (def.is_secret(), value) {
@@ -165,7 +165,7 @@ impl Plugins {
         })
     }
 
-    /// Вмикає чи вимикає плагін на льоту. `Err` — відмова (залежності, конфлікт типів): стан не змінено.
+    /// Enables or disables a plugin on the fly. Returns `Err` on rejection (dependencies, type conflicts) without changing state.
     pub fn set_enabled(&mut self, engine: &mut TickEngine, name: &str, enabled: bool) -> Result<Outcome, String> {
         let entry = self.entries.get(name).ok_or_else(|| format!("Плагін {name} не знайдено"))?;
         if !entry.loaded {
@@ -180,7 +180,7 @@ impl Plugins {
                 match engine.enable_plugin(name, &settings) {
                     Ok(change) => change,
                     Err(e) => {
-                        // Стан «помилка» лишається видимим у панелі, доки вмикання не вдасться
+                        // Keep the error state visible in the panel until enabling succeeds
                         self.entries.get_mut(name).expect("запис щойно знайдено").error = Some(e.clone());
                         return Err(e);
                     }
@@ -201,14 +201,14 @@ impl Plugins {
         Ok(Outcome { change, warning })
     }
 
-    /// Зберігає налаштування й передає їх плагіну (якщо він увімкнений). Відповідь `configure`
-    /// не є помилкою цієї дії: вона лишається в `PluginInfo::settings_error`.
+    /// Saves settings and applies them to the plugin (if enabled). A `configure` rejection
+    /// is not an error of this action: it is recorded in `PluginInfo::settings_error`.
     pub fn configure(&mut self, engine: &mut TickEngine, name: &str, values: Vec<(String, SettingUpdate)>) -> Result<(), String> {
         let entry = self.entries.get(name).ok_or_else(|| format!("Плагін {name} не знайдено"))?;
         let manifest = engine.plugin_manifest(name).filter(|_| entry.loaded).cloned()
             .ok_or_else(|| format!("Плагін {name} не завантажено"))?;
         let mut config = entry.config.clone();
-        // Пошкоджена конфігурація замінюється цим збереженням
+        // Overwrite a corrupted config file when saving new settings
         if entry.error.as_deref().is_some_and(|e| e.starts_with("Конфігурація плагіна пошкоджена")) {
             config = PluginConfig { enabled: false, ..PluginConfig::default() };
         }
@@ -242,7 +242,7 @@ fn stored(config: &PluginConfig) -> Vec<(String, DataValue)> {
     config.settings.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 }
 
-/// Атомарний запис (tmp + rename) з правами 0600: у файлі можуть бути токени.
+/// Atomic write (tmp + rename) with mode 0600: the file may contain tokens.
 fn write_private(dir: &Path, path: &Path, contents: &str) -> anyhow::Result<()> {
     use std::io::Write;
     std::fs::create_dir_all(dir).with_context(|| format!("не вдалось створити {}", dir.display()))?;
@@ -286,10 +286,10 @@ mod tests {
             let mode = std::fs::metadata(plugins.config_path("p")).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600);
         }
-        // Повторний запис не лишає тимчасових файлів
+        // Rewriting leaves no leftover temp files
         plugins.write_config("p", &config).unwrap();
         assert_eq!(std::fs::read_dir(dir.path().join("plugin-config")).unwrap().count(), 1);
-        // Без файлу — увімкнений з типовими налаштуваннями
+        // Missing file defaults to enabled with default settings
         assert_eq!(plugins.read_config("none").unwrap(), PluginConfig::default());
     }
 }

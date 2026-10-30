@@ -1,9 +1,9 @@
-//! Інтеграційні тести WASM-плагінів. Потрібні зібрані компоненти:
+//! Integration tests for WASM plugins. Requires built components:
 //! `cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin`.
-//! Якщо файлу немає, тест пропускається з повідомленням (а з `TICKNODE_REQUIRE_PLUGINS=1` — падає).
+//! If a binary is missing, the test is skipped with a message (or fails when `TICKNODE_REQUIRE_PLUGINS=1`).
 //!
-//! Тести не асинхронні навмисно: синхронний wasmtime-wasi не можна викликати всередині tokio-задачі,
-//! тому рушій, як і на сервері, працює поза runtime, а runtime передається для HTTP.
+//! Tests are intentionally non-async: synchronous wasmtime-wasi cannot be called inside a tokio task,
+//! so the engine, as on the server, runs outside the runtime while a runtime handle is passed for HTTP.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -62,7 +62,7 @@ fn manifest_and_definitions_are_registered() {
     let names: Vec<_> = pow.pins.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["In", "Base", "Exp", "Out", "Res"]);
 
-    // Повторне завантаження не може перехопити вже зареєстровані типи.
+    // Reloading cannot hijack already registered types.
     assert!(engine.load_plugin(&bytes, None, |_| vec![]).is_err());
 }
 
@@ -115,7 +115,7 @@ fn delay_queue_fires_after_delay() {
     let Some(mut engine) = engine_with("delay_plugin", vec![]) else { return };
     let delay = NodeId::generate();
     engine.create_node(delay, "delay/queue", &[]).unwrap();
-    // 500 мс при такті 100 мс — 5 тактів.
+    // 500 ms at 100 ms per tick is 5 ticks.
     constant(&mut engine, number(500), delay, 2);
     let next = sink(&mut engine, delay, 1);
 
@@ -141,7 +141,7 @@ fn delay_nodes_keep_their_own_state() {
     engine.create_node(reset, "delay/reset", &[]).unwrap();
     constant(&mut engine, number(300), reset, 22);
 
-    // Повторні імпульси: Ignore тримає одну задачу, Reset замінює свою.
+    // Repeated impulses: Ignore keeps a single task, Reset replaces its own.
     for _ in 0..3 {
         engine.trigger_node(ignore, PinId(10));
         engine.trigger_node(reset, PinId(20));
@@ -165,7 +165,7 @@ fn removing_plugin_node_cancels_tasks() {
     assert!(engine.host_state.active_tasks.is_empty());
 }
 
-/// Одноразовий HTTP-сервер, що відповідає `body`. Приймач отримує рядок запиту (`GET /… HTTP/1.1`).
+/// One-shot HTTP server responding with `body`. The receiver gets the request line (`GET /… HTTP/1.1`).
 fn serve_once(body: &'static str) -> (u16, std::sync::mpsc::Receiver<String>) {
     serve_raw(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body))
 }
@@ -207,7 +207,7 @@ fn weather_plugin_makes_http_request() {
     let url = format!("http://127.0.0.1:{port}/weather?city={{city}}");
     engine.create_node(weather, "http/weather", &[("url".into(), DataValue::String(url.clone()))]).unwrap();
     assert_eq!(engine.node_model(weather).unwrap().properties, vec![("url".into(), DataValue::String(url))]);
-    // Місто кодується в URL і не додає параметрів запиту
+    // City is URL-encoded and does not inject extra query parameters
     constant(&mut engine, DataValue::String("Lviv&units=imperial".into()), weather, 1);
     let success = sink(&mut engine, weather, 2);
 
@@ -224,7 +224,7 @@ fn http_redirects_are_not_followed() {
     let Some(mut engine) = engine_with("http_weather_plugin", vec![Capability::Http { allowed_domains: vec!["127.0.0.1".into()] }]) else { return };
     engine.host_state.runtime = Some(runtime.handle().clone());
 
-    // Перенаправлення на хост без дозволу (localhost) — нода отримує 3xx, а не відповідь цілі
+    // Redirect to an unpermitted host (localhost) — the node receives 3xx rather than the target response
     let (target, target_requests) = serve_once("1,Hacked");
     let (port, _) = serve_raw(format!("HTTP/1.1 302 Found\r\nLocation: http://localhost:{target}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
     let weather = NodeId::generate();
@@ -240,7 +240,7 @@ fn http_redirects_are_not_followed() {
 #[test]
 fn http_outside_granted_domains_is_denied() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    // Право лише на example.com — запит на 127.0.0.1 відхиляється одразу.
+    // Only example.com is allowed — a request to 127.0.0.1 is rejected immediately.
     let Some(mut engine) = engine_with("http_weather_plugin", vec![Capability::Http { allowed_domains: vec!["example.com".into()] }]) else { return };
     engine.host_state.runtime = Some(runtime.handle().clone());
 
@@ -270,17 +270,17 @@ fn assert_recovers(trigger_pin: u32, reason: &str) {
     engine.tick();
     assert_eq!(output(&engine, counter, 1), Some(number(5)));
 
-    // Аварія не валить рушій: помилка йде в консоль ноди.
+    // A crash does not bring down the engine: the error is logged to the node's console.
     engine.trigger_node(crash, PinId(trigger_pin));
     engine.tick();
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Аварія плагіна") && m.contains(reason)), "{:?}", engine.host_state.logs);
 
-    // Екземпляр перестворено: лічильник відтворено з властивостей (крок 5), стан почався заново.
+    // Instance recreated: counter is reconstructed from properties (step 5) with fresh state.
     engine.trigger_node(counter, PinId(0));
     engine.tick();
     assert_eq!(output(&engine, counter, 1), Some(number(5)));
 
-    // Нода-винуватець зупинена, доки її не переналаштують.
+    // The offending node remains halted until reconfigured.
     engine.host_state.logs.clear();
     engine.trigger_node(crash, PinId(trigger_pin));
     engine.tick();
@@ -290,13 +290,13 @@ fn assert_recovers(trigger_pin: u32, reason: &str) {
 #[test]
 fn removing_node_after_crash_does_not_touch_new_instance() {
     let Some((mut engine, counter, crash)) = crash_setup() else { return };
-    // Обидві ноди мають ресурси в першому екземплярі
+    // Both nodes hold resources in the first instance
     engine.trigger_node(counter, PinId(0));
     engine.trigger_node(crash, PinId(0));
     engine.tick();
     engine.tick();
 
-    // Екземпляр мертвий; видалення ноди не має ні створювати новий, ні передавати йому старий ресурс
+    // Instance is dead; removing a node must neither create a new instance nor pass it a stale resource
     engine.remove_node(crash);
     engine.remove_node(counter);
     let counter = NodeId::generate();
@@ -316,7 +316,7 @@ fn only_polling_plugin_nodes_are_polled() {
     for _ in 0..3 {
         engine.tick();
     }
-    // `poll` ticker'а рахує виклики; counter не опитується (його `poll` панікує)
+    // Ticker's `poll` counts calls; counter is not polled (its `poll` panics)
     assert_eq!(output(&engine, ticker, 1), Some(number(3)));
     assert!(engine.host_state.logs.is_empty(), "{:?}", engine.host_state.logs);
 }
@@ -366,7 +366,7 @@ fn storage_without_grant_is_unavailable() {
     assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
 }
 
-// --- Власні типи даних ---
+// --- Custom data types ---
 
 fn point_type() -> DataType {
     DataType::Named("test.point".into())
@@ -393,7 +393,7 @@ fn plugin_types_are_registered_with_make_and_break_nodes() {
     let brk = engine.registry.get_definition("type/break/test.point").unwrap();
     assert!(!brk.help.is_empty());
     assert!(brk.pins.iter().any(|p| p.id == PinId(0) && p.direction == PinDirection::Input));
-    // Для переліку Make/Break не створюються
+    // Make/Break nodes are not generated for enums
     assert!(engine.registry.get_definition("type/make/test.mode").is_none());
 }
 
@@ -413,7 +413,7 @@ fn type_conflicts_and_unknown_types_are_rejected() {
     let bad_name = TypeDefinition::new_enum("nodot", "X", &[("a", "A")]);
     assert!(engine.register_types(&[bad_name], &[]).is_err());
 
-    // Пін ноди з невідомим типом
+    // Node pin referencing an unknown type
     let node = NodeDefinition {
         type_name: "other/node".into(),
         title: "N".into(),
@@ -425,13 +425,13 @@ fn type_conflicts_and_unknown_types_are_rejected() {
     let err = engine.register_types(&[], &[node]).unwrap_err();
     assert!(err.contains("nope.type"), "{err}");
 
-    // Поле може посилатись на тип, оголошений раніше
+    // A field may reference a previously registered type
     let nested = TypeDefinition::new_struct("other.nested", "Nested", vec![FieldDefinition::new("p", "P", point_type())]);
     engine.register_types(&[nested], &[]).unwrap();
     assert!(engine.registry.get_definition("type/make/other.nested").is_some());
     assert_eq!(engine.registry.get_definitions().len(), before + 2);
 
-    // Невдала спроба нічого не лишила
+    // Failed attempt left no partial state behind
     assert!(engine.types.get("other.thing").is_none());
 }
 
@@ -451,15 +451,15 @@ fn pin_compatibility_respects_named_types() {
     let debug = NodeId::generate();
     engine.create_node(debug, "test/debug", &[]).unwrap();
 
-    // Named -> Named (та сама), Named -> Any, Named -> Object
+    // Named -> Named (same), Named -> Any, Named -> Object
     engine.connect_data(make, PinId(0), brk, PinId(0)).unwrap();
     engine.connect_data(make, PinId(0), sink, PinId(1)).unwrap();
     engine.connect_data(make, PinId(0), debug, PinId(1)).unwrap();
     engine.connect_data(make, PinId(0), get_field, PinId(0)).unwrap();
-    // Object -> Named відхиляється (строга типізація)
+    // Object -> Named is rejected (strict typing)
     assert!(matches!(engine.connect_data(object, PinId(0), brk, PinId(0)), Err(EngineError::TypeMismatch(..))));
     assert!(matches!(engine.connect_data(object, PinId(0), sink, PinId(1)), Err(EngineError::TypeMismatch(..))));
-    // Інший Named тип і рядок -> перелік
+    // Different Named type and String -> Enum
     assert!(engine.connect_data(make, PinId(0), sink, PinId(2)).is_err());
     let text = NodeId::generate();
     engine.create_node(text, "const", &[("value".into(), DataValue::String("auto".into()))]).unwrap();
@@ -473,7 +473,7 @@ fn pin_compatibility_respects_named_types() {
 #[test]
 fn enum_pin_to_string_is_allowed() {
     let Some(mut engine) = engine_with("test_plugin", vec![]) else { return };
-    // Break не має виходу-переліку, тож перевіряємо правило напряму через реєстр типів
+    // Break has no enum output, so test the rule directly through the type registry
     assert!(engine.types.compatible(&mode_type(), &DataType::String));
     assert!(!engine.types.compatible(&DataType::String, &mode_type()));
     assert!(engine.types.compatible(&point_type(), &DataType::Object));
@@ -495,7 +495,7 @@ fn make_and_break_roundtrip_through_plugin_nodes() {
     let make = NodeId::generate();
     engine.create_node(make, "type/make/test.point", &[]).unwrap();
     engine.connect_data(brk, PinId(1), make, PinId(1)).unwrap();
-    // y — значення прямо на ноді, label — необов'язкове, але задане
+    // y is an inline value on the node; label is optional but provided
     engine.set_input_value(make, PinId(2), Some(number(1))).unwrap();
     engine.set_input_value(make, PinId(3), Some(DataValue::String("hi".into()))).unwrap();
 
@@ -510,7 +510,7 @@ fn make_and_break_roundtrip_through_plugin_nodes() {
     assert_eq!(output(&engine, sink, 3), Some(DataValue::String("manual:5,1:hi".into())));
     assert_eq!(output(&engine, sink, 4), Some(number(6)));
 
-    // Значення теговане
+    // Value is tagged
     let made = engine.pure_cache.get(&make).and_then(|m| m.get(&PinId(0))).cloned()
         .or_else(|| engine.executed.iter().find(|t| t.node_id == make).and_then(|t| t.outputs.first().map(|(_, v)| v.clone())));
     assert_eq!(made.map(|v| v.get_type()), Some(point_type()));
@@ -527,7 +527,7 @@ fn break_skips_missing_optional_field() {
     engine.trigger_node(source, PinId(0));
     engine.tick();
 
-    // Break обчислюється на запит; label у точки немає
+    // Break evaluates on demand; the point has no label
     let probe = NodeId::generate();
     engine.create_node(probe, "test/debug", &[]).unwrap();
     engine.connect_data(brk, PinId(3), probe, PinId(1)).unwrap();
@@ -548,9 +548,9 @@ fn enum_input_values_are_validated() {
     engine.set_input_value(sink, PinId(2), Some(DataValue::String("auto".into()))).unwrap();
     assert!(matches!(engine.set_input_value(sink, PinId(2), Some(DataValue::String("bogus".into()))), Err(EngineError::TypeMismatch(..))));
     assert!(engine.set_input_value(sink, PinId(2), Some(number(1))).is_err());
-    // Структуру на ноді не задати
+    // A struct cannot be set inline on a node
     assert!(engine.set_input_value(sink, PinId(1), Some(DataValue::String("x".into()))).is_err());
-    // Значення пережило відхилені спроби
+    // Value survived rejected attempts
     let model = engine.node_model(sink).unwrap();
     assert!(model.properties.contains(&("in:2".to_string(), DataValue::String("auto".into()))));
 }
@@ -578,7 +578,7 @@ fn graph_with_named_nodes_survives_save_and_load() {
     engine.connect_data(make, PinId(0), sink, PinId(1)).unwrap();
     engine.set_input_value(sink, PinId(2), Some(DataValue::String("auto".into()))).unwrap();
 
-    // Через JSON, як на диску
+    // Roundtrip through JSON, as stored on disk
     let json = serde_json::to_string_pretty(&engine.export_graph()).unwrap();
     let graph: GraphModel = serde_json::from_str(&json).unwrap();
     let mut restored = new_engine();
@@ -591,14 +591,14 @@ fn graph_with_named_nodes_survives_save_and_load() {
     restored.tick();
     assert_eq!(output(&restored, sink, 3), Some(DataValue::String("auto:2,3".into())));
 
-    // Без плагіна нода типу не губиться: заглушка зберігає тип, властивості й з'єднання
+    // Without the plugin, the typed node is not lost: a stub preserves its type, properties, and connections
     let mut bare = TickEngine::new();
     assert!(bare.load_graph(&graph).is_empty());
     assert_eq!(bare.export_graph(), graph);
     assert!(bare.node_unavailable(source).is_some());
 }
 
-// --- Обов'язкові входи ---
+// --- Required inputs ---
 
 #[test]
 fn make_requires_its_required_fields() {
@@ -614,7 +614,7 @@ fn make_requires_its_required_fields() {
     engine.connect_data(make, PinId(0), probe, PinId(1)).unwrap();
     engine.set_input_value(make, PinId(1), Some(number(1))).unwrap();
 
-    // Не задано y: значення немає, у лозі одна помилка (не щотакту)
+    // y is unset: no output value, one error logged (not repeated every tick)
     for _ in 0..3 {
         engine.trigger_node(probe, PinId(0));
         engine.tick();
@@ -625,7 +625,7 @@ fn make_requires_its_required_fields() {
     let trace = engine.executed.iter().find(|t| t.node_id == probe).unwrap();
     assert_eq!(trace.inputs, vec![(PinId(1), None)]);
 
-    // Усе задано: тегований об'єкт без необов'язкового поля
+    // All required fields set: tagged object without the optional field
     engine.set_input_value(make, PinId(2), Some(number(2))).unwrap();
     engine.trigger_node(probe, PinId(0));
     engine.tick();
@@ -634,7 +634,7 @@ fn make_requires_its_required_fields() {
     assert_eq!(type_name.as_deref(), Some("test.point"));
     assert_eq!(fields.keys().map(String::as_str).collect::<Vec<_>>(), ["x", "y"]);
 
-    // Необов'язкове поле, якщо задане, з'являється
+    // Optional field appears once provided
     engine.set_input_value(make, PinId(3), Some(DataValue::String("a".into()))).unwrap();
     engine.trigger_node(probe, PinId(0));
     engine.tick();
@@ -649,7 +649,7 @@ fn connected_source_without_value_skips_silently() {
     let make = NodeId::generate();
     engine.create_node(make, "type/make/test.point", &[]).unwrap();
     let source = NodeId::generate();
-    engine.create_node(source, "test/counter", &[]).unwrap(); // Count ще не мав значення
+    engine.create_node(source, "test/counter", &[]).unwrap(); // Count has no value yet
     engine.connect_data(source, PinId(1), make, PinId(1)).unwrap();
     engine.set_input_value(make, PinId(2), Some(number(2))).unwrap();
     let probe = NodeId::generate();
@@ -684,7 +684,7 @@ fn foreign_tagged_object_on_named_output_is_rejected() {
     assert_eq!(output(&engine, bad, 1), None);
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == bad && m.contains("other.type")), "{:?}", engine.host_state.logs);
 
-    // Чесний вихід того ж типу проходить і несе тег
+    // A valid output of the declared type passes through with its tag intact
     let good = NodeId::generate();
     engine.create_node(good, "test/point_source", &[]).unwrap();
     engine.trigger_node(good, PinId(0));
@@ -692,7 +692,7 @@ fn foreign_tagged_object_on_named_output_is_rejected() {
     assert_eq!(output(&engine, good, 1).map(|v| v.get_type()), Some(point_type()));
 }
 
-// --- Налаштування плагіна (configure) ---
+// --- Plugin settings (configure) ---
 
 fn test_settings(greeting: &str, token: &str) -> Vec<(String, DataValue)> {
     vec![
@@ -701,7 +701,7 @@ fn test_settings(greeting: &str, token: &str) -> Vec<(String, DataValue)> {
     ]
 }
 
-/// Рушій з вимкненим (завантаженим, але не ввімкненим) test_plugin.
+/// Engine with test_plugin loaded but disabled.
 fn engine_with_disabled_test_plugin() -> Option<TickEngine> {
     let bytes = plugin_bytes("test_plugin")?;
     let mut engine = TickEngine::new();
@@ -723,7 +723,7 @@ fn manifest_has_settings_schema() {
     assert_eq!(keys, [("greeting", false), ("token", true), ("mode", false)]);
     assert_eq!(manifest.settings[0].default, Some(DataValue::String("Hello".into())));
     assert!(matches!(&manifest.settings[2].kind, SettingKind::Select(o) if o.len() == 2));
-    // Додано, але не ввімкнено: типи ще не зареєстровано
+    // Added but not enabled: types are not registered yet
     assert!(!engine.plugin_active("test_plugin"));
     assert!(engine.registry.get_definition("test/greeter").is_none());
 }
@@ -733,7 +733,7 @@ fn configure_is_called_and_its_error_is_reported() {
     let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
     let manifest = engine.plugin_manifest("test_plugin").unwrap().clone();
 
-    // Увімкнення без токена: configure відхиляє, але плагін працює
+    // Enabling without token: configure rejects it, but the plugin remains operational
     let defaults = effective_settings(&manifest, &[]);
     engine.enable_plugin("test_plugin", &defaults).unwrap();
     assert_eq!(engine.plugin_settings_error("test_plugin").as_deref(), Some("token не задано"));
@@ -741,18 +741,18 @@ fn configure_is_called_and_its_error_is_reported() {
     engine.create_node(greeter, "test/greeter", &[]).unwrap();
     assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Hello|quiet|no-token".into())));
 
-    // Нові налаштування застосовуються без перезапуску
+    // New settings are applied without a restart
     engine.configure_plugin("test_plugin", &effective_settings(&manifest, &test_settings("Привіт", "good"))).unwrap();
     assert_eq!(engine.plugin_settings_error("test_plugin"), None);
     assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Привіт|quiet|token".into())));
 
-    // Відповідь плагіна повертається як помилка й запам'ятовується
+    // Plugin response is returned as an error and recorded
     let err = engine.configure_plugin("test_plugin", &test_settings("x", "bad")).unwrap_err();
     assert_eq!(err, "невірний токен");
     assert_eq!(engine.plugin_settings_error("test_plugin").as_deref(), Some("невірний токен"));
     assert!(engine.plugin_active("test_plugin"));
 
-    // Виправлення знімає помилку
+    // Fixing the setting clears the error
     engine.configure_plugin("test_plugin", &test_settings("x", "ok")).unwrap();
     assert_eq!(engine.plugin_settings_error("test_plugin"), None);
 }
@@ -771,11 +771,11 @@ fn settings_survive_plugin_crash() {
     engine.tick();
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Аварія плагіна")));
 
-    // Екземпляр перестворено: configure викликано повторно до відтворення ноди
+    // Instance recreated: configure was re-run before recreating the node
     assert_eq!(greet(&mut engine, greeter), Some(DataValue::String("Привіт|quiet|token".into())));
 }
 
-// --- Вимкнення й увімкнення плагіна ---
+// --- Disabling and enabling a plugin ---
 
 #[test]
 fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
@@ -804,14 +804,14 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     let change = engine.disable_plugin("test_plugin").unwrap();
     assert_eq!(change.replaced.len(), 4, "source, brk, sink, make: {:?}", change.replaced);
     assert!(change.removed.data.is_empty());
-    // Типи знято з реєстрів
+    // Types unregistered from registries
     assert!(engine.registry.get_definition("test/point_source").is_none());
     assert!(engine.registry.get_definition("type/make/test.point").is_none());
     assert!(engine.types.get("test.point").is_none());
     assert!(!engine.plugin_active("test_plugin"));
-    // Граф ідентичний: типи, властивості (включно з in:*) і з'єднання
+    // Graph is identical: types, properties (including in:*), and connections
     assert_eq!(engine.export_graph(), before);
-    // Заглушка: пояснення, жодних змін, не виконується
+    // Stub: provides reason, rejects changes, does not execute
     assert_eq!(engine.node_unavailable(source).as_deref(), Some("плагін test_plugin недоступний"));
     assert!(engine.node_unavailable(debug).is_none());
     assert!(matches!(engine.set_node_property(source, "x", number(9)), Err(EngineError::PluginUnavailable(_))));
@@ -820,17 +820,17 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     engine.trigger_node(source, PinId(0));
     engine.tick();
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == source && m.contains("плагін test_plugin недоступний")));
-    // Дефініція стала невідомою для палітри, а нода ще має піни
+    // Definition is no longer in the palette, but the node still retains its pins
     assert_eq!(engine.node_definition(source).unwrap().pins.len(), 2);
 
-    // Повторне вимкнення — помилка; граф, збережений у вимкненому стані, теж не втрачається
+    // Disabling again is an error; a graph saved while disabled is also preserved intact
     assert!(engine.disable_plugin("test_plugin").is_err());
     let json = serde_json::to_string(&engine.export_graph()).unwrap();
     let mut reloaded = TickEngine::new();
     assert!(reloaded.load_graph(&serde_json::from_str(&json).unwrap()).is_empty());
     assert_eq!(reloaded.export_graph(), before);
 
-    // Увімкнення: заглушки знову справжні, з'єднання на місці
+    // Enabling: stubs become real nodes again, connections remain intact
     let change = engine.enable_plugin("test_plugin", &test_settings("Hi", "good")).unwrap();
     assert_eq!(change.replaced.len(), 4);
     assert!(change.removed.data.is_empty() && change.removed.exec.is_empty());
@@ -841,7 +841,7 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     engine.tick();
     assert_eq!(output(&engine, sink_node, 3), Some(DataValue::String("manual:2,3".into())));
 
-    // Перезавантажений зі заглушками граф теж оживає, коли плагін з'являється
+    // A graph reloaded with stubs also revives once the plugin becomes available
     let bytes = plugin_bytes("test_plugin").unwrap();
     reloaded.add_plugin(&bytes, None, |_| vec![]).unwrap();
     let change = reloaded.enable_plugin("test_plugin", &test_settings("Hi", "good")).unwrap();
@@ -864,7 +864,7 @@ fn enabling_drops_connections_that_became_invalid() {
             NodeModel { id: counter, type_name: "test/counter".into(), properties: vec![("step".into(), number(2))], position: Position::default() },
             NodeModel { id: debug, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default() },
         ],
-        // Пін 9 заглушка вивела з з'єднання, а в справжнього лічильника такого піна немає
+        // Pin 9 was inferred by the stub from the connection, but the real counter node has no such pin
         exec_connections: vec![ghost_link],
         data_connections: vec![ConnectionModel { src_node: counter, src_pin: PinId(1), dst_node: debug, dst_pin: PinId(1) }],
     };
@@ -912,7 +912,7 @@ fn unknown_node_type_survives_load_and_save() {
     let mut want = graph.data_connections.clone();
     want.sort_by_key(|c| (c.src_node.0, c.src_pin.0, c.dst_node.0, c.dst_pin.0));
     assert_eq!(exported.data_connections, want);
-    // Піни відновлено з з'єднань; тип піна дав інший кінець (Debug.Value — Any)
+    // Pins inferred from connections; the data pin type came from the other end (Debug.Value is Any)
     let pins = engine.node_definition(a).unwrap().pins;
     assert_eq!(pins.len(), 3);
     assert!(pins.iter().any(|p| p.id == PinId(0) && p.direction == PinDirection::Output && p.pin_type == PinType::Exec));

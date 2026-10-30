@@ -14,7 +14,7 @@ pub async fn handler(ws: WebSocketUpgrade, State(engine): State<EngineHandle>) -
 
 async fn client(socket: WebSocket, engine: EngineHandle) {
     let (mut sink, mut stream) = socket.split();
-    // Підписка до знімка: подія між ними прийде двічі, але не загубиться. Редактор обробляє їх ідемпотентно.
+    // Subscribe before taking the snapshot: an event in between may arrive twice, but will not be lost. The editor handles events idempotently.
     let mut events = engine.subscribe();
     let (reply_tx, mut reply_rx) = mpsc::unbounded_channel::<ServerMessage>();
 
@@ -26,12 +26,12 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
 
     loop {
         tokio::select! {
-            // Спершу події: відповідь ініціатору (`Created`) посилається на ноди з `NodeAdded`,
-            // які актор розіслав перед нею.
+            // Drain broadcast events first: the initiator's `Created` reply references nodes from `NodeAdded`
+            // messages that the actor broadcast right before it.
             biased;
             event = events.recv() => match event {
                 Ok(bytes) => if sink.send(Message::Binary(bytes)).await.is_err() { break },
-                // Клієнт не встигає: розриваємо з'єднання, після перепідключення він отримає свіжий знімок.
+                // Client fell behind: drop the connection so it receives a fresh snapshot on reconnect.
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     warn!(skipped = n, "Редактор відстав, розриваємо з'єднання");
                     break;

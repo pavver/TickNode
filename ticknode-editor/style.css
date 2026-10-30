@@ -1,5 +1,5 @@
-/* Operator UI (NotifiApp design system) для веб-редактора TickNode.
-   Токени — з OperatorTheme.kt, розміри — у DU (1 DU = 4px), кути — 0. */
+/* Operator UI (NotifiApp design system) for the TickNode web editor.
+   Tokens from OperatorTheme.kt, sizes in DU (1 DU = 4px), corners = 0. */
 
 @font-face {
     font-family: "Cascadia Code";
@@ -99,7 +99,7 @@ html, body {
 
 button, input, select { font: inherit; color: inherit; }
 
-/* --- Типографіка --- */
+/* --- Typography --- */
 .t-app-title { font-size: 20px; line-height: 26px; font-weight: 700; }
 .t-section { font-size: 14px; line-height: 18px; font-weight: 500; }
 .t-row { font-size: 15px; line-height: 20px; font-weight: 500; }
@@ -107,12 +107,12 @@ button, input, select { font: inherit; color: inherit; }
 .t-caption { font-size: 12px; line-height: 15px; color: var(--text-secondary); }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-/* --- Іконки --- */
+/* --- Icons --- */
 .icon { width: calc(var(--du) * 4); height: calc(var(--du) * 4); fill: currentColor; flex: none; display: block; }
 
-/* --- Межа стану (operatorStateBorder) ---
-   Базова рамка — ::after всередині елемента (не змінює розмір),
-   Pending — біжучий сегмент SVG, Success/Error — пульс товстої рамки. */
+/* --- State border (operatorStateBorder) ---
+   Base border is an inset ::after (does not affect layout),
+   Pending is an animated SVG segment, Success/Error pulse a thick border. */
 .ctl { position: relative; }
 .ctl::after {
     content: "";
@@ -276,13 +276,13 @@ button, input, select { font: inherit; color: inherit; }
 .switch.on .thumb { transform: translateX(calc(var(--du) * 4.5)); background: var(--success); }
 .switch.st-pending { border-color: var(--pending); }
 .switch.st-pending .thumb { background: transparent; transform: translateX(calc(var(--du) * 2.25)); }
-/* Компактний — на ноді (рядок 6DU) */
+/* Compact — on a node (6DU row) */
 .switch.small { width: calc(var(--du) * 8.5); height: calc(var(--du) * 4.5); border-radius: calc(var(--du) * 2.25); }
 .switch.small .thumb { left: calc(var(--du) * 0.5); width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); margin-top: calc(var(--du) * -1.75); }
 .switch.small.on .thumb { transform: translateX(calc(var(--du) * 3.75)); }
 .switch.small.st-pending .thumb { transform: translateX(calc(var(--du) * 1.9)); }
 
-/* --- OperatorStatusBadge (точка) --- */
+/* --- OperatorStatusBadge (dot) --- */
 .status-dot {
     width: calc(var(--du) * 2.5);
     height: calc(var(--du) * 2.5);
@@ -294,7 +294,7 @@ button, input, select { font: inherit; color: inherit; }
 .status-dot.offline { background: var(--error); animation: sb-pulse 800ms ease-in-out infinite; }
 .status-dot.connecting { background: var(--warning); }
 
-/* --- Каркас --- */
+/* --- Layout shell --- */
 .app { display: flex; flex-direction: column; height: 100%; }
 
 .header {
@@ -324,7 +324,7 @@ button, input, select { font: inherit; color: inherit; }
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
-/* У прокручуваній колонці рядки не стискаються — інакше текст накладається */
+/* In a scrollable column, rows must not shrink — otherwise text overlaps */
 .panel > * { flex-shrink: 0; }
 .panel.left { border-right: var(--border-w) solid var(--border); }
 .panel.right { border-left: var(--border-w) solid var(--border); }
@@ -374,7 +374,7 @@ button, input, select { font: inherit; color: inherit; }
     font-size: 12px;
 }
 
-/* --- Полотно --- */
+/* --- Canvas --- */
 .canvas-wrap { flex: 1; position: relative; min-width: 0; display: flex; flex-direction: column; }
 .canvas {
     flex: 1;
@@ -419,7 +419,7 @@ button, input, select { font: inherit; color: inherit; }
     pointer-events: none;
 }
 
-/* --- Нода --- */
+/* --- Node --- */
 .node {
     position: absolute;
     background: var(--surface);
@@ -433,12 +433,12 @@ button, input, select { font: inherit; color: inherit; }
     pointer-events: none;
     transition: border-color 500ms cubic-bezier(.4, 0, .2, 1);
 }
-/* Бордер ноди — лише стан виконання. Виділення показуємо інакше:
-   акцентна назва і смуга зліва та пунктирна рамка з «ручками» в кутах, як у CAD (`.selection-bounds`). */
+/* Node border indicates execution state only. Selection is shown differently:
+   accented title and left bar, plus a dashed CAD-style bounding box with corner grips (`.selection-bounds`). */
 .node.selected { z-index: 2; }
 .node.selected .node-header { box-shadow: inset calc(var(--du) * 1) 0 0 var(--accent); }
 .node.selected .node-title { color: var(--accent); }
-/* У групі кожна виділена нода має власну пунктирну рамку (одиночну обводить `.selection-bounds`) */
+/* In a group, each selected node gets its own dashed outline (a single selection is framed by `.selection-bounds`) */
 .viewport.multi-select .node.selected::before {
     content: "";
     position: absolute;
@@ -459,7 +459,7 @@ button, input, select { font: inherit; color: inherit; }
 .node-title { font-size: 13px; line-height: 16px; font-weight: 700; flex: 1; }
 .node-cat { font-size: 11px; line-height: 14px; font-weight: 700; color: var(--cat-color, var(--text-secondary)); flex: none; max-width: 40%; }
 .pins { position: absolute; top: calc(var(--du) * 9); display: flex; flex-direction: column; }
-/* Рядки властивостей між заголовком і пінами: висота рядка = ROW_H (geometry.rs) */
+/* Property rows between header and pins: row height = ROW_H (geometry.rs) */
 .node-props { position: absolute; top: calc(var(--du) * 9); left: 0; right: 0; display: flex; flex-direction: column; }
 .prop-row {
     height: calc(var(--du) * 6);
@@ -499,7 +499,7 @@ button, input, select { font: inherit; color: inherit; }
 .pin.in .socket { margin-left: calc(var(--du) * -1.25); }
 .pin.out .socket { margin-right: calc(var(--du) * -1.25); }
 .socket.connected { background: var(--pin-color); }
-/* Незаданий обов'язковий вхід — стан Error: червона мітка піна й позначка на ноді */
+/* Unset required input — Error state: red pin label and warning badge on the node */
 .pin.missing { color: var(--error); }
 .pin.missing .socket { border-color: var(--error); outline: var(--border-w) solid var(--error); outline-offset: var(--border-w); }
 .node.missing .node-header { box-shadow: inset 0 calc(var(--du) * -0.5) 0 var(--error); }
@@ -508,7 +508,7 @@ button, input, select { font: inherit; color: inherit; }
 .socket.exec.connected { opacity: 1; }
 .pin:hover .socket { outline: var(--border-w) solid var(--accent); outline-offset: var(--border-w); }
 
-/* Значення прямо на ноді (властивість або непід'єднаний вхід) */
+/* Inline value directly on a node (property or unconnected input) */
 .inline-value {
     height: calc(var(--du) * 4.5);
     width: calc(var(--du) * 13);
@@ -533,7 +533,7 @@ button, input, select { font: inherit; color: inherit; }
 .inline-value.bool.unset { color: var(--text-disabled); }
 .pin .inline-value { margin-left: auto; }
 
-/* --- Випадки Match на ноді (як вікно комбінатора-вирішувача); висота рядка = ROW_H --- */
+/* --- Match cases on a node (like a decider combinator window); row height = ROW_H --- */
 .match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
 .case-row {
     height: calc(var(--du) * 6);
@@ -602,7 +602,7 @@ button, input, select { font: inherit; color: inherit; }
 .operand.st-error { border-color: var(--error); }
 .op-select { flex: none; width: calc(var(--du) * 9); padding: 0; text-align: center; font-weight: 700; cursor: pointer; }
 
-/* Входи Match: сокет на краю, ім'я, тип, значення */
+/* Match inputs: socket on edge, name, type, value */
 .match-in, .input-row { padding-left: 0; }
 .match-in .pin { flex: none; }
 .input-row { padding-right: calc(var(--du) * 1); background: color-mix(in srgb, var(--surface-alt) 50%, transparent); }
@@ -623,7 +623,7 @@ button, input, select { font: inherit; color: inherit; }
 .input-row .inline-value { flex: 1 1 0; width: 0; max-width: none; margin-left: 0; }
 .input-src { flex: 1 1 0; width: 0; font-size: 11px; color: var(--text-disabled); }
 
-/* Випадки: смуга ліворуч об'єднує заголовок і його умови */
+/* Cases: left bar visually groups a case header with its conditions */
 .case-head, .cond-row { box-shadow: inset calc(var(--du) * 0.75) 0 0 color-mix(in srgb, var(--cat-color, var(--accent)) 55%, transparent); }
 .case-head .pin { font-weight: 700; color: var(--text-primary); }
 .case-foot .pin { font-style: italic; }
@@ -650,7 +650,7 @@ button, input, select { font: inherit; color: inherit; }
 .cond-fill { flex: 1 1 0; }
 .cond-left:focus, .cond-src:focus { border-color: var(--accent); }
 
-/* Запуск ноди з заголовка */
+/* Run node from header */
 .node-run {
     width: calc(var(--du) * 5);
     height: calc(var(--du) * 5);
@@ -704,20 +704,20 @@ button, input, select { font: inherit; color: inherit; }
 .terminal-line.system { color: var(--terminal-bright-cyan); }
 .terminal-line.success { color: var(--terminal-bright-green); }
 
-/* --- Рамка виділення (як у CAD): вікно — суцільна, перетин — пунктир --- */
+/* --- Selection box (CAD-style): window is solid, crossing is dashed --- */
 .select-box {
     position: absolute;
     pointer-events: none;
     border: var(--border-w) solid var(--accent);
     background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
-/* Вставка, що чекає на розміщення */
+/* Paste ghost awaiting placement */
 .paste-ghost { pointer-events: none; opacity: .6; }
 .node.paste-ghost::after { --sb-color: var(--accent); border-style: dashed; }
 .canvas.placing { cursor: copy; }
 .canvas.placing .node { cursor: copy; }
 
-/* Пунктирна рамка навколо виділеної ноди чи групи */
+/* Dashed bounding box around a selected node or group */
 .selection-bounds {
     position: absolute;
     pointer-events: none;
@@ -727,7 +727,7 @@ button, input, select { font: inherit; color: inherit; }
     --grip: calc(var(--du) * 2);
     content: "";
     position: absolute;
-    /* Центр «ручки» — на куті рамки */
+    /* Grip center is on the bounding box corner */
     inset: calc(var(--grip) / -2 - var(--border-w) / 2);
     background:
         linear-gradient(var(--accent), var(--accent)) left top / var(--grip) var(--grip) no-repeat,
@@ -752,7 +752,7 @@ button, input, select { font: inherit; color: inherit; }
     background: color-mix(in srgb, var(--success) 10%, transparent);
 }
 
-/* --- Палітра (як у Scratch): смуга категорій + кольорові блоки --- */
+/* --- Palette (Scratch-style): category rail + colored blocks --- */
 .panel.left.palette { flex-direction: row; overflow: hidden; width: calc(var(--du) * 94); }
 .palette-rail {
     flex: none;
@@ -817,7 +817,7 @@ button, input, select { font: inherit; color: inherit; }
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
-/* Запас унизу, щоб і останню категорію можна було прокрутити до верху */
+/* Bottom spacer so the last category can still be scrolled to the top */
 .palette-list::after { content: ""; display: block; height: 50vh; }
 .palette-group { padding: 0 calc(var(--du) * 3) calc(var(--du) * 1); }
 .palette-group-title {
@@ -853,7 +853,7 @@ button, input, select { font: inherit; color: inherit; }
 .inspector-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
 .inspector-head .t-row { flex: 1; min-width: 0; }
 
-/* --- Кнопка «інфо» і підказка --- */
+/* --- Info button and tooltip --- */
 .info-btn {
     flex: none;
     display: inline-flex;
@@ -900,9 +900,9 @@ button, input, select { font: inherit; color: inherit; }
     overflow: hidden;
 }
 
-/* --- Перетягування з палітри --- */
+/* --- Dragging from palette --- */
 .palette-item { touch-action: pan-y; }
-/* Під час перетягування палітра «прозора» для курсора: на вузькому екрані вона накриває полотно */
+/* While dragging out, the palette becomes pointer-transparent: on narrow screens it overlays the canvas */
 .panel.dragging-out { pointer-events: none; opacity: .35; }
 .palette-ghost {
     position: fixed;
@@ -921,7 +921,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 body:has(.palette-ghost) { cursor: copy; }
 
-/* --- Значення пінів в інспекторі --- */
+/* --- Pin values in inspector --- */
 .io-row { display: flex; flex-direction: column; gap: calc(var(--du) * .5); }
 .io-row + .io-row { padding-top: calc(var(--du) * 1); border-top: var(--border-w) solid var(--divider); }
 .io-value {
@@ -938,8 +938,8 @@ body:has(.palette-ghost) { cursor: copy; }
 }
 .io-value.muted { color: var(--text-secondary); }
 
-/* --- Вузькі екрани: панелі як висувні шари над полотном --- */
-/* --- Ноди-заглушки (плагін недоступний) --- */
+/* --- Narrow screens: panels become overlay drawers above the canvas --- */
+/* --- Stub nodes (plugin unavailable) --- */
 .node.unavailable { cursor: grab; }
 .node.unavailable .node-header { background: repeating-linear-gradient(135deg, var(--surface-alt) 0 calc(var(--du) * 2), var(--surface) calc(var(--du) * 2) calc(var(--du) * 4)); }
 .node.unavailable .node-title, .node.unavailable .pin, .node.unavailable .prop-row { color: var(--text-disabled); }
@@ -947,7 +947,7 @@ body:has(.palette-ghost) { cursor: copy; }
 .node.unavailable .socket { opacity: .55; }
 .node-cat.node-unavailable { color: var(--warning); }
 
-/* --- Панель плагінів --- */
+/* --- Plugins panel --- */
 .panel.plugins { width: calc(var(--du) * 90); }
 .plugin-card { gap: calc(var(--du) * 2.5); }
 .plugin-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }

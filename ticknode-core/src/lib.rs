@@ -49,19 +49,19 @@ pub trait Node: Send + Sync {
     fn is_pure(&self) -> bool { false }
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput>;
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
-    /// Властивості, через які ноду можна відтворити (збереження графа, редактор).
+    /// Properties needed to reconstruct the node (graph persistence, editor).
     fn properties(&self) -> Vec<(String, DataValue)> { Vec::new() }
-    /// Ноду відтворено: властивості з `create_node` застосовано. Далі `set_property` — це вже
-    /// правки, а не відновлення збереженого стану.
+    /// The node has been restored: properties from `create_node` have been applied. Subsequent
+    /// `set_property` calls are live edits rather than saved state restoration.
     fn restored(&mut self) {}
-    /// Ноди-джерела подій (таймери, тригери): викликається на початку кожного такту.
-    /// Повернений пін стає тригером виконання ноди в цьому ж такті.
+    /// Event source nodes (timers, triggers): called at the start of every tick.
+    /// A returned pin triggers execution of the node in the same tick.
     fn poll(&mut self, _host: &mut HostState) -> Option<PinId> { None }
-    /// Завершилась задача, яку нода запустила через `HostState` (затримка, HTTP).
-    /// Викликається в такті завершення, до виконання черги.
+    /// A task started by the node via `HostState` (delay, HTTP) has completed.
+    /// Called on the completion tick, before executing the queue.
     fn on_task(&mut self, _task: TaskId, _result: TaskResult, _ctx: &mut NodeContext) -> Vec<NodeOutput> { Vec::new() }
-    /// Нода-заглушка (плагін типу недоступний): пояснення для редактора. Така нода не виконується
-    /// і не приймає змін властивостей, але зберігає піни й властивості для збереження графа.
+    /// Stub node (plugin for this type is unavailable): explanation for the editor. Such a node does not
+    /// execute or accept property changes, but preserves pins and properties so the graph can be saved.
     fn unavailable(&self) -> Option<String> { None }
 }
 
@@ -86,7 +86,7 @@ pub type NodeCreator = Box<dyn Fn(NodeId) -> Box<dyn Node> + Send + Sync>;
 pub struct NodeRegistry {
     definitions: HashMap<String, NodeDefinition>,
     creators: HashMap<String, NodeCreator>,
-    /// Який плагін зареєстрував тип ноди (вбудовані типи власника не мають).
+    /// Which plugin registered the node type (built-in types have no owner).
     owners: HashMap<String, String>,
 }
 
@@ -101,14 +101,14 @@ impl NodeRegistry {
         registry
     }
 
-    /// Реєструє тип ноди. Дефініція береться з екземпляра, створеного з дефолтними властивостями,
-    /// тому реєстр і сама нода не можуть розійтись.
+    /// Registers a node type. The definition is taken from an instance created with default properties,
+    /// so the registry and the node itself cannot diverge.
     pub fn register(&mut self, creator: NodeCreator) {
         let definition = creator(NodeId(uuid::Uuid::nil())).definition();
         self.register_definition(definition, creator);
     }
 
-    /// Реєструє тип ноди від імені плагіна (щоб зняти його при вимкненні плагіна).
+    /// Registers a node type on behalf of a plugin (so it can be unregistered when the plugin is disabled).
     pub fn register_owned(&mut self, owner: &str, creator: NodeCreator) {
         let definition = creator(NodeId(uuid::Uuid::nil())).definition();
         self.owners.insert(definition.type_name.clone(), owner.to_string());
@@ -129,7 +129,7 @@ impl NodeRegistry {
         self.owners.iter().filter(|(_, o)| *o == owner).map(|(t, _)| t.clone()).collect()
     }
 
-    /// Знімає всі типи нод плагіна; повертає їхні назви.
+    /// Unregisters all node types owned by the plugin and returns their names.
     pub fn unregister_owner(&mut self, owner: &str) -> Vec<String> {
         let names: Vec<String> = self.owners.iter().filter(|(_, o)| *o == owner).map(|(t, _)| t.clone()).collect();
         for name in &names {
@@ -193,7 +193,7 @@ impl Default for NodeRegistry {
     fn default() -> Self { Self::new() }
 }
 
-/// З'єднання, прибрані рушієм автоматично (напр. після зміни пінів ноди).
+/// Connections removed automatically by the engine (e.g., after a node's pins changed).
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct RemovedConnections {
     pub exec: Vec<ConnectionModel>,
@@ -205,24 +205,24 @@ pub struct TickEngine {
     exec_connections: Vec<ConnectionModel>,
     data_connections: Vec<ConnectionModel>,
     pub registry: NodeRegistry,
-    /// Власні типи даних, оголошені плагінами.
+    /// Custom data types declared by plugins.
     pub types: TypeRegistry,
-    /// Який плагін оголосив власний тип даних.
+    /// Which plugin declared each custom data type.
     type_owners: HashMap<String, String>,
-    /// Завантажені плагіни (увімкнені й ні); див. `plugin.rs`.
+    /// Loaded plugins (both enabled and disabled); see `plugin.rs`.
     plugins: std::collections::BTreeMap<String, plugin::PluginSlot>,
     pub data_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
     pub pure_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
     pub variables: HashMap<String, DataValue>,
-    /// Значення непід'єднаних входів, задані в редакторі (властивості `in:<пін>`).
+    /// Values of unconnected inputs set in the editor (`in:<pin>` properties).
     input_values: HashMap<NodeId, BTreeMap<u32, DataValue>>,
-    /// Ноди, для яких помилку «не задано обов'язковий вхід» уже записано в лог (щоб не повторювати щотакту).
+    /// Nodes for which a "missing required input" error has already been logged (to avoid repeating every tick).
     required_reported: std::collections::HashSet<NodeId>,
     pub execution_queue: VecDeque<(NodeId, PinId)>,
-    // Спільний стан асинхронних задач та дескрипторів
+    // Shared state for async tasks and handles
     pub host_state: HostState,
-    /// Ноди, що виконались за останній такт, з входами й виходами (телеметрія для редактора).
-    /// Чисті ноди потрапляють сюди, коли їх обчислили на запит.
+    /// Nodes executed during the last tick, with their inputs and outputs (telemetry for the editor).
+    /// Pure nodes appear here when evaluated on demand.
     pub executed: Vec<NodeTrace>,
 }
 
@@ -251,14 +251,14 @@ impl TickEngine {
         }
     }
 
-    // --- Ноди ---
+    // --- Nodes ---
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
         self.nodes.insert(node.id(), node);
     }
 
-    /// Створює ноду через реєстр і застосовує властивості. Значення входів (`in:<пін>`) повертаються
-    /// окремо: їх можна задати лише після властивостей, бо піни залежать від них.
+    /// Creates a node via the registry and applies its properties. Input values (`in:<pin>`) are returned
+    /// separately: they can only be set after properties because pins may depend on them.
     fn build_node(&self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(Box<dyn Node>, Vec<(PinId, DataValue)>), EngineError> {
         let mut node = self.registry.create_node(type_name, id)
             .ok_or_else(|| EngineError::UnknownNodeType(type_name.to_string()))?;
@@ -273,18 +273,18 @@ impl TickEngine {
         Ok((node, inputs))
     }
 
-    /// Створює ноду через реєстр і застосовує властивості.
+    /// Creates a node via the registry and applies its properties.
     pub fn create_node(&mut self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(), EngineError> {
         let (node, inputs) = self.build_node(id, type_name, properties)?;
         self.add_node(node);
-        // Піни залежать від властивостей, тож значення входів — після них
+        // Pins depend on properties, so input values are applied afterward
         for (pin, value) in inputs {
             let _ = self.set_input_value(id, pin, Some(value));
         }
         Ok(())
     }
 
-    /// Чому нода недоступна (заглушка); `None` — нода справжня.
+    /// Why the node is unavailable (stub); `None` if it is a real node.
     pub fn node_unavailable(&self, node_id: NodeId) -> Option<String> {
         self.nodes.get(&node_id)?.unavailable()
     }
@@ -301,7 +301,7 @@ impl TickEngine {
         self.nodes.get(&node_id).map(|n| n.definition())
     }
 
-    /// Модель ноди для збереження/редактора (позиція — справа сервера, тут за замовчуванням).
+    /// Node model for persistence/editor (position is managed by the server, defaulted here).
     pub fn node_model(&self, node_id: NodeId) -> Option<NodeModel> {
         self.nodes.get(&node_id).map(|n| NodeModel {
             id: node_id,
@@ -338,7 +338,7 @@ impl TickEngine {
         removed
     }
 
-    /// Змінює властивість ноди. Якщо через це змінились піни, невалідні з'єднання прибираються.
+    /// Sets a node property. If pins changed as a result, invalid connections are pruned.
     pub fn set_node_property(&mut self, node_id: NodeId, name: &str, value: DataValue) -> Result<RemovedConnections, EngineError> {
         if let Some(pin) = parse_input_value_property(name) {
             self.set_input_value(node_id, pin, Some(value))?;
@@ -352,7 +352,7 @@ impl TickEngine {
         self.pure_cache.remove(&node_id);
         self.data_cache.remove(&node_id);
 
-        // Значення входів, що зникли чи змінили тип, більше не діють
+        // Input values whose pins disappeared or changed type are no longer valid
         let definition = node.definition();
         if let Some(values) = self.input_values.get_mut(&node_id) {
             values.retain(|pin, v| input_pin_type(&definition, PinId(*pin)).is_some_and(|t| input_value_fits(&self.types, &t, v)));
@@ -361,7 +361,7 @@ impl TickEngine {
         Ok(self.prune_connections(|c| c.src_node == node_id || c.dst_node == node_id))
     }
 
-    /// Прибирає з'єднання, що торкаються вибраних нод і стали невалідними (змінились піни).
+    /// Prunes connections touching selected nodes that have become invalid (pins changed).
     fn prune_connections(&mut self, touching: impl Fn(&ConnectionModel) -> bool) -> RemovedConnections {
         let invalid_exec: Vec<_> = self.exec_connections.iter()
             .filter(|c| touching(c) && self.validate_exec(c).is_err())
@@ -374,7 +374,7 @@ impl TickEngine {
         RemovedConnections { exec: invalid_exec, data: invalid_data }
     }
 
-    /// Значення непід'єднаного входу даних (`None` — прибрати). Діє, поки до піна нічого не під'єднано.
+    /// Value of an unconnected data input (`None` clears it). Effective while nothing is connected to the pin.
     pub fn set_input_value(&mut self, node_id: NodeId, pin: PinId, value: Option<DataValue>) -> Result<(), EngineError> {
         let node = self.nodes.get(&node_id).ok_or(EngineError::NodeNotFound(node_id))?;
         if let Some(reason) = node.unavailable() {
@@ -397,7 +397,7 @@ impl TickEngine {
         Ok(())
     }
 
-    // --- З'єднання ---
+    // --- Connections ---
 
     pub fn exec_connections(&self) -> &[ConnectionModel] {
         &self.exec_connections
@@ -451,7 +451,7 @@ impl TickEngine {
         before != self.exec_connections.len()
     }
 
-    /// Чи залежить `start` (через вхідні піни даних) від `target`.
+    /// Whether `start` depends (via data input pins) on `target`.
     fn has_data_path(&self, start: NodeId, target: NodeId) -> bool {
         let mut stack = vec![start];
         let mut visited = std::collections::HashSet::new();
@@ -465,7 +465,7 @@ impl TickEngine {
         false
     }
 
-    /// Вхідний пін даних має рівно одне джерело: нове з'єднання замінює попереднє.
+    /// A data input pin has at most one source: a new connection replaces the previous one.
     pub fn connect_data(&mut self, src_node: NodeId, src_pin: PinId, dst_node: NodeId, dst_pin: PinId) -> Result<(), EngineError> {
         let c = ConnectionModel { src_node, src_pin, dst_node, dst_pin };
         self.validate_data_types(&c)?;
@@ -489,9 +489,9 @@ impl TickEngine {
         self.execution_queue.push_back((node_id, pin_id));
     }
 
-    // --- Граф цілком ---
+    // --- Whole graph ---
 
-    /// Експорт у стабільному порядку (зручно для diff у git).
+    /// Exports in a deterministic order (friendly for git diffs).
     pub fn export_graph(&self) -> GraphModel {
         let mut ids = self.node_ids();
         ids.sort_by_key(|id| id.0);
@@ -512,7 +512,7 @@ impl TickEngine {
         GraphModel { nodes, exec_connections, data_connections }
     }
 
-    /// Замінює поточний граф збереженим. Повертає попередження про елементи, які не вдалось відновити.
+    /// Replaces the current graph with the saved one. Returns warnings for elements that could not be restored.
     pub fn load_graph(&mut self, graph: &GraphModel) -> Vec<String> {
         for id in self.node_ids() {
             self.remove_node(id);
@@ -522,9 +522,9 @@ impl TickEngine {
         self.insert_graph(graph, |id| id)
     }
 
-    /// Вставляє фрагмент графа з новими ID (копіювання/вставка).
-    /// Повертає пари (ID у фрагменті, новий ID) для створених нод і попередження.
-    /// З'єднання з нодами поза фрагментом ігноруються.
+    /// Inserts a graph snippet with fresh IDs (copy/paste).
+    /// Returns `(snippet_id, new_id)` pairs for created nodes along with warnings.
+    /// Connections to nodes outside the snippet are ignored.
     pub fn import_snippet(&mut self, snippet: &GraphModel) -> (Vec<(NodeId, NodeId)>, Vec<String>) {
         let id_map: HashMap<NodeId, NodeId> = snippet.nodes.iter().map(|n| (n.id, NodeId::generate())).collect();
         let inside = |c: &&ConnectionModel| id_map.contains_key(&c.src_node) && id_map.contains_key(&c.dst_node);
@@ -548,8 +548,8 @@ impl TickEngine {
                 Err(e) => warnings.push(format!("Нода {:?}: {}", n.id, e)),
             }
         }
-        // Невідомий тип (плагін вимкнено чи не завантажено) не губить ноду: заглушка зберігає
-        // властивості й з'єднання, тож граф запишеться назад без втрат
+        // An unknown type (plugin disabled or not loaded) does not lose the node: a stub preserves
+        // properties and connections so the graph saves back without data loss
         for n in unknown {
             let id = map_id(n.id);
             let pins = self.infer_stub_pins(id, graph, &map_id);
@@ -569,13 +569,13 @@ impl TickEngine {
         warnings
     }
 
-    // --- Виконання ---
+    // --- Execution ---
 
     fn pull_data(&mut self, node_id: NodeId, pin_id: PinId, stack: &mut Vec<NodeId>) -> Option<DataValue> {
         if stack.contains(&node_id) { return None; }
 
-        // Перевіримо, чи це вхідний пін, з'єднаний з виходом іншої ноди.
-        // Якщо так, рекурсивно тягнемо дані з джерела.
+        // Check whether this is an input pin connected to another node's output.
+        // If so, recursively pull data from the source.
         let incoming = self.data_connections.iter()
             .find(|c| c.dst_node == node_id && c.dst_pin == pin_id)
             .copied();
@@ -637,9 +637,9 @@ impl TickEngine {
         inputs
     }
 
-    /// Нода з незаданим обов'язковим входом не виконується. Вхід заданий, якщо до нього під'єднано
-    /// джерело або на ноді задано значення. Джерело без значення — ноду пропускаємо мовчки,
-    /// відсутність входу — помилка в лозі (один раз, доки стан не зміниться).
+    /// A node with an unset required input is not executed. An input is considered set if a source is
+    /// connected to it or an inline value is set on the node. A connected source with no value yet skips
+    /// the node silently; a missing input logs an error (once, until the state changes).
     fn skip_for_required(&mut self, node_id: NodeId, def: &NodeDefinition, inputs: &HashMap<PinId, Option<DataValue>>) -> bool {
         let mut pending = false;
         for pin in def.pins.iter().filter(|p| p.required && p.direction == PinDirection::Input && p.pin_type != PinType::Exec) {
@@ -666,7 +666,7 @@ impl TickEngine {
         self.host_state.current_tick += 1;
         let mut next_tick_queue = VecDeque::new();
 
-        // Завершені задачі (затримки, HTTP) доставляються нодам-власникам.
+        // Completed tasks (delays, HTTP) are delivered to their owning nodes.
         for (node_id, task, result) in self.host_state.take_finished() {
             if !self.nodes.contains_key(&node_id) { continue; }
             let mut stack = Vec::new();
@@ -705,7 +705,7 @@ impl TickEngine {
         self.execution_queue.extend(next_tick_queue);
     }
 
-    /// Exec-виходи стають у чергу наступного такту; дані й змінні застосовуються одразу.
+    /// Exec outputs are queued for the next tick; data and variables are applied immediately.
     fn apply_outputs(
         &mut self,
         node_id: NodeId,
@@ -735,14 +735,14 @@ impl TickEngine {
                 }
             }
         }
-        // Чисті ноди, обчислені раніше в цьому такті, могли залежати від змінених даних.
+        // Pure nodes evaluated earlier in this tick might depend on the updated data.
         if state_changed {
             self.pure_cache.clear();
         }
         self.record_trace(node_id, inputs, fired);
     }
 
-    /// Нода виконалась кілька разів за такт — лишається останнє виконання, exec-виходи накопичуються.
+    /// If a node executed multiple times in a tick, the last execution's data is kept while fired exec pins accumulate.
     fn record_trace(&mut self, node_id: NodeId, inputs: Vec<(PinId, Option<DataValue>)>, fired: Vec<PinId>) {
         let mut outputs: Vec<(PinId, DataValue)> = self.data_cache.get(&node_id).into_iter().flatten()
             .chain(self.pure_cache.get(&node_id).into_iter().flatten())
@@ -766,7 +766,7 @@ impl TickEngine {
     }
 }
 
-/// Тип вхідного піна даних (`None` — немає такого або це exec-пін).
+/// Data type of an input pin (`None` if no such pin exists or it is an exec pin).
 fn input_pin_type(definition: &NodeDefinition, pin: PinId) -> Option<DataType> {
     definition.pins.iter()
         .find(|p| p.id == pin && p.direction == PinDirection::Input)
@@ -782,7 +782,7 @@ fn trace_inputs(inputs: &HashMap<PinId, Option<DataValue>>) -> Vec<(PinId, Optio
     traced
 }
 
-// --- РЕАЛІЗАЦІЯ ВБУДОВАНИХ НОД ---
+// --- BUILT-IN NODE IMPLEMENTATIONS ---
 
 pub struct ConstNode { pub id: NodeId, pub value: DataValue }
 impl Node for ConstNode {
@@ -915,7 +915,7 @@ impl Node for MathExpressionNode {
     }
 }
 
-/// Змінні формули стають вхідними пінами (1, 2, ...) у алфавітному порядку.
+/// Formula variables become input pins (1, 2, ...) in alphabetical order.
 pub fn expression_variables(expression: &str) -> HashMap<String, PinId> {
     let mut names: Vec<String> = match build_operator_tree(expression) {
         Ok(tree) => tree.iter_read_variable_identifiers().map(str::to_string).collect(),
@@ -1036,16 +1036,16 @@ impl Node for VariableSetNode {
     }
 }
 
-/// Комбінатор-вирішувач: за сигналом на In перевіряє випадки й передає виконання на вихід
-/// першого, що збігся (або всіх, що збіглись), інакше — на Else.
-/// Входи — явний список (`inputs`: пін, ім'я, тип); у старих графах без нього — імена з умов.
+/// Decider combinator: on an In signal, evaluates cases in order and routes execution to the output
+/// of the first matching case (or all matching cases), or to Else if none match.
+/// Inputs are an explicit list (`inputs`: pin, name, type); in older graphs without it, names are inferred from conditions.
 pub struct MatchNode {
     pub id: NodeId,
     pub cases: Vec<MatchCase>,
-    /// Спрацьовують усі випадки, що збіглись, а не лише перший.
+    /// Fire all matching cases rather than only the first one.
     pub all_matches: bool,
     inputs: Vec<MatchInput>,
-    /// Входи задані явно (інакше — виводяться з умов, як у старих графах).
+    /// Inputs are defined explicitly (otherwise inferred from conditions, as in legacy graphs).
     explicit_inputs: bool,
 }
 
@@ -1053,14 +1053,14 @@ impl MatchNode {
     pub const ELSE_PIN: PinId = PinId(0);
 
     pub fn new(id: NodeId) -> Self {
-        // Типовий вхід `a` виводиться з умови. Поки нода відновлюється, випадки без `inputs`
-        // (старий формат) виводять входи; після `restored` входи явні — і в новій ноді, і в завантаженій.
+        // Default input `a` is inferred from the condition. While the node is being restored, cases without `inputs`
+        // (legacy format) infer inputs; after `restored`, inputs are explicit — both for new and loaded nodes.
         let mut node = Self { id, cases: Vec::new(), all_matches: false, inputs: Vec::new(), explicit_inputs: false };
         node.set_cases(vec![MatchCase::parse("1: a > 0").expect("типовий випадок коректний")]);
         node
     }
 
-    /// Номери пінів випадків унікальні й не збігаються з Else.
+    /// Case pin numbers are unique and do not collide with Else.
     fn set_cases(&mut self, mut cases: Vec<MatchCase>) {
         let mut seen = std::collections::HashSet::new();
         cases.retain(|c| c.pin != Self::ELSE_PIN.0 && seen.insert(c.pin));
@@ -1072,7 +1072,7 @@ impl MatchNode {
         }
     }
 
-    /// Піни й імена входів унікальні; пін 0 зайнятий exec-входом In.
+    /// Input pins and names are unique; pin 0 is reserved for the In exec input.
     fn set_inputs(&mut self, mut inputs: Vec<MatchInput>) {
         let mut pins = std::collections::HashSet::new();
         let mut names = std::collections::HashSet::new();
@@ -1136,7 +1136,7 @@ impl Node for MatchNode {
             element_type: DataType::String,
             elements: items.into_iter().map(DataValue::String).collect(),
         };
-        // Входи — перед випадками: при відтворенні ноди випадки не мусять виводити входи самі
+        // Inputs come before cases: when reconstructing the node, cases need not infer inputs on their own
         vec![
             ("inputs".to_string(), list(self.inputs.iter().map(MatchInput::to_text).collect())),
             ("cases".to_string(), list(self.cases.iter().map(MatchCase::to_text).collect())),
@@ -1144,7 +1144,7 @@ impl Node for MatchNode {
         ]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        // Некоректний список не застосовується зовсім (редактор перевіряє його заздалегідь)
+        // An invalid list is not applied at all (the editor validates it beforehand)
         match (name, value) {
             ("cases", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
@@ -1489,7 +1489,7 @@ impl Node for SleepNode {
             let ticks = if ctx.get_bool(PinId(2), false) {
                 delay.ceil() as u64
             } else {
-                // Мілісекунди; TickDuration (якщо задано) перекриває тривалість такту рушія.
+                // Milliseconds; TickDuration (if set) overrides the engine's tick duration.
                 match ctx.get_number(PinId(3), NumberValue::Int(0)).to_f64() {
                     tick_ms if tick_ms > 0.0 => (delay / tick_ms).ceil() as u64,
                     _ => ctx.host_state.ticks_for(std::time::Duration::from_millis(delay as u64)),
@@ -1881,7 +1881,7 @@ impl Node for ObjectUnpackNode {
 mod tests {
     use super::*;
 
-    /// Нода-приймач з exec-входом PinId(0), щоб відстежувати потік виконання.
+    /// Sink node with exec input PinId(0) for tracing execution flow.
     fn add_sink(engine: &mut TickEngine) -> NodeId {
         let id = NodeId::generate();
         engine.create_node(id, "test/debug", &[]).unwrap();
@@ -1899,7 +1899,7 @@ mod tests {
         DataValue::Number(NumberValue::Int(v))
     }
 
-    /// Запускає ноду й повертає exec-піни, що спрацювали.
+    /// Triggers the node and returns the exec pins that fired.
     fn fire(engine: &mut TickEngine, id: NodeId) -> Vec<PinId> {
         engine.trigger_node(id, PinId(0));
         engine.tick();
@@ -1917,7 +1917,7 @@ mod tests {
         let outputs: Vec<_> = def.pins.iter().filter(|p| p.direction == PinDirection::Output).map(|p| p.name.as_str()).collect();
         assert_eq!(outputs, ["t > 25", "t > 20 і mode = \"auto\"", "t < 0 або t > 100", "Else"]);
 
-        // Входи без значень — жодна умова не виконується
+        // Inputs have no values — no condition matches
         assert_eq!(fire(&mut engine, id), [MatchNode::ELSE_PIN]);
 
         engine.set_input_value(id, PinId(2), Some(num(30))).unwrap();
@@ -1937,9 +1937,9 @@ mod tests {
         let mut engine = TickEngine::new();
         let id = NodeId::generate();
         engine.create_node(id, "match", &[cases(&["5: a > 1", "5: a < 0", "0: a = 3"])]).unwrap();
-        // Повтори номерів і пін Else відкидаються
+        // Duplicate pin numbers and the Else pin are rejected
         assert_eq!(engine.node_model(id).unwrap().properties[1], cases(&["5: a > 1"]));
-        // Некоректний список не застосовується
+        // Invalid list is not applied
         engine.set_node_property(id, "cases", cases(&["1: a >"]).1).unwrap();
         assert_eq!(engine.node_model(id).unwrap().properties[1], cases(&["5: a > 1"]));
     }
@@ -1958,19 +1958,19 @@ mod tests {
         ]).unwrap();
         let def = engine.node_definition(id).unwrap();
         let ins: Vec<_> = def.pins.iter().filter(|p| p.direction == PinDirection::Input).map(|p| (p.id.0, p.name.as_str())).collect();
-        // Повтори пінів і імен відкинуто
+        // Duplicate pins and names are rejected
         assert_eq!(ins, [(0, "In"), (1, "now"), (2, "limit"), (3, "list")]);
         assert!(def.pins.iter().any(|p| p.id == PinId(1) && p.pin_type == PinType::Data(DataType::Time)));
 
         let time = |t: &str| DataValue::Time(ticknode_shared::text::parse_time(t).unwrap());
         engine.set_input_value(id, PinId(1), Some(time("22:30"))).unwrap();
         engine.set_input_value(id, PinId(2), Some(time("23:00"))).unwrap();
-        // now < limit, список порожній, але now ≥ 22:00 (рядок приводиться до часу)
+        // now < limit, list is empty, but now ≥ 22:00 (string is coerced to time)
         assert_eq!(fire(&mut engine, id), [PinId(3)]);
         engine.set_input_value(id, PinId(2), Some(time("21:00"))).unwrap();
         assert_eq!(fire(&mut engine, id), [PinId(1)]);
 
-        // Явні входи переживають збереження
+        // Explicit inputs survive save and load
         let graph = engine.export_graph();
         let mut copy = TickEngine::new();
         assert!(copy.load_graph(&graph).is_empty());
@@ -1979,7 +1979,7 @@ mod tests {
 
     #[test]
     fn test_match_inputs_are_explicit_after_creation() {
-        // Нова нода й та сама нода після перезапуску однаково реагують на зміну випадків
+        // A newly created node and the same node after reload react identically to case changes
         let mut engine = TickEngine::new();
         let id = NodeId::generate();
         engine.create_node(id, "match", &[]).unwrap();
@@ -1993,7 +1993,7 @@ mod tests {
         assert!(copy.load_graph(&graph).is_empty());
         copy.set_node_property(id, "cases", cases(&["1: x > 0"]).1).unwrap();
         assert_eq!(copy.node_definition(id).unwrap().pins, fresh);
-        // Вхід `a` лишився, `x` не з'явився сам
+        // Input `a` remained, `x` did not appear automatically
         assert!(fresh.iter().any(|p| p.name == "a") && !fresh.iter().any(|p| p.name == "x"));
     }
 
@@ -2006,11 +2006,11 @@ mod tests {
         engine.set_input_value(add, PinId(1), Some(num(3))).unwrap();
         assert_eq!(engine.pull_data(add, PinId(2), &mut Vec::new()), Some(num(5)));
 
-        // Тип має збігатися з піном, а пін — бути входом даних
+        // Type must match the pin, and the pin must be a data input
         assert!(engine.set_input_value(add, PinId(0), Some(DataValue::String("x".into()))).is_err());
         assert!(engine.set_input_value(add, PinId(2), Some(num(1))).is_err());
 
-        // Під'єднане джерело важливіше за значення на ноді
+        // A connected source takes precedence over an inline value on the node
         let c = NodeId::generate();
         engine.create_node(c, "const", &[("value".into(), num(10))]).unwrap();
         engine.connect_data(c, PinId(0), add, PinId(0)).unwrap();
@@ -2018,13 +2018,13 @@ mod tests {
         engine.disconnect_data(add, PinId(0));
         assert_eq!(engine.pull_data(add, PinId(2), &mut Vec::new()), Some(num(5)));
 
-        // Значення зберігаються як властивості й відновлюються
+        // Values are saved as properties and restored
         let graph = engine.export_graph();
         let mut copy = TickEngine::new();
         assert!(copy.load_graph(&graph).is_empty());
         assert_eq!(copy.pull_data(add, PinId(2), &mut Vec::new()), Some(num(5)));
 
-        // Пін зник після зміни властивості — його значення прибирається
+        // When a pin disappears after a property change, its value is removed
         let m = NodeId::generate();
         engine.create_node(m, "match", &[cases(&["1: a > b"])]).unwrap();
         engine.set_input_value(m, PinId(2), Some(num(1))).unwrap();
@@ -2046,7 +2046,7 @@ mod tests {
     fn test_built_in_logic_nodes() {
         let mut engine = TickEngine::new();
 
-        // Match з одним випадком «a = true» на пін 2 — колишній Branch
+        // Match with a single case "a = true" on pin 2 — equivalent to the former Branch node
         let branch_id = NodeId::generate();
         engine.create_node(branch_id, "match", &[cases(&["2: a = true"])]).unwrap();
 
@@ -2077,18 +2077,18 @@ mod tests {
         assert_eq!(gt_val, DataValue::Bool(true));
         assert_eq!(lt_val, DataValue::Bool(false));
 
-        // Compare Gt → вхід a ноди Match
+        // Compare Gt → input a of the Match node
         engine.connect_data(compare_id, PinId(3), branch_id, PinId(1)).unwrap();
 
-        // Запуск Match
+        // Trigger Match
         engine.trigger_node(branch_id, PinId(0));
         
-        // Випадок 2 → приймач
+        // Case 2 → sink
         let target_id = add_sink(&mut engine);
         engine.connect_exec(branch_id, PinId(2), target_id, PinId(0)).unwrap();
 
         engine.tick();
-        // Gt = true, тож спрацьовує пін 2 і приймач стає в чергу
+        // Gt = true, so pin 2 fires and the sink is queued
         assert!(engine.execution_queue.contains(&(target_id, PinId(0))));
     }
 
@@ -2177,7 +2177,7 @@ mod tests {
         engine.tick(); // elapsed = 2
         assert!(engine.host_state.active_tasks.contains_key(&task_handle));
 
-        engine.tick(); // elapsed = 3 -> задача завершилась і доставлена ноді, Out ставить наступну ноду в чергу
+        engine.tick(); // elapsed = 3 -> task finished and delivered to the node, Out queues the next node
         assert!(!engine.host_state.active_tasks.contains_key(&task_handle));
         assert!(engine.execution_queue.contains(&(dummy_sleep_out_id, PinId(0))));
     }
@@ -2269,35 +2269,35 @@ mod tests {
     fn test_click_button_and_debug_nodes() {
         let mut engine = TickEngine::new();
 
-        // 1. Створюємо ClickButton
+        // 1. Create ClickButton
         let button_id = NodeId::generate();
         let button_node = engine.registry.create_node("test/click_button", button_id).unwrap();
         engine.add_node(button_node);
 
-        // 2. Створюємо DebugNode та задаємо префікс
+        // 2. Create DebugNode and set prefix
         let debug_id = NodeId::generate();
         let mut debug_node = engine.registry.create_node("test/debug", debug_id).unwrap();
         debug_node.set_property("prefix", DataValue::String("значення змінної: ".to_string()));
         engine.add_node(debug_node);
 
-        // 3. З'єднуємо Exec: Button Out -> Debug In
+        // 3. Connect Exec: Button Out -> Debug In
         engine.connect_exec(button_id, PinId(0), debug_id, PinId(0)).unwrap();
 
-        // 4. Створюємо ConstNode (444) і з'єднуємо з Debug Val (Any)
+        // 4. Create ConstNode (444) and connect to Debug Val (Any)
         let const_id = NodeId::generate();
         let const_node = Box::new(ConstNode { id: const_id, value: DataValue::Number(NumberValue::Int(444)) });
         engine.add_node(const_node);
         engine.connect_data(const_id, PinId(0), debug_id, PinId(1)).unwrap(); // Any connection must succeed!
 
-        // Симулюємо клік користувача
+        // Simulate user click
         engine.set_node_property(button_id, "clicked", DataValue::Bool(true)).unwrap();
         engine.trigger_node(button_id, PinId(0));
 
-        // Перший такт: Кнопка виконується, дебаг нода стає в чергу на наступний такт
+        // First tick: Button executes, debug node is queued for the next tick
         engine.tick();
         assert!(engine.execution_queue.contains(&(debug_id, PinId(0))));
 
-        // Другий такт: Дебаг нода виконується
+        // Second tick: Debug node executes
         engine.tick();
         assert!(engine.execution_queue.is_empty());
     }
@@ -2318,7 +2318,7 @@ mod tests {
         let warnings = restored.load_graph(&graph);
         assert!(warnings.is_empty(), "{:?}", warnings);
         assert_eq!(restored.export_graph(), graph);
-        // Пін формули відновився з виразу
+        // Formula pin was restored from the expression
         let def = restored.node_definition(b).unwrap();
         assert!(def.pins.iter().any(|p| p.name == "x" && p.direction == PinDirection::Input));
     }
@@ -2336,7 +2336,7 @@ mod tests {
         assert_eq!(engine.data_connections().len(), 1);
         assert_eq!(engine.data_connections()[0].src_node, c2);
 
-        // Data-пін не можна під'єднати як exec
+        // Data pin cannot be connected as exec
         assert_eq!(engine.connect_exec(c1, PinId(0), dbg, PinId(0)), Err(EngineError::InvalidPinConnection));
     }
 
@@ -2349,7 +2349,7 @@ mod tests {
         engine.create_node(expr, "math/expression", &[("expression".into(), DataValue::String("a + b".into()))]).unwrap();
         engine.connect_data(x, PinId(0), expr, PinId(2)).unwrap(); // b
 
-        // Тепер у формулі одна змінна — піна 2 більше немає
+        // Formula now has only one variable — pin 2 no longer exists
         let removed = engine.set_node_property(expr, "expression", DataValue::String("a * 3".into())).unwrap();
         assert_eq!(removed.data.len(), 1);
         assert!(engine.data_connections().is_empty());
@@ -2410,7 +2410,7 @@ mod tests {
         assert_eq!(d.tick, 1);
         assert_eq!(d.inputs, vec![(PinId(1), Some(num(5)))]);
         assert_eq!(d.fired, vec![PinId(2)]);
-        // Чиста нода, обчислена на запит, теж має трасу.
+        // Pure node evaluated on demand also produces a trace.
         let s = trace(add);
         assert_eq!(s.inputs, vec![(PinId(0), Some(num(2))), (PinId(1), Some(num(3)))]);
         assert_eq!(s.outputs, vec![(PinId(2), num(5))]);
@@ -2429,7 +2429,7 @@ mod tests {
         engine.connect_data(a, PinId(0), b, PinId(1)).unwrap();
         engine.connect_data(a, PinId(0), outside, PinId(1)).unwrap();
         let mut snippet = engine.export_snippet(&[a, b]);
-        // З'єднання на ноду поза фрагментом (напр. з буфера іншого графа) ігнорується.
+        // Connection to a node outside the snippet (e.g., from another graph's clipboard) is ignored.
         snippet.data_connections.push(ConnectionModel { src_node: a, src_pin: PinId(0), dst_node: outside, dst_pin: PinId(1) });
 
         let (created, warnings) = engine.import_snippet(&snippet);

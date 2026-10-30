@@ -1,10 +1,10 @@
-//! Текстова форма значень, які можна набрати з клавіатури (поля на ноді, умови Match):
-//! число, рядок, логічне, час, дата-час, тривалість, колір.
+//! Text representation of values that can be entered from the keyboard (inline node fields, Match conditions):
+//! number, string, boolean, time, date-time, duration, color.
 //!
-//! - час — `HH:MM` або `HH:MM:SS`;
-//! - дата-час — `YYYY-MM-DD HH:MM[:SS]` (UTC) або RFC 3339 зі зсувом;
-//! - тривалість — секунди (`90`, `1.5`) або з одиницями: `1h 30m`, `45s`, `500ms` (також `год`, `хв`, `с`, `мс`);
-//! - колір — `#rrggbb` або `#rrggbbaa`.
+//! - time — `HH:MM` or `HH:MM:SS`;
+//! - date-time — `YYYY-MM-DD HH:MM[:SS]` (UTC) or RFC 3339 with offset;
+//! - duration — seconds (`90`, `1.5`) or with units: `1h 30m`, `45s`, `500ms` (including localized unit suffixes);
+//! - color — `#rrggbb` or `#rrggbbaa`.
 
 use std::time::Duration;
 
@@ -34,7 +34,7 @@ pub fn parse_datetime(text: &str) -> Option<DateTime<Utc>> {
         .map(|n| n.and_utc())
 }
 
-/// `90` / `1.5` — секунди; інакше послідовність «число одиниця»: `1h 30m`, `2хв`, `500ms`.
+/// `90` / `1.5` — seconds; otherwise a sequence of "number unit" pairs: `1h 30m`, `45s`, `500ms`.
 pub fn parse_duration(text: &str) -> Option<Duration> {
     let t = text.trim().replace(',', ".");
     if let Ok(secs) = t.parse::<f64>() {
@@ -104,7 +104,7 @@ pub fn format_duration(d: Duration) -> String {
             secs %= size;
         }
     }
-    // Частка секунди йде в останню частину: `1m 1.5s`, а не `1m 1s`
+    // Subsecond fraction goes into the last part: `1m 1.5s`, not `1m 1s`
     let nanos = d.subsec_nanos();
     if nanos != 0 {
         parts.push(format!("{}s", secs as f64 + f64::from(nanos) / 1e9));
@@ -114,7 +114,7 @@ pub fn format_duration(d: Duration) -> String {
     parts.join(" ")
 }
 
-/// Текст значення для поля вводу (без лапок у рядків). `parse_value` розбирає його назад.
+/// Text representation of a value for an input field (unquoted for strings). `parse_value` parses it back.
 pub fn format_value(value: &DataValue) -> String {
     match value {
         DataValue::String(s) => s.clone(),
@@ -134,8 +134,8 @@ pub fn format_value(value: &DataValue) -> String {
     }
 }
 
-/// Значення невідомого типу: число, `true`/`false`, інакше рядок (лапки дозволяють записати
-/// рядок `"5"`).
+/// Value of unknown type: number, `true`/`false`, otherwise string (quotes allow writing
+/// the string `"5"`).
 pub fn parse_any(text: &str) -> DataValue {
     let t = text.trim();
     if let Some(n) = parse_number(t) {
@@ -152,7 +152,7 @@ pub fn parse_any(text: &str) -> DataValue {
     }
 }
 
-/// Чи можна задати значення цього типу текстом.
+/// Whether a value of this type can be entered as text.
 pub fn is_text_type(t: &DataType) -> bool {
     matches!(
         t,
@@ -161,12 +161,12 @@ pub fn is_text_type(t: &DataType) -> bool {
     )
 }
 
-/// Як `is_text_type`, але значення переліку теж задаються (вибором зі списку або текстом).
+/// Like `is_text_type`, but enum values can also be set (by selecting from a list or entering text).
 pub fn is_text_type_in(types: &TypeRegistry, t: &DataType) -> bool {
     is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum())
 }
 
-/// Підказка для поля вводу значення цього типу.
+/// Placeholder hint for an input field of this type.
 pub fn type_hint(t: &DataType) -> &'static str {
     match t {
         DataType::Time => "ГГ:ХХ",
@@ -177,7 +177,7 @@ pub fn type_hint(t: &DataType) -> &'static str {
     }
 }
 
-/// Типове значення для нового поля типу `t` (Any — число 0).
+/// Default value for a new field of type `t` (`Any` defaults to number 0).
 pub fn default_of(t: &DataType) -> DataValue {
     match t {
         DataType::String => DataValue::String(String::new()),
@@ -192,7 +192,7 @@ pub fn default_of(t: &DataType) -> DataValue {
     }
 }
 
-/// Розбирає текст як значення типу `t`.
+/// Parses text as a value of type `t`.
 pub fn parse_value(text: &str, t: &DataType) -> Result<DataValue, String> {
     let bad = |what: &str| format!("«{}» — не {what}", text.trim());
     Ok(match t {
@@ -212,8 +212,8 @@ pub fn parse_value(text: &str, t: &DataType) -> Result<DataValue, String> {
     })
 }
 
-/// Як `parse_value`, але знає власні типи: значення переліку — рядок з переліку (за значенням
-/// або за підписом), структура текстом не набирається.
+/// Like `parse_value`, but custom-type aware: an enum value is a string from the enumeration
+/// (matched by value or label), while a struct cannot be entered as text.
 pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<DataValue, String> {
     match types.definition_of(t) {
         Some(def) if def.is_enum() => {
@@ -232,14 +232,14 @@ pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<
     }
 }
 
-/// Приводить `value` до типу `like` там, де це однозначно: рядок → час / дата / колір / число,
-/// число → тривалість (секунди). Інакше повертає як є.
+/// Coerces `value` to type `like` where unambiguous: string → time / date / color / number,
+/// number → duration (seconds). Otherwise returns `value` as-is.
 pub fn coerce_to(value: DataValue, like: &DataType) -> DataValue {
     match (&value, like) {
         (DataValue::String(s), DataType::Number | DataType::Bool | DataType::Time | DataType::DateTime | DataType::Duration | DataType::Color) => {
             parse_value(s, like).unwrap_or(value)
         }
-        // Нескінченність, від'ємне чи завелике число лишаються числом — порівняння дасть помилку типу
+        // Infinity, negative, or out-of-range numbers remain numbers — comparison will yield a type mismatch
         (DataValue::Number(n), DataType::Duration) => match Duration::try_from_secs_f64(n.to_f64()) {
             Ok(d) => DataValue::Duration(d),
             Err(_) => value,
@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(coerce_to(DataValue::String("07:30".into()), &DataType::Time), DataValue::Time(parse_time("07:30").unwrap()));
         assert_eq!(coerce_to(DataValue::Number(NumberValue::Int(60)), &DataType::Duration), DataValue::Duration(Duration::from_secs(60)));
         assert_eq!(coerce_to(DataValue::String("abc".into()), &DataType::Time), DataValue::String("abc".into()));
-        // Нескінченність і завеликі числа не перетворюються (і не панікують)
+        // Infinity and out-of-range numbers are not converted (and do not panic)
         for n in [f64::INFINITY, 1e30, -1.0] {
             let v = DataValue::Number(NumberValue::Float(n));
             assert_eq!(coerce_to(v.clone(), &DataType::Duration), v);

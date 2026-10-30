@@ -1,4 +1,4 @@
-//! Бічні панелі (палітра, інспектор) і консоль.
+//! Side panels (palette, inspector) and console.
 
 use std::collections::BTreeMap;
 
@@ -16,11 +16,11 @@ use crate::i18n::{self, t};
 use crate::state::{Editor, LogKind, PaletteDrag, Selection, Tooltip, use_editor};
 use crate::ui::*;
 
-/// Ширина підказки «інфо», px.
+/// Width of the "info" tooltip, in px.
 const TOOLTIP_WIDTH: f64 = 80.0 * DU;
-/// Зсув (px), після якого натискання на пункт палітри стає перетягуванням.
+/// Pointer movement threshold (px) before clicking a palette item becomes a drag.
 const PALETTE_DRAG_THRESHOLD: f64 = 4.0;
-/// Довші значення в інспекторі обрізаються (повне — у підказці).
+/// Longer values in the inspector are truncated (the full text is shown in the tooltip).
 const MAX_VALUE_CHARS: usize = 400;
 
 pub fn property_label(name: &str) -> String {
@@ -40,7 +40,7 @@ pub fn property_label(name: &str) -> String {
     }
 }
 
-/// Значення для показу в інспекторі: рядки в лапках, щоб відрізнити `"5"` від `5`.
+/// Formats a value for display in the inspector: strings are quoted to distinguish `"5"` from `5`.
 pub fn display_value(value: &DataValue) -> String {
     match value {
         DataValue::String(s) => format!("\"{s}\""),
@@ -79,7 +79,7 @@ pub fn relative_time(ms: f64) -> String {
     }
 }
 
-/// Назва піна ноди на полотні з урахуванням перекладу (включно з умовами випадків Match).
+/// Localized pin label for a node instance on the canvas (including Match case conditions).
 fn instance_pin_label(instance: &NodeInstance, pin: PinId, dir: PinDirection, fallback: &str) -> String {
     if instance.definition.type_name == "match"
         && dir == PinDirection::Output
@@ -91,7 +91,7 @@ fn instance_pin_label(instance: &NodeInstance, pin: PinId, dir: PinDirection, fa
     i18n::node_pin_label(&instance.definition.type_name, fallback)
 }
 
-// --- Палітра ---
+// --- Palette ---
 
 #[component]
 pub fn Palette() -> impl IntoView {
@@ -115,7 +115,7 @@ pub fn Palette() -> impl IntoView {
         }
         groups.into_iter().map(|((_, category), defs)| (category, defs)).collect::<Vec<_>>()
     });
-    // Категорія, до якої прокручено список (підсвічується на смузі ліворуч)
+    // Category currently scrolled into view (highlighted in the left rail)
     let active = RwSignal::new(None::<String>);
     let list = NodeRef::<html::Div>::new();
 
@@ -150,7 +150,7 @@ pub fn Palette() -> impl IntoView {
 
     let add = move |type_name: String| {
         let (cx, cy) = view_center(ed);
-        // Невеликий зсув, щоб кілька нових нод не лягали одна на одну
+        // Small offset so multiple newly added nodes don't stack directly on top of each other
         let shift = (ed.nodes.with_untracked(|n| n.len()) % 6) as f64 * 4.0 * DU;
         let position = Position { x: (cx - node_width(&type_name) / 2.0 + shift) as f32, y: (cy - 10.0 * DU + shift) as f32 };
         ed.send(ClientMessage::AddNode { type_name, position });
@@ -220,8 +220,8 @@ pub fn Palette() -> impl IntoView {
     }
 }
 
-/// Блок палітри: назва, піни (ліворуч входи, праворуч виходи) й опис. Клік — нода в центр,
-/// перетягування — нода туди, де відпустили.
+/// Palette block: title, pins (inputs on the left, outputs on the right), and description.
+/// Clicking adds the node to the center; dragging drops it at the release position.
 #[component]
 fn PaletteBlock(def: NodeDefinition, color: &'static str, add: impl Fn(String) + Copy + 'static) -> impl IntoView {
     let ed = use_editor();
@@ -279,7 +279,7 @@ fn PaletteBlock(def: NodeDefinition, color: &'static str, add: impl Fn(String) +
             on:pointermove=move |ev: PointerEvent| move_palette_drag(ed, &ev)
             on:pointerup=move |ev: PointerEvent| match ed.palette_drag.try_update(Option::take).flatten() {
                 Some(drag) if drag.active => drop_on_canvas(ed, &drag, &ev),
-                // Клік без перетягування — додати в центр
+                // Click without dragging — add to center
                 Some(drag) => add(drag.type_name),
                 None => {}
             }
@@ -308,7 +308,7 @@ fn move_palette_drag(ed: Editor, ev: &PointerEvent) {
     });
 }
 
-/// Нода з'являється там, де відпустили кнопку (курсор — над заголовком ноди).
+/// Spawns the node where the pointer was released (cursor positioned over the node header).
 fn drop_on_canvas(ed: Editor, drag: &PaletteDrag, ev: &PointerEvent) {
     let (x, y) = (ev.client_x(), ev.client_y());
     let over_canvas = document()
@@ -325,7 +325,7 @@ fn drop_on_canvas(ed: Editor, drag: &PaletteDrag, ev: &PointerEvent) {
     }
 }
 
-/// Кнопка «інфо»: при наведенні (або дотику) показує детальне пояснення ноди.
+/// "Info" button: shows a detailed node explanation on hover (or tap).
 #[component]
 fn InfoButton(def: NodeDefinition) -> impl IntoView {
     let ed = use_editor();
@@ -346,9 +346,9 @@ fn InfoButton(def: NodeDefinition) -> impl IntoView {
             aria-label=move || t!("palette-info-aria")
             on:mouseenter=move |ev| show_hover(&ev)
             on:mouseleave=move |_| ed.tooltip.set(None)
-            // Не починати перетягування блоку палітри
+            // Do not start dragging the palette block
             on:pointerdown=|ev: PointerEvent| ev.stop_propagation()
-            // На сенсорі наведення немає: дотик показує підказку, дотик деінде — ховає (див. App)
+            // Touch devices have no hover: tap shows the tooltip, tapping elsewhere hides it (see App)
             on:click=move |ev: web_sys::MouseEvent| {
                 ev.stop_propagation();
                 show(&ev);
@@ -359,7 +359,7 @@ fn InfoButton(def: NodeDefinition) -> impl IntoView {
     }
 }
 
-/// Підказка «інфо» поверх усього: праворуч від кнопки, а якщо не влазить — ліворуч.
+/// "Info" tooltip overlay: positioned to the right of the button, or to the left if it doesn't fit.
 #[component]
 pub fn TooltipLayer() -> impl IntoView {
     let ed = use_editor();
@@ -373,7 +373,7 @@ pub fn TooltipLayer() -> impl IntoView {
         let width = TOOLTIP_WIDTH.min(vw - 4.0 * DU);
         let gap = 2.0 * DU;
         let x = if right + gap + width <= vw { right + gap } else { (left - gap - width).max(2.0 * DU) };
-        // У нижній половині екрана — вирівнюємо за низом кнопки, щоб підказка не вилазила за край
+        // In the lower half of the screen, align with the button's bottom edge to keep the tooltip on-screen
         let y = if top < vh / 2.0 { format!("top:{top}px") } else { format!("bottom:{}px", vh - bottom) };
         Some(view! {
             <div class="tooltip" style=format!("left:{x}px;{y};width:{width}px")>
@@ -384,7 +384,7 @@ pub fn TooltipLayer() -> impl IntoView {
     }
 }
 
-/// Привид ноди під курсором під час перетягування з палітри.
+/// Ghost node under the cursor while dragging from the palette.
 #[component]
 pub fn PaletteGhost() -> impl IntoView {
     let ed = use_editor();
@@ -397,12 +397,12 @@ pub fn PaletteGhost() -> impl IntoView {
     }
 }
 
-// --- Інспектор ---
+// --- Inspector ---
 
 #[component]
 pub fn Inspector() -> impl IntoView {
     let ed = use_editor();
-    // Панель плагінів займає місце інспектора
+    // The plugins panel takes the inspector's slot
     let hidden = move || ed.show_plugins.get() || (ed.narrow.get() && ed.selection.get().is_none());
     view! {
         <aside class="panel right" class:hidden=hidden>
@@ -462,7 +462,7 @@ fn NodeInspector(id: NodeId) -> impl IntoView {
             <span class="t-caption">{move || def.with(|d| format!("{} · {}", category_label(&d.category), d.type_name))}</span>
             <span class="t-body-small">{move || def.with(i18n::node_description)}</span>
         </div>
-        // Властивості, значення входів, умови й запуск — на самій ноді
+        // Properties, input values, conditions, and triggers live directly on the node
         <ExecutionInfo id=id />
         <div class="section-title">{move || t!("inspector-section-actions")}</div>
         <div class="panel-section">
@@ -484,7 +484,7 @@ fn NodeInspector(id: NodeId) -> impl IntoView {
     .into_any()
 }
 
-/// Коли нода виконувалась і з якими значеннями на пінах.
+/// When the node last executed and what values were on its pins.
 #[component]
 fn ExecutionInfo(id: NodeId) -> impl IntoView {
     let ed = use_editor();
@@ -505,7 +505,7 @@ fn ExecutionInfo(id: NodeId) -> impl IntoView {
         pins.into_iter().map(|p| {
             let pin = p.id;
             let exec = p.pin_type == PinType::Exec;
-            // (текст, приглушений, підказка)
+            // (text, muted, tooltip)
             let value = move || -> (String, bool, String) {
                 let connected = match dir {
                     PinDirection::Input => ed.is_input_connected(id, pin),
@@ -669,7 +669,7 @@ fn ConnectionInspector(conn: ConnectionModel, exec: bool) -> impl IntoView {
     }
 }
 
-// --- Консоль ---
+// --- Console ---
 
 #[component]
 pub fn ConsolePanel() -> impl IntoView {

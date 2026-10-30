@@ -1,5 +1,5 @@
-//! Значення прямо на ноді: рядки властивостей під заголовком і значення непід'єднаних входів
-//! біля пінів (як параметри комбінаторів Factorio — видно, не відкриваючи інспектор).
+//! Inline values directly on a node: property rows below the header and unconnected input values
+//! next to pins (like Factorio combinator parameters — visible without opening the inspector).
 
 use leptos::prelude::*;
 use ticknode_shared::*;
@@ -11,7 +11,7 @@ use crate::panels::property_label;
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, Switch, flash};
 
-/// Текст значення в полі. Для Any рядок, схожий на число чи true/false, береться в лапки.
+/// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.
 fn value_text(value: &DataValue, value_type: &DataType) -> String {
     match value {
         DataValue::String(s) if *value_type == DataType::Any && !matches!(text::parse_any(s), DataValue::String(_)) => format!("\"{s}\""),
@@ -19,7 +19,7 @@ fn value_text(value: &DataValue, value_type: &DataType) -> String {
     }
 }
 
-/// Розбирає набраний текст; `Ok(None)` — поле очищено.
+/// Parses typed text; `Ok(None)` means the field was cleared.
 fn parse_text(input: &str, value_type: &DataType) -> Result<Option<DataValue>, String> {
     if input.trim().is_empty() && *value_type != DataType::String {
         return Ok(None);
@@ -27,8 +27,8 @@ fn parse_text(input: &str, value_type: &DataType) -> Result<Option<DataValue>, S
     i18n::parse_value_localized(input, value_type).map(Some)
 }
 
-/// Компактне поле значення на ноді. Зміна застосовується по Enter чи втраті фокусу (Esc — скасувати).
-/// Для `Bool` — перемикач. `optional`: значення можна прибрати (очистити поле / третій стан перемикача).
+/// Compact inline value field on a node. Commits on Enter or blur (Esc cancels).
+/// Renders as a toggle for `Bool`. `optional`: the value can be cleared (empty field / third toggle state).
 #[component]
 pub fn InlineValue(
     #[prop(into)] value: Signal<Option<DataValue>>,
@@ -39,7 +39,7 @@ pub fn InlineValue(
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
-    // Натискання на поле не починає перетягування ноди чи рамку виділення
+    // Pressing on the field does not start node dragging or rubber-band selection
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
     if value_type == DataType::Bool {
@@ -53,7 +53,7 @@ pub fn InlineValue(
         };
         return view! {
             <button
-                // Увесь клас одним рядком: окремі `class:` і динамічний `class` перезаписують одне одного
+                // Single combined class string: separate `class:` directives and dynamic `class` would overwrite each other
                 class=move || match value.get() {
                     Some(DataValue::Bool(true)) => "inline-value bool on",
                     Some(DataValue::Bool(false)) => "inline-value bool",
@@ -72,7 +72,7 @@ pub fn InlineValue(
         .into_any();
     }
 
-    // Перелік: значення вибирається зі списку, а не набирається
+    // Enum: value is chosen from a dropdown rather than typed
     let enum_def = ed.types.with_untracked(|types| types.definition_of(&value_type).filter(|d| d.is_enum()).cloned());
     if let Some(def) = enum_def {
         return view! {
@@ -104,7 +104,7 @@ pub fn InlineValue(
     let shown = Memo::new(move |_| value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
     let draft = RwSignal::new(String::new());
     Effect::new(move |_| draft.set(shown.get()));
-    // Поле може втратити фокус уже після того, як його прибрали з DOM — тоді сигнали знищені
+    // The field may lose focus after it has already been removed from the DOM — in that case signals are disposed
     let commit = move || {
         let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked()) else { return };
         if text == saved {
@@ -158,9 +158,9 @@ fn property_value(node: ClientNode, name: &str) -> Option<DataValue> {
     node.instance.with(|i| i.model.properties.iter().find(|(n, _)| n == name).map(|(_, v)| v.clone()))
 }
 
-/// Типи, які можна обрати для `*_type` (елементи списку, поле об'єкта); власні типи додаються з реєстру.
+/// Selectable types for `*_type` properties (list elements, object field); custom types are appended from the registry.
 const TYPE_OPTIONS: [&str; 8] = ["number", "string", "bool", "time", "datetime", "duration", "color", "object"];
-/// Типи значення константи.
+/// Selectable value types for a Constant node.
 const CONST_TYPES: [&str; 7] = ["number", "string", "bool", "time", "datetime", "duration", "color"];
 
 fn default_value(type_name: &str) -> DataValue {
@@ -171,7 +171,7 @@ fn default_value(type_name: &str) -> DataValue {
     }
 }
 
-/// Пари (значення, підпис): вбудовані типи й власні типи плагінів (підпис — `title`).
+/// `(value, label)` pairs: built-in types followed by custom plugin types (labeled with `title`).
 fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
     let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect();
     ed.types.with_untracked(|types| {
@@ -180,7 +180,7 @@ fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
     options
 }
 
-/// Компактний випадний список на ноді.
+/// Compact dropdown select on a node.
 #[component]
 fn InlineSelect(
     mut options: Vec<(String, String)>,
@@ -188,7 +188,7 @@ fn InlineSelect(
     on_select: Callback<String>,
     #[prop(optional, into)] title: Signal<String>,
 ) -> impl IntoView {
-    // Значення, якого немає в списку (тип зниклого плагіна), лишається видимим
+    // A value not present in the options list (from a missing plugin's type) remains visible
     let current = selected.get_untracked();
     if !current.is_empty() && !options.iter().any(|(v, _)| *v == current) {
         options.push((current.clone(), current));
@@ -210,9 +210,9 @@ fn InlineSelect(
     }
 }
 
-/// Рядки властивостей між заголовком ноди і пінами (див. `geometry::is_inline_property`):
-/// типи — випадним списком, логічні — перемикачем, решта — полем. У константи поруч зі значенням
-/// ще й вибір його типу.
+/// Property rows between the node header and pins (see `geometry::is_inline_property`):
+/// types use a dropdown, booleans use a switch, others use an input field. On a Constant node,
+/// a type selector is shown next to the value.
 #[component]
 pub fn NodeProps(id: NodeId) -> impl IntoView {
     let ed = use_editor();
@@ -297,7 +297,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
     .into_any()
 }
 
-/// Значення непід'єднаного входу даних (ставиться в рядку піна).
+/// Value of an unconnected data input (rendered inside the pin row).
 #[component]
 pub fn PinValue(ed: Editor, node: NodeId, pin: PinId, value_type: DataType) -> impl IntoView {
     let Some(client) = ed.node(node) else { return ().into_any() };

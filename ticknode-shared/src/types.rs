@@ -1,9 +1,9 @@
-//! Користувацькі типи даних, які оголошують плагіни: структури (`DataValue::Object` з тегом типу)
-//! і переліки (`DataValue::String` зі значенням з переліку), та реєстр цих типів.
+//! Custom data types declared by plugins: structs (`DataValue::Object` with a type tag)
+//! and enums (`DataValue::String` with a value from the enumeration), plus their registry.
 //!
-//! Типізація строга: `Named(a)` сумісний лише з `Named(a)`, `Any` і (для структури) `Object`,
-//! (для переліку) `String`. У зворотний бік — ні: `Object`/`String` не можна подати на пін
-//! власного типу, бо вони не гарантують ні полів, ні допустимого значення.
+//! Typing is strict: `Named(a)` is compatible only with `Named(a)`, `Any`, and `Object` (for structs)
+//! or `String` (for enums). Not the other way around: `Object`/`String` cannot be fed into a custom-type
+//! pin, because they guarantee neither the required fields nor a valid enum value.
 
 use std::collections::BTreeMap;
 
@@ -17,7 +17,7 @@ pub struct FieldDefinition {
     pub title: String,
     pub description: String,
     pub data_type: DataType,
-    /// Необов'язкове поле може бути відсутнє у значенні (Make не вимагає входу, Break не видає значення).
+    /// An optional field may be absent from the value (Make does not require the input, Break may omit the output).
     pub optional: bool,
 }
 
@@ -39,9 +39,9 @@ impl FieldDefinition {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EnumValue {
-    /// Значення, як воно зберігається й передається (`DataValue::String`).
+    /// The value as stored and passed (`DataValue::String`).
     pub value: String,
-    /// Як показувати в редакторі.
+    /// Display label in the editor.
     pub title: String,
 }
 
@@ -53,11 +53,11 @@ pub enum TypeKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TypeDefinition {
-    /// Повна назва з крапкою, напр. `ha.state`.
+    /// Full dotted name, e.g. `ha.state`.
     pub name: String,
     pub title: String,
     pub description: String,
-    /// `#rrggbb` — колір пінів і дротів; без нього редактор бере колір із хешу назви.
+    /// `#rrggbb` — color of pins and wires; if absent, the editor derives a color from the name hash.
     pub color: Option<String>,
     pub kind: TypeKind,
 }
@@ -67,7 +67,7 @@ impl TypeDefinition {
         Self { name: name.into(), title: title.into(), description: String::new(), color: None, kind: TypeKind::Struct { fields } }
     }
 
-    /// `values` — пари (значення, підпис).
+    /// `values` — (value, label) pairs.
     pub fn new_enum(name: &str, title: &str, values: &[(&str, &str)]) -> Self {
         let values = values.iter().map(|(v, t)| EnumValue { value: (*v).into(), title: (*t).into() }).collect();
         Self { name: name.into(), title: title.into(), description: String::new(), color: None, kind: TypeKind::Enum { values } }
@@ -106,8 +106,8 @@ impl TypeDefinition {
     }
 }
 
-/// Чи це припустима назва власного типу: сегменти `[a-z0-9_-]` через крапку, крапка обов'язкова
-/// (так назву відрізняють від вбудованих типів).
+/// Whether this is a valid custom type name: dot-separated `[a-z0-9_-]` segments, with at least one dot
+/// (which distinguishes custom type names from built-in types).
 pub fn is_type_name(s: &str) -> bool {
     s.contains('.')
         && s.split('.').all(|seg| {
@@ -115,7 +115,7 @@ pub fn is_type_name(s: &str) -> bool {
         })
 }
 
-/// Реєстр оголошених типів (за повною назвою).
+/// Registry of declared types (keyed by full name).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TypeRegistry {
     types: BTreeMap<String, TypeDefinition>,
@@ -134,7 +134,7 @@ impl TypeRegistry {
         self.types.get(name)
     }
 
-    /// Визначення типу, якщо `t` — `Named`.
+    /// Type definition if `t` is `Named`.
     pub fn definition_of(&self, t: &DataType) -> Option<&TypeDefinition> {
         match t {
             DataType::Named(name) => self.get(name),
@@ -142,7 +142,7 @@ impl TypeRegistry {
         }
     }
 
-    /// Прибирає тип (плагін вимкнено). Чи лишились посилання на нього — справа викликача.
+    /// Removes a type (when a plugin is disabled). Handling any remaining references is up to the caller.
     pub fn remove(&mut self, name: &str) -> Option<TypeDefinition> {
         self.types.remove(name)
     }
@@ -155,8 +155,8 @@ impl TypeRegistry {
         self.types.is_empty()
     }
 
-    /// Додає типи пачкою (один плагін): атомарно. Помилка — конфлікт назви, некоректна назва,
-    /// невідомий тип у полі, порожній чи дубльований перелік.
+    /// Inserts a batch of types (from a single plugin) atomically. Fails on name conflict, invalid name,
+    /// unknown field type, or an empty or duplicate enum.
     pub fn insert_all(&mut self, defs: &[TypeDefinition]) -> Result<(), String> {
         let mut next = self.clone();
         for def in defs {
@@ -197,7 +197,7 @@ impl TypeRegistry {
         Ok(())
     }
 
-    /// Усі `Named` усередині `t` мають бути зареєстровані.
+    /// All `Named` types inside `t` must be registered.
     pub fn check_known(&self, t: &DataType) -> Result<(), String> {
         match t {
             DataType::Named(name) if !self.types.contains_key(name) => Err(format!("невідомий тип даних {name}")),
@@ -206,7 +206,7 @@ impl TypeRegistry {
         }
     }
 
-    /// Назва типу для людини: `title` власного типу, інакше технічна назва.
+    /// Human-readable type name: `title` for a custom type, otherwise the technical name.
     pub fn title_of(&self, t: &DataType) -> String {
         match t {
             DataType::Named(name) => self.get(name).map_or_else(|| name.clone(), |d| d.title.clone()),
@@ -215,7 +215,7 @@ impl TypeRegistry {
         }
     }
 
-    /// Чи можна з'єднати вихід типу `src` зі входом типу `dst` (див. правила в документації модуля).
+    /// Whether an output of type `src` can be connected to an input of type `dst` (see module docs for rules).
     pub fn compatible(&self, src: &DataType, dst: &DataType) -> bool {
         match (src, dst) {
             (DataType::Any, _) | (_, DataType::Any) => true,
@@ -228,7 +228,7 @@ impl TypeRegistry {
         }
     }
 
-    /// Значення переліку `t` за замовчуванням — перше з переліку.
+    /// Default value for enum `t` — the first value in the enumeration.
     pub fn default_enum(&self, t: &DataType) -> Option<String> {
         self.definition_of(t).and_then(|d| d.values().first()).map(|v| v.value.clone())
     }
@@ -283,7 +283,7 @@ mod tests {
         assert!(r.get("t.fine").is_none(), "пачка або проходить цілком, або ні");
         assert!(r.insert_all(&[TypeDefinition::new_enum("t.empty", "E", &[])]).is_err());
         assert!(r.insert_all(&[TypeDefinition::new_enum("NoDot", "E", &[("a", "A")])]).is_err());
-        // Тип може посилатись на тип з тієї ж пачки
+        // A type may reference another type from the same batch
         let a = TypeDefinition::new_struct("t.a", "A", vec![FieldDefinition::new("b", "B", named("t.b"))]);
         let b = TypeDefinition::new_enum("t.b", "B", &[("x", "X")]);
         r.insert_all(&[a, b]).unwrap();
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(v.get_type(), named("t.point"));
         let back: DataValue = postcard::from_bytes(&postcard::to_allocvec(&v).unwrap()).unwrap();
         assert_eq!(back, v);
-        // Старий JSON графа (без type_name) читається як звичайний об'єкт
+        // Legacy graph JSON (without type_name) deserializes as a plain object
         let old: DataValue = serde_json::from_str(r#"{"Object":{"fields":{}}}"#).unwrap();
         assert_eq!(old.get_type(), DataType::Object);
     }

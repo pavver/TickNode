@@ -1,22 +1,22 @@
-/// Контракт між рушієм TickNode (хост, wasmtime) і плагіном нод (WASM-компонент).
+/// Contract between the TickNode engine (host, wasmtime) and a node plugin (WASM component).
 ///
-/// Плагін — набір типів нод. Кожна нода графа — окремий ресурс `node` усередині екземпляра
-/// плагіна, тож нода тримає власний стан між викликами. Асинхронна робота (затримки, HTTP)
-/// виконується хостом: плагін отримує `task-id`, а результат приходить пізніше тригером `task`.
+/// A plugin is a set of node types. Each graph node is a separate `node` resource inside the
+/// plugin instance, so a node retains its own state across calls. Async work (delays, HTTP)
+/// is executed by the host: the plugin receives a `task-id`, and the result arrives later via a `task` trigger.
 package ticknode:plugin@0.1.0;
 
 interface types {
-    /// Значення даних — postcard-кодований `ticknode_shared::DataValue`.
-    /// WIT не має рекурсивних типів, а значення бувають вкладеними (списки, об'єкти).
+    /// Data value — postcard-encoded `ticknode_shared::DataValue`.
+    /// WIT has no recursive types, and values can be nested (lists, objects).
     type value = list<u8>;
 
     variant scalar-type {
         %bool, number, %string, time, datetime, duration, color, object, any,
-        /// Власний тип плагіна за повною назвою (`ha.state`), оголошений через `types`.
+        /// Custom plugin type by full name (`ha.state`), declared via `types`.
         named(string),
     }
 
-    /// Тип даних піна: `list-depth = 2`, `base = number` означає `list<list<number>>`.
+    /// Pin data type: `list-depth = 2`, `base = number` means `list<list<number>>`.
     record data-type {
         base: scalar-type,
         list-depth: u8,
@@ -27,30 +27,30 @@ interface types {
         title: string,
         description: string,
         data-type: data-type,
-        /// Необов'язкове поле може бути відсутнє у значенні.
+        /// An optional field may be absent from the value.
         optional: bool,
     }
 
     record enum-value {
-        /// Значення, як воно передається (`DataValue::String`).
+        /// The value as passed (`DataValue::String`).
         value: string,
         title: string,
     }
 
     variant type-kind {
-        /// Структура: значення — `DataValue::Object` з тегом типу.
+        /// Struct: value is a `DataValue::Object` with a type tag.
         structure(list<field-definition>),
-        /// Перелік: значення — `DataValue::String` з переліку.
+        /// Enum: value is a `DataValue::String` from the enumeration.
         enumeration(list<enum-value>),
     }
 
-    /// Власний тип даних плагіна.
+    /// Custom plugin data type.
     record type-definition {
-        /// Повна назва з крапкою, напр. `ha.state`.
+        /// Full dotted name, e.g. `ha.state`.
         name: string,
         title: string,
         description: string,
-        /// `#rrggbb` — колір пінів і дротів у редакторі.
+        /// `#rrggbb` — color of pins and wires in the editor.
         color: option<string>,
         kind: type-kind,
     }
@@ -67,7 +67,7 @@ interface types {
         name: string,
         pin-type: pin-type,
         direction: pin-direction,
-        /// Обов'язковий вхід: без з'єднання чи значення на ноді хост не викликає `execute`.
+        /// Required input: without a connection or value on the node, the host does not call `execute`.
         required: bool,
     }
 
@@ -76,17 +76,17 @@ interface types {
         title: string,
         category: string,
         description: string,
-        /// Детальне пояснення роботи ноди (підказка «інфо» в редакторі).
+        /// Detailed explanation of how the node works ("info" tooltip in the editor).
         help: string,
         pins: list<pin>,
-        /// Нода — джерело подій: хост викликає `node.poll` щотакту. Інакше `poll` не викликається.
+        /// Event source node: the host calls `node.poll` every tick. Otherwise `poll` is not called.
         polls: bool,
     }
 
     variant capability {
-        /// HTTP(S)-запити до доменів зі списку та їхніх піддоменів; `*` — будь-який домен.
+        /// HTTP(S) requests to listed domains and their subdomains; `*` — any domain.
         http(list<string>),
-        /// Власний каталог плагіна, доступний через `std::fs` (WASI) як поточний каталог.
+        /// Plugin's own directory, accessible via `std::fs` (WASI) as the current working directory.
         storage,
     }
 
@@ -99,22 +99,22 @@ interface types {
         text,
         number,
         %bool,
-        /// Токен чи пароль: редактор його не бачить.
+        /// Token or password: the editor cannot read it back.
         secret,
         url,
-        /// Пари (значення, підпис).
+        /// (value, label) pairs.
         select(list<tuple<string, string>>),
     }
 
-    /// Налаштування плагіна, яке користувач задає в інтерфейсі.
+    /// Plugin setting configured by the user in the UI.
     record setting-definition {
         key: string,
         title: string,
         description: string,
         kind: setting-kind,
-        /// Без значення (і без `default`) плагін не вважається налаштованим.
+        /// Without a value (and without a `default`), the plugin is not considered configured.
         required: bool,
-        /// Значення за замовчуванням — postcard-кодований `DataValue`.
+        /// Default value — postcard-encoded `DataValue`.
         default: option<value>,
     }
 
@@ -131,7 +131,7 @@ interface types {
         url: string,
         headers: list<tuple<string, string>>,
         body: list<u8>,
-        /// 0 — типовий тайм-аут хоста.
+        /// 0 — default host timeout.
         timeout-ms: u32,
     }
 
@@ -153,45 +153,45 @@ interface types {
         %result: result<task-output, string>,
     }
 
-    /// Причина виклику `node.execute`.
+    /// Reason for calling `node.execute`.
     variant trigger {
-        /// Імпульс на вхідний exec-пін (або ручний запуск з редактора).
+        /// Pulse on an input exec pin (or manual trigger from the editor).
         pin(u32),
-        /// Завершилась задача, яку нода запустила раніше.
+        /// A task previously started by the node has completed.
         task(task-done),
     }
 
     variant output {
-        /// Імпульс з вихідного exec-піна (наступні ноди виконаються наступного такту).
+        /// Pulse from an output exec pin (downstream nodes execute on the next tick).
         exec(u32),
-        /// Нове значення вихідного піна даних.
+        /// New value on an output data pin.
         data(tuple<u32, value>),
     }
 
     enum log-level { debug, info, warn, error }
 }
 
-/// Сервіси хоста. Функції, що запускають задачі, працюють лише під час `execute`/`poll`
-/// (задача належить ноді, яку зараз виконують).
+/// Host services. Task-starting functions work only during `execute`/`poll`
+/// (the task belongs to the currently executing node).
 interface host {
     use types.{log-level, task-id, http-request};
 
-    /// Повідомлення в консоль редактора (від імені поточної ноди).
+    /// Log message to the editor console (on behalf of the current node).
     log: func(level: log-level, message: string);
 
-    /// Номер поточного такту.
+    /// Current tick number.
     current-tick: func() -> u64;
 
-    /// Тривалість такту в мілісекундах.
+    /// Tick duration in milliseconds.
     tick-duration-ms: func() -> u32;
 
-    /// Затримка на `ticks` тактів; результат — `task-output::delay`.
+    /// Delay for `ticks` ticks; result is `task-output::delay`.
     delay: func(ticks: u64) -> result<task-id, string>;
 
-    /// HTTP-запит; потрібне право `capability::http` на домен.
+    /// HTTP request; requires `capability::http` for the domain.
     start-http: func(request: http-request) -> result<task-id, string>;
 
-    /// Скасовує задачу цієї ж ноди. `false`, якщо задачі вже немає.
+    /// Cancels a task belonging to this node. `false` if the task no longer exists.
     cancel-task: func(id: task-id) -> bool;
 }
 
@@ -200,25 +200,25 @@ interface nodes {
 
     manifest: func() -> plugin-manifest;
 
-    /// Застосовує налаштування (за схемою маніфесту; значення — збережені або типові). Хост викликає
-    /// після завантаження, при кожній зміні налаштувань і після перестворення екземпляра плагіна
-    /// (аварія) — до відтворення нод. `err` показується користувачу; плагін лишається завантаженим.
+    /// Applies settings (following the manifest schema; values are saved or defaults). Called by the host
+    /// after loading, on every settings change, and after recreating the plugin instance
+    /// (crash) — before recreating nodes. `err` is shown to the user; the plugin remains loaded.
     configure: func(settings: list<property>) -> result<_, string>;
 
-    /// Дефініції всіх типів нод з властивостями за замовчуванням.
+    /// Definitions of all node types with default properties.
     definitions: func() -> list<node-definition>;
 
-    /// Власні типи даних плагіна (структури й переліки). Хост читає їх разом із `definitions`.
+    /// Custom plugin data types (structs and enums). The host reads them alongside `definitions`.
     types: func() -> list<type-definition>;
 
     resource node {
-        /// Піни можуть залежати від властивостей.
+        /// Pins may depend on properties.
         definition: func() -> node-definition;
         properties: func() -> list<property>;
         set-property: func(name: string, value: value);
-        /// `inputs` — значення підключених вхідних пінів даних.
+        /// `inputs` — values of connected input data pins.
         execute: func(trigger: trigger, inputs: list<tuple<u32, value>>) -> list<output>;
-        /// Для нод-джерел подій: викликається на початку кожного такту.
+        /// For event source nodes: called at the start of every tick.
         poll: func(tick: u64) -> option<u32>;
     }
 

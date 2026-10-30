@@ -1,8 +1,8 @@
-//! Нода Match прямо на ноді — як вікно комбінатора-вирішувача Factorio. Згори вниз:
-//! вхід In; рядки входів (сокет, ім'я, тип, значення); «+ вхід»; далі випадки — заголовок зі своїм
-//! exec-виходом і рядки умов «вхід  оператор  операнд», де оператори залежать від типу входу;
-//! наприкінці «+ випадок» і вихід Else. Кожна зміна одразу надсилається на сервер (властивості
-//! `inputs` і `cases`); стан — лише з сервера. Висоти рядків — `geometry::NodeLayout`.
+//! In-node Match editor — similar to Factorio's decider combinator window. Top to bottom:
+//! In pin; input rows (socket, name, type, value); "+ input"; then cases — a header with its own
+//! exec output and condition rows "input  operator  operand", where operators depend on the input type;
+//! finally "+ case" and the Else output. Every change is immediately sent to the server (`inputs` and
+//! `cases` properties); state is server-driven only. Row heights match `geometry::NodeLayout`.
 
 use leptos::prelude::*;
 use ticknode_shared::condition::*;
@@ -16,15 +16,15 @@ use crate::inline::{InlineValue, PinValue};
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, Icon, flash, icons};
 
-/// Входи й випадки разом: перейменування чи видалення входу змінює й умови.
+/// Inputs and cases together: renaming or removing an input also updates conditions.
 #[derive(Debug, Clone, PartialEq)]
 struct MatchState {
     inputs: Vec<MatchInput>,
     cases: Vec<MatchCase>,
 }
 
-/// Ефективні типи входів: для «auto» — тип під'єднаного джерела чи значення на ноді.
-/// Пін Else ноди Match (як `MatchNode::ELSE_PIN` у ядрі).
+/// Effective input types: for "auto", the type of the connected source or the on-node value.
+/// Else pin of the Match node (matches `MatchNode::ELSE_PIN` in the core).
 const ELSE_PIN: PinId = PinId(0);
 
 type InputTypes = Vec<(String, DataType)>;
@@ -50,8 +50,8 @@ fn effective_type(ed: Editor, id: NodeId, node: ClientNode, input: &MatchInput) 
         .unwrap_or(DataType::Any)
 }
 
-/// Підганяє умову під тип лівого входу: оператор — з доречних, правий операнд — потрібного типу
-/// (значення по змозі перетворюється, інакше — типове).
+/// Adapts a condition to the left input's type: picks a valid operator and ensures the right operand
+/// has the expected type (converting the value when possible, or falling back to the default).
 fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
     let ops = ops_in(reg, left);
     if !ops.contains(&c.op) {
@@ -79,7 +79,7 @@ fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
     }
 }
 
-/// Перше вільне ім'я: a, b, c, … потім in1, in2, …
+/// First unused name: a, b, c, … then in1, in2, …
 fn free_name(inputs: &[MatchInput]) -> String {
     let taken = |n: &str| inputs.iter().any(|i| i.name == n);
     ('a'..='z').map(String::from)
@@ -95,7 +95,7 @@ fn add_input(s: &mut MatchState) -> String {
     name
 }
 
-/// Нова умова — на перший вхід (без входів — спершу додається вхід).
+/// New condition targeting the first input (if there are no inputs, adds one first).
 fn new_condition(s: &mut MatchState, env: &Env, join: Join) -> Condition {
     let types = &env.types;
     let name = match s.inputs.first() {
@@ -109,7 +109,7 @@ fn new_condition(s: &mut MatchState, env: &Env, join: Join) -> Condition {
     c
 }
 
-/// Що знають правки: ефективні типи входів і реєстр власних типів.
+/// Context passed to edits: effective input types and the custom type registry.
 pub struct Env {
     types: InputTypes,
     reg: TypeRegistry,
@@ -117,7 +117,7 @@ pub struct Env {
 
 type MatchEdit = Box<dyn FnOnce(&mut MatchState, &Env)>;
 
-/// Зміна стану ноди (обгортка, щоб передавати через `Callback`). Другий аргумент — ефективні типи.
+/// Node state mutation (wrapper for passing via `Callback`). The second argument holds effective types.
 pub struct EditFn(MatchEdit);
 
 impl EditFn {
@@ -126,7 +126,7 @@ impl EditFn {
     }
 }
 
-/// Натискання на поле чи кнопку не починає перетягування ноди; на пін чи фон — як завжди.
+/// Clicking a field or button does not start node dragging; clicking a pin or background behaves normally.
 pub fn stop_on_controls(ev: web_sys::PointerEvent) {
     let on_control = ev.target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
@@ -158,13 +158,13 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
         let inputs = state.with(|s| s.inputs.clone());
         inputs.iter().map(|i| (i.name.clone(), effective_type(ed, id, node, i))).collect::<InputTypes>()
     });
-    // Поле може втратити фокус (і застосувати зміну) уже після того, як його прибрали,
-    // тож стан читаємо через try_
+    // A field may lose focus (and commit its change) after already being removed,
+    // so read state via try_
     let edit = Callback::new(move |f: EditFn| {
         let (Some(before), Some(types)) = (state.try_get_untracked(), types.try_get_untracked()) else { return };
         let mut after = before.clone();
         f.0(&mut after, &Env { types, reg: ed.types.get_untracked() });
-        // Входи — першими: умови можуть посилатися на щойно доданий вхід
+        // Send inputs first: conditions may reference a newly added input
         if after.inputs != before.inputs {
             ed.send(ClientMessage::SetProperty { id, name: "inputs".into(), value: string_list(after.inputs.iter().map(MatchInput::to_text)) });
         }
@@ -194,7 +194,7 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
                 </button>
                 <span class="match-section">{move || t!("match-section-cases")}</span>
             </div>
-            // Рядки живуть, поки не зміниться структура (ключі — номер і пін), тож фокус не губиться
+            // Rows stay alive until the structure changes (keyed by index and pin), preserving focus
             <For each=move || state.with(|s| s.cases.iter().enumerate().map(|(i, c)| (i, c.pin)).collect::<Vec<_>>()) key=|k| *k let:key>
                 <CaseBlock node=id state=state types=types ci=key.0 pin=key.1 edit=edit />
             </For>
@@ -203,7 +203,7 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
                     class="mini-btn"
                     title=move || t!("match-add-case-title")
                     on:click=move |_| edit.run(EditFn::new(|s, env| {
-                        // Номер піна — новий, щоб з'єднання інших випадків не переїхали
+                        // Allocate a fresh pin ID so existing case connections don't shift
                         let pin = s.cases.iter().map(|c| c.pin).max().unwrap_or(0) + 1;
                         let c = new_condition(s, env, Join::And);
                         s.cases.push(MatchCase { pin, conditions: vec![c] });
@@ -248,7 +248,7 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
         let types = &env.types;
         let name = s.inputs[ii].name.clone();
         s.inputs[ii].value_type = t.clone();
-        // Для «auto» підходять оператори фактичного типу
+        // For "auto", use operators matching the effective type
         let left = if t == DataType::Any { type_of(types, &Operand::Input(name.clone())) } else { t };
         for c in s.cases.iter_mut().flat_map(|c| c.conditions.iter_mut()) {
             if c.left == Operand::Input(name.clone()) {
@@ -324,7 +324,7 @@ fn CaseBlock(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ci:
             <button
                 class="mini-btn icon"
                 title=move || t!("match-move-down-title")
-                // Вирази з `<` / `>` — у дужках, інакше view! сприйме їх як кінець тегу
+                // Expressions with `<` / `>` must be braced so `view!` doesn't parse them as tag endings
                 prop:disabled={move || ci + 1 >= count()}
                 on:click={move |_| edit.run(EditFn::new(move |s, _| if ci + 1 < s.cases.len() { s.cases.swap(ci, ci + 1) }))}
             >"↓"</button>
@@ -352,7 +352,7 @@ fn CaseBlock(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ci:
     }
 }
 
-/// Що праворуч в умові: нічого (унарний оператор), стала чи інший вхід.
+/// Right-hand side of a condition: none (unary operator), a constant value, or another input.
 #[derive(Debug, Clone, PartialEq)]
 enum Right {
     Value(DataType),
@@ -439,7 +439,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                 {move || {
                     let current = left_text.get();
                     let mut list = names.get();
-                    // Старі умови можуть мати сталу ліворуч або посилання на неіснуючий вхід
+                    // Legacy conditions may have a constant on the left or reference a non-existent input
                     if !list.contains(&current) {
                         list.insert(0, current.clone());
                     }
@@ -480,7 +480,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                             title=move || t!("match-right-source-title")
                             on:change=move |ev| {
                                 let v = event_target_value(&ev);
-                                // Порожній правий операнд fit_condition замінить типовим значенням
+                                // An empty right operand will be replaced with a default value by fit_condition
                                 set_right(if v.is_empty() { None } else { Some(Operand::Input(v)) });
                             }
                         >
@@ -523,8 +523,8 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
     }
 }
 
-/// Текстове поле, що застосовується по Enter чи втраті фокусу (Esc — скасувати). Відмова
-/// `on_commit` повертає попередній текст і показує помилку в консолі.
+/// Text input that commits on Enter or blur (Esc cancels). If `on_commit` returns an error,
+/// reverts to the previous text and logs the error to the console.
 #[component]
 fn TextField(
     #[prop(into)] value: Signal<String>,
@@ -559,7 +559,7 @@ fn TextField(
             on:keydown=move |ev| {
                 let input = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok());
                 match ev.key().as_str() {
-                    // Застосовується при втраті фокусу
+                    // Commits on blur
                     "Enter" => {
                         if let Some(i) = input { let _ = i.blur(); }
                     }
@@ -584,19 +584,19 @@ mod tests {
 
     #[test]
     fn conditions_follow_input_type() {
-        // Число → рядок: «>» не годиться, 5 стає "5"
+        // Number -> string: ">" is invalid, 5 becomes "5"
         let mut c = cond("a > 5");
         fit_condition(&TypeRegistry::new(), &mut c, &DataType::String);
         assert_eq!(c.op, CompareOp::Eq);
         assert_eq!(c.right, Some(Operand::Value(DataValue::String("5".into()))));
-        // «=» годиться й для логічного — лишається, значення стає true/false
+        // "=" is valid for bool as well — stays, value becomes true/false
         fit_condition(&TypeRegistry::new(), &mut c, &DataType::Bool);
         assert_eq!((c.op, c.right.clone()), (CompareOp::Eq, Some(Operand::Value(DataValue::Bool(true)))));
-        // «>» для логічного не годиться — перший доречний, унарний «= true»
+        // ">" is invalid for bool — picks first applicable unary operator "= true"
         let mut c = cond("a > 5");
         fit_condition(&TypeRegistry::new(), &mut c, &DataType::Bool);
         assert_eq!((c.op, c.right.clone()), (CompareOp::IsTrue, None));
-        // Час: значення з'являється потрібного типу
+        // Time: value is converted to the required type
         let mut c = cond("a > b");
         fit_condition(&TypeRegistry::new(), &mut c, &DataType::Time);
         assert_eq!(c.right, Some(Operand::Input("b".into())));

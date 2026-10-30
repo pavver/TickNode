@@ -118,7 +118,7 @@ pub enum DataType {
     List(Box<DataType>),
     Object,
     Any,
-    /// Тип, оголошений плагіном, за повною назвою (`ha.state`); визначення — у `TypeRegistry`.
+    /// Plugin-declared type by full name (`ha.state`); definition lives in `TypeRegistry`.
     Named(String),
 }
 
@@ -144,8 +144,8 @@ pub enum DataValue {
     },
     Object {
         fields: BTreeMap<String, ObjectField>,
-        /// Назва власного типу-структури; `None` — довільний об'єкт.
-        /// Без `skip_serializing_if`: postcard не самоописовий.
+        /// Name of a custom struct type; `None` for an untyped object.
+        /// Without `skip_serializing_if`: postcard is not self-describing.
         #[serde(default)]
         type_name: Option<String>,
     },
@@ -192,7 +192,7 @@ pub struct PinDefinition {
     pub name: String,
     pub pin_type: PinType,
     pub direction: PinDirection,
-    /// Обов'язковий вхід: без під'єднаного джерела чи значення на ноді нода не виконується.
+    /// Required input: without a connected source or an inline value on the node, the node does not execute.
     #[serde(default)]
     pub required: bool,
 }
@@ -210,14 +210,14 @@ pub struct NodeDefinition {
     pub title: String,
     pub category: String,
     pub description: String,
-    /// Детальне пояснення роботи ноди (підказка «інфо» в редакторі).
+    /// Detailed explanation of how the node works ("info" tooltip in the editor).
     #[serde(default)]
     pub help: String,
     pub pins: Vec<PinDefinition>,
 }
 
-/// Значення непід'єднаного вхідного піна даних зберігається серед властивостей ноди
-/// під іменем `in:<id піна>`; рушій підставляє його, поки до піна нічого не під'єднано.
+/// An unconnected input data pin's value is stored among the node's properties
+/// under the name `in:<pin id>`; the engine substitutes it while nothing is connected to the pin.
 const INPUT_VALUE_PREFIX: &str = "in:";
 
 pub fn input_value_property(pin: PinId) -> String {
@@ -228,13 +228,13 @@ pub fn parse_input_value_property(name: &str) -> Option<PinId> {
     name.strip_prefix(INPUT_VALUE_PREFIX)?.parse().ok().map(PinId)
 }
 
-/// Чи можна задати значення входу такого типу прямо на ноді (набирається текстом, див. `text`;
-/// для переліку — вибирається зі списку).
+/// Whether an input of this type can be given a value directly on the node (entered as text, see `text`;
+/// for an enum, selected from a list).
 pub fn input_value_editable(types: &TypeRegistry, t: &DataType) -> bool {
     text::is_text_type_in(types, t)
 }
 
-/// Чи підходить значення як значення входу типу `t` на ноді.
+/// Whether `value` is valid as an inline input value of type `t` on a node.
 pub fn input_value_fits(types: &TypeRegistry, t: &DataType, value: &DataValue) -> bool {
     if let Some(def) = types.definition_of(t) {
         return matches!(value, DataValue::String(s) if def.values().iter().any(|v| &v.value == s));
@@ -243,9 +243,9 @@ pub fn input_value_fits(types: &TypeRegistry, t: &DataType, value: &DataValue) -
     input_value_editable(types, t) && text::is_text_type(&value_type) && types.compatible(&value_type, t)
 }
 
-/// Чи можна з'єднати вихід типу `src` зі входом типу `dst`, коли власних типів немає:
-/// однакові, або хоч один — Any (також усередині списків: `list<number>` → `list<any>`).
-/// З власними типами — `TypeRegistry::compatible`.
+/// Whether an output of type `src` can be connected to an input of type `dst` when there are no custom types:
+/// equal, or at least one is `Any` (also inside lists: `list<number>` → `list<any>`).
+/// With custom types, use `TypeRegistry::compatible`.
 pub fn types_compatible(src: &DataType, dst: &DataType) -> bool {
     TypeRegistry::default().compatible(src, dst)
 }
@@ -270,7 +270,7 @@ pub struct Position {
     pub y: f32,
 }
 
-/// Збережений стан однієї ноди: тип + властивості, з яких її можна відтворити через реєстр.
+/// Persisted state of a single node: type + properties from which it can be recreated via the registry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NodeModel {
     pub id: NodeId,
@@ -279,7 +279,7 @@ pub struct NodeModel {
     pub position: Position,
 }
 
-/// Повний граф (або фрагмент для копіювання) у форматі, незалежному від реалізації нод.
+/// Complete graph (or a fragment for copying) in a format independent of node implementations.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphModel {
     pub nodes: Vec<NodeModel>,
@@ -287,18 +287,18 @@ pub struct GraphModel {
     pub data_connections: Vec<ConnectionModel>,
 }
 
-/// Нода разом з її поточною дефініцією (піни можуть залежати від властивостей).
+/// A node paired with its current definition (pins may depend on properties).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NodeInstance {
     pub model: NodeModel,
     pub definition: NodeDefinition,
-    /// Нода-заглушка: плагін її типу недоступний (вимкнений, не завантажений). Текст — пояснення
-    /// для редактора. Властивості й піни збережені, але нода не виконується й не редагується.
+    /// Stub node: the plugin for its type is unavailable (disabled or not loaded). The text is an explanation
+    /// for the editor. Properties and pins are preserved, but the node cannot execute or be edited.
     #[serde(default)]
     pub unavailable: Option<String>,
 }
 
-// --- Протокол сервер <-> редактор (postcard поверх WebSocket) ---
+// --- Server <-> editor protocol (postcard over WebSocket) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ClientMessage {
@@ -311,64 +311,64 @@ pub enum ClientMessage {
     ConnectData(ConnectionModel),
     DisconnectData { dst_node: NodeId, dst_pin: PinId },
     TriggerNode { id: NodeId, pin: PinId },
-    /// Значення непід'єднаного входу даних; `None` — прибрати (нода візьме своє за замовчуванням).
+    /// Value of an unconnected data input; `None` clears it (the node falls back to its default).
     SetInputValue { id: NodeId, pin: PinId, value: Option<DataValue> },
-    /// Вставити фрагмент графа (копіювання/дублювання). Ноди отримують нові ID,
-    /// позиції беруться з фрагмента як є.
+    /// Paste a graph fragment (copy/duplicate). Nodes receive new IDs;
+    /// positions are taken from the fragment as-is.
     Paste(GraphModel),
-    /// Увімкнути чи вимкнути плагін на льоту (без перезапуску сервера).
+    /// Enable or disable a plugin on the fly (without restarting the server).
     SetPluginEnabled { name: String, enabled: bool },
-    /// Зберегти налаштування плагіна. Ключі, яких немає в списку, лишаються як були.
+    /// Save plugin settings. Keys not present in the list remain unchanged.
     ConfigurePlugin { name: String, values: Vec<(String, SettingUpdate)> },
 }
 
-/// Що нода отримала й видала під час останнього виконання (для інспектора редактора).
+/// What a node received and emitted during its last execution (for the editor inspector).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NodeTrace {
     pub node_id: NodeId,
     pub tick: u64,
-    /// Підключені входи даних; `None` — джерело ще не мало значення.
+    /// Connected data inputs; `None` means the source had no value yet.
     pub inputs: Vec<(PinId, Option<DataValue>)>,
-    /// Відомі значення вихідних пінів даних після виконання.
+    /// Known values of output data pins after execution.
     pub outputs: Vec<(PinId, DataValue)>,
-    /// Exec-виходи, що спрацювали.
+    /// Exec outputs that fired.
     pub fired: Vec<PinId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ServerMessage {
-    /// Повний знімок стану — надсилається одразу після підключення.
+    /// Full state snapshot — sent immediately after connecting.
     Init {
         definitions: Vec<NodeDefinition>,
         nodes: Vec<NodeInstance>,
         exec_connections: Vec<ConnectionModel>,
         data_connections: Vec<ConnectionModel>,
-        /// Останні виконання нод і скільки мілісекунд тому вони були.
+        /// Latest node executions and how many milliseconds ago they occurred.
         traces: Vec<(NodeTrace, u64)>,
-        /// Власні типи даних, оголошені плагінами.
+        /// Custom data types declared by plugins.
         types: Vec<TypeDefinition>,
-        /// Усі знайдені плагіни зі станом і налаштуваннями (секрети — лише «задано/не задано»).
+        /// All discovered plugins with their state and settings (secrets only indicate whether set).
         plugins: Vec<PluginInfo>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
     NodeMoved { id: NodeId, position: Position },
-    /// Властивості змінились (дефініція могла змінитись теж).
+    /// Properties changed (the definition may have changed as well).
     NodeUpdated(NodeInstance),
     ExecConnected(ConnectionModel),
     ExecDisconnected(ConnectionModel),
     DataConnected(ConnectionModel),
     DataDisconnected { dst_node: NodeId, dst_pin: PinId },
-    /// Ноди, що виконались за останній такт, з їхніми входами й виходами.
+    /// Nodes executed on the latest tick, with their inputs and outputs.
     Executed(Vec<NodeTrace>),
-    /// Лише ініціатору `AddNode` / `Paste`: ID створених нод (щоб їх виділити).
-    /// Приходить після відповідних `NodeAdded`.
+    /// Sent only to the initiator of `AddNode` / `Paste`: IDs of created nodes (to select them).
+    /// Arrives after the corresponding `NodeAdded` messages.
     Created(Vec<NodeId>),
     Log { node_id: NodeId, message: String },
-    /// Стан чи налаштування плагіна змінились.
+    /// Plugin state or settings changed.
     PluginUpdated(PluginInfo),
-    /// Набір типів нод і даних змінився (плагін увімкнено чи вимкнено): нові дефініції для палітри.
-    /// Змінені ноди приходять окремо як `NodeUpdated`.
+    /// The set of node and data types changed (plugin enabled or disabled): new definitions for the palette.
+    /// Affected nodes arrive separately as `NodeUpdated`.
     Catalog { definitions: Vec<NodeDefinition>, types: Vec<TypeDefinition> },
     Error(String),
 }
@@ -388,7 +388,7 @@ pub fn parse_data_type(s: &str) -> Option<DataType> {
             if let Some(inner) = other.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
                 return parse_data_type(inner).map(|t| DataType::List(Box::new(t)));
             }
-            // Власний тип: регістр зберігається (назви типів — малі літери, але не вгадуємо)
+            // Custom type: case is preserved (type names are lowercase, but we do not guess)
             let name = s.trim();
             return is_type_name(name).then(|| DataType::Named(name.to_string()));
         }
@@ -412,12 +412,12 @@ pub fn data_type_name(t: &DataType) -> String {
 }
 
 
-/// Права, які плагін запитує в маніфесті. Хост перевіряє їх при кожному зверненні плагіна.
+/// Permissions requested by a plugin in its manifest. Enforced by the host on every plugin call.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Capability {
-    /// HTTP(S) до доменів зі списку та їхніх піддоменів; `*` — будь-який домен.
+    /// HTTP(S) to listed domains and their subdomains; `*` — any domain.
     Http { allowed_domains: Vec<String> },
-    /// Власний ізольований каталог плагіна (через WASI-файлову систему).
+    /// Plugin's own isolated directory (via the WASI filesystem).
     Storage,
 }
 
@@ -427,7 +427,7 @@ pub struct PluginManifest {
     pub version: String,
     pub author: String,
     pub requested_capabilities: Vec<Capability>,
-    /// Схема налаштувань, які користувач задає в інтерфейсі (URL, токен…).
+    /// Schema of settings configured by the user in the UI (URL, token, etc.).
     pub settings: Vec<SettingDefinition>,
 }
 

@@ -1,7 +1,7 @@
-//! Рушій живе в окремому потоці (актор): такти й команди редактора обробляються послідовно,
-//! тож `TickEngine` не потребує блокувань. Потік не належить tokio: виклики плагінів
-//! (синхронний wasmtime-wasi) не можна робити всередині async-контексту. Мережеві задачі
-//! рушій запускає в runtime сервера через `HostState::runtime`.
+//! The engine lives on a dedicated thread (actor): ticks and editor commands are processed sequentially,
+//! so `TickEngine` needs no locks. The thread does not belong to tokio: plugin calls
+//! (synchronous wasmtime-wasi) cannot be made inside an async context. Network tasks
+//! are spawned by the engine onto the server runtime via `HostState::runtime`.
 
 use std::collections::HashMap;
 use std::sync::mpsc as std_mpsc;
@@ -17,7 +17,7 @@ use crate::plugins::Plugins;
 use crate::storage::Storage;
 
 const SAVE_DEBOUNCE: Duration = Duration::from_secs(1);
-/// Більший фрагмент — найімовірніше, помилка або зловживання.
+/// A larger fragment is almost certainly a bug or abuse.
 const MAX_PASTE_NODES: usize = 1000;
 
 pub enum Command {
@@ -26,7 +26,7 @@ pub enum Command {
     Shutdown(oneshot::Sender<()>),
 }
 
-/// Доступ до актора для HTTP/WebSocket обробників.
+/// Handle to the engine actor for HTTP/WebSocket handlers.
 #[derive(Clone)]
 pub struct EngineHandle {
     commands: std_mpsc::Sender<Command>,
@@ -34,7 +34,7 @@ pub struct EngineHandle {
 }
 
 impl EngineHandle {
-    /// Події для всіх редакторів, уже закодовані в postcard.
+    /// Events broadcast to all editors, pre-encoded with postcard.
     pub fn subscribe(&self) -> broadcast::Receiver<Bytes> {
         self.events.subscribe()
     }
@@ -49,7 +49,7 @@ impl EngineHandle {
         rx.await.ok()
     }
 
-    /// Зупиняє рушій і чекає на фінальне збереження графа.
+    /// Stops the engine and waits for the final graph save to complete.
     pub async fn shutdown(&self) {
         let (tx, rx) = oneshot::channel();
         if self.commands.send(Command::Shutdown(tx)).is_ok() {
@@ -86,9 +86,9 @@ struct Actor {
     storage: Storage,
     plugins: Plugins,
     events: broadcast::Sender<Bytes>,
-    /// Коли граф уперше змінився після останнього збереження.
+    /// When the graph was first modified since the last save.
     dirty_since: Option<Instant>,
-    /// Останнє виконання кожної ноди (лише в пам'яті: це стан роботи, а не графа).
+    /// Latest execution of each node (in-memory only: runtime state, not part of the graph).
     traces: HashMap<NodeId, (NodeTrace, Instant)>,
 }
 
@@ -100,7 +100,7 @@ impl Actor {
             if now >= next_tick {
                 self.tick();
                 next_tick += tick;
-                // Пропущені такти не наздоганяємо (рушій був зайнятий довше за такт).
+                // Do not catch up on missed ticks (if the engine was busy longer than a tick).
                 if next_tick <= now {
                     next_tick = now + tick;
                 }
@@ -114,7 +114,7 @@ impl Actor {
                 Ok(Command::Client { msg, reply }) => match self.apply(msg, &reply) {
                     Ok((events, created)) => {
                         events.iter().for_each(|e| self.broadcast(e));
-                        // Після розсилки: `NodeAdded` уже в каналі подій, а ws-сесія віддає його першим
+                        // Sent after broadcast: `NodeAdded` is already in the event channel, and the ws session delivers it first
                         if let Some(ids) = created {
                             let _ = reply.send(ServerMessage::Created(ids));
                         }
@@ -156,7 +156,7 @@ impl Actor {
     }
 
     fn broadcast(&self, msg: &ServerMessage) {
-        // Помилка означає лише відсутність підписників.
+        // An error simply means there are no active subscribers.
         let _ = self.events.send(encode(msg));
     }
 
@@ -168,7 +168,7 @@ impl Actor {
             Ok(()) => self.dirty_since = None,
             Err(e) => {
                 error!("Не вдалось зберегти граф: {:#}", e);
-                // Повторна спроба — після наступного інтервалу дебаунсу.
+                // Retry after the next debounce interval.
                 self.dirty_since = Some(Instant::now());
             }
         }
@@ -203,8 +203,8 @@ impl Actor {
         if self.engine.has_node(id) { Ok(()) } else { Err(format!("Ноду {:?} не знайдено", id)) }
     }
 
-    /// Застосовує команду редактора; повертає події для розсилки всім редакторам і ID нод,
-    /// створених для ініціатора (`ServerMessage::Created`).
+    /// Applies an editor command; returns events to broadcast to all editors and the IDs of nodes
+    /// created for the initiator (`ServerMessage::Created`).
     fn apply(
         &mut self,
         msg: ClientMessage,
@@ -294,7 +294,7 @@ impl Actor {
                 if let Some(warning) = outcome.warning {
                     let _ = reply.send(ServerMessage::Error(warning));
                 }
-                // Нові дефініції — першими, щоб редактор знав піни перетворених нод
+                // Send new definitions first so the editor knows the pins of converted nodes
                 let mut events = vec![self.catalog()];
                 events.extend(outcome.change.replaced.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeUpdated));
                 if !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {

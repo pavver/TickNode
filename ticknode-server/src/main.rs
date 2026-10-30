@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
 
     let mut engine = TickEngine::new();
-    // Плагіни — до графа: так ноди їхніх типів одразу справжні, а не заглушки
+    // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
     let mut plugins = plugins::Plugins::new(&config.data_dir);
     plugins.load_all(&mut engine);
 
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             shutdown_signal().await;
             info!("Отримано сигнал зупинки, зберігаємо граф");
             shutdown_handle.shutdown().await;
-            // Відкриті WebSocket-з'єднання не повинні тримати процес.
+            // Open WebSocket connections must not keep the process alive.
             tokio::spawn(async {
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 std::process::exit(0);
@@ -109,7 +109,7 @@ mod tests {
         ws.send(Message::Binary(postcard::to_allocvec(&msg).unwrap().into())).await.unwrap();
     }
 
-    /// Наступне повідомлення, що не є телеметрією.
+    /// Next non-telemetry message.
     async fn recv(ws: &mut Socket) -> ServerMessage {
         loop {
             let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
@@ -122,7 +122,7 @@ mod tests {
         }
     }
 
-    /// Наступне повідомлення будь-якого типу (з тайм-аутом).
+    /// Next message of any kind (with timeout).
     async fn recv_any(ws: &mut Socket) -> ServerMessage {
         loop {
             let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
@@ -149,7 +149,7 @@ mod tests {
 
         send(&mut ws, ClientMessage::AddNode { type_name: "const".into(), position: Position { x: 1.0, y: 2.0 } }).await;
         let ServerMessage::NodeAdded(c) = recv(&mut ws).await else { panic!() };
-        // Ініціатор дізнається, яку ноду створено, — після NodeAdded
+        // The initiator learns which node was created after NodeAdded
         assert_eq!(recv(&mut ws).await, ServerMessage::Created(vec![c.model.id]));
         send(&mut ws, ClientMessage::AddNode { type_name: "test/debug".into(), position: Position::default() }).await;
         let ServerMessage::NodeAdded(dbg) = recv(&mut ws).await else { panic!() };
@@ -163,11 +163,11 @@ mod tests {
         send(&mut ws, ClientMessage::ConnectData(conn)).await;
         assert_eq!(recv(&mut ws).await, ServerMessage::DataConnected(conn));
 
-        // Невалідне з'єднання — помилка лише цьому клієнту
+        // Invalid connection — error sent only to this client
         send(&mut ws, ClientMessage::ConnectExec(conn)).await;
         assert!(matches!(recv(&mut ws).await, ServerMessage::Error(_)));
 
-        // Тригер ноди: Debug пише лог, а сервер розсилає трасу з входами
+        // Node trigger: Debug writes a log, and the server broadcasts the execution trace with inputs
         send(&mut ws, ClientMessage::TriggerNode { id: dbg.model.id, pin: PinId(0) }).await;
         let (mut traced, mut logged) = (false, false);
         while !(traced && logged) {
@@ -185,12 +185,12 @@ mod tests {
             }
         }
 
-        // Новий редактор отримує останні виконання в знімку
+        // A newly connected editor receives the latest execution traces in its snapshot
         let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
         let ServerMessage::Init { traces, .. } = recv(&mut ws2).await else { panic!("очікували Init") };
         assert!(traces.iter().any(|(t, _)| t.node_id == dbg.model.id));
 
-        // Вставка копії обох нод зі з'єднанням: нові ID, задані позиції, Created — лише ініціатору й після NodeAdded
+        // Paste a copy of both nodes with their connection: new IDs, preserved positions, Created sent only to initiator and after NodeAdded
         let mut snippet = ticknode_shared::GraphModel {
             nodes: vec![updated.model.clone(), dbg.model.clone()],
             exec_connections: vec![],
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(saved_const.position, Position { x: 1.0, y: 2.0 });
     }
 
-    /// Збирає сирі байти всіх отриманих повідомлень (щоб перевірити, що секрет не витікає).
+    /// Collects raw bytes of all received messages (to verify that secrets never leak).
     async fn recv_logged(ws: &mut Socket, seen: &mut Vec<u8>) -> ServerMessage {
         loop {
             let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
@@ -250,7 +250,7 @@ mod tests {
         handle: actor::EngineHandle,
     }
 
-    /// Сервер на каталозі даних `dir` (як `main`: плагіни — до графа).
+    /// Starts a server on data directory `dir` (same order as `main`: plugins before the graph).
     async fn start(dir: &Path) -> Server {
         let mut engine = TickEngine::new();
         let mut plugins = plugins::Plugins::new(dir);
@@ -289,7 +289,7 @@ mod tests {
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", server.addr)).await.unwrap();
         let mut seen = Vec::new();
 
-        // Init: плагін ввімкнено, але configure відхилив порожній токен
+        // Init: plugin is enabled, but configure rejected the empty token
         let ServerMessage::Init { plugins, definitions, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("очікували Init") };
         let info = plugin_of(&plugins);
         assert_eq!((info.state, info.file.as_str()), (PluginState::Enabled, "test_plugin.wasm"));
@@ -300,7 +300,7 @@ mod tests {
         assert!(definitions.iter().any(|d| d.type_name == "test/greeter"));
         assert!(!dir.path().join("plugin-config/test_plugin.json").exists(), "без дій користувача файлу конфігурації немає");
 
-        // Збереження налаштувань: секрет у відповіді — лише «задано»
+        // Save settings: secret in the response only indicates that it is set
         let secret = "s3cret-token-value";
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
             ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
@@ -311,7 +311,7 @@ mod tests {
         assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: true })));
         assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Привіт".into())))));
 
-        // Файл конфігурації: токен збережено, права 0600
+        // Config file: token is saved, permissions are 0600
         let config_path = dir.path().join("plugin-config/test_plugin.json");
         let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert_eq!(saved["enabled"], true);
@@ -322,7 +322,7 @@ mod tests {
             assert_eq!(std::fs::metadata(&config_path).unwrap().permissions().mode() & 0o777, 0o600);
         }
 
-        // Нода плагіна бачить нові налаштування без перезапуску
+        // Plugin node sees the updated settings without a restart
         send(&mut ws, ClientMessage::AddNode { type_name: "test/greeter".into(), position: Position { x: 3.0, y: 4.0 } }).await;
         let ServerMessage::NodeAdded(greeter) = recv_logged(&mut ws, &mut seen).await else { panic!() };
         assert_eq!(greeter.unavailable, None);
@@ -337,11 +337,11 @@ mod tests {
             }
         }
 
-        // Помилка configure: плагін лишається завантаженим, помилка в PluginUpdated
+        // configure error: plugin stays loaded, error is reported in PluginUpdated
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String("bad".into())))] }).await;
         let ServerMessage::PluginUpdated(info) = recv_logged(&mut ws, &mut seen).await else { panic!() };
         assert_eq!((info.state, info.settings_error.as_deref()), (PluginState::Enabled, Some("невірний токен")));
-        // «Не змінювати» лишає секрет; помилка лише ініціатору
+        // `Keep` preserves the secret; validation error goes only to the initiator
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![
             ("token".into(), SettingUpdate::Set(DataValue::String(secret.into()))),
             ("greeting".into(), SettingUpdate::Set(DataValue::Number(ticknode_shared::NumberValue::Int(1)))),
@@ -353,7 +353,7 @@ mod tests {
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "nope".into(), values: vec![] }).await;
         assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Error(_)));
 
-        // Вимкнення: каталог без типів плагіна, нода — заглушка, потім PluginUpdated
+        // Disabling: catalog drops plugin types, node becomes a stub, followed by PluginUpdated
         send(&mut ws, ClientMessage::ConfigurePlugin { name: "test_plugin".into(), values: vec![("token".into(), SettingUpdate::Set(DataValue::String(secret.into())))] }).await;
         assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::PluginUpdated(_)));
         send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: false }).await;
@@ -368,10 +368,10 @@ mod tests {
         let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert_eq!(saved["enabled"], false);
 
-        // Секрет нікуди не потрапив із повідомлень сервера
+        // Secret never appeared in any server messages
         assert!(!contains(&seen, secret.as_bytes()), "секрет у повідомленнях редактору");
 
-        // Перезапуск: плагін лишається вимкненим, граф зберігає ноду плагіна як заглушку
+        // Restart: plugin stays disabled, graph preserves the plugin node as a stub
         server.handle.shutdown().await;
         let on_disk: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(dir.path().join("graph.json")).unwrap()).unwrap();
         assert_eq!(on_disk.nodes.len(), 1);
@@ -383,7 +383,7 @@ mod tests {
         assert_eq!(nodes.len(), 1);
         assert!(nodes[0].unavailable.is_some());
 
-        // Увімкнення на льоту оживляє ноду з тими ж налаштуваннями
+        // Enabling on the fly revives the node with the same settings
         send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: true }).await;
         assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::Catalog { .. }));
         let ServerMessage::NodeUpdated(live) = recv_logged(&mut ws, &mut seen).await else { panic!() };

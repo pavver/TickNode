@@ -1,6 +1,6 @@
-//! Копіювання й вставка нод. Фрагмент — `GraphModel` у JSON з міткою формату, тож його можна
-//! вставити в інший редактор (вкладку) або зберегти як текст. Працює через події `copy`/`paste`
-//! документа — без Clipboard API, якому потрібен HTTPS.
+//! Node copy and paste. A snippet is a `GraphModel` serialized as JSON with a format tag, so it can
+//! be pasted into another editor (tab) or saved as text. Works via document `copy`/`paste` events —
+//! without the Clipboard API, which requires HTTPS.
 
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ struct Envelope {
     graph: GraphModel,
 }
 
-/// Виділені ноди з їхніми поточними позиціями та з'єднаннями між ними.
+/// Selected nodes with their current positions and the connections between them.
 pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
     let ids = ed.selected_nodes();
     if ids.is_empty() {
@@ -56,7 +56,7 @@ pub fn snap_point((x, y): (f64, f64)) -> (f64, f64) {
     (snap(x) as f64, snap(y) as f64)
 }
 
-/// Зсуває фрагмент так, щоб його лівий верхній кут опинився в `at`, і надсилає на сервер.
+/// Offsets the snippet so its top-left corner lands at `at` and sends it to the server.
 pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
     let min_x = graph.nodes.iter().map(|n| n.position.x as f64).fold(f64::INFINITY, f64::min);
     let min_y = graph.nodes.iter().map(|n| n.position.y as f64).fold(f64::INFINITY, f64::min);
@@ -66,8 +66,8 @@ pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
     ed.send(ClientMessage::Paste(graph));
 }
 
-/// Вставка тексту з буфера: ноди ще не створюються, а з'являються під курсором (або в центрі
-/// видимої області) і їдуть за ним до підтвердження (`place_paste`) чи скасування (`cancel_paste`).
+/// Pastes text from the clipboard: nodes are not created yet, but appear under the cursor (or at the
+/// viewport center) and follow it until confirmed (`place_paste`) or cancelled (`cancel_paste`).
 pub fn paste_text(ed: Editor, text: &str) {
     let Some(mut graph) = from_text(text) else {
         ed.log(LogKind::Error, t!("log-error-empty-clipboard"));
@@ -97,7 +97,7 @@ pub fn cancel_paste(ed: Editor) -> bool {
     pending
 }
 
-/// Копія виділених нод зі зсувом униз-управо.
+/// Duplicates selected nodes shifted down and to the right.
 pub fn duplicate(ed: Editor) {
     let Some(graph) = selection_snippet(ed) else { return };
     let min_x = graph.nodes.iter().map(|n| n.position.x as f64).fold(f64::INFINITY, f64::min);
@@ -105,7 +105,7 @@ pub fn duplicate(ed: Editor) {
     paste_at(ed, graph, (min_x + 6.0 * DU, min_y + 6.0 * DU));
 }
 
-/// Видаляє виділені ноди або дріт.
+/// Deletes the selected nodes or wire.
 pub fn delete_selection(ed: Editor) {
     use crate::state::Selection;
     match ed.selection.get_untracked() {
@@ -116,7 +116,7 @@ pub fn delete_selection(ed: Editor) {
     }
 }
 
-/// Копіює виділення через подію `copy` (працює з кнопки, бо викликається з жесту користувача).
+/// Copies the selection via a `copy` event (works from a button because it is triggered by a user gesture).
 pub fn copy_via_command() -> bool {
     use wasm_bindgen::JsCast;
     leptos::prelude::document()

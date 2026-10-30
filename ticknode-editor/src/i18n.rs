@@ -1,6 +1,6 @@
-//! Інтернаціоналізація редактора на Mozilla Fluent (дві локалі: `uk` та `en`).
-//! Файли перекладів вбудовані у WASM під час компіляції (`include_str!`), активна мова
-//! зберігається в `localStorage` і передається через контекст Leptos.
+//! Editor internationalization powered by Mozilla Fluent (two locales: `uk` and `en`).
+//! Translation files are embedded into WASM at compile time (`include_str!`), while the active
+//! locale is persisted in `localStorage` and provided via Leptos context.
 
 use std::cell::Cell;
 
@@ -66,7 +66,7 @@ struct Bundles {
 fn build_bundle(code: &str, sources: &[&str]) -> FluentBundle<FluentResource> {
     let langid: LanguageIdentifier = code.parse().expect("коректний ідентифікатор мови");
     let mut bundle = FluentBundle::new(vec![langid]);
-    // Без символів ізоляції двонапрямленого тексту (U+2068/U+2069) навколо підставлених значень
+    // Disable Unicode bidi isolation characters (U+2068/U+2069) around interpolated values
     bundle.set_use_isolating(false);
     for src in sources {
         let res = FluentResource::try_new((*src).to_string()).expect("коректний FTL-ресурс");
@@ -80,13 +80,13 @@ thread_local! {
         uk: build_bundle("uk", &[UK_UI_FTL, UK_NODES_FTL]),
         en: build_bundle("en", &[EN_UI_FTL, EN_NODES_FTL]),
     };
-    /// Сигнал активної мови для викликів поза деревом компонентів (наприклад, колбеки WebSocket).
+    /// Active locale signal for calls outside the component tree (e.g., WebSocket callbacks).
     static LOCALE_SIGNAL: Cell<Option<RwSignal<Locale>>> = const { Cell::new(None) };
-    /// Запасна локаль для тестів та середовищ без реактивного власника.
+    /// Fallback locale for tests and environments without a reactive owner.
     static FALLBACK_LOCALE: Cell<Locale> = const { Cell::new(Locale::Uk) };
 }
 
-/// Визначає початкову мову: збережена в `localStorage`, інакше мова браузера (`uk*` → `uk`, решта → `en`).
+/// Detects the initial locale: saved in `localStorage`, otherwise browser language (`uk*` → `uk`, else `en`).
 pub fn detect_locale() -> Locale {
     if let Some(saved) = window()
         .local_storage()
@@ -103,7 +103,7 @@ pub fn detect_locale() -> Locale {
     }
 }
 
-/// Зберігає вибір мови в `localStorage` та оновлює `<html lang="...">`. Помилки сховища ігноруються.
+/// Persists the locale choice in `localStorage` and updates `<html lang="...">`. Storage errors are ignored.
 pub fn persist_locale(locale: Locale) {
     FALLBACK_LOCALE.with(|c| c.set(locale));
     if let Some(root) = document().document_element() {
@@ -114,7 +114,7 @@ pub fn persist_locale(locale: Locale) {
     }
 }
 
-/// Надає сигнал мови в контекст Leptos і реєструє його для нереактивних колбеків.
+/// Provides the locale signal in Leptos context and registers it for non-reactive callbacks.
 pub fn provide_locale(initial: Locale) -> RwSignal<Locale> {
     let signal = RwSignal::new(initial);
     FALLBACK_LOCALE.with(|c| c.set(initial));
@@ -127,7 +127,7 @@ pub fn use_locale() -> RwSignal<Locale> {
     expect_context::<RwSignal<Locale>>()
 }
 
-/// Поточна мова (з реактивною підпискою, якщо викликано всередині реактивного контексту).
+/// Current locale (with reactive subscription when called inside a reactive context).
 pub fn current_locale() -> Locale {
     if let Some(sig) = use_context::<RwSignal<Locale>>().or_else(|| LOCALE_SIGNAL.with(Cell::get))
         && let Some(locale) = sig.try_get()
@@ -137,7 +137,7 @@ pub fn current_locale() -> Locale {
     FALLBACK_LOCALE.with(Cell::get)
 }
 
-/// Виконує замикання з явно заданою локаллю (для модульних тестів).
+/// Runs a closure with an explicitly set locale (for unit tests).
 #[cfg(test)]
 pub fn with_locale<R>(locale: Locale, f: impl FnOnce() -> R) -> R {
     let prev_sig = LOCALE_SIGNAL.with(|c| c.replace(None));
@@ -148,7 +148,7 @@ pub fn with_locale<R>(locale: Locale, f: impl FnOnce() -> R) -> R {
     res
 }
 
-/// Шукає повідомлення за ключем у поточній локалі; `None`, якщо ключа немає.
+/// Looks up a message by key in the current locale; returns `None` if the key is missing.
 pub fn try_translate(key: &str, args: Option<&FluentArgs<'_>>) -> Option<String> {
     let locale = current_locale();
     BUNDLES.with(|bundles| {
@@ -163,12 +163,12 @@ pub fn try_translate(key: &str, args: Option<&FluentArgs<'_>>) -> Option<String>
     })
 }
 
-/// Перекладає рядок за ключем; якщо ключа немає, повертає сам ключ.
+/// Translates a string by key; returns the key itself if not found.
 pub fn translate(key: &str, args: Option<&FluentArgs<'_>>) -> String {
     try_translate(key, args).unwrap_or_else(|| key.to_string())
 }
 
-/// Макрос локалізації: `t!("key")` або `t!("key", count = n, name = s)`.
+/// Localization macro: `t!("key")` or `t!("key", count = n, name = s)`.
 macro_rules! t {
     ($key:expr) => {
         $crate::i18n::translate($key, None)
@@ -184,14 +184,14 @@ macro_rules! t {
 
 pub(crate) use t;
 
-// --- Переклад вбудованих нод за `type_name` ---
+// --- Built-in node translations by `type_name` ---
 
 fn node_slug(type_name: &str) -> String {
     type_name.replace('/', "-")
 }
 
 pub fn node_title(def: &NodeDefinition) -> String {
-    // На полотні ноди змінних мають динамічну назву змінної у заголовку (`Get counter`, `Set x`)
+    // On the canvas, variable nodes include the dynamic variable name in their title (`Get counter`, `Set x`)
     if (def.type_name == "variable/get" && def.title != "Get my_var")
         || (def.type_name == "variable/set" && def.title != "Set my_var")
     {
@@ -227,7 +227,7 @@ pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
     pin_name.to_string()
 }
 
-// --- Типи даних, підказки полів і розбір значень ---
+// --- Data types, field hints, and value parsing ---
 
 pub fn type_name_label(name: &str) -> String {
     match name {
@@ -278,7 +278,7 @@ pub fn parse_value_localized(input: &str, t: &DataType) -> Result<DataValue, Str
     })
 }
 
-// --- Оператори та форматування умов Match ---
+// --- Match condition operators and formatting ---
 
 pub fn op_symbol(op: CompareOp) -> String {
     match op {
@@ -395,7 +395,7 @@ mod tests {
             "ключі ui.ftl та nodes.ftl не повинні перетинатися"
         );
 
-        // Перевірка ініціалізації бандлів обох мов
+        // Verify bundle initialization for both locales
         BUNDLES.with(|b| {
             for key in uk_ui.iter().chain(uk_nodes.iter()) {
                 assert!(b.uk.has_message(key), "немає ключа {key} в uk bundle");
@@ -404,7 +404,7 @@ mod tests {
         });
     }
 
-    /// Знаходить усі виклики макроса перекладу у вихідному коді файлу (ігноруючи рядки-коментарі).
+    /// Finds all translation macro calls in a source file (ignoring comment lines).
     fn scan_t_calls(src: &str) -> Vec<String> {
         let cleaned: String = src
             .lines()
@@ -499,7 +499,7 @@ mod tests {
             }
         }
 
-        // Нода плагіна (якої немає в .ftl) повертає серверні рядки як є
+        // Plugin node (not present in .ftl) falls back to server-provided strings as-is
         let plugin_def = NodeDefinition {
             type_name: "weather/forecast".into(),
             title: "Weather Forecast".into(),

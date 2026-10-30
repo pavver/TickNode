@@ -1,8 +1,8 @@
-//! Налаштування плагінів і стан плагінів для редактора.
+//! Plugin settings and plugin state for the editor.
 //!
-//! Плагін описує схему налаштувань у маніфесті (`SettingDefinition`); значення зберігає сервер
-//! (`data/plugin-config/<назва>.json`) і передає плагіну викликом `configure`. Секрети (токени)
-//! ніколи не йдуть у редактор: `PluginInfo` містить про них лише «задано / не задано».
+//! A plugin declares its settings schema in the manifest (`SettingDefinition`); the server stores values
+//! (`data/plugin-config/<name>.json`) and passes them to the plugin via `configure`. Secrets (tokens)
+//! are never sent to the editor: `PluginInfo` only reports whether each secret is set or not.
 
 use serde::{Deserialize, Serialize};
 
@@ -13,10 +13,10 @@ pub enum SettingKind {
     Text,
     Number,
     Bool,
-    /// Токен чи пароль: не показується в редакторі й не потрапляє в його повідомлення.
+    /// Token or password: not displayed in the editor and never included in its messages.
     Secret,
     Url,
-    /// Пари (значення, підпис).
+    /// (value, label) pairs.
     Select(Vec<(String, String)>),
 }
 
@@ -26,7 +26,7 @@ pub struct SettingDefinition {
     pub title: String,
     pub description: String,
     pub kind: SettingKind,
-    /// Без значення (і без `default`) плагін не вважається налаштованим.
+    /// Without a value (and without a `default`), the plugin is not considered configured.
     pub required: bool,
     pub default: Option<DataValue>,
 }
@@ -42,7 +42,7 @@ impl SettingDefinition {
     pub fn secret(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Secret) }
     pub fn url(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Url) }
 
-    /// `options` — пари (значення, підпис).
+    /// `options` — (value, label) pairs.
     pub fn select(key: &str, title: &str, options: &[(&str, &str)]) -> Self {
         let options = options.iter().map(|(v, t)| ((*v).into(), (*t).into())).collect();
         Self::new(key, title, SettingKind::Select(options))
@@ -63,7 +63,7 @@ impl SettingDefinition {
         self
     }
 
-    /// Перевіряє, що значення підходить за типом схеми.
+    /// Validates that the value matches the schema kind.
     pub fn check(&self, value: &DataValue) -> Result<(), String> {
         let ok = match (&self.kind, value) {
             (SettingKind::Text | SettingKind::Secret, DataValue::String(_)) => true,
@@ -81,23 +81,23 @@ impl SettingDefinition {
     }
 }
 
-/// Що редактор надсилає для одного налаштування.
+/// What the editor sends for a single setting.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SettingUpdate {
     Set(DataValue),
-    /// Не змінювати (для секретів: редактор не знає поточного значення).
+    /// Keep unchanged (for secrets: the editor does not know the current value).
     Keep,
-    /// Прибрати значення (діє типове, якщо воно є).
+    /// Clear the value (falls back to the default if present).
     Clear,
 }
 
-/// Значення налаштування для редактора.
+/// Setting value representation for the editor.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SettingValueView {
     Value(DataValue),
-    /// Секрет: лише чи задано.
+    /// Secret: only whether it is set.
     Secret { is_set: bool },
-    /// Немає ні значення, ні типового.
+    /// Neither a saved value nor a default exists.
     Unset,
 }
 
@@ -105,7 +105,7 @@ pub enum SettingValueView {
 pub enum PluginState {
     Enabled,
     Disabled,
-    /// Плагін не завантажився (див. `PluginInfo::error`).
+    /// Plugin failed to load (see `PluginInfo::error`).
     Error,
 }
 
@@ -114,14 +114,14 @@ pub struct PluginInfo {
     pub name: String,
     pub version: String,
     pub author: String,
-    /// Файл у каталозі плагінів.
+    /// Filename in the plugins directory.
     pub file: String,
     pub state: PluginState,
-    /// Причина стану `Error`.
+    /// Reason for the `Error` state.
     pub error: Option<String>,
-    /// Помилка останнього `configure` (плагін при цьому лишається завантаженим).
+    /// Error from the last `configure` call (the plugin remains loaded).
     pub settings_error: Option<String>,
-    /// Права, яких плагін просить (сервер видає запитані).
+    /// Permissions requested by the plugin (granted by the server).
     pub capabilities: Vec<Capability>,
     pub settings: Vec<SettingDefinition>,
     pub values: Vec<(String, SettingValueView)>,

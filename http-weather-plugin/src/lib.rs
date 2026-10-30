@@ -1,7 +1,7 @@
-//! Приклад мережевого плагіна: температура для міста через HTTP.
+//! Example network plugin: fetches city temperature over HTTP.
 //!
-//! Сервіс за адресою з властивості `url` (`{city}` замінюється назвою міста) має відповідати
-//! текстом `температура,опис`, наприклад `22.5,Sunny`.
+//! The service at the `url` property (`{city}` is replaced with the city name) is expected to respond
+//! with plain text `temperature,description`, for example `22.5,Sunny`.
 
 use ticknode_plugin_sdk::*;
 
@@ -62,7 +62,7 @@ impl PluginNode for WeatherNode {
                     c if c.is_empty() => "Kyiv".to_string(),
                     c => c,
                 };
-                // Новий запит робить попередній неактуальним.
+                // A new request supersedes any in-flight one.
                 if let Some(task) = self.pending.take() {
                     host::cancel(task);
                 }
@@ -128,7 +128,7 @@ impl Plugin for WeatherPlugin {
 
 export_plugin!(WeatherPlugin);
 
-/// Percent-encoding компонента URL: `Kyiv&units=imperial` лишається значенням, а не новими параметрами.
+/// Percent-encoding for a URL component: `Kyiv&units=imperial` stays a literal value rather than injecting query parameters.
 fn encode_component(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for byte in text.bytes() {

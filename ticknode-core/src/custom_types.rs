@@ -1,8 +1,8 @@
-//! Власні типи даних плагінів: реєстрація в рушії та автоматичні ноди «Make <Тип>» / «Break <Тип>».
+//! Custom plugin data types: engine registration and auto-generated `Make <Type>` / `Break <Type>` nodes.
 //!
-//! Для кожної структури рушій сам додає дві чисті ноди: `type/make/<назва>` збирає значення з полів,
-//! `type/break/<назва>` розбирає його на поля. Піни стабільні: у Make вихід — пін 0, поля — 1..=N;
-//! у Break вхід — пін 0, поля — 1..=N (у порядку оголошення; нові поля додавайте в кінець).
+//! For each struct type, the engine automatically registers two pure nodes: `type/make/<name>` constructs a value from fields,
+//! and `type/break/<name>` decomposes a value into fields. Pins are stable: in Make, the output is pin 0 and fields are 1..=N;
+//! in Break, the input is pin 0 and fields are 1..=N (in declaration order; append new fields at the end).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -25,12 +25,12 @@ fn field_pin(index: usize, field: &FieldDefinition, direction: PinDirection) -> 
         name: if field.title.is_empty() { field.name.clone() } else { field.title.clone() },
         pin_type: PinType::Data(field.data_type.clone()),
         direction,
-        // Обов'язкове поле — обов'язковий вхід Make
+        // Required field — required Make input
         required: direction == PinDirection::Input && !field.optional,
     }
 }
 
-/// «Make <Тип>»: поля → значення типу.
+/// `Make <Type>`: fields → typed value.
 pub struct TypeMakeNode {
     id: NodeId,
     def: Arc<TypeDefinition>,
@@ -66,7 +66,7 @@ impl Node for TypeMakeNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let mut fields = BTreeMap::new();
         for (i, f) in self.def.fields().iter().enumerate() {
-            // Обов'язкові входи рушій перевірив до виконання; необов'язкове поле без значення пропускається
+            // The engine verified required inputs before execution; an optional field without a value is skipped
             if let Some(value) = ctx.get_value(PinId(i as u32 + 1)) {
                 fields.insert(f.name.clone(), ObjectField { name: f.name.clone(), description: f.description.clone(), value });
             } else if !f.optional {
@@ -77,7 +77,7 @@ impl Node for TypeMakeNode {
     }
 }
 
-/// «Break <Тип>»: значення типу → поля.
+/// `Break <Type>`: typed value → fields.
 pub struct TypeBreakNode {
     id: NodeId,
     def: Arc<TypeDefinition>,
@@ -119,13 +119,13 @@ impl Node for TypeBreakNode {
 }
 
 impl TickEngine {
-    /// Реєструє типи плагіна й ноди Make/Break для його структур. `nodes` — дефініції нод того ж
-    /// плагіна: їхні піни можуть посилатись лише на відомі типи. Усе або нічого.
+    /// Registers plugin types and Make/Break nodes for its structs. `nodes` are the node definitions
+    /// of the same plugin: their pins may only reference known types. All-or-nothing.
     pub fn register_types(&mut self, defs: &[TypeDefinition], nodes: &[NodeDefinition]) -> Result<(), String> {
         self.register_types_owned(None, defs, nodes)
     }
 
-    /// Те саме від імені плагіна `owner`: типи й ноди Make/Break знімаються разом з ним.
+    /// Same on behalf of plugin `owner`: types and Make/Break nodes are unregistered along with it.
     pub fn register_types_owned(&mut self, owner: Option<&str>, defs: &[TypeDefinition], nodes: &[NodeDefinition]) -> Result<(), String> {
         let mut types = self.types.clone();
         types.insert_all(defs)?;

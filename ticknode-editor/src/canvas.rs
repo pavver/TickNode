@@ -1,4 +1,4 @@
-//! Полотно редактора: ноди (DOM) і дроти (SVG) у спільному трансформованому шарі.
+//! Editor canvas: nodes (DOM) and wires (SVG) in a shared transformed layer.
 
 use std::collections::HashMap;
 
@@ -18,7 +18,7 @@ use crate::ui::{Icon, icons};
 use crate::state::{EXEC_HIGHLIGHT_MS, Editor, LogKind, Selection, use_editor};
 
 pub const CANVAS_ID: &str = "ticknode-canvas";
-/// Зсув курсора (px), після якого натискання вважається перетягуванням, а не кліком.
+/// Pointer movement threshold (px) after which a press is treated as a drag rather than a click.
 const DRAG_THRESHOLD: f64 = 3.0;
 const GRID: f64 = 5.0 * DU;
 
@@ -34,16 +34,16 @@ struct WireEnd {
 enum Drag {
     Idle,
     Pan { start: (f64, f64), origin: Camera, moved: bool },
-    /// Перетягування виділених нод; `clicked` — нода під курсором.
+    /// Dragging selected nodes; `clicked` is the node under the cursor.
     Nodes { origins: Vec<(NodeId, Position)>, start_world: (f64, f64), start: (f64, f64), moved: bool, clicked: NodeId },
     Wire { from: WireEnd },
     Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
-    /// Рамка виділення (екранні координати полотна). `additive` — Shift/Ctrl: додати до виділення.
+    /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
     Box { start: (f64, f64), additive: bool },
 }
 
-/// Рамка виділення як у CAD: зліва направо — «вікно» (нода має бути всередині повністю),
-/// справа наліво — «перетин» (достатньо торкнутись).
+/// CAD-style selection marquee: left-to-right is a "window" (node must be completely inside),
+/// right-to-left is "crossing" (touching is enough).
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct SelectBox {
     start: (f64, f64),
@@ -60,7 +60,7 @@ impl SelectBox {
     }
 }
 
-/// Ноди, які захоплює рамка (у світових координатах).
+/// Nodes captured by the selection box (in world coordinates).
 fn nodes_in_box(ed: Editor, b: SelectBox) -> Vec<NodeId> {
     let view = ed.view.get_untracked();
     let (x0, y0, x1, y1) = b.rect();
@@ -89,14 +89,14 @@ fn canvas_element() -> Option<Element> {
     document().get_element_by_id(CANVAS_ID)
 }
 
-/// Центр видимої області у світових координатах.
+/// Center of the visible viewport in world coordinates.
 pub fn view_center(ed: Editor) -> (f64, f64) {
     let rect = canvas_element().map(|c| c.get_bounding_client_rect());
     let (w, h) = rect.map(|r| (r.width(), r.height())).unwrap_or((800.0, 600.0));
     ed.view.get_untracked().to_world(w / 2.0, h / 2.0)
 }
 
-/// Масштаб і зсув, за яких видно всі ноди.
+/// Adjusts zoom and pan so that all nodes fit in the viewport.
 pub fn fit_view(ed: Editor) {
     let Some(rect) = canvas_element().map(|c| c.get_bounding_client_rect()) else { return };
     let bounds = ed.nodes.with_untracked(|nodes| {
@@ -151,7 +151,7 @@ fn parse_wire(el: &Element) -> Option<Selection> {
     Some(if el.get_attribute("data-wire")? == "exec" { Selection::Exec(c) } else { Selection::Data(c) })
 }
 
-/// Фрагмент, що вставляється, їде за курсором (`p` — координати полотна).
+/// Moves the pending paste fragment along with the cursor (`p` is in canvas coordinates).
 fn move_paste(ed: Editor, p: (f64, f64)) {
     if ed.pending_paste.with_untracked(|p| p.is_none()) {
         return;
@@ -189,8 +189,8 @@ pub fn Canvas() -> impl IntoView {
             .unwrap_or((0.0, 0.0))
     };
 
-    // Нові позиції перетягнутих нод — на сервер. Позицію вже змінено локально, тож перерване
-    // перетягування (pointercancel, другий палець) теж надсилається, інакше редактор і сервер розійдуться.
+    // Send new positions of dragged nodes to the server. Positions were already updated locally, so an
+    // interrupted drag (pointercancel, second finger) is also sent to keep editor and server in sync.
     let send_moves = move |origins: Vec<(NodeId, Position)>| {
         for (id, origin) in origins {
             if let Some(node) = ed.node(id) {
@@ -221,7 +221,7 @@ pub fn Canvas() -> impl IntoView {
         }
         match state {
             Drag::Pan { moved: false, .. } => ed.selection.set(None),
-            // Клік без перетягування по ноді з групи — виділяємо лише її.
+            // Clicking a node in a group without dragging selects only that node.
             Drag::Nodes { moved: false, clicked, .. } => ed.select_nodes([clicked]),
             Drag::Box { start, additive } => {
                 let b = boxed.unwrap_or(SelectBox { start, end: start });
@@ -263,7 +263,7 @@ pub fn Canvas() -> impl IntoView {
 
     let on_pointer_down = move |ev: PointerEvent| {
         let p = local_point(&ev);
-        // Розміщення вставки: ЛКМ (або дотик) ставить, ПКМ скасовує, середня — зсув як завжди
+        // Paste placement: LMB (or tap) places, RMB cancels, middle button pans as usual
         if ed.pending_paste.with_untracked(|p| p.is_some()) && ev.button() != 1 {
             match ev.button() {
                 0 => {
@@ -285,7 +285,7 @@ pub fn Canvas() -> impl IntoView {
             let _ = c.set_pointer_capture(ev.pointer_id());
         }
 
-        // Другий палець — масштабування жестом
+        // Second finger starts pinch-to-zoom
         let active: Vec<(f64, f64)> = pointers.with_value(|ps| ps.values().copied().collect());
         if active.len() == 2 {
             if let Drag::Nodes { origins, moved: true, .. } = drag.get_value() {
@@ -304,13 +304,13 @@ pub fn Canvas() -> impl IntoView {
         let world = view.to_world(p.0, p.1);
         let target = ev.target();
         if ev.button() == 1 {
-            // Середня кнопка — зсув полотна (як у CAD), звідки б не почали
+            // Middle button pans the canvas (CAD-style), regardless of where the press started
             ev.prevent_default();
             drag.set_value(Drag::Pan { start: p, origin: view, moved: true });
             panning.set(true);
         } else if let Some(end) = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el)) {
             let mut from = end;
-            // Тягнемо від підключеного входу даних — від'єднуємо і переносимо дріт
+            // Dragging from a connected data input disconnects and relocates the existing wire
             if end.dir == PinDirection::Input && !end.exec {
                 let existing = ed.data.with_untracked(|d| d.iter().find(|c| c.dst_node == end.node && c.dst_pin == end.pin).copied());
                 if let Some(c) = existing {
@@ -325,7 +325,7 @@ pub fn Canvas() -> impl IntoView {
             ed.selection.set(Some(sel));
         } else if let Some(id) = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s)) {
             if additive(&ev) {
-                // Shift/Ctrl+клік — додати ноду до виділення або прибрати з нього
+                // Shift/Ctrl+click toggles the node in the selection
                 let mut ids = ed.selected_nodes();
                 match ids.iter().position(|n| *n == id) {
                     Some(i) => { ids.remove(i); }
@@ -342,7 +342,7 @@ pub fn Canvas() -> impl IntoView {
                 .collect();
             drag.set_value(Drag::Nodes { origins, start_world: world, start: p, moved: false, clicked: id });
         } else if ev.pointer_type() == "touch" {
-            // На сенсорному екрані палець по фону зсуває полотно
+            // On touch screens, dragging the background with one finger pans the canvas
             drag.set_value(Drag::Pan { start: p, origin: view, moved: false });
             panning.set(true);
         } else {
@@ -372,7 +372,7 @@ pub fn Canvas() -> impl IntoView {
                 if moved {
                     let (wx, wy) = ed.view.get_untracked().to_world(p.0, p.1);
                     let (dx, dy) = (wx - start_world.0, wy - start_world.1);
-                    // Прив'язка до сітки 1 DU
+                    // Snap to 1 DU grid
                     let snap = |v: f64| ((v / DU).round() * DU) as f32;
                     for (id, origin) in &origins {
                         if let Some(node) = ed.node(*id) {
@@ -429,7 +429,7 @@ pub fn Canvas() -> impl IntoView {
             on:pointerup=move |ev| finish(&ev, true)
             on:pointercancel=move |ev| finish(&ev, false)
             on:pointerleave=move |_| ed.pointer_world.set_value(None)
-            // Інакше браузер вмикає автопрокрутку на середню кнопку
+            // Prevent the browser from activating middle-click autoscroll
             on:mousedown=|ev: web_sys::MouseEvent| if ev.button() == 1 { ev.prevent_default() }
             on:wheel=on_wheel
             on:contextmenu=|ev| ev.prevent_default()
@@ -475,12 +475,12 @@ pub fn Canvas() -> impl IntoView {
     }
 }
 
-/// Відступ рамки виділення від нод (у світових координатах). Групова рамка ширша,
-/// щоб не зливатися з рамками окремих нод (`.multi-select .node.selected::before`).
+/// Padding of the selection bounds around nodes (in world coordinates). The group frame is wider
+/// so it doesn't merge with individual node outlines (`.multi-select .node.selected::before`).
 const BOUNDS_PAD: f64 = 3.0 * DU;
 const GROUP_BOUNDS_PAD: f64 = 5.0 * DU;
 
-/// Пунктирна рамка навколо виділених нод; для групи — з кількістю нод.
+/// Dashed bounding box around selected nodes; shows the node count for multi-selection.
 #[component]
 fn SelectionBounds() -> impl IntoView {
     let ed = use_editor();
@@ -514,8 +514,8 @@ fn SelectionBounds() -> impl IntoView {
     })
 }
 
-/// Напівпрозорий «привид» фрагмента, що вставляється. Дефініції беруться з реєстру за типом —
-/// для нод, чиї піни залежать від властивостей, вигляд може трохи відрізнятися від результату.
+/// Translucent "ghost" of the fragment being pasted. Definitions are looked up in the registry by type —
+/// for nodes whose pins depend on properties, the preview may differ slightly from the final result.
 #[component]
 fn PastePreview() -> impl IntoView {
     let ed = use_editor();
@@ -545,14 +545,14 @@ fn PastePreview() -> impl IntoView {
         let nodes = pending.graph.nodes.iter().map(|n| {
             let p = positions[&n.id];
             let def = defs.get(&n.id).cloned().flatten();
-            // Привид — лише заголовок і піни (без полів), але розміром як справжня нода
+            // Ghost renders only header and pins (no fields), but matches the real node's size
             let height = layouts.get(&n.id).map_or(MIN_NODE_HEIGHT, |l| l.height);
             let top = layouts.get(&n.id).map_or(0.0, |l| l.pins_top);
             let (title, category) = def.as_ref().map_or((n.type_name.clone(), String::new()), |d| (i18n::node_title(d), category_label(&d.category)));
             let layout = layouts.get(&n.id).cloned();
             let pin_list = |dir: PinDirection| def.as_ref().map(|d| pins(d, dir).map(|pin| {
                 let exec = pin.pin_type == PinType::Exec;
-                // Позиція — з розкладки (у Match виходи стоять біля своїх випадків)
+                // Position comes from the layout (in Match, outputs sit next to their respective cases)
                 let y = layout.as_ref().and_then(|l| l.anchor(Position::default(), pin.id, dir)).map_or(0.0, |(_, y)| y - top);
                 let side = if dir == PinDirection::Input { "left:0" } else { "right:0" };
                 let pin_label = i18n::node_pin_label(&d.type_name, &pin.name);
@@ -640,8 +640,8 @@ fn PendingWire(from: RwSignal<Option<WireEnd>>, cursor: RwSignal<(f64, f64)>) ->
     }
 }
 
-/// Пін, з якого нода запускається вручну: перший exec-вхід; для джерел подій (Clock, кнопка) —
-/// їхній exec-вихід.
+/// Pin used to trigger a node manually: first exec input; for event sources (Clock, button),
+/// their exec output.
 pub fn trigger_pin(def: &NodeDefinition) -> Option<PinId> {
     let exec = |dir| def.pins.iter().find(|p| p.direction == dir && p.pin_type == PinType::Exec).map(|p| p.id);
     exec(PinDirection::Input).or_else(|| exec(PinDirection::Output))
@@ -670,7 +670,7 @@ fn NodeView(id: NodeId) -> impl IntoView {
             .map(|p| view! { <Pin node=id pin=p dir=dir /> })
             .collect_view()
     };
-    // Нода-заглушка: плагін її типу недоступний — нода приглушена, властивості не редагуються
+    // Stub node: its plugin is unavailable — the node is dimmed and properties are read-only
     let unavailable = Memo::new(move |_| node.instance.with(|i| i.unavailable.clone()));
     let trigger = Memo::new(move |_| if unavailable.with(Option::is_some) { None } else { def.with(trigger_pin) });
     view! {
@@ -693,7 +693,7 @@ fn NodeView(id: NodeId) -> impl IntoView {
                     <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}
                 {move || trigger.get().map(|pin| view! {
-                    // Кнопка — для неї нода й існує, тож «запустити» видно завжди; решті — при наведенні
+                    // For ClickButton, triggering is its entire purpose, so "run" is always visible; for others, on hover
                     <button
                         class="node-run"
                         class:always=move || def.with(|d| d.type_name == "test/click_button")
@@ -706,7 +706,7 @@ fn NodeView(id: NodeId) -> impl IntoView {
                 })}
             </div>
             <NodeProps id=id />
-            // Match малює свої рядки сам: входи з іменем і типом, далі випадки
+            // Match renders its own rows: named/typed inputs followed by cases
             {move || if is_match() {
                 view! { <MatchBody id=id top=Signal::derive(move || layout.with(|l| l.pins_top)) /> }.into_any()
             } else {
@@ -725,7 +725,7 @@ pub fn Pin(
     node: NodeId,
     pin: PinDefinition,
     dir: PinDirection,
-    /// Підпис замість імені піна.
+    /// Custom label overriding the pin name.
     #[prop(optional, into)]
     label: Option<Signal<String>>,
 ) -> impl IntoView {
@@ -741,7 +741,7 @@ pub fn Pin(
     let is_required = pin.required;
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
-    // Непід'єднаному входу даних можна задати значення прямо тут
+    // An unconnected data input can have an inline value set right here
     let value = match &pin.pin_type {
         PinType::Data(t) if is_input && ed.types.with_untracked(|types| input_value_editable(types, t)) => {
             let t = t.clone();
@@ -773,7 +773,7 @@ pub fn Pin(
     };
     view! {
         <div
-            // Увесь клас одним рядком: динамічний `class` перезаписує окремі `class:`
+            // Single-string class attribute: a dynamic `class` would overwrite separate `class:` bindings
             class=move || match (is_input, missing()) {
                 (true, true) => "pin in missing",
                 (true, false) => "pin in",

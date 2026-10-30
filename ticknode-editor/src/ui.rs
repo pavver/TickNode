@@ -1,4 +1,4 @@
-//! Компоненти Operator UI (дизайн-система NotifiApp), перенесені з Kotlin/Compose на Leptos.
+//! Operator UI components (NotifiApp design system), ported from Kotlin/Compose to Leptos.
 
 use std::time::Duration;
 
@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use crate::i18n::t;
 use crate::state::{LogKind, LogLine};
 
-/// Тривалість активної фази Success/Error (далі — 500 мс згасання рамки в CSS).
+/// Duration of the active Success/Error phase (followed by a 500 ms border fade-out in CSS).
 const RESULT_FLASH: Duration = Duration::from_millis(800);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,7 +31,7 @@ impl ControlState {
     }
 }
 
-/// Переводить стан у Success/Error і повертає в Idle після активної фази.
+/// Transitions state to Success/Error and resets it to Idle after the active flash duration.
 pub fn flash(state: RwSignal<ControlState>, result: ControlState) {
     state.set(result);
     set_timeout(
@@ -45,7 +45,7 @@ pub fn flash(state: RwSignal<ControlState>, result: ControlState) {
 }
 
 pub mod icons {
-    // Material-гліфи у viewBox 24×24 (ті самі, що в OperatorIcons.kt).
+    // Material glyphs in a 24x24 viewBox (matching OperatorIcons.kt).
     pub const ADD: &str = "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z";
     pub const DELETE: &str = "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
     pub const CLOSE: &str = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
@@ -58,7 +58,7 @@ pub mod icons {
     pub const FIT: &str = "M5 15H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z";
     pub const THEME: &str = "M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6z";
     pub const INFO: &str = "M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z";
-    // Категорії нод
+    // Node categories
     pub const BOLT: &str = "M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z";
     pub const CALL_SPLIT: &str = "M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3z";
     pub const SCHEDULE: &str = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z";
@@ -83,7 +83,7 @@ pub fn Icon(path: &'static str) -> impl IntoView {
     }
 }
 
-/// Біжучий сегмент рамки для Pending (25% периметра, за годинниковою стрілкою).
+/// Animated border segment for Pending (25% of the perimeter, clockwise).
 #[component]
 fn PendingRun(state: Signal<ControlState>) -> impl IntoView {
     move || {
@@ -97,7 +97,7 @@ fn PendingRun(state: Signal<ControlState>) -> impl IntoView {
     }
 }
 
-/// Ефективний стан: зовнішній (якщо не Idle) має пріоритет над локальним.
+/// Effective state: external state (when non-Idle) takes precedence over local state.
 fn effective(external: Option<Signal<ControlState>>, local: RwSignal<ControlState>) -> Signal<ControlState> {
     Signal::derive(move || match external.map(|s| s.get()) {
         Some(s) if s != ControlState::Idle => s,
@@ -105,7 +105,7 @@ fn effective(external: Option<Signal<ControlState>>, local: RwSignal<ControlStat
     })
 }
 
-/// OperatorActionButton: прямокутна кнопка зі станами; ширина не змінюється під час Pending/flash.
+/// OperatorActionButton: rectangular stateful button; width remains constant during Pending/flash.
 #[component]
 pub fn ActionButton(
     #[prop(into)] text: Signal<String>,
@@ -114,7 +114,7 @@ pub fn ActionButton(
     #[prop(optional)] danger: bool,
     #[prop(optional)] full: bool,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
-    /// Дія без підтвердження від сервера: одразу показати Success.
+    /// Action without server confirmation: immediately flash Success.
     #[prop(optional)] flash_on_click: bool,
 ) -> impl IntoView {
     let local = RwSignal::new(ControlState::Idle);
@@ -130,7 +130,7 @@ pub fn ActionButton(
     };
     view! {
         <button
-            // Увесь клас одним рядком: окремі `class:` стиралися б, коли змінюється стан
+            // Single-string class attribute: separate `class:` bindings would be wiped on state change
             class=move || format!(
                 "btn ctl {}{}{}",
                 state.get().class(),
@@ -153,7 +153,7 @@ pub fn ActionButton(
     }
 }
 
-/// OperatorIconButton: квадратна кнопка 9 DU.
+/// OperatorIconButton: 9 DU square icon button.
 #[component]
 pub fn IconButton(
     icon: &'static str,
@@ -174,21 +174,21 @@ pub fn IconButton(
     }
 }
 
-/// OperatorTextField: поле з кнопкою SAVE, що з'являється, коли значення змінено.
+/// OperatorTextField: text input with a SAVE button that appears when the value is modified.
 #[component]
 pub fn TextField(
-    /// Збережене значення (з сервера).
+    /// Saved value (from the server).
     #[prop(into)] value: Signal<String>,
     #[prop(optional, into)] placeholder: Signal<String>,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
-    /// Без `on_save` поле працює як живий пошук через `on_input`.
+    /// Without `on_save`, the field acts as a live search input via `on_input`.
     #[prop(optional)] on_save: Option<Callback<String>>,
     #[prop(optional)] on_input: Option<Callback<String>>,
     #[prop(optional)] icon: Option<&'static str>,
     #[prop(optional)] numeric: bool,
 ) -> impl IntoView {
     let draft = RwSignal::new(value.get_untracked());
-    // Нове значення з сервера замінює чернетку
+    // A new value from the server replaces the draft
     Effect::new(move |_| draft.set(value.get()));
 
     let local = RwSignal::new(ControlState::Idle);
@@ -231,21 +231,21 @@ pub fn TextField(
     }
 }
 
-/// OperatorAsyncSwitch: позиція змінюється лише після підтвердження (значення з сервера).
+/// OperatorAsyncSwitch: thumb position changes only after confirmation (server value update).
 #[component]
 pub fn Switch(
     #[prop(into)] checked: Signal<bool>,
     on_toggle: Callback<bool>,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
-    /// Компактний варіант (на ноді).
+    /// Compact variant (used inline on a node).
     #[prop(optional)] small: bool,
 ) -> impl IntoView {
     let local = RwSignal::new(ControlState::Idle);
     let state = effective(state, local);
     view! {
         <button
-            // Увесь клас одним рядком: окремий `class:on` стирався, коли змінювався стан
-            // (Pending → Success), і перемикач лишався візуально вимкненим
+            // Single-string class attribute: a separate `class:on` binding would be wiped on state
+            // change (Pending -> Success), leaving the switch visually off
             class=move || format!(
                 "switch {}{}{}",
                 state.get().class(),
@@ -266,7 +266,7 @@ pub fn StatusDot(#[prop(into)] class: Signal<&'static str>) -> impl IntoView {
     view! { <span class=move || format!("status-dot {}", class.get())></span> }
 }
 
-/// OperatorConsoleTerminal з автопрокруткою, якщо користувач і так був унизу.
+/// OperatorConsoleTerminal with auto-scroll when the user is already near the bottom.
 #[component]
 pub fn Terminal(#[prop(into)] lines: Signal<Vec<LogLine>>) -> impl IntoView {
     let el = NodeRef::<html::Div>::new();

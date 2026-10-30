@@ -1,5 +1,5 @@
-//! Затримки з різною поведінкою при повторному імпульсі. Затримка задається в мілісекундах
-//! і округлюється вгору до цілих тактів.
+//! Delays with different retrigger behaviors. The delay is specified in milliseconds
+//! and rounded up to whole ticks.
 
 use ticknode_plugin_sdk::*;
 
@@ -7,22 +7,22 @@ struct DelayPlugin;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
-    /// Кожен імпульс запускає власну затримку.
+    /// Each pulse starts its own independent delay.
     Queue,
-    /// Імпульси під час активної затримки ігноруються.
+    /// Pulses arriving during an active delay are ignored.
     Ignore,
-    /// Новий імпульс скасовує активну затримку й починає відлік заново.
+    /// A new pulse cancels the active delay and restarts the countdown.
     Reset,
 }
 
 struct DelayNode {
     mode: Mode,
-    /// Остання запущена затримка (для Ignore/Reset).
+    /// Latest active delay task (for Ignore/Reset).
     active: Option<TaskId>,
 }
 
 impl DelayNode {
-    /// (тип, назва, опис, базовий ID пінів: +0 In, +1 Out, +2 Delay).
+    /// (type, title, description, base pin ID: +0 In, +1 Out, +2 Delay).
     fn info(&self) -> (&'static str, &'static str, &'static str, u32) {
         match self.mode {
             Mode::Queue => ("delay/queue", "Queue Delay", "Кожен імпульс запускає незалежну затримку", 0),

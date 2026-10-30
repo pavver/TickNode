@@ -1,5 +1,5 @@
-//! Сервіси рушія для нод: асинхронні задачі (затримки, HTTP), логи, номер такту.
-//! Ними користуються і вбудовані ноди, і WASM-плагіни (через `plugin.rs`).
+//! Engine services for nodes: asynchronous tasks (delays, HTTP), logs, and current tick number.
+//! Used by both built-in nodes and WASM plugins (via `plugin.rs`).
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -47,14 +47,14 @@ pub struct HostTask {
 }
 
 pub struct HostState {
-    /// Незавершені задачі. Завершену задачу рушій прибирає й доставляє ноді через `Node::on_task`.
+    /// Pending tasks. Completed tasks are removed by the engine and delivered to the node via `Node::on_task`.
     pub active_tasks: HashMap<TaskId, HostTask>,
     next_task_id: TaskId,
     pub current_tick: u64,
     pub tick_duration: Duration,
-    /// Runtime для мережевих задач. Якщо `None` — береться поточний (`Handle::try_current`).
+    /// Runtime for network tasks. When `None`, the current runtime (`Handle::try_current`) is used.
     pub runtime: Option<tokio::runtime::Handle>,
-    /// Повідомлення нод (Console, Debug, плагіни) за поточний такт; сервер їх забирає після такту.
+    /// Node log messages (Console, Debug, plugins) for the current tick; collected by the server after the tick.
     pub logs: Vec<(NodeId, String)>,
 }
 
@@ -76,7 +76,7 @@ impl HostState {
         self.logs.push((node_id, message.into()));
     }
 
-    /// Кількість тактів, що покриває `duration` (з округленням угору).
+    /// Number of ticks needed to cover `duration` (rounded up).
     pub fn ticks_for(&self, duration: Duration) -> u64 {
         let tick = self.tick_duration.as_millis().max(1);
         duration.as_millis().div_ceil(tick) as u64
@@ -89,13 +89,13 @@ impl HostState {
         id
     }
 
-    /// Задача завершиться в такті `current_tick + ticks` (не раніше наступного такту).
+    /// The task will complete at tick `current_tick + ticks` (no earlier than the next tick).
     pub fn start_delay(&mut self, node_id: NodeId, ticks: u64) -> TaskId {
         let due_tick = self.current_tick + ticks.max(1);
         self.insert(node_id, TaskState::Delay { due_tick })
     }
 
-    /// Запускає HTTP-запит у фоні. Права на домен перевіряє той, хто викликає (плагін-хост).
+    /// Spawns an HTTP request in the background. Domain permissions are checked by the caller (plugin host).
     pub fn start_http(&mut self, node_id: NodeId, request: HttpRequest) -> Result<TaskId, String> {
         let runtime = self.runtime.clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
@@ -104,7 +104,7 @@ impl HostState {
         Ok(self.insert(node_id, TaskState::Spawned(handle)))
     }
 
-    /// Скасовує задачу, якщо вона належить `node_id`.
+    /// Cancels a task if it belongs to `node_id`.
     pub fn cancel_task(&mut self, node_id: NodeId, id: TaskId) -> bool {
         if self.active_tasks.get(&id).is_some_and(|t| t.node_id == node_id) {
             if let Some(task) = self.active_tasks.remove(&id) {
@@ -123,7 +123,7 @@ impl HostState {
         }
     }
 
-    /// Забирає задачі, що завершились до поточного такту включно, у порядку запуску.
+    /// Drains tasks completed up to and including the current tick, in start order.
     pub(crate) fn take_finished(&mut self) -> Vec<(NodeId, TaskId, TaskResult)> {
         let tick = self.current_tick;
         let mut ready: Vec<TaskId> = self.active_tasks.iter()
@@ -139,7 +139,7 @@ impl HostState {
             .map(|(id, task)| {
                 let result = match task.state {
                     TaskState::Delay { .. } => Ok(TaskOutput::Delay),
-                    // Задача вже завершилась, тож block_on не чекає.
+                    // The task has already finished, so block_on does not wait.
                     TaskState::Spawned(handle) => futures::executor::block_on(handle)
                         .unwrap_or_else(|e| Err(format!("Задача аварійно завершилась: {}", e))),
                 };
@@ -157,8 +157,8 @@ fn abort(task: HostTask) {
 
 fn perform_http_request(request: HttpRequest) -> TaskResult {
     let timeout = if request.timeout.is_zero() { DEFAULT_HTTP_TIMEOUT } else { request.timeout.min(MAX_HTTP_TIMEOUT) };
-    // Без автоматичних перенаправлень: дозволені домени перевіряються лише для запитаного URL.
-    // Відповідь 3xx отримує нода; щоб піти за `Location`, вона робить новий запит (з перевіркою).
+    // No automatic redirects: allowed domains are checked only for the requested URL.
+    // A 3xx response is returned to the node; to follow `Location`, it must make a new request (which is checked).
     let agent = ureq::AgentBuilder::new().redirects(0).build();
     let mut req = agent.request(&request.method, &request.url).timeout(timeout);
     for (name, value) in &request.headers {
@@ -166,7 +166,7 @@ fn perform_http_request(request: HttpRequest) -> TaskResult {
     }
     let response = match req.send_bytes(&request.body) {
         Ok(r) => r,
-        // Код відповіді 4xx/5xx — теж відповідь, яку нода може обробити сама.
+        // A 4xx/5xx status code is still a valid response that the node can handle itself.
         Err(ureq::Error::Status(_, r)) => r,
         Err(e) => return Err(e.to_string()),
     };

@@ -1,9 +1,9 @@
-//! Ноди-заглушки: нода, тип якої зараз недоступний (плагін вимкнено чи не завантажено).
+//! Stub nodes: a node whose type is currently unavailable (plugin disabled or not loaded).
 //!
-//! Заглушка тримає тип, усі властивості (включно зі значеннями входів `in:*`) і останню відому
-//! дефініцію (піни), тож з'єднання лишаються, а граф записується на диск без змін. Вона не
-//! виконується й не приймає змін; коли тип знову з'являється в реєстрі, замість неї
-//! створюється справжня нода з тих самих властивостей.
+//! A stub retains its type, all properties (including `in:*` input values), and its last known
+//! definition (pins), so connections remain intact and the graph saves to disk unchanged. It does not
+//! execute or accept modifications; when the type reappears in the registry, a real node is
+//! created in its place from the same properties.
 
 use std::collections::HashSet;
 
@@ -15,7 +15,7 @@ pub struct StubNode {
     id: NodeId,
     definition: NodeDefinition,
     properties: Vec<(String, DataValue)>,
-    /// Плагін, що вимкнено; `None` — тип просто невідомий (плагіна не завантажено).
+    /// The disabled plugin; `None` means the type is simply unknown (plugin not loaded).
     plugin: Option<String>,
 }
 
@@ -24,7 +24,7 @@ impl StubNode {
         Self { id, definition, properties, plugin }
     }
 
-    /// Дефініція для типу, про який відомі лише піни з з'єднань.
+    /// Definition for a type whose pins are known only from graph connections.
     pub fn bare_definition(type_name: &str, pins: Vec<PinDefinition>) -> NodeDefinition {
         NodeDefinition {
             type_name: type_name.into(),
@@ -58,8 +58,8 @@ impl Node for StubNode {
 }
 
 impl TickEngine {
-    /// Піни заглушки для невідомого типу: відновлюються з з'єднань графа. Тип піна даних береться
-    /// з іншого кінця з'єднання, а якщо там теж заглушка — `Any`.
+    /// Stub pins for an unknown type: inferred from graph connections. A data pin's type is taken
+    /// from the other end of the connection, or `Any` if the other end is also a stub.
     pub(crate) fn infer_stub_pins(&self, id: NodeId, graph: &GraphModel, map_id: &impl Fn(NodeId) -> NodeId) -> Vec<PinDefinition> {
         let mut pins: Vec<PinDefinition> = Vec::new();
         let mut add = |pin: PinId, direction: PinDirection, pin_type: PinType| {
@@ -92,7 +92,7 @@ impl TickEngine {
         pins
     }
 
-    /// Замінює ноди вказаних типів заглушками (плагін вимкнено). Повертає ID замінених нод.
+    /// Replaces nodes of the given types with stubs (plugin disabled). Returns the IDs of replaced nodes.
     pub(crate) fn replace_with_stubs(&mut self, type_names: &HashSet<String>, plugin: &str) -> Vec<NodeId> {
         let mut ids: Vec<NodeId> = self.nodes.iter()
             .filter(|(_, n)| type_names.contains(&n.definition().type_name))
@@ -107,15 +107,15 @@ impl TickEngine {
             self.required_reported.remove(id);
             self.data_cache.remove(id);
             self.pure_cache.remove(id);
-            // Стара нода (WasmNode) звільняє свій ресурс у плагіні при заміні
+            // Old node (WasmNode) drops its plugin resource when replaced
             self.nodes.insert(*id, Box::new(StubNode::new(*id, definition, model.properties, Some(plugin.to_string()))));
         }
         self.pure_cache.clear();
         ids
     }
 
-    /// Перетворює заглушки, чий тип знову зареєстровано, на справжні ноди. З'єднання, що стали
-    /// невалідними (піни змінились), прибираються й повертаються.
+    /// Converts stubs whose type is registered again back into real nodes. Connections that became
+    /// invalid (pins changed) are pruned and returned.
     pub(crate) fn revive_stubs(&mut self) -> (Vec<NodeId>, RemovedConnections) {
         let mut ids: Vec<NodeId> = self.nodes.iter()
             .filter(|(_, n)| n.unavailable().is_some() && self.registry.get_definition(&n.definition().type_name).is_some())

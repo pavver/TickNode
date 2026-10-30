@@ -1,4 +1,4 @@
-# Стан з'єднання та шапка редактора
+# Connection status and editor header
 status-online = підключено · { $count } нод
 status-connecting = підключення…
 status-offline = немає з'єднання з сервером
@@ -10,7 +10,7 @@ toolbar-console = Консоль
 toolbar-theme = Світла / темна тема
 toolbar-language = Мова: Українська / English
 
-# Повідомлення редактора в консолі
+# Editor messages in console
 log-ui-connected = [UI] Підключено до сервера
 log-ui-graph-received = [UI] Граф отримано: { $count } нод
 log-ui-copied = [UI] Скопійовано нод: { $count }
@@ -23,7 +23,7 @@ log-error-connect-same-dir = [ERROR] З'єднувати можна лише в�
 log-error-connect-exec-mismatch = [ERROR] Exec-пін з'єднується лише з exec-піном
 log-error-copy-blocked = [ERROR] Браузер не дозволив копіювання — спробуйте Ctrl+C
 
-# Категорії нод
+# Node categories
 category-events = Події
 category-control-flow = Керування
 category-time = Час
@@ -38,7 +38,7 @@ category-network = Мережа
 category-debug = Налагодження
 category-test = Тест
 
-# Типи даних і підказки полів вводу
+# Data types and input hints
 type-exec = exec
 type-number = number
 type-string = string
@@ -67,12 +67,12 @@ parse-error-duration = «{ $value }» — не тривалість (90, 1h 30m,
 parse-error-color = «{ $value }» — не колір (#rrggbb)
 parse-error-not-text = значення типу { $type } не набирається текстом
 
-# Спільні елементи керування та поля на ноді
+# Shared controls and inline node fields
 ui-save = SAVE
 inline-value-type-title = Тип значення
 inline-pin-value-title = Значення, поки до входу нічого не під'єднано. Порожнє — нода бере своє за замовчуванням
 
-# Полотно та ноди
+# Canvas and nodes
 canvas-empty-title = Порожній граф
 canvas-empty-hint = Додайте ноду з палітри й з'єднайте піни перетягуванням
 node-plugin-unavailable = плагін недоступний
@@ -80,7 +80,7 @@ node-missing-required-title = Не задано обов'язковий вхід
 node-run-title = Запустити
 pin-required-suffix = { " " }· обов'язковий
 
-# Редактор умов Match
+# Match condition editor
 match-section-inputs = входи
 match-add-input = + вхід
 match-add-input-title = Додати вхід (новий пін даних), щоб порівнювати кілька значень
@@ -111,7 +111,7 @@ match-right-source-title = Праворуч — значення (✎) або і
 match-right-value-title = Значення для порівняння
 match-remove-condition-title = Прибрати умову
 
-# Оператори умов Match у показі
+# Match condition operators in display
 match-op-eq = =
 match-op-ne = ≠
 match-op-lt = <
@@ -140,7 +140,7 @@ match-op-len-lt = довжина <
 match-op-has-value = є значення
 match-op-no-value = немає значення
 
-# Назви властивостей нод
+# Node property labels
 prop-value = Значення
 prop-var-name = Змінна
 prop-expression = Формула
@@ -153,7 +153,7 @@ prop-interval-ticks = Інтервал, тактів
 prop-all-matches = Усі збіги
 prop-cases = Випадки
 
-# Відносний час виконання
+# Relative execution time
 time-just-now = щойно
 time-seconds-ago =
     { $count ->
@@ -184,12 +184,12 @@ time-days-ago =
        *[other] { $count } днів тому
     }
 
-# Палітра нод
+# Node palette
 palette-search-placeholder = Пошук нод
 palette-empty = Нічого не знайдено
 palette-info-aria = Як працює нода
 
-# Огляд графа та інспектор
+# Graph overview and inspector
 overview-title-graph = Граф
 overview-stats = { $nodes } нод · { $connections } з'єднань
 overview-title-controls = Керування
@@ -246,13 +246,13 @@ conn-from = з
 conn-to = до
 conn-disconnect = Від'єднати
 
-# Консоль
+# Console
 console-title = Консоль
 console-lines = { $count } рядків
 console-clear = Очистити
 console-hide = Сховати консоль
 
-# Панель плагінів
+# Plugins panel
 plugins-title = Плагіни
 plugins-hide = Сховати панель плагінів
 plugins-empty = Плагінів не знайдено. Покладіть скомпільовані компоненти (*.wasm) у data/plugins/ і перезапустіть сервер.

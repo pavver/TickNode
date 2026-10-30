@@ -1,8 +1,8 @@
-//! SDK для плагінів нод TickNode.
+//! SDK for TickNode node plugins.
 //!
-//! Плагін — WASM-компонент (`crate-type = ["cdylib"]`, ціль `wasm32-wasip2`) з контрактом
-//! `wit/plugin.wit`. Реалізуйте [`Plugin`] і [`PluginNode`], потім викличте [`export_plugin!`].
-//! Кожна нода графа — окремий екземпляр [`PluginNode`], тож стан можна тримати в полях.
+//! A plugin is a WASM component (`crate-type = ["cdylib"]`, target `wasm32-wasip2`) implementing
+//! the `wit/plugin.wit` contract. Implement [`Plugin`] and [`PluginNode`], then invoke [`export_plugin!`].
+//! Each graph node is a separate [`PluginNode`] instance, so state can be held directly in struct fields.
 //!
 //! ```ignore
 //! use ticknode_plugin_sdk::*;
@@ -49,7 +49,7 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
-    /// 0 — типовий тайм-аут хоста.
+    /// 0 — default host timeout.
     pub timeout_ms: u32,
 }
 
@@ -91,24 +91,24 @@ pub enum TaskOutput {
     Http(HttpResponse),
 }
 
-/// Причина виконання ноди.
+/// Reason why a node is executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Trigger {
-    /// Імпульс на вхідний exec-пін (або ручний запуск з редактора).
+    /// Pulse on an input exec pin (or manual trigger from the editor).
     Pin(PinId),
-    /// Завершилась задача, запущена цією нодою.
+    /// A task started by this node has completed.
     Task { id: TaskId, result: Result<TaskOutput, String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Output {
-    /// Імпульс з вихідного exec-піна.
+    /// Pulse from an output exec pin.
     Exec(PinId),
-    /// Значення вихідного піна даних.
+    /// Value on an output data pin.
     Data(PinId, DataValue),
 }
 
-/// Значення підключених вхідних пінів даних.
+/// Values of connected input data pins.
 #[derive(Debug, Default, Clone)]
 pub struct Inputs(HashMap<PinId, DataValue>);
 
@@ -124,7 +124,7 @@ impl Inputs {
         }
     }
 
-    /// Поле значення-структури на вході `pin`.
+    /// Field of a struct value on input `pin`.
     pub fn field(&self, pin: PinId, name: &str) -> Option<&DataValue> {
         field(self.get(pin)?, name)
     }
@@ -148,7 +148,7 @@ impl Inputs {
         }
     }
 
-    /// Рядок або порожній рядок, якщо пін не підключено чи тип інший.
+    /// String value, or an empty string if the pin is unconnected or holds another type.
     pub fn string(&self, pin: PinId) -> String {
         match self.get(pin) {
             Some(DataValue::String(s)) => s.clone(),
@@ -157,8 +157,8 @@ impl Inputs {
     }
 }
 
-/// Побудова значення власного типу-структури: `StructValue::new("ha.state").field("state", "on").build()`.
-/// Поля, яких немає в `TypeDefinition`, хост не перевіряє, тож імена мусять збігатися з оголошеними.
+/// Builder for a custom struct value: `StructValue::new("ha.state").field("state", "on").build()`.
+/// Fields absent from `TypeDefinition` are not checked by the host, so field names must match the declaration.
 #[derive(Debug, Clone)]
 pub struct StructValue {
     type_name: String,
@@ -175,7 +175,7 @@ impl StructValue {
         self
     }
 
-    /// Додає необов'язкове поле лише якщо значення є.
+    /// Adds an optional field only if `value` is `Some`.
     pub fn field_opt(self, name: &str, value: Option<impl Into<DataValue>>) -> Self {
         match value {
             Some(v) => self.field(name, v),
@@ -192,7 +192,7 @@ impl From<StructValue> for DataValue {
     fn from(v: StructValue) -> Self { v.build() }
 }
 
-/// Поле значення-структури (або довільного об'єкта).
+/// Field of a struct value (or any object).
 pub fn field<'a>(value: &'a DataValue, name: &str) -> Option<&'a DataValue> {
     match value {
         DataValue::Object { fields, .. } => fields.get(name).map(|f| &f.value),
@@ -221,41 +221,41 @@ pub fn field_bool(value: &DataValue, name: &str) -> Option<bool> {
     }
 }
 
-/// Нода плагіна. Один екземпляр — одна нода графа.
+/// A plugin node. One instance corresponds to one node in the graph.
 pub trait PluginNode: 'static {
-    /// Піни можуть залежати від властивостей.
+    /// Pins may depend on properties.
     fn definition(&self) -> NodeDefinition;
-    /// Властивості, з яких ноду відтворюють (збереження графа, перезапуск плагіна).
+    /// Properties used to reconstruct the node (graph persistence, plugin restart).
     fn properties(&self) -> Vec<(String, DataValue)> { Vec::new() }
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output>;
-    /// Для нод-джерел подій: викликається на початку кожного такту, якщо `polls()` — `true`.
+    /// For event source nodes: called at the start of every tick when `polls()` is `true`.
     fn poll(&mut self, _tick: u64) -> Option<PinId> { None }
-    /// Нода — джерело подій, і хост має викликати `poll` щотакту.
+    /// Whether this node is an event source and the host should call `poll` every tick.
     fn polls(&self) -> bool { false }
 }
 
 pub trait Plugin: 'static {
-    /// Усі типи нод плагіна; дефініції для палітри беруться з `create(type).definition()`.
+    /// All node types provided by the plugin; palette definitions come from `create(type).definition()`.
     const NODE_TYPES: &'static [&'static str];
     fn manifest() -> PluginManifest;
     fn create(type_name: &str) -> Option<Box<dyn PluginNode>>;
-    /// Власні типи даних плагіна (структури й переліки); піни нод можуть посилатись на них
-    /// через `DataType::Named`. Для кожної структури хост сам додає ноди Make/Break.
+    /// Custom plugin data types (structs and enums); node pins can reference them
+    /// via `DataType::Named`. The host automatically generates Make/Break nodes for each struct.
     fn types() -> Vec<TypeDefinition> { Vec::new() }
-    /// Застосовує налаштування за схемою `manifest().settings` (значення — збережені або типові).
-    /// Хост викликає після завантаження, при кожній зміні й після перестворення екземпляра
-    /// (аварія). Екземпляр на плагін один, тож налаштування тримають у статичному стані
-    /// (`thread_local!`). `Err` показується користувачу, плагін лишається завантаженим.
+    /// Applies settings according to `manifest().settings` (values are saved or defaults).
+    /// Called by the host after loading, on every change, and after recreating the instance
+    /// (crash). There is one instance per plugin, so settings are typically stored in static state
+    /// (`thread_local!`). `Err` is shown to the user while the plugin remains loaded.
     fn configure(_settings: &[(String, DataValue)]) -> Result<(), String> { Ok(()) }
 }
 
-/// Значення налаштування за ключем.
+/// Looks up a setting value by key.
 pub fn setting<'a>(settings: &'a [(String, DataValue)], key: &str) -> Option<&'a DataValue> {
     settings.iter().find(|(k, _)| k == key).map(|(_, v)| v)
 }
 
-/// Текстове налаштування (порожній рядок вважається незаданим).
+/// String setting (an empty string is treated as unset).
 pub fn setting_str<'a>(settings: &'a [(String, DataValue)], key: &str) -> Option<&'a str> {
     match setting(settings, key)? {
         DataValue::String(s) if !s.is_empty() => Some(s),
@@ -277,8 +277,8 @@ pub fn setting_bool(settings: &[(String, DataValue)], key: &str) -> Option<bool>
     }
 }
 
-/// Сервіси хоста. Задачі (`delay_*`, `http`) можна запускати лише з `execute`/`poll`;
-/// їхній результат прийде в `execute` як [`Trigger::Task`].
+/// Host services. Tasks (`delay_*`, `http`) can only be started during `execute`/`poll`;
+/// their result arrives in `execute` as [`Trigger::Task`].
 pub mod host {
     use super::*;
 
@@ -306,7 +306,7 @@ pub mod host {
         wit_host::delay(ticks)
     }
 
-    /// Затримка, округлена вгору до цілих тактів.
+    /// Delay rounded up to whole ticks.
     pub fn delay_ms(ms: u64) -> Result<TaskId, String> {
         let tick = u64::from(tick_duration_ms().max(1));
         delay_ticks(ms.div_ceil(tick))
@@ -322,13 +322,13 @@ pub mod host {
         })
     }
 
-    /// Скасовує задачу цієї ноди. `false`, якщо задача вже завершилась.
+    /// Cancels a task belonging to this node. Returns `false` if the task has already finished.
     pub fn cancel(task: TaskId) -> bool {
         wit_host::cancel_task(task)
     }
 }
 
-/// Експортує плагін як WASM-компонент. Викликається один раз у крейті плагіна.
+/// Exports the plugin as a WASM component. Invoked once in a plugin crate.
 #[macro_export]
 macro_rules! export_plugin {
     ($plugin:ty) => {
@@ -337,7 +337,7 @@ macro_rules! export_plugin {
     };
 }
 
-// --- Реалізація WIT-експортів ---
+// --- WIT export implementation ---
 
 #[doc(hidden)]
 pub struct Exporter<P>(PhantomData<P>);
@@ -516,7 +516,7 @@ fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefinition {
     }
 }
 
-/// Скорочення для опису пінів у `definition()`.
+/// Shorthand helpers for defining pins in `definition()`.
 pub fn pin(id: u32, name: &str, pin_type: PinType, direction: PinDirection) -> PinDefinition {
     PinDefinition { id: PinId(id), name: name.to_string(), pin_type, direction, required: false }
 }

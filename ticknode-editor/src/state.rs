@@ -1,4 +1,4 @@
-//! Стан редактора. Сервер — джерело істини: зміни графа застосовуються лише з `ServerMessage`.
+//! Editor state. The server is the single source of truth: graph mutations are applied only via `ServerMessage`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,7 +10,7 @@ use crate::geometry::Camera;
 use crate::i18n::{self, Locale, t};
 
 const MAX_LOG_LINES: usize = 500;
-/// Скільки мілісекунд нода підсвічується після виконання.
+/// Duration (ms) a node stays highlighted after execution.
 pub const EXEC_HIGHLIGHT_MS: f64 = 250.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,29 +35,29 @@ pub struct LogLine {
     pub text: String,
 }
 
-/// Виділення: кілька нод або один дріт.
+/// Selection: one or more nodes, or a single wire.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Selection {
-    /// Ніколи не порожня (порожнє виділення — `None`).
+    /// Never empty (an empty selection is represented as `None`).
     Nodes(BTreeSet<NodeId>),
     Exec(ConnectionModel),
     Data(ConnectionModel),
 }
 
-/// Перетягування ноди з палітри на полотно.
+/// Dragging a node from the palette onto the canvas.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaletteDrag {
     pub type_name: String,
     pub title: String,
     pub color: &'static str,
     pub start: (f64, f64),
-    /// Поточна позиція курсора (клієнтські координати).
+    /// Current cursor position (client coordinates).
     pub at: (f64, f64),
-    /// Курсор зрушив далі за поріг — це вже перетягування, а не клік.
+    /// Cursor moved past the threshold — this is now a drag rather than a click.
     pub active: bool,
 }
 
-/// Підказка «інфо» про ноду: текст і прямокутник кнопки (клієнтські координати), біля якої її показати.
+/// Node "info" tooltip: text and bounding rect of the button (client coordinates) to anchor next to.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tooltip {
     pub title: String,
@@ -65,12 +65,12 @@ pub struct Tooltip {
     pub anchor: (f64, f64, f64, f64),
 }
 
-/// Вставка, що чекає на розміщення: фрагмент їде за курсором, ЛКМ ставить, ПКМ/Esc скасовує.
+/// Paste awaiting placement: the fragment follows the cursor; LMB places it, RMB/Esc cancels.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PendingPaste {
-    /// Позиції нод відносно лівого верхнього кута фрагмента.
+    /// Node positions relative to the top-left corner of the fragment.
     pub graph: GraphModel,
-    /// Куди зараз потрапить лівий верхній кут (світові координати, з прив'язкою до сітки).
+    /// Current target position for the top-left corner (world coordinates, grid-snapped).
     pub at: (f64, f64),
 }
 
@@ -80,19 +80,19 @@ pub enum Theme {
     Light,
 }
 
-/// Нода на клієнті: окремі сигнали, щоб перетягування не перерисовувало решту графа.
+/// Client-side node: fine-grained signals so dragging doesn't re-render the rest of the graph.
 #[derive(Clone, Copy)]
 pub struct ClientNode {
     pub instance: RwSignal<NodeInstance>,
     pub pos: RwSignal<Position>,
-    /// Локальний час (мс) останнього виконання.
+    /// Local timestamp (ms) of the last execution.
     pub last_exec: RwSignal<f64>,
-    /// Входи й виходи останнього виконання.
+    /// Inputs and outputs from the last execution.
     pub trace: RwSignal<Option<NodeTrace>>,
 }
 
-/// Сигнали нод звільняються після того, як інтерфейс перемалювався: інакше ефекти, які ще
-/// тримають ноду (інспектор, поля на ній), спрацювали б на знищених сигналах.
+/// Node signals are disposed after the UI finishes re-rendering: otherwise effects still
+/// referencing the node (inspector, inline fields) would run against disposed signals.
 fn dispose_later(nodes: impl IntoIterator<Item = ClientNode> + 'static) {
     set_timeout(move || nodes.into_iter().for_each(ClientNode::dispose), std::time::Duration::ZERO);
 }
@@ -124,38 +124,38 @@ impl ClientNode {
 pub struct Editor {
     pub status: RwSignal<ConnStatus>,
     pub definitions: RwSignal<Vec<NodeDefinition>>,
-    /// Власні типи даних, оголошені плагінами (для кольорів, підписів і випадних списків).
+    /// Custom data types declared by plugins (for colors, labels, and dropdowns).
     pub types: RwSignal<TypeRegistry>,
     pub nodes: RwSignal<BTreeMap<NodeId, ClientNode>>,
     pub exec: RwSignal<Vec<ConnectionModel>>,
     pub data: RwSignal<Vec<ConnectionModel>>,
     pub selection: RwSignal<Option<Selection>>,
     pub logs: RwSignal<Vec<LogLine>>,
-    /// Лічильник помилок сервера: поля властивостей у Pending переходять в Error при його зміні.
+    /// Server error counter: property fields in Pending transition to Error when this increments.
     pub error_seq: RwSignal<u64>,
     pub view: RwSignal<Camera>,
-    /// Поточний час (мс), оновлюється таймером — для згасання підсвітки виконання.
+    /// Current timestamp (ms), updated by a timer — used to fade out execution highlights.
     pub now: RwSignal<f64>,
     pub theme: RwSignal<Theme>,
     pub locale: RwSignal<Locale>,
     pub show_palette: RwSignal<bool>,
     pub show_console: RwSignal<bool>,
-    /// Панель плагінів (на місці інспектора).
+    /// Plugins panel (replaces the inspector slot).
     pub show_plugins: RwSignal<bool>,
-    /// Плагіни зі станом і налаштуваннями (секрети — лише «задано»).
+    /// Plugins with their state and settings (secrets only indicate whether they are set).
     pub plugins: RwSignal<Vec<PluginInfo>>,
-    /// Вузький екран: панелі — висувні шари над полотном.
+    /// Narrow screen: panels become slide-over drawers above the canvas.
     pub narrow: RwSignal<bool>,
     pub socket: StoredValue<Option<WebSocket>, LocalStorage>,
-    /// Останнє положення курсора над полотном (світові координати) — куди вставляти.
+    /// Last cursor position over the canvas (world coordinates) — target for paste.
     pub pointer_world: StoredValue<Option<(f64, f64)>>,
     pub palette_drag: RwSignal<Option<PaletteDrag>>,
     pub pending_paste: RwSignal<Option<PendingPaste>>,
     pub tooltip: RwSignal<Option<Tooltip>>,
-    /// Коли востаннє натискали/відпускали середню кнопку (`INFINITY` — затиснута). На Linux
-    /// середня кнопка вставляє «первинне виділення» подією `paste` — таку вставку ігноруємо.
+    /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
+    /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
-    /// Камеру вписуємо в граф лише після першого Init, а не при кожному перепідключенні.
+    /// Fit camera to the graph only after the first Init, not on every reconnect.
     fitted: StoredValue<bool>,
     next_log_id: StoredValue<u64>,
 }
@@ -228,7 +228,7 @@ impl Editor {
         }
     }
 
-    /// Чи виділена нода (з підпискою).
+    /// Whether the node is selected (tracked).
     pub fn is_selected(&self, id: NodeId) -> bool {
         self.selection.with(|s| matches!(s, Some(Selection::Nodes(set)) if set.contains(&id)))
     }
@@ -245,7 +245,7 @@ impl Editor {
         self.selection.set((!set.is_empty()).then_some(Selection::Nodes(set)));
     }
 
-    /// Прибирає з виділення ноди, яких уже немає, і дроти, що на них посилались.
+    /// Removes deleted nodes and wires referencing them from the current selection.
     fn prune_selection(&self) {
         let exists = |id: &NodeId| self.node(*id).is_some();
         let next = match self.selection.get_untracked() {
@@ -261,12 +261,12 @@ impl Editor {
         self.selection.set(next);
     }
 
-    /// Нода без підписки на зміни набору нод (обробники подій, застосування повідомлень).
+    /// Node lookup without subscribing to the node map (event handlers, applying messages).
     pub fn node(&self, id: NodeId) -> Option<ClientNode> {
         self.nodes.with_untracked(|nodes| nodes.get(&id).copied())
     }
 
-    /// Нода з підпискою: для обчислень, які мають оновитись, коли нода з'явиться чи зникне.
+    /// Tracked node lookup: for computations that should update when the node appears or disappears.
     pub fn node_tracked(&self, id: NodeId) -> Option<ClientNode> {
         self.nodes.with(|nodes| nodes.get(&id).copied())
     }
@@ -282,7 +282,7 @@ impl Editor {
             || self.exec.with(|e| e.iter().any(|c| c.dst_node == node && c.dst_pin == pin))
     }
 
-    /// Тип вихідного піна, під'єднаного до входу даних (відстежується).
+    /// Data type of the output pin connected to a data input (tracked).
     pub fn source_type(&self, node: NodeId, pin: PinId) -> Option<DataType> {
         let src = self.data.with(|d| d.iter().find(|c| c.dst_node == node && c.dst_pin == pin).map(|c| (c.src_node, c.src_pin)))?;
         self.node_tracked(src.0)?.instance.with(|i| {
@@ -295,7 +295,7 @@ impl Editor {
         })
     }
 
-    /// Обов'язковий вхід даних, до якого нічого не під'єднано й на ноді немає значення (з підпискою).
+    /// Required data input that is neither connected nor has an inline value on the node (tracked).
     pub fn required_missing(&self, node: NodeId, pin: &PinDefinition) -> bool {
         if !pin.required || pin.direction != PinDirection::Input || pin.pin_type == PinType::Exec {
             return false;
@@ -305,7 +305,7 @@ impl Editor {
             && !self.node_tracked(node).is_some_and(|n| n.instance.with(|i| i.model.properties.iter().any(|(p, _)| *p == name)))
     }
 
-    /// Назва типу для людини (`title` власного типу), з підпискою на реєстр типів.
+    /// Human-readable type name (`title` for custom types), tracked against the type registry.
     pub fn type_title(&self, t: &DataType) -> String {
         self.types.with(|types| i18n::data_type_title(types, t))
     }
@@ -332,8 +332,8 @@ impl Editor {
     pub fn apply(&self, msg: ServerMessage) {
         match msg {
             ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins } => {
-                // Наявні ноди оновлюються на місці (після перепідключення відкритий інспектор
-                // і поля на нодах лишаються живими), зниклі — прибираються
+                // Update existing nodes in place (keeping open inspector and inline fields alive
+                // across reconnects) and remove any that disappeared
                 let fresh: BTreeSet<NodeId> = nodes.iter().map(|i| i.model.id).collect();
                 let gone: Vec<ClientNode> = self.nodes.try_update(|map| {
                     let ids: Vec<NodeId> = map.keys().filter(|id| !fresh.contains(id)).copied().collect();
@@ -360,7 +360,7 @@ impl Editor {
                 if !self.fitted.get_value() {
                     self.fitted.set_value(true);
                     let ed = *self;
-                    // Після того, як ноди потраплять у DOM і полотно матиме розмір
+                    // Wait until nodes are mounted in the DOM and the canvas has dimensions
                     request_animation_frame(move || crate::canvas::fit_view(ed));
                 }
             }
@@ -394,7 +394,7 @@ impl Editor {
                 self.prune_selection();
             }
             ServerMessage::DataConnected(c) => self.data.update(|d| {
-                // Вхід даних має одне джерело: нове з'єднання замінює старе
+                // A data input has a single source: a new connection replaces the old one
                 d.retain(|x| x.dst_node != c.dst_node || x.dst_pin != c.dst_pin);
                 d.push(c);
             }),
@@ -419,12 +419,12 @@ impl Editor {
                     }
                 }
             }),
-            // Плагін увімкнено чи вимкнено: палітра й кольори типів — з нового каталогу
+            // Plugin enabled or disabled: refresh palette and type colors from the updated catalog
             ServerMessage::Catalog { definitions, types } => {
                 self.types.set(TypeRegistry::from_definitions(types));
                 self.definitions.set(definitions);
             }
-            // Ноди, створені на наш AddNode / Paste (сервер шле це після їхніх NodeAdded)
+            // Nodes created in response to our AddNode / Paste (sent by the server after their NodeAdded messages)
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => {
                 self.log(LogKind::Node, format!("[{}] {}", self.node_title(node_id), message));

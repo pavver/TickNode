@@ -1,6 +1,6 @@
-//! Панель «Плагіни»: список плагінів зі станом, перемикачем увімкнення, правами та формою
-//! налаштувань за схемою з маніфесту. Секрети не надходять у редактор: поле пароля показує лише
-//! «задано / не задано» і надсилає або нове значення, або «не змінювати».
+//! "Plugins" panel: plugin list with status, enable toggle, capabilities, and settings form
+//! driven by the manifest schema. Secrets are never sent to the editor: password fields only show
+//! "set / unset" and submit either a new value or "keep unchanged".
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -11,7 +11,7 @@ use crate::i18n::{self, t};
 use crate::state::{LogKind, use_editor};
 use crate::ui::*;
 
-/// Текст у полі форми для збереженого значення.
+/// Form field text for a stored setting value.
 fn draft_of(view: &SettingValueView) -> String {
     match view {
         SettingValueView::Value(DataValue::Bool(b)) => b.to_string(),
@@ -20,7 +20,7 @@ fn draft_of(view: &SettingValueView) -> String {
     }
 }
 
-/// Що надіслати серверу для поля: `Err` — текст не підходить за типом.
+/// Update to send to the server for a field: `Err` if the text fails type validation.
 fn update_of(def: &SettingDefinition, draft: &str, cleared: bool) -> Result<SettingUpdate, String> {
     Ok(match &def.kind {
         SettingKind::Secret if cleared => SettingUpdate::Clear,
@@ -75,7 +75,7 @@ fn PluginCard(name: String) -> impl IntoView {
     let toggling = RwSignal::new(ControlState::Idle);
     let saving = RwSignal::new(ControlState::Idle);
 
-    // Відповідь сервера (або помилка) завершує очікування перемикача й кнопки «Зберегти»
+    // Server response (or error) resolves the pending state of the toggle and "Save" button
     Effect::new(move |_| {
         ed.plugins.track();
         let settings_failed = info.with_untracked(|i| i.as_ref().is_some_and(|i| i.settings_error.is_some()));
@@ -96,7 +96,7 @@ fn PluginCard(name: String) -> impl IntoView {
         }
     });
 
-    // Чернетки форми: скидаються, коли сервер підтвердив нові значення
+    // Form drafts: reset when the server confirms updated values
     let drafts = RwSignal::new(BTreeMap::<String, String>::new());
     let cleared = RwSignal::new(BTreeSet::<String>::new());
     let values = Memo::new(move |_| info.with(|i| i.as_ref().map(|i| i.values.clone()).unwrap_or_default()));
@@ -190,7 +190,7 @@ fn PluginCard(name: String) -> impl IntoView {
     .into_any()
 }
 
-/// Одне поле форми за типом налаштування.
+/// Single form field rendered according to the setting kind.
 #[component]
 fn SettingField(
     def: SettingDefinition,
@@ -286,7 +286,7 @@ mod tests {
         let flag = SettingDefinition::bool("tls", "TLS");
         assert_eq!(update_of(&text, "hi", false), Ok(SettingUpdate::Set(DataValue::String("hi".into()))));
         assert_eq!(update_of(&text, "", false), Ok(SettingUpdate::Clear));
-        // Секрет: порожнє поле — «не змінювати», явне очищення — Clear
+        // Secret: empty field means "keep unchanged", explicit clear means Clear
         assert_eq!(update_of(&secret, "", false), Ok(SettingUpdate::Keep));
         assert_eq!(update_of(&secret, "", true), Ok(SettingUpdate::Clear));
         assert_eq!(update_of(&secret, "abc", false), Ok(SettingUpdate::Set(DataValue::String("abc".into()))));

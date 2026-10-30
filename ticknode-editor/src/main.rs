@@ -1,5 +1,5 @@
-//! Веб-редактор TickNode на Leptos (CSR). Рушій працює на сервері; редактор лише показує граф
-//! і надсилає зміни через WebSocket.
+//! TickNode web editor built with Leptos (CSR). The engine runs on the server; the editor only
+//! renders the graph and sends changes over WebSocket.
 
 mod canvas;
 mod categories;
@@ -27,10 +27,10 @@ use crate::plugins_panel::PluginsPanel;
 use crate::state::{ConnStatus, Editor, LogKind, Theme, now_ms, use_editor};
 use crate::ui::{IconButton, StatusDot, icons};
 
-/// Ширина, нижче якої панелі стають висувними шарами (див. @media у style.css).
+/// Viewport width below which panels become slide-over overlays (see `@media` in `style.css`).
 const NARROW_WIDTH: f64 = 900.0;
 const THEME_KEY: &str = "ticknode.theme";
-/// Подія `paste` протягом цього часу після середньої кнопки — вставка первинного виділення.
+/// A `paste` event within this window after a middle-click is treated as a primary-selection paste.
 const MIDDLE_PASTE_WINDOW_MS: f64 = 500.0;
 
 fn window_width() -> f64 {
@@ -48,7 +48,7 @@ fn load_theme() -> Theme {
     }
 }
 
-/// Гарячі клавіші й буфер обміну не перехоплюються, поки фокус у полі вводу.
+/// Shortcuts and clipboard events are not intercepted while focus is inside an input control.
 fn typing_in_field(ev: &web_sys::Event) -> bool {
     ev.target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
@@ -111,7 +111,7 @@ fn App() -> impl IntoView {
         }
         let ctrl = ev.ctrl_key() || ev.meta_key();
         if ctrl {
-            // Вставка з клавіатури — не первинне виділення, навіть якщо відпускання середньої кнопки загубилось
+            // Keyboard paste is not a primary selection paste, even if a middle-button release was missed
             editor.middle_button_at.set_value(f64::NEG_INFINITY);
         }
         match (ctrl, ev.key().to_lowercase().as_str()) {
@@ -133,11 +133,11 @@ fn App() -> impl IntoView {
             _ => {}
         }
     });
-    // Копіювання/вставка — через події буфера: працюють і без HTTPS, і між вкладками.
+    // Copy/paste uses clipboard events: works without HTTPS and across browser tabs.
     let copy = window_event_listener(ev::copy, move |ev| copy_selection(editor, &ev, false));
     let cut = window_event_listener(ev::cut, move |ev| copy_selection(editor, &ev, true));
-    // Середня кнопка: запам'ятовуємо час, щоб відсіяти вставку первинного виділення (Linux).
-    // Саме pointer-події: полотно скасовує pointerdown, і тоді mousedown/mouseup не надходять.
+    // Middle button: record timestamp to ignore Linux primary-selection paste on middle-click pan.
+    // Must use pointer events: the canvas cancels pointerdown, which suppresses mousedown/mouseup.
     let middle_down = window_event_listener(ev::pointerdown, move |ev| {
         if ev.button() == 1 {
             editor.middle_button_at.set_value(f64::INFINITY);
@@ -148,7 +148,7 @@ fn App() -> impl IntoView {
             editor.middle_button_at.set_value(now_ms());
         }
     });
-    // Підказку «інфо» ховає натискання будь-де, крім самої кнопки
+    // The "info" tooltip is dismissed by pressing anywhere outside the info button itself
     let hide_tooltip = window_event_listener(ev::pointerdown, move |ev| {
         let on_info = ev.target()
             .and_then(|t| t.dyn_into::<web_sys::Element>().ok())

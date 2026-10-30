@@ -6,7 +6,7 @@ use ticknode_core::TickEngine;
 use ticknode_shared::{GraphModel, NodeId, Position};
 use tracing::{info, warn};
 
-/// Граф зберігається як відформатований JSON зі стабільним порядком — щоб нормально лягав у git.
+/// The graph is stored as pretty-printed JSON with deterministic ordering so it diffs cleanly in git.
 pub struct Storage {
     path: PathBuf,
 }
@@ -16,8 +16,8 @@ impl Storage {
         Self { path }
     }
 
-    /// Завантажує граф у рушій і повертає позиції нод. Відсутній файл — порожній граф;
-    /// пошкоджений файл — помилка, щоб не перезаписати його порожнім графом.
+    /// Loads the graph into the engine and returns node positions. A missing file starts with an empty graph;
+    /// a corrupted file returns an error rather than overwriting it with an empty graph.
     pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<HashMap<NodeId, Position>> {
         if !self.path.exists() {
             info!(path = %self.path.display(), "Файл графа не знайдено, починаємо з порожнього");
@@ -44,7 +44,7 @@ impl Storage {
     }
 }
 
-/// Запис через тимчасовий файл і rename, щоб падіння посеред запису не зіпсувало граф.
+/// Writes via a temporary file and rename so a crash mid-write does not corrupt the graph.
 fn write_atomic(path: &Path, contents: &str) -> anyhow::Result<()> {
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, contents).with_context(|| format!("не вдалось записати {}", tmp.display()))?;
@@ -76,7 +76,7 @@ mod tests {
         assert_eq!(restored_positions[&c], Position { x: 10.0, y: 20.0 });
         assert_eq!(restored.export_graph(), engine.export_graph());
 
-        // Повторне збереження без змін дає ідентичний файл (стабільний diff)
+        // Saving again without changes produces an identical file (stable diff)
         let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
         storage.save(&restored, &restored_positions).unwrap();
         let second = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();

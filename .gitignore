@@ -1,12 +1,12 @@
-# Артефакти збірки
+# Build artifacts
 /target
 node_modules/
 dist/
 pkg/
 
-# Робочі дані сервера: graph.json відстежується, скомпільовані плагіни, їхні дані й тимчасові файли — ні
+# Server runtime data: graph.json is tracked; compiled plugins, their data, and temp files are not
 /data/plugins/
 /data/plugin-data/
 *.json.tmp
-# Налаштування плагінів можуть містити токени й паролі
+# Plugin settings may contain tokens and passwords
 /data/plugin-config/

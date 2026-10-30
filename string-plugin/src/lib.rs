@@ -1,4 +1,4 @@
-//! Операції над рядками.
+//! String manipulation operations.
 
 use regex::Regex;
 use ticknode_plugin_sdk::*;
@@ -26,7 +26,7 @@ impl Op {
         })
     }
 
-    /// Базовий ID пінів: +0 — In, +1 — Out, далі — аргументи й результати.
+    /// Base pin ID: +0 — In, +1 — Out, followed by arguments and outputs.
     fn base(self) -> u32 {
         self as u32 * 10
     }

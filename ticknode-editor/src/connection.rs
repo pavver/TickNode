@@ -1,4 +1,4 @@
-//! WebSocket до ticknode-server: postcard у обидва боки, автоматичне перепідключення.
+//! WebSocket to ticknode-server: bidirectional postcard messages with automatic reconnection.
 
 use std::time::Duration;
 
@@ -13,7 +13,7 @@ use crate::state::{ConnStatus, Editor, LogKind};
 
 const RECONNECT_DELAY: Duration = Duration::from_millis(1500);
 
-/// `ws` поруч із поточною сторінкою — працює і напряму, і під префіксом HA ingress.
+/// Relative `ws` endpoint next to the current page — works both directly and behind an HA ingress prefix.
 fn ws_url() -> Option<String> {
     let href = window().location().href().ok()?;
     let url = web_sys::Url::new_with_base("ws", &href).ok()?;
@@ -56,7 +56,7 @@ pub fn connect(editor: Editor) {
     ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
     ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
     ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
-    // Обробники живуть стільки ж, скільки сокет; на перепідключення припадає три дрібні замикання.
+    // Handlers live for the lifetime of the socket; each reconnect leaks three small closures.
     on_open.forget();
     on_message.forget();
     on_close.forget();

@@ -19,7 +19,7 @@ use hub::{CALL_DONE, CALL_ERROR, CALL_FAILED, CHANGED, Env, GET_DONE, GET_ERROR,
 use queue::Mode;
 
 /// The endpoint of the Home Assistant add-on environment (the supervisor proxies the core).
-const DEFAULT_URL: &str = "ws://supervisor/core/websocket";
+const DEFAULT_URL: &str = "ws://homeassistant.local:8123/api/websocket";
 const CATEGORY: &str = "Home Assistant";
 
 thread_local! {
@@ -268,7 +268,7 @@ impl Plugin for HomeAssistant {
             .capability(Capability::WebSocket { allowed_hosts: vec!["*".into()] })
             .setting(
                 SettingDefinition::url("url", "URL")
-                    .described("WebSocket address of Home Assistant. The default is the add-on endpoint; elsewhere use ws://<host>:8123/api/websocket")
+                    .described("WebSocket address of Home Assistant: ws://<host>:8123/api/websocket (wss:// with TLS). The add-on sets it to its Supervisor endpoint automatically")
                     .default_value(DEFAULT_URL),
             )
             .setting(

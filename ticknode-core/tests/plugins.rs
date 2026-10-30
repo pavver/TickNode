@@ -1318,7 +1318,7 @@ fn ha_plugin_declares_its_nodes_and_type() {
     let manifest = engine.add_plugin(&bytes, None, |_| vec![]).unwrap();
     assert_eq!(manifest.name, "home_assistant");
     assert!(manifest.settings.iter().any(|s| s.key == "token" && s.is_secret() && s.required));
-    assert!(manifest.settings.iter().any(|s| s.key == "url" && s.default == Some(DataValue::String("ws://supervisor/core/websocket".into()))));
+    assert!(manifest.settings.iter().any(|s| s.key == "url" && s.default == Some(DataValue::String("ws://homeassistant.local:8123/api/websocket".into()))));
     engine.enable_plugin("home_assistant", &[("token".into(), DataValue::String("t".into()))]).unwrap();
     for node in ["ha/state_changed", "ha/get_state", "ha/call_service"] {
         let definition = engine.registry.get_definition(node).unwrap();

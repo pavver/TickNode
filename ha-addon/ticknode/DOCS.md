@@ -15,7 +15,7 @@ TickNode server together with its web editor and plugs it into Home Assistant.
 
 The add-on is granted access to the Home Assistant Core API (`homeassistant_api: true`). On start
 the Supervisor token is passed to the bundled Home Assistant plugin as its `token` setting, and the
-plugin connects to `ws://supervisor/core/websocket` (its default URL). Nothing has to be configured.
+plugin connects to `ws://supervisor/core/websocket` (the add-on sets this URL). Nothing has to be configured.
 The token is never shown in the editor. You can still override the URL or token in the editor's
 Plugins panel; saved values win over the automatic ones.
 

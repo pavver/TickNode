@@ -56,7 +56,7 @@ type-ha-state-field-last_updated = Останнє оновлення
 
 # Settings
 setting-home-assistant-url-title = Адреса
-setting-home-assistant-url-description = WebSocket-адреса Home Assistant. Типова — адреса додатка; в інших випадках ws://<хост>:8123/api/websocket
+setting-home-assistant-url-description = WebSocket-адреса Home Assistant: ws://<хост>:8123/api/websocket (wss:// з TLS). Додаток підставляє адресу Supervisor автоматично
 setting-home-assistant-token-title = Токен доступу
 setting-home-assistant-token-description = Довгоживучий токен доступу (Профіль > Безпека в Home Assistant) або токен supervisor у додатку
 

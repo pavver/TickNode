@@ -5,9 +5,10 @@ use leptos::prelude::*;
 use ticknode_shared::*;
 
 use crate::geometry::is_inline_property;
+use crate::i18n::{self, t};
+use crate::match_editor::stop_on_controls;
 use crate::panels::property_label;
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
-use crate::match_editor::stop_on_controls;
 use crate::ui::{ControlState, Switch, flash};
 
 /// Текст значення в полі. Для Any рядок, схожий на число чи true/false, береться в лапки.
@@ -23,7 +24,7 @@ fn parse_text(input: &str, value_type: &DataType) -> Result<Option<DataValue>, S
     if input.trim().is_empty() && *value_type != DataType::String {
         return Ok(None);
     }
-    text::parse_value(input, value_type).map(Some)
+    i18n::parse_value_localized(input, value_type).map(Some)
 }
 
 /// Компактне поле значення на ноді. Зміна застосовується по Enter чи втраті фокусу (Esc — скасувати).
@@ -34,7 +35,7 @@ pub fn InlineValue(
     value_type: DataType,
     on_commit: Callback<Option<DataValue>>,
     #[prop(optional)] optional: bool,
-    #[prop(optional, into)] title: String,
+    #[prop(optional, into)] title: Signal<String>,
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
@@ -58,7 +59,7 @@ pub fn InlineValue(
                     Some(DataValue::Bool(false)) => "inline-value bool",
                     _ => "inline-value bool unset",
                 }
-                title=title
+                title=move || title.get()
                 on:pointerdown=stop
                 on:click=toggle
             >
@@ -77,7 +78,7 @@ pub fn InlineValue(
         return view! {
             <select
                 class="inline-value select"
-                title=title
+                title=move || title.get()
                 prop:value=move || match value.get() {
                     Some(DataValue::String(s)) => s,
                     _ => String::new(),
@@ -98,7 +99,7 @@ pub fn InlineValue(
         .into_any();
     }
 
-    let hint = text::type_hint(&value_type);
+    let hint_type = value_type.clone();
     let shown_type = value_type.clone();
     let shown = Memo::new(move |_| value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
     let draft = RwSignal::new(String::new());
@@ -123,8 +124,8 @@ pub fn InlineValue(
         <input
             type="text"
             class=move || format!("inline-value {}", state.get().class())
-            placeholder=hint
-            title=title
+            placeholder=move || i18n::type_hint(&hint_type)
+            title=move || title.get()
             spellcheck="false"
             prop:value=move || draft.get()
             on:pointerdown=stop
@@ -172,7 +173,7 @@ fn default_value(type_name: &str) -> DataValue {
 
 /// Пари (значення, підпис): вбудовані типи й власні типи плагінів (підпис — `title`).
 fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
-    let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), o.to_string())).collect();
+    let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect();
     ed.types.with_untracked(|types| {
         options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", d.title, d.name))));
     });
@@ -181,7 +182,12 @@ fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
 
 /// Компактний випадний список на ноді.
 #[component]
-fn InlineSelect(mut options: Vec<(String, String)>, #[prop(into)] selected: Signal<String>, on_select: Callback<String>, #[prop(optional, into)] title: String) -> impl IntoView {
+fn InlineSelect(
+    mut options: Vec<(String, String)>,
+    #[prop(into)] selected: Signal<String>,
+    on_select: Callback<String>,
+    #[prop(optional, into)] title: Signal<String>,
+) -> impl IntoView {
     // Значення, якого немає в списку (тип зниклого плагіна), лишається видимим
     let current = selected.get_untracked();
     if !current.is_empty() && !options.iter().any(|(v, _)| *v == current) {
@@ -190,7 +196,7 @@ fn InlineSelect(mut options: Vec<(String, String)>, #[prop(into)] selected: Sign
     view! {
         <select
             class="inline-value select"
-            title=title
+            title=move || title.get()
             prop:value=move || selected.get()
             on:change=move |ev| {
                 let v = event_target_value(&ev);
@@ -223,7 +229,8 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
             <For each=move || names.get() key=|(n, t)| (n.clone(), data_type_name(t)) let:prop>
                 {
                     let (name, value_type) = prop;
-                    let label = property_label(&name);
+                    let label_name = name.clone();
+                    let label = Signal::derive(move || property_label(&label_name));
                     let read_name = name.clone();
                     let value = Signal::derive(move || property_value(node, &read_name));
                     let send_name = name.clone();
@@ -239,7 +246,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             <InlineSelect
                                 options=type_options(ed, &TYPE_OPTIONS)
                                 selected=Signal::derive(text_of)
-                                title=label.clone()
+                                title=label
                                 on_select=Callback::new(move |v| send.run(DataValue::String(v)))
                             />
                         }
@@ -256,9 +263,9 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     } else {
                         let type_select = (name == "value" && is_const()).then(|| view! {
                             <InlineSelect
-                                options=CONST_TYPES.iter().map(|o| (o.to_string(), o.to_string())).collect()
+                                options=CONST_TYPES.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect()
                                 selected=Signal::derive(move || value.get().map(|v| data_type_name(&v.get_type())).unwrap_or_default())
-                                title="Тип значення"
+                                title=Signal::derive(move || t!("inline-value-type-title"))
                                 on_select=Callback::new(move |t: String| send.run(default_value(&t)))
                             />
                         });
@@ -267,7 +274,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             <InlineValue
                                 value=value
                                 value_type=value_type
-                                title=label.clone()
+                                title=label
                                 on_commit=Callback::new(move |v: Option<DataValue>| {
                                     if let Some(v) = v {
                                         send.run(v);
@@ -279,7 +286,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     };
                     view! {
                         <div class="prop-row">
-                            <span class="ellipsis prop-label" title=label.clone()>{label.clone()}</span>
+                            <span class="ellipsis prop-label" title=move || label.get()>{move || label.get()}</span>
                             {control}
                         </div>
                     }
@@ -300,7 +307,7 @@ pub fn PinValue(ed: Editor, node: NodeId, pin: PinId, value_type: DataType) -> i
             value=Signal::derive(move || property_value(client, &name))
             value_type=value_type
             optional=true
-            title="Значення, поки до входу нічого не під'єднано. Порожнє — нода бере своє за замовчуванням"
+            title=Signal::derive(move || t!("inline-pin-value-title"))
             on_commit=Callback::new(move |value| ed.send(ClientMessage::SetInputValue { id: node, pin, value }))
         />
     }

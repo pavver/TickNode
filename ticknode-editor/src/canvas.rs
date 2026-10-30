@@ -11,6 +11,7 @@ use web_sys::{Element, PointerEvent, WheelEvent};
 use crate::geometry::*;
 use crate::categories::{category_color, category_label};
 use crate::clipboard;
+use crate::i18n::{self, t};
 use crate::inline::{NodeProps, PinValue};
 use crate::match_editor::MatchBody;
 use crate::ui::{Icon, icons};
@@ -245,11 +246,11 @@ pub fn Canvas() -> impl IntoView {
                     return;
                 }
                 if to.dir == from.dir {
-                    ed.log(LogKind::Error, "[ERROR] З'єднувати можна лише вихід із входом");
+                    ed.log(LogKind::Error, t!("log-error-connect-same-dir"));
                     return;
                 }
                 if to.exec != from.exec {
-                    ed.log(LogKind::Error, "[ERROR] Exec-пін з'єднується лише з exec-піном");
+                    ed.log(LogKind::Error, t!("log-error-connect-exec-mismatch"));
                     return;
                 }
                 let (out, inp) = if from.dir == PinDirection::Output { (from, to) } else { (to, from) };
@@ -455,8 +456,8 @@ pub fn Canvas() -> impl IntoView {
             </div>
             <Show when=move || ed.nodes.with(|n| n.is_empty())>
                 <div class="canvas-hint">
-                    <div class="t-section">"Порожній граф"</div>
-                    <div class="t-caption">"Додайте ноду з палітри й з'єднайте піни перетягуванням"</div>
+                    <div class="t-section">{move || t!("canvas-empty-title")}</div>
+                    <div class="t-caption">{move || t!("canvas-empty-hint")}</div>
                 </div>
             </Show>
             {move || select_box.get().map(|b| {
@@ -547,17 +548,18 @@ fn PastePreview() -> impl IntoView {
             // Привид — лише заголовок і піни (без полів), але розміром як справжня нода
             let height = layouts.get(&n.id).map_or(MIN_NODE_HEIGHT, |l| l.height);
             let top = layouts.get(&n.id).map_or(0.0, |l| l.pins_top);
-            let (title, category) = def.as_ref().map_or((n.type_name.clone(), String::new()), |d| (d.title.clone(), category_label(&d.category)));
+            let (title, category) = def.as_ref().map_or((n.type_name.clone(), String::new()), |d| (i18n::node_title(d), category_label(&d.category)));
             let layout = layouts.get(&n.id).cloned();
             let pin_list = |dir: PinDirection| def.as_ref().map(|d| pins(d, dir).map(|pin| {
                 let exec = pin.pin_type == PinType::Exec;
                 // Позиція — з розкладки (у Match виходи стоять біля своїх випадків)
                 let y = layout.as_ref().and_then(|l| l.anchor(Position::default(), pin.id, dir)).map_or(0.0, |(_, y)| y - top);
                 let side = if dir == PinDirection::Input { "left:0" } else { "right:0" };
+                let pin_label = i18n::node_pin_label(&d.type_name, &pin.name);
                 view! {
                     <div class=if dir == PinDirection::Input { "pin in" } else { "pin out" } style=format!("position:absolute;{side};top:{}px;white-space:nowrap", y - ROW_H / 2.0)>
                         <span class="socket" class:exec=exec style=format!("--pin-color:{}", pin_color(&types, &pin.pin_type))></span>
-                        <span class="ellipsis">{pin.name.clone()}</span>
+                        <span class="ellipsis">{pin_label}</span>
                     </div>
                 }
             }).collect_view());
@@ -683,19 +685,19 @@ fn NodeView(id: NodeId) -> impl IntoView {
             style=style
         >
             <div class="node-header">
-                <span class="node-title ellipsis">{move || def.with(|d| d.title.clone())}</span>
+                <span class="node-title ellipsis">{move || def.with(i18n::node_title)}</span>
                 <span class="node-cat ellipsis" class:node-unavailable=move || unavailable.with(Option::is_some)>
-                    {move || if unavailable.with(Option::is_some) { "плагін недоступний".to_string() } else { def.with(|d| category_label(&d.category)) }}
+                    {move || if unavailable.with(Option::is_some) { t!("node-plugin-unavailable") } else { def.with(|d| category_label(&d.category)) }}
                 </span>
                 {move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p))).then(|| view! {
-                    <span class="node-warn" title="Не задано обов'язковий вхід — нода не виконується">"!"</span>
+                    <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}
                 {move || trigger.get().map(|pin| view! {
                     // Кнопка — для неї нода й існує, тож «запустити» видно завжди; решті — при наведенні
                     <button
                         class="node-run"
                         class:always=move || def.with(|d| d.type_name == "test/click_button")
-                        title="Запустити"
+                        title=move || t!("node-run-title")
                         on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
                         on:click=move |_| ed.send(ClientMessage::TriggerNode { id, pin })
                     >
@@ -725,7 +727,7 @@ pub fn Pin(
     dir: PinDirection,
     /// Підпис замість імені піна.
     #[prop(optional, into)]
-    label: Option<String>,
+    label: Option<Signal<String>>,
 ) -> impl IntoView {
     let ed = use_editor();
     let exec = pin.pin_type == PinType::Exec;
@@ -734,15 +736,11 @@ pub fn Pin(
         PinDirection::Input => ed.is_input_connected(node, pin_id),
         PinDirection::Output => ed.is_output_connected(node, pin_id),
     };
-    let type_name = match &pin.pin_type {
-        PinType::Exec => "exec".to_string(),
-        PinType::Data(t) => ed.type_title(t),
-    };
     let color = ed.types.with_untracked(|types| pin_color(types, &pin.pin_type));
     let is_input = dir == PinDirection::Input;
+    let is_required = pin.required;
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
-    let required_note = if pin.required { " · обов'язковий" } else { "" };
     // Непід'єднаному входу даних можна задати значення прямо тут
     let value = match &pin.pin_type {
         PinType::Data(t) if is_input && ed.types.with_untracked(|types| input_value_editable(types, t)) => {
@@ -750,6 +748,28 @@ pub fn Pin(
             Some(move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() /> }))
         }
         _ => None,
+    };
+    let pin_name_title = pin.name.clone();
+    let pin_type_title = pin.pin_type.clone();
+    let pin_title = move || {
+        let translated_pin = ed.node_tracked(node).map_or_else(
+            || pin_name_title.clone(),
+            |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, &pin_name_title)),
+        );
+        let type_name = match &pin_type_title {
+            PinType::Exec => i18n::type_name_label("exec"),
+            PinType::Data(t) => ed.type_title(t),
+        };
+        let required_note = if is_required { t!("pin-required-suffix") } else { String::new() };
+        format!("{translated_pin}: {type_name}{required_note}")
+    };
+    let pin_name_label = pin.name;
+    let pin_label = move || match label {
+        Some(custom) => custom.get(),
+        None => ed.node_tracked(node).map_or_else(
+            || pin_name_label.clone(),
+            |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, &pin_name_label)),
+        ),
     };
     view! {
         <div
@@ -759,14 +779,14 @@ pub fn Pin(
                 (true, false) => "pin in",
                 (false, _) => "pin out",
             }
-            title=format!("{}: {}{required_note}", pin.name, type_name)
+            title=pin_title
             data-pin=pin_id.0.to_string()
             data-node=node.0.to_string()
             data-dir=if is_input { "in" } else { "out" }
             data-kind=if exec { "exec" } else { "data" }
         >
             <span class="socket" class:exec=exec class:connected=connected style=format!("--pin-color:{color}")></span>
-            <span class="ellipsis">{label.unwrap_or_else(|| pin.name.clone())}</span>
+            <span class="ellipsis">{pin_label}</span>
             {value}
         </div>
     }

@@ -8,6 +8,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 
+use crate::i18n::t;
 use crate::state::{ConnStatus, Editor, LogKind};
 
 const RECONNECT_DELAY: Duration = Duration::from_millis(1500);
@@ -32,14 +33,14 @@ pub fn connect(editor: Editor) {
 
     let on_open = Closure::<dyn FnMut()>::new(move || {
         editor.status.set(ConnStatus::Online);
-        editor.log(LogKind::System, "[UI] Підключено до сервера");
+        editor.log(LogKind::System, t!("log-ui-connected"));
     });
     let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
         let Ok(buffer) = event.data().dyn_into::<js_sys::ArrayBuffer>() else { return };
         let bytes = js_sys::Uint8Array::new(&buffer).to_vec();
         match postcard::from_bytes::<ServerMessage>(&bytes) {
             Ok(msg) => editor.apply(msg),
-            Err(e) => editor.log(LogKind::Error, format!("[ERROR] Некоректне повідомлення сервера: {}", e)),
+            Err(e) => editor.log(LogKind::Error, t!("log-error-bad-server-msg", error = e.to_string())),
         }
     });
     let on_close = Closure::<dyn FnMut()>::new(move || {
@@ -47,7 +48,7 @@ pub fn connect(editor: Editor) {
         editor.socket.set_value(None);
         editor.status.set(ConnStatus::Offline);
         if was_online {
-            editor.log(LogKind::Error, "[ERROR] З'єднання з сервером втрачено, перепідключення…");
+            editor.log(LogKind::Error, t!("log-error-connection-lost"));
         }
         schedule_reconnect(editor);
     });

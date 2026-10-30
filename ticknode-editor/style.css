@@ -215,6 +215,7 @@ button, input, select { font: inherit; color: inherit; }
 .icon-btn:active { background: var(--pressed); }
 .icon-btn:active::after { --sb-color: var(--border-strong); }
 .icon-btn.st-selected { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.icon-btn.lang-btn { font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.04em; user-select: none; }
 
 /* --- OperatorTextField --- */
 .text-field {

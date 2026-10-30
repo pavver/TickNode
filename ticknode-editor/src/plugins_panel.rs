@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use leptos::prelude::*;
 use ticknode_shared::*;
 
+use crate::i18n::{self, t};
 use crate::state::{LogKind, use_editor};
 use crate::ui::*;
 
@@ -27,7 +28,8 @@ fn update_of(def: &SettingDefinition, draft: &str, cleared: bool) -> Result<Sett
         SettingKind::Bool => SettingUpdate::Set(DataValue::Bool(draft == "true")),
         SettingKind::Number if draft.trim().is_empty() => SettingUpdate::Clear,
         SettingKind::Number => SettingUpdate::Set(
-            text::parse_value(draft, &DataType::Number).map_err(|e| format!("«{}»: {e}", def.title))?,
+            i18n::parse_value_localized(draft, &DataType::Number)
+                .map_err(|e| t!("plugins-field-error", field = def.title.clone(), error = e))?,
         ),
         _ if draft.is_empty() => SettingUpdate::Clear,
         _ => SettingUpdate::Set(DataValue::String(draft.to_string())),
@@ -36,9 +38,9 @@ fn update_of(def: &SettingDefinition, draft: &str, cleared: bool) -> Result<Sett
 
 fn capability_text(c: &Capability) -> String {
     match c {
-        Capability::Http { allowed_domains } if allowed_domains.iter().any(|d| d == "*") => "HTTP: будь-які домени".to_string(),
-        Capability::Http { allowed_domains } => format!("HTTP: {}", allowed_domains.join(", ")),
-        Capability::Storage => "Сховище: власний каталог плагіна".to_string(),
+        Capability::Http { allowed_domains } if allowed_domains.iter().any(|d| d == "*") => t!("plugins-cap-http-any"),
+        Capability::Http { allowed_domains } => t!("plugins-cap-http-domains", domains = allowed_domains.join(", ")),
+        Capability::Storage => t!("plugins-cap-storage"),
     }
 }
 
@@ -49,11 +51,11 @@ pub fn PluginsPanel() -> impl IntoView {
     view! {
         <aside class="panel right plugins" class:hidden=move || !ed.show_plugins.get()>
             <div class="console-bar">
-                <span class="t-section" style="flex:1">"Плагіни"</span>
-                <IconButton icon=icons::CLOSE title="Сховати панель плагінів" on_click=Callback::new(move |_| ed.show_plugins.set(false)) />
+                <span class="t-section" style="flex:1">{move || t!("plugins-title")}</span>
+                <IconButton icon=icons::CLOSE title=Signal::derive(move || t!("plugins-hide")) on_click=Callback::new(move |_| ed.show_plugins.set(false)) />
             </div>
             {move || names.with(Vec::is_empty).then(|| view! {
-                <div class="empty">"Плагінів не знайдено. Покладіть скомпільовані компоненти (*.wasm) у data/plugins/ і перезапустіть сервер."</div>
+                <div class="empty">{move || t!("plugins-empty")}</div>
             })}
             <For each=move || names.get() key=|n| n.clone() let:name>
                 <PluginCard name=name />
@@ -106,9 +108,9 @@ fn PluginCard(name: String) -> impl IntoView {
 
     let state = move || info.with(|i| i.as_ref().map_or(PluginState::Error, |i| i.state));
     let chip = move || match state() {
-        PluginState::Enabled => (ControlState::Success, "працює"),
-        PluginState::Disabled => (ControlState::Idle, "вимкнено"),
-        PluginState::Error => (ControlState::Error, "помилка"),
+        PluginState::Enabled => (ControlState::Success, t!("plugins-state-enabled")),
+        PluginState::Disabled => (ControlState::Idle, t!("plugins-state-disabled")),
+        PluginState::Error => (ControlState::Error, t!("plugins-state-error")),
     };
     let settings_error = move || info.with(|i| i.as_ref().and_then(|i| i.settings_error.clone()));
     let load_error = move || info.with(|i| i.as_ref().and_then(|i| i.error.clone()));
@@ -142,7 +144,7 @@ fn PluginCard(name: String) -> impl IntoView {
 
     let fields = initial.settings.iter().cloned().map(|def| view! { <SettingField def=def drafts=drafts cleared=cleared values=values /> }).collect_view();
     let has_settings = !initial.settings.is_empty();
-    let caps = initial.capabilities.iter().map(capability_text).collect::<Vec<_>>();
+    let caps = initial.capabilities.clone();
 
     view! {
         <section class="panel-section plugin-card">
@@ -161,25 +163,25 @@ fn PluginCard(name: String) -> impl IntoView {
             </div>
             <div class="chips">
                 <span class=move || format!("chip {}", chip().0.class())>{move || chip().1}</span>
-                {move || settings_error().map(|_| view! { <span class="chip st-error" title="Плагін відхилив налаштування">"помилка налаштувань"</span> })}
+                {move || settings_error().map(|_| view! { <span class="chip st-error" title=move || t!("plugins-settings-error-title")>{move || t!("plugins-settings-error-chip")}</span> })}
             </div>
             {move || load_error().map(|e| view! { <div class="plugin-error">{e}</div> })}
             {(!caps.is_empty()).then(|| view! {
                 <div class="caps">
-                    <span class="field-label">"Права"</span>
-                    {caps.iter().map(|c| view! { <span class="t-body-small">{c.clone()}</span> }).collect_view()}
+                    <span class="field-label">{move || t!("plugins-capabilities")}</span>
+                    {caps.into_iter().map(|c| view! { <span class="t-body-small">{move || capability_text(&c)}</span> }).collect_view()}
                 </div>
             })}
             {has_settings.then(|| view! {
                 <button class="section-toggle" on:click=move |_| expanded.update(|v| *v = !*v)>
                     <span>{move || if expanded.get() { "▾" } else { "▸" }}</span>
-                    "Налаштування"
+                    {move || t!("plugins-settings")}
                 </button>
             })}
             {has_settings.then(|| view! {
                 <div class="plugin-form" class:hidden=move || !expanded.get()>
                     {fields}
-                    <ActionButton text="Зберегти" icon=icons::CHECK full=true state=Signal::derive(move || saving.get()) on_click=save />
+                    <ActionButton text=Signal::derive(move || t!("plugins-save")) icon=icons::CHECK full=true state=Signal::derive(move || saving.get()) on_click=save />
                     {move || settings_error().map(|e| view! { <div class="plugin-error">{e}</div> })}
                 </div>
             })}
@@ -233,17 +235,17 @@ fn SettingField(
                         type="password"
                         autocomplete="new-password"
                         spellcheck="false"
-                        placeholder=move || if is_cleared.get() { "буде очищено" } else if is_set.get() { "задано" } else { "не задано" }
+                        placeholder=move || if is_cleared.get() { t!("plugins-secret-will-clear") } else if is_set.get() { t!("plugins-secret-set") } else { t!("plugins-secret-unset") }
                         prop:value=move || draft.get()
                         on:input=move |ev| set_draft(event_target_value(&ev))
                     />
                     {move || (is_set.get() && !is_cleared.get()).then(|| {
                         let clear_key = clear_key.clone();
                         view! {
-                            <button class="link-btn" title="Видалити збережене значення" on:click=move |_| {
+                            <button class="link-btn" title=move || t!("plugins-secret-clear-title") on:click=move |_| {
                                 cleared.update(|c| { c.insert(clear_key.clone()); });
                                 drafts.update(|d| { d.insert(clear_key.clone(), String::new()); });
-                            }>"Очистити"</button>
+                            }>{move || t!("plugins-secret-clear")}</button>
                         }
                     })}
                 </div>

@@ -7,6 +7,7 @@ use ticknode_shared::*;
 use web_sys::WebSocket;
 
 use crate::geometry::Camera;
+use crate::i18n::{self, Locale, t};
 
 const MAX_LOG_LINES: usize = 500;
 /// Скільки мілісекунд нода підсвічується після виконання.
@@ -136,6 +137,7 @@ pub struct Editor {
     /// Поточний час (мс), оновлюється таймером — для згасання підсвітки виконання.
     pub now: RwSignal<f64>,
     pub theme: RwSignal<Theme>,
+    pub locale: RwSignal<Locale>,
     pub show_palette: RwSignal<bool>,
     pub show_console: RwSignal<bool>,
     /// Панель плагінів (на місці інспектора).
@@ -172,7 +174,7 @@ fn clock_time() -> String {
 }
 
 impl Editor {
-    pub fn new(theme: Theme, wide_screen: bool) -> Self {
+    pub fn new(theme: Theme, locale: RwSignal<Locale>, wide_screen: bool) -> Self {
         Self {
             status: RwSignal::new(ConnStatus::Connecting),
             definitions: RwSignal::new(Vec::new()),
@@ -186,6 +188,7 @@ impl Editor {
             view: RwSignal::new(Camera::default()),
             now: RwSignal::new(now_ms()),
             theme: RwSignal::new(theme),
+            locale,
             show_palette: RwSignal::new(wide_screen),
             show_console: RwSignal::new(wide_screen),
             show_plugins: RwSignal::new(false),
@@ -221,7 +224,7 @@ impl Editor {
             _ => false,
         });
         if !sent {
-            self.log(LogKind::Error, "[ERROR] Немає з'єднання з сервером — зміну не надіслано");
+            self.log(LogKind::Error, t!("log-error-offline-send"));
         }
     }
 
@@ -270,7 +273,7 @@ impl Editor {
 
     pub fn node_title(&self, id: NodeId) -> String {
         self.node(id)
-            .map(|n| n.instance.with_untracked(|i| i.definition.title.clone()))
+            .map(|n| n.instance.with_untracked(|i| i18n::node_title(&i.definition)))
             .unwrap_or_else(|| "?".to_string())
     }
 
@@ -304,7 +307,7 @@ impl Editor {
 
     /// Назва типу для людини (`title` власного типу), з підпискою на реєстр типів.
     pub fn type_title(&self, t: &DataType) -> String {
-        self.types.with(|types| types.title_of(t))
+        self.types.with(|types| i18n::data_type_title(types, t))
     }
 
     pub fn is_output_connected(&self, node: NodeId, pin: PinId) -> bool {
@@ -353,7 +356,7 @@ impl Editor {
                     }
                 }
                 self.prune_selection();
-                self.log(LogKind::System, format!("[UI] Граф отримано: {} нод", count));
+                self.log(LogKind::System, t!("log-ui-graph-received", count = count));
                 if !self.fitted.get_value() {
                     self.fitted.set_value(true);
                     let ed = *self;

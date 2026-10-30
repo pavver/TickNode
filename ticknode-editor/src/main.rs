@@ -6,6 +6,7 @@ mod categories;
 mod clipboard;
 mod connection;
 mod geometry;
+pub mod i18n;
 mod inline;
 mod match_editor;
 mod panels;
@@ -20,6 +21,7 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::canvas::{Canvas, fit_view};
+use crate::i18n::t;
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
 use crate::plugins_panel::PluginsPanel;
 use crate::state::{ConnStatus, Editor, LogKind, Theme, now_ms, use_editor};
@@ -61,7 +63,14 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
     let count = graph.nodes.len();
     if data.set_data("text/plain", &clipboard::to_text(graph)).is_ok() {
         ev.prevent_default();
-        ed.log(LogKind::System, format!("[UI] {} нод: {}", if cut { "Вирізано" } else { "Скопійовано" }, count));
+        ed.log(
+            LogKind::System,
+            if cut {
+                t!("log-ui-cut", count = count)
+            } else {
+                t!("log-ui-copied", count = count)
+            },
+        );
         if cut {
             clipboard::delete_selection(ed);
         }
@@ -70,8 +79,13 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
 
 #[component]
 fn App() -> impl IntoView {
-    let editor = Editor::new(load_theme(), window_width() > NARROW_WIDTH);
+    let locale = i18n::provide_locale(i18n::detect_locale());
+    let editor = Editor::new(load_theme(), locale, window_width() > NARROW_WIDTH);
     provide_context(editor);
+
+    Effect::new(move |_| {
+        i18n::persist_locale(locale.get());
+    });
 
     Effect::new(move |_| {
         let name = match editor.theme.get() {
@@ -190,9 +204,9 @@ fn App() -> impl IntoView {
 fn Header() -> impl IntoView {
     let ed = use_editor();
     let status = move || match ed.status.get() {
-        ConnStatus::Online => ("online", format!("підключено · {} нод", ed.nodes.with(|n| n.len()))),
-        ConnStatus::Connecting => ("connecting", "підключення…".to_string()),
-        ConnStatus::Offline => ("offline", "немає з'єднання з сервером".to_string()),
+        ConnStatus::Online => ("online", t!("status-online", count = ed.nodes.with(|n| n.len()))),
+        ConnStatus::Connecting => ("connecting", t!("status-connecting")),
+        ConnStatus::Offline => ("offline", t!("status-offline")),
     };
     view! {
         <header class="header">
@@ -206,28 +220,40 @@ fn Header() -> impl IntoView {
             <div class="actions">
                 <IconButton
                     icon=icons::ADD
-                    title="Палітра нод"
+                    title=Signal::derive(move || t!("toolbar-palette"))
                     selected=Signal::derive(move || ed.show_palette.get())
                     on_click=Callback::new(move |_| ed.show_palette.update(|v| *v = !*v))
                 />
                 <IconButton
                     icon=icons::EXTENSION
-                    title="Плагіни"
+                    title=Signal::derive(move || t!("toolbar-plugins"))
                     selected=Signal::derive(move || ed.show_plugins.get())
                     on_click=Callback::new(move |_| ed.show_plugins.update(|v| *v = !*v))
                 />
-                <IconButton icon=icons::FIT title="Показати весь граф (F)" on_click=Callback::new(move |_| fit_view(ed)) />
+                <IconButton
+                    icon=icons::FIT
+                    title=Signal::derive(move || t!("toolbar-fit"))
+                    on_click=Callback::new(move |_| fit_view(ed))
+                />
                 <IconButton
                     icon=icons::TERMINAL
-                    title="Консоль"
+                    title=Signal::derive(move || t!("toolbar-console"))
                     selected=Signal::derive(move || ed.show_console.get())
                     on_click=Callback::new(move |_| ed.show_console.update(|v| *v = !*v))
                 />
                 <IconButton
                     icon=icons::THEME
-                    title="Світла / темна тема"
+                    title=Signal::derive(move || t!("toolbar-theme"))
                     on_click=Callback::new(move |_| ed.theme.update(|t| *t = if *t == Theme::Dark { Theme::Light } else { Theme::Dark }))
                 />
+                <button
+                    class="icon-btn ctl lang-btn"
+                    title=move || t!("toolbar-language")
+                    aria-label=move || t!("toolbar-language")
+                    on:click=move |_| ed.locale.update(|l| *l = l.toggle())
+                >
+                    {move || ed.locale.get().badge()}
+                </button>
             </div>
         </header>
     }

@@ -5,6 +5,7 @@ use std::time::Duration;
 use leptos::html;
 use leptos::prelude::*;
 
+use crate::i18n::t;
 use crate::state::{LogKind, LogLine};
 
 /// Тривалість активної фази Success/Error (далі — 500 мс згасання рамки в CSS).
@@ -107,7 +108,7 @@ fn effective(external: Option<Signal<ControlState>>, local: RwSignal<ControlStat
 /// OperatorActionButton: прямокутна кнопка зі станами; ширина не змінюється під час Pending/flash.
 #[component]
 pub fn ActionButton(
-    #[prop(into)] text: String,
+    #[prop(into)] text: Signal<String>,
     on_click: Callback<()>,
     #[prop(optional)] icon: Option<&'static str>,
     #[prop(optional)] danger: bool,
@@ -138,7 +139,7 @@ pub fn ActionButton(
             )
             on:click=click
         >
-            <span class="btn-content">{icon.map(|p| view! { <Icon path=p /> })}<span>{text}</span></span>
+            <span class="btn-content">{icon.map(|p| view! { <Icon path=p /> })}<span>{move || text.get()}</span></span>
             <span class="btn-overlay">
                 {move || match state.get() {
                     ControlState::Pending => Some(view! { <span class="spinner"></span> }.into_any()),
@@ -156,7 +157,7 @@ pub fn ActionButton(
 #[component]
 pub fn IconButton(
     icon: &'static str,
-    #[prop(into)] title: String,
+    #[prop(into)] title: Signal<String>,
     on_click: Callback<()>,
     #[prop(optional, into)] selected: Option<Signal<bool>>,
 ) -> impl IntoView {
@@ -164,8 +165,8 @@ pub fn IconButton(
         <button
             class="icon-btn ctl"
             class:st-selected=move || selected.is_some_and(|s| s.get())
-            title=title.clone()
-            aria-label=title
+            title=move || title.get()
+            aria-label=move || title.get()
             on:click=move |_| on_click.run(())
         >
             <Icon path=icon />
@@ -178,7 +179,7 @@ pub fn IconButton(
 pub fn TextField(
     /// Збережене значення (з сервера).
     #[prop(into)] value: Signal<String>,
-    #[prop(optional, into)] placeholder: String,
+    #[prop(optional, into)] placeholder: Signal<String>,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
     /// Без `on_save` поле працює як живий пошук через `on_input`.
     #[prop(optional)] on_save: Option<Callback<String>>,
@@ -207,7 +208,7 @@ pub fn TextField(
             <input
                 type="text"
                 inputmode=if numeric { "decimal" } else { "text" }
-                placeholder=placeholder
+                placeholder=move || placeholder.get()
                 prop:value=move || draft.get()
                 on:input=move |ev| {
                     let v = event_target_value(&ev);
@@ -224,7 +225,7 @@ pub fn TextField(
                     }
                 }
             />
-            {move || dirty().then(|| view! { <button class="save-btn" on:click=move |_| save()>"SAVE"</button> })}
+            {move || dirty().then(|| view! { <button class="save-btn" on:click=move |_| save()>{move || t!("ui-save")}</button> })}
             <PendingRun state=state />
         </div>
     }

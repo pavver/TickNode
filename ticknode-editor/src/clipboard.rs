@@ -8,6 +8,7 @@ use ticknode_shared::*;
 
 use crate::canvas::view_center;
 use crate::geometry::DU;
+use crate::i18n::t;
 use crate::state::{Editor, LogKind, PendingPaste};
 
 const FORMAT: &str = "ticknode/snippet@1";
@@ -69,7 +70,7 @@ pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
 /// видимої області) і їдуть за ним до підтвердження (`place_paste`) чи скасування (`cancel_paste`).
 pub fn paste_text(ed: Editor, text: &str) {
     let Some(mut graph) = from_text(text) else {
-        ed.log(LogKind::Error, "[ERROR] У буфері обміну немає нод TickNode");
+        ed.log(LogKind::Error, t!("log-error-empty-clipboard"));
         return;
     };
     let min_x = graph.nodes.iter().map(|n| n.position.x).fold(f32::INFINITY, f32::min);

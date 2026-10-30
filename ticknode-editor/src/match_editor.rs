@@ -11,6 +11,7 @@ use wasm_bindgen::JsCast;
 
 use crate::canvas::Pin;
 use crate::geometry::{match_cases, match_inputs_of, type_color};
+use crate::i18n::{self, t};
 use crate::inline::{InlineValue, PinValue};
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, Icon, flash, icons};
@@ -178,7 +179,7 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
         <div class="match-body" style=move || format!("top:{}px", top.get()) on:pointerdown=stop_on_controls>
             <div class="case-row match-in">
                 {move || in_pin.get().map(|p| view! { <Pin node=id pin=p dir=PinDirection::Input /> })}
-                <span class="match-section">"входи"</span>
+                <span class="match-section">{move || t!("match-section-inputs")}</span>
             </div>
             <For each=move || state.with(|s| s.inputs.iter().enumerate().map(|(i, inp)| (i, inp.pin)).collect::<Vec<_>>()) key=|k| *k let:key>
                 <InputRow node=id state=state types=types ii=key.0 pin=key.1 edit=edit />
@@ -186,12 +187,12 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
             <div class="case-row input-foot">
                 <button
                     class="mini-btn"
-                    title="Додати вхід (новий пін даних), щоб порівнювати кілька значень"
+                    title=move || t!("match-add-input-title")
                     on:click=move |_| edit.run(EditFn::new(|s, _| { add_input(s); }))
                 >
-                    "+ вхід"
+                    {move || t!("match-add-input")}
                 </button>
-                <span class="match-section">"випадки — згори вниз"</span>
+                <span class="match-section">{move || t!("match-section-cases")}</span>
             </div>
             // Рядки живуть, поки не зміниться структура (ключі — номер і пін), тож фокус не губиться
             <For each=move || state.with(|s| s.cases.iter().enumerate().map(|(i, c)| (i, c.pin)).collect::<Vec<_>>()) key=|k| *k let:key>
@@ -200,7 +201,7 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
             <div class="case-row case-foot">
                 <button
                     class="mini-btn"
-                    title="Додати випадок (новий вихід)"
+                    title=move || t!("match-add-case-title")
                     on:click=move |_| edit.run(EditFn::new(|s, env| {
                         // Номер піна — новий, щоб з'єднання інших випадків не переїхали
                         let pin = s.cases.iter().map(|c| c.pin).max().unwrap_or(0) + 1;
@@ -208,9 +209,9 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
                         s.cases.push(MatchCase { pin, conditions: vec![c] });
                     }))
                 >
-                    "+ випадок"
+                    {move || t!("match-add-case")}
                 </button>
-                {move || else_pin.get().map(|p| view! { <Pin node=id pin=p dir=PinDirection::Output label="інакше" /> })}
+                {move || else_pin.get().map(|p| view! { <Pin node=id pin=p dir=PinDirection::Output label=Signal::derive(move || t!("match-else")) /> })}
             </div>
         </div>
     }
@@ -230,10 +231,10 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
     let rename = Callback::new(move |new: String| -> Result<(), String> {
         let new = new.trim().to_string();
         if !is_input_name(&new) {
-            return Err(format!("«{new}» — некоректне ім'я входу (літери, цифри, _; не оператор)"));
+            return Err(t!("match-error-bad-input-name", name = new));
         }
         if state.with_untracked(|s| s.inputs.iter().enumerate().any(|(j, i)| j != ii && i.name == new)) {
-            return Err(format!("вхід «{new}» уже є"));
+            return Err(t!("match-error-duplicate-input", name = new));
         }
         edit.run(EditFn::new(move |s, _| {
             let old = std::mem::replace(&mut s.inputs[ii].name, new.clone());
@@ -276,18 +277,18 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
             <div class="pin in match-socket" title=pin_title data-pin=pin.to_string() data-node=node.0.to_string() data-dir="in" data-kind="data">
                 <span class="socket" class:connected=move || connected.get() style=move || format!("--pin-color:{}", ed.types.with(|r| type_color(r, &effective.get())))></span>
             </div>
-            <TextField value=name on_commit=rename class="input-name" title="Ім'я входу — на нього посилаються умови" />
+            <TextField value=name on_commit=rename class="input-name" title=Signal::derive(move || t!("match-input-name-title")) />
             <select
                 class="op-select type-select"
-                title="Тип входу; auto — будь-який, оператори підбираються за під'єднаним значенням"
+                title=move || t!("match-input-type-title")
                 on:change=move |ev| {
                     if let Some(t) = parse_input_type(&event_target_value(&ev)) {
                         set_type(t);
                     }
                 }
             >
-                {INPUT_TYPES.iter().map(|t| (t.to_string(), if *t == "any" { "auto".to_string() } else { t.to_string() }))
-                    .chain(ed.types.with_untracked(|r| r.definitions()).into_iter().map(|d| (d.name.clone(), d.title.clone())))
+                {move || INPUT_TYPES.iter().map(|t| (t.to_string(), if *t == "any" { i18n::type_name_label("auto") } else { i18n::type_name_label(t) }))
+                    .chain(ed.types.with(|r| r.definitions()).into_iter().map(|d| (d.name.clone(), d.title.clone())))
                     .map(|(t, label)| {
                         let value = t.clone();
                         view! { <option value=value selected=move || input_type_name(&declared.get()) == t>{label}</option> }
@@ -300,10 +301,10 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
                 } else if ed.types.with(|r| input_value_editable(r, &t)) {
                     view! { <PinValue ed=ed node=node pin=pin_id value_type=t /> }.into_any()
                 } else {
-                    view! { <span class="input-src ellipsis">"під'єднайте"</span> }.into_any()
+                    view! { <span class="input-src ellipsis">{move || t!("match-connect-hint")}</span> }.into_any()
                 }
             }}
-            <button class="mini-btn icon danger" title="Видалити вхід (і умови з ним)" on:click=remove>
+            <button class="mini-btn icon danger" title=move || t!("match-remove-input-title") on:click=remove>
                 <Icon path=icons::CLOSE />
             </button>
         </div>
@@ -319,35 +320,35 @@ fn CaseBlock(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ci:
     view! {
         <div class="case-row case-head">
             <span class="case-index">{ci + 1}</span>
-            <button class="mini-btn icon" title="Вище" disabled=ci == 0 on:click=move |_| edit.run(EditFn::new(move |s, _| s.cases.swap(ci, ci - 1)))>"↑"</button>
+            <button class="mini-btn icon" title=move || t!("match-move-up-title") disabled=ci == 0 on:click=move |_| edit.run(EditFn::new(move |s, _| s.cases.swap(ci, ci - 1)))>"↑"</button>
             <button
                 class="mini-btn icon"
-                title="Нижче"
+                title=move || t!("match-move-down-title")
                 // Вирази з `<` / `>` — у дужках, інакше view! сприйме їх як кінець тегу
                 prop:disabled={move || ci + 1 >= count()}
                 on:click={move |_| edit.run(EditFn::new(move |s, _| if ci + 1 < s.cases.len() { s.cases.swap(ci, ci + 1) }))}
             >"↓"</button>
             <button
                 class="mini-btn"
-                title="Додати умову до цього випадку"
+                title=move || t!("match-add-condition-title")
                 on:click=move |_| edit.run(EditFn::new(move |s, env| {
                     let c = new_condition(s, env, Join::And);
                     s.cases[ci].conditions.push(c);
                 }))
-            >"+ умова"</button>
+            >{move || t!("match-add-condition")}</button>
             <button
                 class="mini-btn icon danger"
-                title="Видалити випадок (і його вихід)"
+                title=move || t!("match-remove-case-title")
                 on:click=move |_| edit.run(EditFn::new(move |s, _| { s.cases.remove(ci); }))
             >
                 <Icon path=icons::DELETE />
             </button>
-            {move || out.get().map(|p| view! { <Pin node=node pin=p dir=PinDirection::Output label=format!("тоді → {}", ci + 1) /> })}
+            {move || out.get().map(|p| view! { <Pin node=node pin=p dir=PinDirection::Output label=Signal::derive(move || t!("match-then", index = ci + 1)) /> })}
         </div>
         <For each=move || 0..rows() key=|ri| *ri let:ri>
             <ConditionRow case=case state=state types=types ci=ci ri=ri edit=edit />
         </For>
-        {move || (rows() == 0).then(|| view! { <div class="case-row cond-row always">"завжди"</div> })}
+        {move || (rows() == 0).then(|| view! { <div class="case-row cond-row always">{move || t!("match-always")}</div> })}
     }
 }
 
@@ -408,25 +409,25 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
     view! {
         <div class="case-row cond-row">
             {if ri == 0 {
-                view! { <span class="join-label">"якщо"</span> }.into_any()
+                view! { <span class="join-label">{move || t!("match-if")}</span> }.into_any()
             } else {
                 view! {
                     <button
                         class=move || format!("join-btn{}", if join() == Some(Join::Or) { " or" } else { "" })
-                        title="Перемкнути «і» / «або» («і» зв'язує сильніше)"
+                        title=move || t!("match-join-title")
                         on:click=move |_| {
                             let next = if join() == Some(Join::Or) { Join::And } else { Join::Or };
                             edit.run(EditFn::new(move |s, _| s.cases[ci].conditions[ri].join = next));
                         }
                     >
-                        {move || join().map(Join::symbol).unwrap_or_default()}
+                        {move || join().map(i18n::join_symbol).unwrap_or_default()}
                     </button>
                 }
                 .into_any()
             }}
             <select
                 class="cond-left"
-                title=move || format!("Вхід: {}", ed.type_title(&left_type.get()))
+                title=move || t!("match-left-input-title", type = ed.type_title(&left_type.get()))
                 style=move || format!("--pin-color:{}", ed.types.with(|r| type_color(r, &left_type.get())))
                 on:change=move |ev| {
                     let name = event_target_value(&ev);
@@ -450,7 +451,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
             </select>
             <select
                 class="op-select cond-op"
-                title="Оператор (залежить від типу входу)"
+                title=move || t!("match-op-title")
                 on:change=move |ev| {
                     if let Some(op) = CompareOp::parse(&event_target_value(&ev)) {
                         set_op(op);
@@ -465,7 +466,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                         ops.insert(0, c);
                     }
                     ops.into_iter().map(|o| view! {
-                        <option value=o.text() selected=Some(o) == current>{o.label_for(&t)}</option>
+                        <option value=o.text() selected=Some(o) == current>{i18n::op_label_for(o, &t)}</option>
                     }).collect_view()
                 }}
             </select>
@@ -476,7 +477,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                     let source = view! {
                         <select
                             class=if is_value { "cond-src value" } else { "cond-src" }
-                            title="Праворуч — значення (✎) або інший вхід"
+                            title=move || t!("match-right-source-title")
                             on:change=move |ev| {
                                 let v = event_target_value(&ev);
                                 // Порожній правий операнд fit_condition замінить типовим значенням
@@ -497,7 +498,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                                 <InlineValue
                                     value=right_value
                                     value_type=vt
-                                    title="Значення для порівняння"
+                                    title=Signal::derive(move || t!("match-right-value-title"))
                                     on_commit=Callback::new(move |v: Option<DataValue>| {
                                         if let Some(v) = v {
                                             set_right(Some(Operand::Value(v)));
@@ -513,7 +514,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
             }}
             <button
                 class="mini-btn icon"
-                title="Прибрати умову"
+                title=move || t!("match-remove-condition-title")
                 on:click=move |_| edit.run(EditFn::new(move |s, _| { s.cases[ci].conditions.remove(ri); }))
             >
                 <Icon path=icons::CLOSE />
@@ -529,7 +530,7 @@ fn TextField(
     #[prop(into)] value: Signal<String>,
     on_commit: Callback<String, Result<(), String>>,
     #[prop(into)] class: String,
-    #[prop(optional, into)] title: String,
+    #[prop(optional, into)] title: Signal<String>,
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
@@ -551,7 +552,7 @@ fn TextField(
             type="text"
             class=move || format!("operand {class} {}", state.get().class())
             spellcheck="false"
-            title=title
+            title=move || title.get()
             prop:value=move || draft.get()
             on:input=move |ev| draft.set(event_target_value(&ev))
             on:blur=move |_| commit()

@@ -59,6 +59,23 @@ export TICKNODE_WEB_DIR=$ROOT/ticknode-editor/dist
 export TICKNODE_BIND=${TICKNODE_BIND:-127.0.0.1:8099}
 export RUST_LOG=${RUST_LOG:-info}
 
-echo "==> http://$TICKNODE_BIND"
+host=${TICKNODE_BIND%:*}
+port=${TICKNODE_BIND##*:}
+urls=()
+if [ "$host" = 0.0.0.0 ]; then
+    # Listening on every interface: localhost plus the machine's LAN addresses
+    urls+=("http://localhost:$port")
+    for ip in $(hostname -I 2>/dev/null); do
+        [[ $ip == *:* ]] || urls+=("http://$ip:$port")
+    done
+else
+    urls+=("http://$host:$port")
+fi
+echo
+echo "================================================"
+echo " TickNode editor:"
+for url in "${urls[@]}"; do echo "   $url"; done
+echo "================================================"
+echo
 echo $$ > "$PIDFILE"
 exec "$ROOT/target/debug/ticknode-server"

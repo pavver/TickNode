@@ -1106,6 +1106,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17e2ac29387b1aa07a1e448f7bb4f35b500787971e965b02842b900afa5c8f6f"
 
 [[package]]
+name = "ha-core-client"
+version = "0.4.0"
+source = "git+https://github.com/pavver/ha-core-client?rev=51276aee34cceab5360ef83468274d5e15b66e3f#51276aee34cceab5360ef83468274d5e15b66e3f"
+dependencies = [
+ "chrono",
+ "log",
+ "serde",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "ha-plugin"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ha-core-client",
+ "log",
+ "serde_json",
+ "ticknode-plugin-sdk",
+ "ticknode-shared",
+]
+
+[[package]]
 name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2723,6 +2749,27 @@ version = "0.1.0"
 dependencies = [
  "regex",
  "ticknode-plugin-sdk",
+]
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

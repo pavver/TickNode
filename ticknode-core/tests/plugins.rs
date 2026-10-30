@@ -1,5 +1,5 @@
 //! Integration tests for WASM plugins. Requires built components:
-//! `cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin`.
+//! `cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin`.
 //! If a binary is missing, the test is skipped with a message (or fails when `TICKNODE_REQUIRE_PLUGINS=1`).
 //!
 //! Tests are intentionally non-async: synchronous wasmtime-wasi cannot be called inside a tokio task,
@@ -1142,4 +1142,321 @@ fn websocket_reconnects_after_the_plugin_crashes() {
     constant(&mut engine, DataValue::String("again".into()), probe, 1);
     engine.trigger_node(probe, PinId(0));
     run_until(&mut engine, |e| output(e, probe, 3) == Some(DataValue::String("echo:again".into())));
+}
+
+// --- Home Assistant plugin against a fake Home Assistant WebSocket server ---
+
+const HA_TOKEN: &str = "test-token";
+
+/// A minimal Home Assistant: the auth handshake, `subscribe_trigger` / `subscribe_entities` /
+/// `unsubscribe_events` / `call_service` as `ha-core-client` uses them, and pushed state changes.
+/// Like `echo_server`, it runs in its own runtime on its own thread.
+struct FakeHa {
+    port: u16,
+    /// Message id of each entity's `subscribe_trigger`.
+    subs: Arc<std::sync::Mutex<std::collections::HashMap<String, u64>>>,
+    /// Current state of each entity (default "off").
+    states: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    unsubscribed: Arc<AtomicUsize>,
+    connections: Arc<AtomicUsize>,
+    /// `call_service` requests as received.
+    calls: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+    /// Frames to push to every connected client.
+    push: tokio::sync::broadcast::Sender<String>,
+}
+
+impl FakeHa {
+    fn start() -> FakeHa {
+        use futures::{SinkExt, StreamExt};
+        use serde_json::{Value, json};
+        let (push, _) = tokio::sync::broadcast::channel(64);
+        let server = FakeHa {
+            port: 0,
+            subs: Arc::default(),
+            states: Arc::default(),
+            unsubscribed: Arc::default(),
+            connections: Arc::default(),
+            calls: Arc::default(),
+            push,
+        };
+        let (subs, states, unsubscribed, connections, calls, push) =
+            (server.subs.clone(), server.states.clone(), server.unsubscribed.clone(), server.connections.clone(), server.calls.clone(), server.push.clone());
+        let (port_tx, port_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                port_tx.send(listener.local_addr().unwrap().port()).unwrap();
+                loop {
+                    let (stream, _) = listener.accept().await.unwrap();
+                    let (subs, states, unsubscribed, connections, calls) = (subs.clone(), states.clone(), unsubscribed.clone(), connections.clone(), calls.clone());
+                    let mut pushed = push.subscribe();
+                    tokio::spawn(async move {
+                        use tokio_tungstenite::tungstenite::Message;
+                        let Ok(mut ws) = tokio_tungstenite::accept_async(stream).await else { return };
+                        connections.fetch_add(1, Ordering::SeqCst);
+                        let _ = ws.send(json!({"type": "auth_required", "ha_version": "2026.10.0"}).to_string().into()).await;
+                        let mut authenticated = false;
+                        loop {
+                            let text = tokio::select! {
+                                message = ws.next() => match message {
+                                    Some(Ok(Message::Text(text))) => text.to_string(),
+                                    Some(Ok(_)) => continue,
+                                    _ => break,
+                                },
+                                frame = pushed.recv() => {
+                                    if let Ok(frame) = frame && authenticated {
+                                        let _ = ws.send(frame.into()).await;
+                                    }
+                                    continue;
+                                }
+                            };
+                            let request: Value = serde_json::from_str(&text).unwrap();
+                            if !authenticated {
+                                let ok = request["type"] == "auth" && request["access_token"] == HA_TOKEN;
+                                let reply = if ok { json!({"type": "auth_ok", "ha_version": "2026.10.0"}) } else { json!({"type": "auth_invalid", "message": "Invalid access token"}) };
+                                let _ = ws.send(reply.to_string().into()).await;
+                                authenticated = ok;
+                                continue;
+                            }
+                            let id = request["id"].clone();
+                            let mut replies = vec![json!({"id": id, "type": "result", "success": true, "result": null})];
+                            match request["type"].as_str().unwrap_or_default() {
+                                "subscribe_trigger" => {
+                                    subs.lock().unwrap().insert(request["trigger"]["entity_id"].as_str().unwrap().to_string(), id.as_u64().unwrap());
+                                }
+                                "subscribe_entities" => {
+                                    let entity = request["entity_ids"][0].as_str().unwrap();
+                                    let state = states.lock().unwrap().get(entity).cloned().unwrap_or_else(|| "off".into());
+                                    replies.push(json!({"id": id, "type": "event", "event": {"a": {entity: {"s": state, "a": {}, "c": "01X", "lc": 1.0, "lu": 1.0}}}}));
+                                }
+                                "unsubscribe_events" => {
+                                    unsubscribed.fetch_add(1, Ordering::SeqCst);
+                                }
+                                "call_service" => {
+                                    calls.lock().unwrap().push(request.clone());
+                                    if request["domain"] == "broken" {
+                                        replies = vec![json!({"id": id, "type": "result", "success": false, "error": {"code": "not_found", "message": "Service not found."}})];
+                                    }
+                                }
+                                _ => {}
+                            }
+                            for reply in replies {
+                                let _ = ws.send(reply.to_string().into()).await;
+                            }
+                        }
+                    });
+                }
+            });
+        });
+        FakeHa { port: port_rx.recv().unwrap(), ..server }
+    }
+
+    fn url(&self) -> String {
+        format!("ws://127.0.0.1:{}/api/websocket", self.port)
+    }
+
+    /// Pushes a state change of `entity`, as the entity's `state` trigger subscription reports it.
+    fn change(&self, entity: &str, from: &str, to: &str) {
+        let state = |s: &str| serde_json::json!({
+            "entity_id": entity, "state": s, "attributes": {"friendly_name": "Kitchen", "brightness": 120},
+            "last_changed": "2026-10-30T23:15:42.500000+02:00",
+            "last_reported": "2026-10-30T23:15:42.500000+02:00",
+            "last_updated": "2026-10-30T23:15:42.500000+02:00",
+            "context": {"id": "01X", "parent_id": null, "user_id": null}
+        });
+        self.states.lock().unwrap().insert(entity.to_string(), to.to_string());
+        let id = self.subs.lock().unwrap()[entity];
+        let event = serde_json::json!({"id": id, "type": "event", "event": {"variables": {"trigger": {
+            "id": "0", "idx": "0", "alias": null, "platform": "state", "entity_id": entity,
+            "from_state": state(from), "to_state": state(to), "for": null, "attribute": null,
+        }}, "context": {"id": "01X", "parent_id": null, "user_id": null}}});
+        let _ = self.push.send(event.to_string());
+    }
+}
+
+fn ha_settings(url: &str, token: &str) -> Vec<(String, DataValue)> {
+    vec![("url".into(), DataValue::String(url.into())), ("token".into(), DataValue::String(token.into()))]
+}
+
+fn ha_engine(ha: &FakeHa, token: &str, runtime: &tokio::runtime::Runtime) -> Option<TickEngine> {
+    let bytes = plugin_bytes("ha_plugin")?;
+    let mut engine = TickEngine::new();
+    engine.host_state.runtime = Some(runtime.handle().clone());
+    engine.add_plugin(&bytes, None, |_| vec![Capability::WebSocket { allowed_hosts: vec!["127.0.0.1".into()] }]).unwrap();
+    engine.enable_plugin("home_assistant", &ha_settings(&ha.url(), token)).unwrap();
+    Some(engine)
+}
+
+fn field_text(value: &DataValue, name: &str) -> Option<String> {
+    match value {
+        DataValue::Object { fields, .. } => match &fields.get(name)?.value {
+            DataValue::String(s) => Some(s.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Ticks until the sink has executed `count` times in total (starting from `*seen`), returns the new total.
+fn count_executions(engine: &mut TickEngine, sink: NodeId, mut seen: usize, until: usize) -> usize {
+    for _ in 0..300 {
+        engine.tick();
+        seen += engine.executed.iter().filter(|t| t.node_id == sink).count();
+        if seen >= until {
+            return seen;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the sink ran {seen} times, expected {until}");
+}
+
+#[test]
+fn ha_plugin_declares_its_nodes_and_type() {
+    let Some(bytes) = plugin_bytes("ha_plugin") else { return };
+    let mut engine = TickEngine::new();
+    let manifest = engine.add_plugin(&bytes, None, |_| vec![]).unwrap();
+    assert_eq!(manifest.name, "home_assistant");
+    assert!(manifest.settings.iter().any(|s| s.key == "token" && s.is_secret() && s.required));
+    assert!(manifest.settings.iter().any(|s| s.key == "url" && s.default == Some(DataValue::String("ws://supervisor/core/websocket".into()))));
+    engine.enable_plugin("home_assistant", &[("token".into(), DataValue::String("t".into()))]).unwrap();
+    for node in ["ha/state_changed", "ha/get_state", "ha/call_service"] {
+        let definition = engine.registry.get_definition(node).unwrap();
+        assert_eq!(definition.category, "Home Assistant");
+        assert!(!definition.help.is_empty());
+    }
+    assert!(engine.types.get("ha.state").is_some());
+    // Every message the plugin ships is kept by the host (nothing is dropped as foreign)
+    let translations = engine.translations();
+    let merged = &translations.iter().find(|(locale, _)| locale == "uk").expect("the uk resource").1;
+    let shipped = include_str!("../../ha-plugin/locales/uk.ftl");
+    let ids: Vec<_> = shipped.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_lowercase())).filter_map(|l| l.split_once(" =").map(|(id, _)| id)).collect();
+    assert!(ids.len() >= 40, "{} ids", ids.len());
+    for id in ids {
+        assert!(merged.contains(&format!("{id} =")), "{id} is missing from the merged translations");
+    }
+}
+
+#[test]
+fn ha_plugin_state_changes_and_service_calls_work_end_to_end() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    assert_eq!(engine.plugin_settings_error("home_assistant"), None);
+
+    let watch = NodeId::generate();
+    engine.create_node(watch, "ha/state_changed", &[("entity_id".into(), DataValue::String("light.kitchen".into()))]).unwrap();
+    let changed = sink(&mut engine, watch, 0);
+
+    // Wait until the subscription is established (the plugin has read the baseline and cleaned up)
+    run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) >= 1);
+    assert_eq!(ha.connections.load(Ordering::SeqCst), 1);
+
+    ha.change("light.kitchen", "off", "on");
+    let mut runs = count_executions(&mut engine, changed, 0, 1);
+    let new = output(&engine, watch, 1).unwrap();
+    let old = output(&engine, watch, 2).unwrap();
+    assert_eq!(new.get_type(), DataType::Named("ha.state".into()));
+    assert_eq!(field_text(&new, "entity_id").as_deref(), Some("light.kitchen"));
+    assert_eq!(field_text(&new, "state").as_deref(), Some("on"));
+    assert_eq!(field_text(&old, "state").as_deref(), Some("off"));
+    let DataValue::Object { fields, .. } = &new else { panic!() };
+    // 23:15:42.5 at +02:00 is 21:15:42.5 UTC
+    let expected = text::parse_datetime("2026-10-30T21:15:42.500Z").unwrap();
+    assert_eq!(fields["last_changed"].value, DataValue::DateTime(expected));
+    let DataValue::Object { fields: attributes, .. } = &fields["attributes"].value else { panic!("attributes") };
+    assert_eq!(attributes["friendly_name"].value, DataValue::String("Kitchen".into()));
+    assert_eq!(attributes["brightness"].value, number(120));
+
+    // `every` delivers each change, one signal per change, in order
+    ha.change("light.kitchen", "on", "off");
+    ha.change("light.kitchen", "off", "on");
+    runs = count_executions(&mut engine, changed, runs, 3);
+    for _ in 0..20 {
+        engine.tick();
+        runs += engine.executed.iter().filter(|t| t.node_id == changed).count();
+    }
+    assert_eq!(runs, 3, "exactly one signal per change");
+    assert_eq!(field_text(&output(&engine, watch, 1).unwrap(), "state").as_deref(), Some("on"));
+    assert_eq!(field_text(&output(&engine, watch, 2).unwrap(), "state").as_deref(), Some("off"));
+
+    // Calling a service: domain, service, target and data reach the server
+    let call = NodeId::generate();
+    engine.create_node(call, "ha/call_service", &[]).unwrap();
+    constant(&mut engine, DataValue::String("light".into()), call, 1);
+    constant(&mut engine, DataValue::String("turn_on".into()), call, 2);
+    constant(&mut engine, DataValue::String("light.kitchen".into()), call, 3);
+    let data = NodeId::generate();
+    engine.create_node(data, "object/create", &[]).unwrap();
+    let field = NodeId::generate();
+    engine.create_node(field, "object/set_field", &[("field_type".into(), DataValue::String("number".into()))]).unwrap();
+    engine.connect_data(data, PinId(0), field, PinId(0)).unwrap();
+    constant(&mut engine, DataValue::String("brightness".into()), field, 1);
+    constant(&mut engine, number(50), field, 2);
+    engine.connect_data(field, PinId(3), call, PinId(4)).unwrap();
+    let done = sink(&mut engine, call, 5);
+    let failed = sink(&mut engine, call, 6);
+    engine.trigger_node(call, PinId(0));
+    count_executions(&mut engine, done, 0, 1);
+    let calls = ha.calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        (&calls[0]["domain"], &calls[0]["service"], &calls[0]["target"], &calls[0]["service_data"]),
+        (&serde_json::json!("light"), &serde_json::json!("turn_on"), &serde_json::json!({"entity_id": ["light.kitchen"]}), &serde_json::json!({"brightness": 50})),
+    );
+    assert_eq!(output(&engine, call, 7), Some(DataValue::String(String::new())));
+
+    // A rejected call goes to Failed with the reason
+    let broken = NodeId::generate();
+    engine.create_node(broken, "ha/call_service", &[
+        ("in:1".into(), DataValue::String("broken".into())),
+        ("in:2".into(), DataValue::String("x".into())),
+    ]).unwrap();
+    let broken_failed = sink(&mut engine, broken, 6);
+    engine.trigger_node(broken, PinId(0));
+    count_executions(&mut engine, broken_failed, 0, 1);
+    let error = output(&engine, broken, 7).unwrap();
+    assert!(matches!(&error, DataValue::String(e) if e.contains("Service not found")), "{error:?}");
+    assert_eq!(engine.executed.iter().filter(|t| t.node_id == failed).count(), 0);
+
+    // Reading a state
+    let get = NodeId::generate();
+    engine.create_node(get, "ha/get_state", &[("in:1".into(), DataValue::String("light.kitchen".into()))]).unwrap();
+    let got = sink(&mut engine, get, 2);
+    engine.trigger_node(get, PinId(0));
+    count_executions(&mut engine, got, 0, 1);
+    assert_eq!(field_text(&output(&engine, get, 4).unwrap(), "state").as_deref(), Some("on"));
+}
+
+#[test]
+fn ha_plugin_requests_fail_when_the_token_is_wrong_and_nothing_hangs() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, "wrong", &runtime) else { return };
+    let get = NodeId::generate();
+    engine.create_node(get, "ha/get_state", &[("in:1".into(), DataValue::String("light.kitchen".into()))]).unwrap();
+    let failed = sink(&mut engine, get, 3);
+    // Let the authentication be rejected, then ask: the request fails at once
+    run_until(&mut engine, |_| ha.connections.load(Ordering::SeqCst) == 1);
+    for _ in 0..30 {
+        engine.tick();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    engine.trigger_node(get, PinId(0));
+    count_executions(&mut engine, failed, 0, 1);
+    let error = output(&engine, get, 5).unwrap();
+    assert!(matches!(&error, DataValue::String(e) if !e.is_empty()), "{error:?}");
+    assert_eq!(ha.connections.load(Ordering::SeqCst), 1, "a rejected token is never retried");
+}
+
+#[test]
+fn ha_plugin_without_a_token_reports_a_settings_error() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, "", &runtime) else { return };
+    let error = engine.plugin_settings_error("home_assistant").expect("a missing token is reported");
+    assert_eq!(error.key, "home-assistant-error-no-token");
+    let error = engine.configure_plugin("home_assistant", &ha_settings("http://127.0.0.1:1/", "t")).unwrap_err();
+    assert_eq!(error.key, "home-assistant-error-bad-url");
+    assert_eq!(ha.connections.load(Ordering::SeqCst), 0);
 }

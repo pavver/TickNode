@@ -5,7 +5,7 @@ Bug reports, ideas and pull requests are welcome. Before you open a pull request
 ## Before you submit
 
 ```bash
-cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin
+cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin
 TICKNODE_REQUIRE_PLUGINS=1 cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
 cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu
 (cd ticknode-editor && trunk build)

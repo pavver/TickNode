@@ -128,7 +128,7 @@ impl Plugins {
                 }
             };
             if config.enabled && error.is_none() {
-                let settings = effective_settings(&manifest, &stored(&config));
+                let settings = effective_settings(&manifest, &stored(&manifest, &config));
                 match engine.enable_plugin(&manifest.name, &settings) {
                     Ok(_) => info!(name = %manifest.name, version = %manifest.version, capabilities = ?manifest.requested_capabilities, "Plugin loaded"),
                     Err(e) => {
@@ -154,7 +154,7 @@ impl Plugins {
         let entry = self.entries.get(name)?;
         let manifest = engine.plugin_manifest(name).filter(|_| entry.loaded);
         let settings = manifest.map(|m| m.settings.clone()).unwrap_or_default();
-        let effective = manifest.map(|m| effective_settings(m, &stored(&entry.config))).unwrap_or_default();
+        let effective = manifest.map(|m| effective_settings(m, &stored(m, &entry.config))).unwrap_or_default();
         // Secrets never leave the server: only whether each secret is set
         let values = settings.iter().map(|def| {
             let value = effective.iter().find(|(k, _)| *k == def.key).map(|(_, v)| v.clone());
@@ -198,7 +198,7 @@ impl Plugins {
         config.enabled = enabled;
         let change = match (enabled, engine.plugin_active(name)) {
             (true, false) => {
-                let settings = effective_settings(&manifest, &stored(&config));
+                let settings = effective_settings(&manifest, &stored(&manifest, &config));
                 match engine.enable_plugin(name, &settings) {
                     Ok(change) => change,
                     Err(e) => {
@@ -256,15 +256,60 @@ impl Plugins {
             entry.error = None;
         }
         entry.config = config.clone();
-        if let Err(e) = engine.configure_plugin(name, &effective_settings(&manifest, &stored(&config))) {
+        if let Err(e) = engine.configure_plugin(name, &effective_settings(&manifest, &stored(&manifest, &config))) {
             warn!(name, "Plugin settings error: {e}");
         }
         Ok(())
     }
 }
 
-fn stored(config: &PluginConfig) -> Vec<(String, DataValue)> {
-    config.settings.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+/// Settings saved in the config, completed with environment overrides.
+fn stored(manifest: &PluginManifest, config: &PluginConfig) -> Vec<(String, DataValue)> {
+    stored_with_env(manifest, config, &|name| std::env::var(name).ok())
+}
+
+/// Name of the environment variable that supplies setting `key` of `plugin`:
+/// `TICKNODE_PLUGIN_<PLUGIN>_<KEY>`, both uppercased with every non-alphanumeric character turned into `_`.
+fn env_var_name(plugin: &str, key: &str) -> String {
+    let norm = |s: &str| s.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect::<String>();
+    format!("TICKNODE_PLUGIN_{}_{}", norm(plugin), norm(key))
+}
+
+/// Parses an environment value according to the setting kind (`None` if it does not fit).
+fn parse_env_value(plugin: &str, def: &SettingDefinition, text: &str) -> Option<DataValue> {
+    let value = match &def.kind {
+        SettingKind::Number => DataValue::from(text.trim().parse::<f64>().ok().filter(|n| n.is_finite())?),
+        SettingKind::Bool => match text.trim().to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" => DataValue::Bool(true),
+            "false" | "0" | "no" | "off" => DataValue::Bool(false),
+            _ => return None,
+        },
+        _ => DataValue::String(text.to_string()),
+    };
+    def.check(plugin, &value).ok()?;
+    Some(value)
+}
+
+/// The stored settings plus values from `TICKNODE_PLUGIN_<PLUGIN>_<KEY>` for keys the config has no value for
+/// (stored values win; an empty string counts as no value). `lookup` reads the environment.
+fn stored_with_env(manifest: &PluginManifest, config: &PluginConfig, lookup: &dyn Fn(&str) -> Option<String>) -> Vec<(String, DataValue)> {
+    let mut values: Vec<(String, DataValue)> = config.settings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    for def in &manifest.settings {
+        let unset = config.settings.get(&def.key).is_none_or(|v| matches!(v, DataValue::String(s) if s.is_empty()));
+        if !unset {
+            continue;
+        }
+        let var = env_var_name(&manifest.name, &def.key);
+        let Some(text) = lookup(&var).filter(|t| !t.is_empty()) else { continue };
+        match parse_env_value(&manifest.name, def, &text) {
+            Some(value) => {
+                values.retain(|(k, _)| *k != def.key);
+                values.push((def.key.clone(), value));
+            }
+            None => warn!(variable = %var, "Ignoring the environment value: it does not fit the setting"),
+        }
+    }
+    values
 }
 
 /// Atomic write (tmp + rename) with mode 0600: the file may contain tokens.
@@ -316,5 +361,39 @@ mod tests {
         assert_eq!(std::fs::read_dir(dir.path().join("plugin-config")).unwrap().count(), 1);
         // Missing file defaults to enabled with default settings
         assert_eq!(plugins.read_config("none").unwrap(), PluginConfig::default());
+    }
+
+    fn env_manifest() -> PluginManifest {
+        PluginManifest::new("home_assistant", "1", "t")
+            .setting(SettingDefinition::url("base-url", "URL"))
+            .setting(SettingDefinition::secret("token", "Token").required())
+            .setting(SettingDefinition::number("retries", "Retries"))
+            .setting(SettingDefinition::bool("debug", "Debug"))
+    }
+
+    #[test]
+    fn environment_supplies_missing_settings_only() {
+        assert_eq!(env_var_name("home_assistant", "base-url"), "TICKNODE_PLUGIN_HOME_ASSISTANT_BASE_URL");
+        let manifest = env_manifest();
+        let env = |name: &str| match name {
+            "TICKNODE_PLUGIN_HOME_ASSISTANT_TOKEN" => Some("from-env".to_string()),
+            "TICKNODE_PLUGIN_HOME_ASSISTANT_BASE_URL" => Some("ws://env/api/websocket".to_string()),
+            "TICKNODE_PLUGIN_HOME_ASSISTANT_RETRIES" => Some("3".to_string()),
+            "TICKNODE_PLUGIN_HOME_ASSISTANT_DEBUG" => Some("maybe".to_string()),
+            _ => None,
+        };
+        let mut config = PluginConfig::default();
+        config.settings.insert("base-url".into(), DataValue::String("ws://stored/api/websocket".into()));
+        let effective = effective_settings(&manifest, &stored_with_env(&manifest, &config, &env));
+        let get = |k: &str| effective.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
+        // The stored value wins, missing ones come from the environment, an invalid one is ignored.
+        assert_eq!(get("base-url"), Some(DataValue::String("ws://stored/api/websocket".into())));
+        assert_eq!(get("token"), Some(DataValue::String("from-env".into())));
+        assert_eq!(get("retries"), Some(DataValue::from(3.0)));
+        assert_eq!(get("debug"), None);
+        // An empty stored string counts as unset.
+        config.settings.insert("token".into(), DataValue::String(String::new()));
+        let effective = effective_settings(&manifest, &stored_with_env(&manifest, &config, &env));
+        assert!(effective.contains(&("token".to_string(), DataValue::String("from-env".into()))));
     }
 }

@@ -22,10 +22,11 @@ TickNode is a node-based visual programming system for automation. The goal is a
 cargo build
 cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
 cargo test -p ticknode-core --test plugins delay_queue -- --nocapture   # a single test
+cargo test -p ha-plugin                                                   # the HA plugin's own logic on the host target (no wasm needed)
 
 # Plugins are wasm32-wasip2 components. The integration tests (ticknode-core/tests/plugins.rs) load
 # target/wasm32-wasip2/debug/*.wasm and are SKIPPED when the files are missing (TICKNODE_REQUIRE_PLUGINS=1 makes them fail)
-cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin
+cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin
 # The server uses release builds copied to data/plugins/
 cargo build --release --target wasm32-wasip2 -p math-plugin && cp target/wasm32-wasip2/release/math_plugin.wasm data/plugins/
 
@@ -52,6 +53,7 @@ cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu   # geometry and
 - `ticknode-server` — axum: `/ws` (WebSocket, postcard) plus the editor's static files. `actor.rs` runs the engine on its own OS thread (ticks and commands sequentially, no locks); `storage.rs` — `graph.json`; `plugins.rs` — discovery of `data/plugins/*.wasm`, plugin state and `data/plugin-config/`; `ws.rs` — an editor session.
 - `ticknode-editor` — the editor: `state.rs` (`Editor`, a `Copy` set of signals, `apply(ServerMessage)`), `i18n.rs` (Fluent, `t!`, runtime resources from the server), `connection.rs` (WebSocket and reconnects), `canvas.rs` (camera, dragging, wires), `panels.rs` (palette, inspector, console), `plugins_panel.rs` (plugin state, toggle, permissions, settings form), `inline.rs` (properties and input values on the node), `match_editor.rs` (Match inputs and cases on the node), `ui.rs` (design-system components), `geometry.rs`.
 - `ticknode-plugin-sdk` — the plugin SDK (wit-bindgen): `Plugin` (with `types()` and `configure()`) and `PluginNode` traits, `host::*`, `export_plugin!`, `StructValue` (builder for tagged values), `Inputs::field*` / `field*()` (reading fields). `*-plugin` are plugins; `test-plugin` exists only for host tests (crashes, fuel, storage, settings).
+- `ha-plugin` — the Home Assistant integration (plugin name `home_assistant`, nodes `ha/state_changed`, `ha/get_state`, `ha/call_service`, type `ha.state`). It drives the sans-IO `Session` of the external crate `ha-core-client` (git dependency, no `runtime` feature) from `Plugin::tick`: `hub.rs` holds the connection, per-node subscriptions and in-flight requests behind an `Env` trait (host calls and the clock are injected, so `cargo test -p ha-plugin` runs it with a scripted fake Home Assistant on the host target), `convert.rs` maps states/JSON to `DataValue`, `queue.rs` is the `every`/`latest` queue. The host test `ha_plugin_*` in `ticknode-core/tests/plugins.rs` runs it against a fake HA WebSocket server. Defaults to the add-on endpoint `ws://supervisor/core/websocket`; the token is a secret setting. An output pin cannot be cleared, so "no state" (a new or removed entity, a failed read) is sent as an `ha.state` with an empty `state`.
 
 ### Nodes and the graph
 - A node is recreated from `type_name` + `properties()`; this is the only persistence/copy mechanism (`export_graph`, `load_graph`, `export_snippet`, `import_snippet`). Every configurable node implements `set_property` and `properties()` symmetrically.
@@ -74,6 +76,7 @@ cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu   # geometry and
 ### Persistence
 - `data/graph.json` is pretty-printed JSON with a stable order (nodes/connections sorted, object fields in a `BTreeMap`) so that it diffs well in git. Writes are atomic (tmp + rename), debounced ~1 s and done on SIGTERM. A corrupt file fails the start-up (it is never overwritten with an empty graph).
 - Plugins are `data/plugins/*.wasm`; their files live in `data/plugin-data/<name>/`; settings and state in `data/plugin-config/<name>.json` (all outside git; configs contain secrets).
+- **Environment overrides for plugin settings.** `TICKNODE_PLUGIN_<PLUGIN>_<KEY>` (the plugin name and the setting key uppercased, every non-alphanumeric character becomes `_`; for example `TICKNODE_PLUGIN_HOME_ASSISTANT_TOKEN`) supplies a setting value when the stored config has none (a missing key or an empty string); stored values win. The text is parsed by the setting kind (number, bool `true/false/1/0/yes/no/on/off`, otherwise a string) and a value that does not fit is ignored with a warning. Secrets supplied this way still never reach the editor, and the panel treats them as set; the override is not written into the config file. This is how the Home Assistant add-on passes `SUPERVISOR_TOKEN` (`ticknode-server/src/plugins.rs`, `stored_with_env`).
 - `data/plugin-config/<name>.json` is `{"enabled": bool, "settings": {key: DataValue}}`, written atomically with file mode 0600 (directory 0700). A plugin without a file is enabled with default settings. A corrupt file gives the `Error` state and is not overwritten silently (only by explicitly saving settings or enabling the plugin).
 
 ### Editor protocol

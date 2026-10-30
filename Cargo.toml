@@ -10,6 +10,7 @@ members = [
     "string-plugin",
     "delay-plugin",
     "test-plugin",
+    "ha-plugin",
 ]
 # The editor and plugins build only for wasm32 (trunk / --target), so default to host crates only.
 default-members = ["ticknode-shared", "ticknode-core", "ticknode-server"]

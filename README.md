@@ -134,7 +134,7 @@ Write definitions (titles, descriptions, help, pin names) in English: they are t
 | [`ticknode-server`](ticknode-server) | runs the engine, stores the graph and serves the editor over WebSocket |
 | [`ticknode-editor`](ticknode-editor) | the web editor (Leptos) |
 | [`ticknode-plugin-sdk`](ticknode-plugin-sdk) | SDK for writing plugins |
-| `*-plugin` | example plugins; `test-plugin` is used by the host tests |
+| `*-plugin` | plugins: examples, `ha-plugin` (Home Assistant integration), `test-plugin` (used by the host tests) |
 | [`wit/plugin.wit`](wit/plugin.wit) | the contract between the host and plugins |
 
 How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).

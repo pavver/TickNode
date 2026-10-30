@@ -24,7 +24,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Plugin integration tests load these components; with TICKNODE_REQUIRE_PLUGINS they fail instead of skipping.
       - name: Build plugins (wasm32-wasip2)
-        run: cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin
+        run: cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin
       - name: Engine, shared types and server tests
         run: cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
         env:

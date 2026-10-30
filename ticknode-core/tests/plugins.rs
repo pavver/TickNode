@@ -415,6 +415,7 @@ fn type_conflicts_and_unknown_types_are_rejected() {
 
     // Node pin referencing an unknown type
     let node = NodeDefinition {
+        properties: Vec::new(),
         type_name: "other/node".into(),
         title: "N".into(),
         category: "Test".into(),
@@ -1178,6 +1179,8 @@ struct FakeHa {
     connections: Arc<AtomicUsize>,
     /// `call_service` requests as received.
     calls: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+    /// What `get_states` answers.
+    entity_list: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
     /// Frames to push to every connected client.
     push: tokio::sync::broadcast::Sender<String>,
 }
@@ -1194,10 +1197,11 @@ impl FakeHa {
             unsubscribed: Arc::default(),
             connections: Arc::default(),
             calls: Arc::default(),
+            entity_list: Arc::default(),
             push,
         };
-        let (subs, states, unsubscribed, connections, calls, push) =
-            (server.subs.clone(), server.states.clone(), server.unsubscribed.clone(), server.connections.clone(), server.calls.clone(), server.push.clone());
+        let (subs, states, unsubscribed, connections, calls, push, entity_list) =
+            (server.subs.clone(), server.states.clone(), server.unsubscribed.clone(), server.connections.clone(), server.calls.clone(), server.push.clone(), server.entity_list.clone());
         let (port_tx, port_rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
@@ -1206,7 +1210,7 @@ impl FakeHa {
                 port_tx.send(listener.local_addr().unwrap().port()).unwrap();
                 loop {
                     let (stream, _) = listener.accept().await.unwrap();
-                    let (subs, states, unsubscribed, connections, calls) = (subs.clone(), states.clone(), unsubscribed.clone(), connections.clone(), calls.clone());
+                    let (subs, states, unsubscribed, connections, calls, entity_list) = (subs.clone(), states.clone(), unsubscribed.clone(), connections.clone(), calls.clone(), entity_list.clone());
                     let mut pushed = push.subscribe();
                     tokio::spawn(async move {
                         use tokio_tungstenite::tungstenite::Message;
@@ -1249,6 +1253,9 @@ impl FakeHa {
                                 }
                                 "unsubscribe_events" => {
                                     unsubscribed.fetch_add(1, Ordering::SeqCst);
+                                }
+                                "get_states" => {
+                                    replies = vec![json!({"id": id, "type": "result", "success": true, "result": entity_list.lock().unwrap().clone()})];
                                 }
                                 "call_service" => {
                                     calls.lock().unwrap().push(request.clone());
@@ -1343,6 +1350,11 @@ fn ha_plugin_declares_its_nodes_and_type() {
         assert!(!definition.help.is_empty());
     }
     assert!(engine.types.get("ha.state").is_some());
+    // The property schema: a picker over the plugin's own `entities` source and a drop-down
+    let def = engine.registry.get_definition("ha/state_changed").unwrap();
+    assert_eq!(def.properties.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["entity_id", "mode"]);
+    assert_eq!(def.properties[0].kind, PropertyKind::Dynamic { source: "entities".into(), plugin: "home_assistant".into() });
+    assert!(matches!(&def.properties[1].kind, PropertyKind::Select(o) if o.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>() == ["every", "latest"]));
     // A node added from the palette (no properties) exposes the plugin's defaults, so the editor shows them
     let node = NodeId::generate();
     engine.create_node(node, "ha/state_changed", &[]).unwrap();
@@ -1482,4 +1494,99 @@ fn ha_plugin_without_a_token_reports_a_settings_error() {
     let error = engine.configure_plugin("home_assistant", &ha_settings("http://127.0.0.1:1/", "t")).unwrap_err();
     assert_eq!(error.key, "home-assistant-error-bad-url");
     assert_eq!(ha.connections.load(Ordering::SeqCst), 0);
+}
+
+// --- Property schema and dynamic options ---
+
+fn option_set<'a>(sets: &'a [PropertyOptionSet], source: &str) -> Option<&'a PropertyOptionSet> {
+    sets.iter().find(|s| s.plugin == "test_plugin" && s.source == source)
+}
+
+#[test]
+fn property_schema_and_dynamic_options_follow_the_plugin_lifecycle() {
+    let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
+    assert!(engine.property_options().is_empty(), "nothing is published before the plugin is enabled");
+    engine.enable_plugin("test_plugin", &test_settings("hi", "t")).unwrap();
+
+    // The schema reaches the definition; the host fills the owning plugin into a dynamic property
+    let def = engine.registry.get_definition("test/picker").unwrap().clone();
+    assert_eq!(def.properties.len(), 2);
+    assert_eq!(def.properties[0].kind, PropertyKind::Dynamic { source: "greetings".into(), plugin: "test_plugin".into() });
+    assert!(matches!(&def.properties[1].kind, PropertyKind::Select(o) if o == &[("a".to_string(), "Option A".to_string()), ("b".to_string(), "Option B".to_string())]));
+    assert_eq!(def.properties[1].description, "Static options");
+    let node = NodeId::generate();
+    engine.create_node(node, "test/picker", &[("choice".into(), DataValue::String("hi".into()))]).unwrap();
+    assert_eq!(engine.node_definition(node).unwrap().properties, def.properties);
+
+    // Options published from `configure` are stored per (plugin, source)
+    let sets = engine.property_options();
+    let greetings = option_set(&sets, "greetings").expect("published by configure");
+    assert_eq!(greetings.options, vec![PropertyOption { value: "hi".into(), label: "HI".into(), detail: "detail hi".into(), icon: Some("mdi:hand-wave".into()) }]);
+    let changes = engine.take_property_option_changes();
+    assert_eq!(option_set(&changes, "greetings").map(|s| s.options.len()), Some(1));
+    assert!(engine.take_property_option_changes().is_empty(), "changes are reported once");
+
+    // Re-configuring with the same value does not mark anything as changed; a new value does
+    engine.configure_plugin("test_plugin", &test_settings("hi", "t")).unwrap();
+    assert!(engine.take_property_option_changes().is_empty(), "an unchanged list is not re-sent");
+    engine.configure_plugin("test_plugin", &test_settings("yo", "t")).unwrap();
+    let changes = engine.take_property_option_changes();
+    assert_eq!(option_set(&changes, "greetings").unwrap().options[0].value, "yo");
+
+    // Disabling clears the options and reports the sources as empty
+    engine.disable_plugin("test_plugin").unwrap();
+    assert!(engine.property_options().is_empty());
+    let changes = engine.take_property_option_changes();
+    assert_eq!(option_set(&changes, "greetings").map(|s| s.options.len()), Some(0));
+    // The stub keeps the schema (read-only in the editor)
+    assert_eq!(engine.node_definition(node).unwrap().properties.len(), 2);
+}
+
+#[test]
+fn option_limits_are_enforced_by_the_host() {
+    let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
+    engine.enable_plugin("test_plugin", &test_settings("flood", "t")).unwrap();
+    let sets = engine.property_options();
+    assert_eq!(option_set(&sets, "flood").unwrap().options.len(), MAX_OPTIONS_PER_SOURCE);
+    // A value longer than the cap and an empty value are dropped; the valid one stays
+    let long = option_set(&sets, "long").unwrap();
+    assert_eq!(long.options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(), ["ok"]);
+}
+
+#[test]
+fn ha_plugin_publishes_entity_options_for_the_picker() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let state = |entity: &str, state: &str, attributes: serde_json::Value| serde_json::json!({
+        "entity_id": entity, "state": state, "attributes": attributes,
+        "last_changed": "2026-10-30T23:15:42.500000+02:00", "last_updated": "2026-10-30T23:15:42.500000+02:00",
+        "context": {"id": "01X", "parent_id": null, "user_id": null}
+    });
+    *ha.entity_list.lock().unwrap() = vec![
+        state("light.kitchen", "on", serde_json::json!({"friendly_name": "Kitchen light"})),
+        state("binary_sensor.door", "off", serde_json::json!({"friendly_name": "Door", "device_class": "door"})),
+        state("sensor.custom", "1", serde_json::json!({"icon": "mdi:cat"})),
+    ];
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let mut sets = Vec::new();
+    for _ in 0..300 {
+        engine.tick();
+        sets.extend(engine.take_property_option_changes());
+        if sets.iter().any(|s| s.source == "entities") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let set = sets.iter().find(|s| s.plugin == "home_assistant" && s.source == "entities").expect("the entity options are published once connected");
+    let summary: Vec<_> = set.options.iter().map(|o| (o.value.as_str(), o.label.as_str(), o.detail.as_str(), o.icon.as_deref().unwrap())).collect();
+    assert_eq!(summary, [
+        ("binary_sensor.door", "Door", "binary_sensor.door", "mdi:door-closed"),
+        ("light.kitchen", "Kitchen light", "light.kitchen", "mdi:lightbulb"),
+        ("sensor.custom", "sensor.custom", "sensor.custom", "mdi:cat"),
+    ]);
+    assert_eq!(engine.property_options().len(), 1);
+    // Disabling the plugin clears the options
+    engine.disable_plugin("home_assistant").unwrap();
+    assert!(engine.property_options().is_empty());
+    assert_eq!(engine.take_property_option_changes().iter().map(|s| s.options.len()).collect::<Vec<_>>(), [0]);
 }

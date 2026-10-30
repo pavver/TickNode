@@ -327,3 +327,11 @@ plugins-secret-unset = not set
 plugins-secret-clear = Clear
 plugins-secret-clear-title = Remove saved value
 plugins-field-error = "{ $field }": { $error }
+
+# Searchable property picker (e.g. a Home Assistant entity)
+picker-placeholder = select…
+picker-search-placeholder = Search by name or ID
+picker-empty = Nothing found
+picker-no-options = No list available yet (the plugin has not published one). You can type a value.
+picker-more = { $count } more - refine the search
+picker-use-typed = Use "{ $value }"

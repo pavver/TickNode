@@ -36,6 +36,7 @@ impl PluginNode for DelayNode {
     fn definition(&self) -> NodeDefinition {
         let (type_name, title, description, base) = self.info();
         NodeDefinition {
+            properties: Vec::new(),
             type_name: type_name.into(),
             title: title.into(),
             category: "Time".into(),

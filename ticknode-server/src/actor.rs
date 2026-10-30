@@ -114,6 +114,8 @@ impl Actor {
                 Ok(Command::Client { msg, reply }) => match self.apply(msg, &reply) {
                     Ok((events, created)) => {
                         events.iter().for_each(|e| self.broadcast(e));
+                        // Enabling, disabling or configuring a plugin may change its options
+                        self.broadcast_option_changes();
                         // Sent after broadcast: `NodeAdded` is already in the event channel, and the ws session delivers it first
                         if let Some(ids) = created {
                             let _ = reply.send(ServerMessage::Created(ids));
@@ -137,8 +139,17 @@ impl Actor {
         }
     }
 
+    /// Broadcasts the dynamic property options that plugins changed since the last check.
+    /// Unchanged lists never appear here (the engine tracks changes), so editors are not spammed.
+    fn broadcast_option_changes(&mut self) {
+        for set in self.engine.take_property_option_changes() {
+            self.broadcast(&ServerMessage::PropertyOptions { plugin: set.plugin, source: set.source, options: set.options });
+        }
+    }
+
     fn tick(&mut self) {
         self.engine.tick();
+        self.broadcast_option_changes();
         let now = Instant::now();
         for trace in &self.engine.executed {
             self.traces.insert(trace.node_id, (trace.clone(), now));
@@ -187,6 +198,7 @@ impl Actor {
             types: self.engine.types.definitions(),
             plugins: self.plugins.infos(&self.engine),
             translations: self.engine.translations(),
+            property_options: self.engine.property_options(),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,

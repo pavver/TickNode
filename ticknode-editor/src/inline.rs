@@ -8,6 +8,7 @@ use crate::geometry::is_inline_property;
 use crate::i18n::{self, t};
 use crate::match_editor::stop_on_controls;
 use crate::panels::property_label;
+use crate::picker::PickerField;
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, Switch, flash};
 
@@ -221,17 +222,29 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
     let names = Memo::new(move |_| node.instance.with(|i| {
         i.model.properties.iter()
             .filter(|(n, v)| is_inline_property(n, v))
-            .map(|(n, v)| (n.clone(), v.get_type()))
+            .map(|(n, v)| {
+                // Only a string property can be shown as a drop-down or picker
+                let described = matches!(v, DataValue::String(_))
+                    .then(|| i.definition.properties.iter().find(|p| p.name == *n).cloned())
+                    .flatten()
+                    .filter(|p| p.kind != PropertyKind::Text || !p.title.is_empty());
+                (n.clone(), v.get_type(), described)
+            })
             .collect::<Vec<_>>()
     }));
+    let type_name = move || node.instance.with(|i| i.model.type_name.clone());
     let is_const = move || node.instance.with(|i| i.model.type_name == "const");
     view! {
         <div class="node-props" on:pointerdown=stop_on_controls>
-            <For each=move || names.get() key=|(n, t)| (n.clone(), data_type_name(t)) let:prop>
+            <For each=move || names.get() key=|(n, t, d)| (n.clone(), data_type_name(t), format!("{d:?}")) let:prop>
                 {
-                    let (name, value_type) = prop;
+                    let (name, value_type, described) = prop;
                     let label_name = name.clone();
-                    let label = Signal::derive(move || property_label(&label_name));
+                    let label_def = described.clone();
+                    let label = Signal::derive(move || match &label_def {
+                        Some(def) => i18n::property_title(&type_name(), def),
+                        None => property_label(&label_name),
+                    });
                     let read_name = name.clone();
                     let value = Signal::derive(move || property_value(node, &read_name));
                     let send_name = name.clone();
@@ -242,7 +255,33 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         Some(DataValue::String(s)) => s,
                         _ => String::new(),
                     };
-                    let control = if name.ends_with("_type") {
+                    let control = if let Some(PropertyKind::Select(options)) = described.as_ref().map(|d| d.kind.clone()) {
+                        let owner = type_name();
+                        let options = options.into_iter()
+                            .map(|(v, l)| { let label = i18n::property_option_label(&owner, &name, &v, &l); (v, label) })
+                            .collect();
+                        view! {
+                            <InlineSelect
+                                options=options
+                                selected=Signal::derive(text_of)
+                                title=label
+                                on_select=Callback::new(move |v| send.run(DataValue::String(v)))
+                            />
+                        }
+                        .into_any()
+                    } else if let Some(PropertyKind::Dynamic { source, plugin }) = described.as_ref().map(|d| d.kind.clone()) {
+                        view! {
+                            <PickerField
+                                node=id
+                                property=name.clone()
+                                plugin=plugin
+                                source=source
+                                value=Signal::derive(text_of)
+                                title=label
+                            />
+                        }
+                        .into_any()
+                    } else if name.ends_with("_type") {
                         view! {
                             <InlineSelect
                                 options=type_options(ed, &TYPE_OPTIONS)

@@ -10,6 +10,7 @@ pub mod i18n;
 mod inline;
 mod match_editor;
 mod panels;
+mod picker;
 mod plugins_panel;
 mod state;
 mod ui;
@@ -23,6 +24,7 @@ use wasm_bindgen::JsCast;
 use crate::canvas::{Canvas, fit_view};
 use crate::i18n::t;
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
+use crate::picker::PickerLayer;
 use crate::plugins_panel::PluginsPanel;
 use crate::state::{ConnStatus, Editor, LogKind, Theme, now_ms, use_editor};
 use crate::ui::{IconButton, StatusDot, icons};
@@ -158,6 +160,16 @@ fn App() -> impl IntoView {
             editor.tooltip.set(None);
         }
     });
+    // The property picker popup closes on a press anywhere outside it and outside its field
+    let hide_picker = window_event_listener(ev::pointerdown, move |ev| {
+        let inside = ev.target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .and_then(|el| el.closest(".picker-popup, .picker-field").ok().flatten())
+            .is_some();
+        if !inside && editor.picker.with_untracked(|p| p.is_some()) {
+            editor.picker.set(None);
+        }
+    });
     let paste = window_event_listener(ev::paste, move |ev| {
         if typing_in_field(&ev) {
             return;
@@ -178,6 +190,7 @@ fn App() -> impl IntoView {
         cut.remove();
         paste.remove();
         hide_tooltip.remove();
+        hide_picker.remove();
         middle_down.remove();
         middle_up.remove();
     });
@@ -196,6 +209,7 @@ fn App() -> impl IntoView {
             <ConsolePanel />
             <PaletteGhost />
             <TooltipLayer />
+            <PickerLayer />
         </div>
     }
 }

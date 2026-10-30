@@ -221,6 +221,7 @@ mod tests {
 
     fn def(type_name: &str, pins: Vec<(u32, PinType, PinDirection)>) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: type_name.into(), title: "T".into(), category: "Data".into(), description: String::new(), help: String::new(),
             pins: pins.into_iter().map(|(id, pin_type, direction)| PinDefinition { id: PinId(id), name: "p".into(), pin_type, direction, required: false }).collect(),
         }

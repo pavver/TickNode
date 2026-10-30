@@ -1,6 +1,7 @@
 //! Editor state. The server is the single source of truth: graph mutations are applied only via `ServerMessage`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Arc;
 
 use leptos::prelude::*;
 use ticknode_shared::*;
@@ -64,6 +65,21 @@ pub struct Tooltip {
     pub text: String,
     pub anchor: (f64, f64, f64, f64),
 }
+
+/// The open searchable picker of a dynamic property (`PropertyKind::Dynamic`): which property it edits
+/// and the field's bounding rect (client coordinates) to anchor the popup to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PickerState {
+    pub node: NodeId,
+    pub property: String,
+    /// Where the options come from: the node's plugin and the source name.
+    pub plugin: String,
+    pub source: String,
+    pub anchor: (f64, f64, f64, f64),
+}
+
+/// Options published by plugins for dynamic properties, by `(plugin, source)`.
+pub type PropertyOptions = HashMap<(String, String), Arc<Vec<PropertyOption>>>;
 
 /// Paste awaiting placement: the fragment follows the cursor; LMB places it, RMB/Esc cancels.
 #[derive(Debug, Clone, PartialEq)]
@@ -152,6 +168,10 @@ pub struct Editor {
     pub palette_drag: RwSignal<Option<PaletteDrag>>,
     pub pending_paste: RwSignal<Option<PendingPaste>>,
     pub tooltip: RwSignal<Option<Tooltip>>,
+    /// Options of dynamic properties; the server is the source (`Init` replaces all, `PropertyOptions` one source).
+    pub property_options: RwSignal<PropertyOptions>,
+    /// The open property picker popup.
+    pub picker: RwSignal<Option<PickerState>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
@@ -199,6 +219,8 @@ impl Editor {
             palette_drag: RwSignal::new(None),
             pending_paste: RwSignal::new(None),
             tooltip: RwSignal::new(None),
+            property_options: RwSignal::new(HashMap::new()),
+            picker: RwSignal::new(None),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),
@@ -337,7 +359,7 @@ impl Editor {
 
     pub fn apply(&self, msg: ServerMessage) {
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options } => {
                 // Update existing nodes in place (keeping open inspector and inline fields alive
                 // across reconnects) and remove any that disappeared
                 let fresh: BTreeSet<NodeId> = nodes.iter().map(|i| i.model.id).collect();
@@ -350,6 +372,7 @@ impl Editor {
                 self.set_types(types);
                 self.definitions.set(definitions);
                 self.plugins.set(plugins);
+                self.property_options.set(property_options.into_iter().map(|s| ((s.plugin, s.source), Arc::new(s.options))).collect());
                 for instance in nodes {
                     self.upsert_node(instance);
                 }
@@ -432,6 +455,13 @@ impl Editor {
                 self.set_types(types);
                 self.definitions.set(definitions);
             }
+            ServerMessage::PropertyOptions { plugin, source, options } => self.property_options.update(|all| {
+                if options.is_empty() {
+                    all.remove(&(plugin, source));
+                } else {
+                    all.insert((plugin, source), Arc::new(options));
+                }
+            }),
             // Nodes created in response to our AddNode / Paste (sent by the server after their NodeAdded messages)
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => {

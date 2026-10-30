@@ -63,6 +63,87 @@ struct CallCtx {
     host: HostState,
 }
 
+/// Options of dynamic properties published by a plugin (`host::set-options`). It outlives plugin instances
+/// (a crash does not clear it) and is cleared when the plugin is disabled.
+#[derive(Default)]
+pub(crate) struct OptionStore {
+    sources: std::collections::BTreeMap<String, Vec<PropertyOption>>,
+    /// Sources whose list changed since the last `take_changes`.
+    dirty: std::collections::BTreeSet<String>,
+}
+
+impl OptionStore {
+    /// Replaces a source. Returns `false` and keeps everything when the list is unchanged.
+    fn set(&mut self, source: &str, options: Vec<PropertyOption>) -> bool {
+        let unchanged = match self.sources.get(source) {
+            Some(old) => *old == options,
+            None => options.is_empty(),
+        };
+        if unchanged {
+            return false;
+        }
+        if options.is_empty() {
+            self.sources.remove(source);
+        } else {
+            self.sources.insert(source.to_string(), options);
+        }
+        self.dirty.insert(source.to_string());
+        true
+    }
+
+    /// Removes every source (the plugin was disabled); editors are told through the dirty set.
+    fn clear(&mut self) {
+        let keys: Vec<String> = self.sources.keys().cloned().collect();
+        self.sources.clear();
+        self.dirty.extend(keys);
+    }
+
+    fn take_changes(&mut self, plugin: &str) -> Vec<PropertyOptionSet> {
+        std::mem::take(&mut self.dirty).into_iter()
+            .map(|source| {
+                let options = self.sources.get(&source).cloned().unwrap_or_default();
+                PropertyOptionSet { plugin: plugin.to_string(), source, options }
+            })
+            .collect()
+    }
+
+    fn all(&self, plugin: &str) -> Vec<PropertyOptionSet> {
+        self.sources.iter()
+            .map(|(source, options)| PropertyOptionSet { plugin: plugin.to_string(), source: source.clone(), options: options.clone() })
+            .collect()
+    }
+}
+
+/// Applies the host limits to options published by a plugin. Returns the accepted options and English
+/// warnings for what was dropped.
+fn sanitize_options(source_count_ok: bool, source: &str, options: Vec<wit::PropertyOption>) -> (Vec<PropertyOption>, Vec<String>) {
+    let mut warnings = Vec::new();
+    if source.is_empty() || source.len() > MAX_OPTION_STRING_LEN {
+        return (Vec::new(), vec!["Option source name is empty or too long: ignored".to_string()]);
+    }
+    if !source_count_ok {
+        return (Vec::new(), vec![format!("Too many option sources (maximum {MAX_OPTION_SOURCES}): source \"{source}\" ignored")]);
+    }
+    let mut options = options;
+    if options.len() > MAX_OPTIONS_PER_SOURCE {
+        warnings.push(format!("Source \"{source}\" has {} options, keeping the first {MAX_OPTIONS_PER_SOURCE}", options.len()));
+        options.truncate(MAX_OPTIONS_PER_SOURCE);
+    }
+    let too_long = |s: &str| s.len() > MAX_OPTION_STRING_LEN;
+    let mut dropped = 0usize;
+    let accepted = options.into_iter().filter_map(|o| {
+        if o.value.is_empty() || too_long(&o.value) || too_long(&o.label) || too_long(&o.detail) || o.icon.as_deref().is_some_and(too_long) {
+            dropped += 1;
+            return None;
+        }
+        Some(PropertyOption { value: o.value, label: o.label, detail: o.detail, icon: o.icon })
+    }).collect();
+    if dropped > 0 {
+        warnings.push(format!("Source \"{source}\": dropped {dropped} option(s) with an empty value or a string longer than {MAX_OPTION_STRING_LEN} bytes"));
+    }
+    (accepted, warnings)
+}
+
 struct PluginState {
     wasi: WasiCtx,
     table: ResourceTable,
@@ -71,6 +152,7 @@ struct PluginState {
     call: Option<CallCtx>,
     /// Plugin-owned WebSocket connections; they die with this instance.
     ws: WsHub,
+    options: Arc<Mutex<OptionStore>>,
 }
 
 impl WasiView for PluginState {
@@ -156,6 +238,18 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     fn ws_close(&mut self, id: wit::WsId) {
         self.ws.close(id);
     }
+
+    fn set_options(&mut self, source: String, options: Vec<wit::PropertyOption>) {
+        let (accepted, warnings) = {
+            let store = lock(&self.options);
+            let source_count_ok = store.sources.contains_key(&source) || store.sources.len() < MAX_OPTION_SOURCES;
+            sanitize_options(source_count_ok, &source, options)
+        };
+        for w in warnings {
+            self.log(wit::LogLevel::Warn, w);
+        }
+        lock(&self.options).set(&source, accepted);
+    }
 }
 
 /// `example.com` allows the domain itself and its subdomains, but not `evilexample.com`.
@@ -183,6 +277,7 @@ struct Runtime {
     /// After a trap in `plugin-tick`, the next call is made no earlier than this tick (a plugin that traps
     /// on every tick would otherwise be recreated and reconnected every tick).
     tick_backoff_until: u64,
+    options: Arc<Mutex<OptionStore>>,
 }
 
 impl Runtime {
@@ -201,6 +296,7 @@ impl Runtime {
                 grants: self.grants.clone(),
                 call: None,
                 ws: WsHub::new(self.tokio.clone()),
+                options: self.options.clone(),
             };
             let mut store = Store::new(engine(), state);
             store.limiter(|s| &mut s.limits);
@@ -313,6 +409,8 @@ pub struct WasmNode {
     polls: bool,
     properties: Vec<(String, DataValue)>,
     failed: bool,
+    /// Owning plugin (fills `PropertyKind::Dynamic::plugin` in refreshed definitions).
+    plugin: String,
 }
 
 enum CallError {
@@ -348,7 +446,8 @@ impl std::fmt::Display for CallError {
 
 impl WasmNode {
     fn new(id: NodeId, definition: NodeDefinition, polls: bool, runtime: Arc<Mutex<Runtime>>) -> Self {
-        Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, polls, properties: Vec::new(), failed: false }
+        let plugin = lock(&runtime).grants.name.clone();
+        Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, polls, properties: Vec::new(), failed: false, plugin }
     }
 
     /// Calls a method on the node resource. If `host` is passed, it is moved into the plugin for the
@@ -397,7 +496,7 @@ impl WasmNode {
         let (definition, properties) = self.call(None, |store, api, node| {
             Ok((api.node().call_definition(&mut *store, node)?, api.node().call_properties(&mut *store, node)?))
         })?;
-        (self.definition, self.polls) = from_wit_definition(definition);
+        (self.definition, self.polls) = from_wit_definition(definition, &self.plugin);
         self.properties = properties.into_iter().filter_map(|p| Some((p.name, decode_value(&p.value)?))).collect();
         Ok(())
     }
@@ -682,7 +781,7 @@ impl TickEngine {
 
         // Manifest and definitions are read from a temporary unprivileged instance.
         let mut runtime = Runtime {
-            pre, grants: Arc::default(), allowed: AllowedIds::default(), instance: None, generation: 0, settings: None, configure_error: None, tokio: None, tick_backoff_until: 0,
+            pre, grants: Arc::default(), allowed: AllowedIds::default(), instance: None, generation: 0, settings: None, configure_error: None, tokio: None, tick_backoff_until: 0, options: Arc::default(),
         };
         let (manifest, definitions, types, translations) = runtime.api()
             .and_then(|(store, api)| Ok((
@@ -701,7 +800,7 @@ impl TickEngine {
         if self.plugins.contains_key(&manifest.name) {
             return Err(UiMessage::plain(format!("Plugin {} is already loaded", manifest.name)));
         }
-        let definitions: Vec<(NodeDefinition, bool)> = definitions.into_iter().map(from_wit_definition).collect();
+        let definitions: Vec<(NodeDefinition, bool)> = definitions.into_iter().map(|d| from_wit_definition(d, &manifest.name)).collect();
         let types: Vec<TypeDefinition> = types.into_iter().map(from_wit_type_definition).collect();
         for (def, _) in &definitions {
             if self.registry.get_definition(&def.type_name).is_some() {
@@ -787,6 +886,21 @@ impl TickEngine {
             crate::translations::CORE_TRANSLATIONS.iter().copied()
                 .chain(plugin_sources.map(|(l, s)| (l.as_str(), s.as_str()))),
         )
+    }
+
+    /// Options of dynamic properties published by enabled plugins (for a newly connected editor).
+    pub fn property_options(&self) -> Vec<PropertyOptionSet> {
+        self.plugins.iter().filter(|(_, p)| p.active)
+            .flat_map(|(name, p)| lock(&lock(&p.runtime).options).all(name))
+            .collect()
+    }
+
+    /// Option sources that changed since the last call (an empty list means the source was removed).
+    /// The server calls this after every tick and command and broadcasts the result.
+    pub fn take_property_option_changes(&mut self) -> Vec<PropertyOptionSet> {
+        self.plugins.iter()
+            .flat_map(|(name, p)| lock(&lock(&p.runtime).options).take_changes(name))
+            .collect()
     }
 
     pub fn plugin_names(&self) -> Vec<String> {
@@ -884,7 +998,11 @@ impl TickEngine {
         slot.active = false;
         slot.settings_error = None;
         // Node resources were already dropped when replaced with stubs; the instance is no longer needed
-        lock(&slot.runtime).discard();
+        {
+            let mut rt = lock(&slot.runtime);
+            rt.discard();
+            lock(&rt.options).clear();
+        }
         Ok(PluginChange { replaced, removed: RemovedConnections::default() })
     }
 
@@ -961,8 +1079,18 @@ fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition {
 }
 
 /// Definition and `polls` flag (not part of `NodeDefinition`: it concerns the host, not the editor).
-fn from_wit_definition(d: wit::NodeDefinition) -> (NodeDefinition, bool) {
+fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (NodeDefinition, bool) {
     let definition = NodeDefinition {
+        properties: d.properties.into_iter().map(|p| PropertyDefinition {
+            name: p.name,
+            title: p.title,
+            description: p.description,
+            kind: match p.kind {
+                wit::PropertyKind::Text => PropertyKind::Text,
+                wit::PropertyKind::Select(options) => PropertyKind::Select(options),
+                wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic { source, plugin: plugin.to_string() },
+            },
+        }).collect(),
         type_name: d.type_name,
         title: d.title,
         category: d.category,
@@ -1026,6 +1154,7 @@ mod tests {
 
     fn consumer_slot(runtime: Arc<Mutex<Runtime>>, pins: Vec<PinDefinition>, types: Vec<TypeDefinition>) -> PluginSlot {
         let definition = NodeDefinition {
+            properties: Vec::new(),
             type_name: "consumer/node".into(),
             title: "Consumer".into(),
             category: "Test".into(),

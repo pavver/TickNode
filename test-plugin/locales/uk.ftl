@@ -33,3 +33,11 @@ setting-test-plugin-mode-option-loud = Гучно
 
 test-plugin-error-no-token = Токен не задано
 test-plugin-error-bad-token = Невірний токен (довжина { $length })
+
+node-test-picker-title = Вибирач
+node-test-picker-description = Має описані властивості
+node-test-picker-prop-choice-title = Вибір
+node-test-picker-prop-mode-title = Режим
+node-test-picker-prop-mode-description = Статичні варіанти
+node-test-picker-prop-mode-option-a = Варіант А
+node-test-picker-prop-mode-option-b = Варіант Б

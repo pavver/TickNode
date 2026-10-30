@@ -324,3 +324,11 @@ plugins-secret-unset = не задано
 plugins-secret-clear = Очистити
 plugins-secret-clear-title = Видалити збережене значення
 plugins-field-error = «{ $field }»: { $error }
+
+# Пошуковий вибір властивості (наприклад, сутності Home Assistant)
+picker-placeholder = оберіть…
+picker-search-placeholder = Пошук за назвою або ідентифікатором
+picker-empty = Нічого не знайдено
+picker-no-options = Списку поки немає (плагін його ще не надав). Можна ввести значення вручну.
+picker-more = Ще { $count } - уточніть пошук
+picker-use-typed = Використати "{ $value }"

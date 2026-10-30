@@ -11,6 +11,12 @@ node-ha-state-changed-help =
     Властивість mode визначає, що робити, коли за один такт приходить кілька змін: "every" (типово) — один сигнал на кожну зміну, по порядку, по одному за такт; "latest" — лише найновіша зміна такту.
 
     Потрібне підключення до Home Assistant у налаштуваннях плагіна. Поки зв'язку немає, зміни не видно, а після відновлення зміна, що сталася за цей час, приходить одним сигналом. Неіснуюча сутність перепідписується кожні 30 секунд.
+node-ha-state-changed-prop-entity_id-title = Сутність
+node-ha-state-changed-prop-entity_id-description = Сутність Home Assistant, за якою стежити. Оберіть зі списку або введіть ідентифікатор сутності
+node-ha-state-changed-prop-mode-title = Режим
+node-ha-state-changed-prop-mode-description = Що робити, коли за один такт приходить кілька змін
+node-ha-state-changed-prop-mode-option-every = Кожна зміна
+node-ha-state-changed-prop-mode-option-latest = Лише остання
 node-ha-state-changed-pin-Changed = Зміна
 node-ha-state-changed-pin-New = Новий
 node-ha-state-changed-pin-Old = Старий

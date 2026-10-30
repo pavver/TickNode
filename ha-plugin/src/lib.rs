@@ -5,7 +5,9 @@
 //! `ha/get_state` and `ha/call_service` start a request whose answer arrives in a later tick, also as an emission.
 
 mod convert;
+mod entities;
 mod hub;
+mod icons;
 mod queue;
 
 use std::cell::RefCell;
@@ -65,6 +67,10 @@ impl Env for HostEnv {
 
     fn error(&mut self, message: &str) {
         host::error(message)
+    }
+
+    fn set_options(&mut self, source: &str, options: &[PropertyOption]) {
+        host::set_options(source, options)
     }
 }
 
@@ -132,6 +138,12 @@ impl Drop for StateChanged {
 impl PluginNode for StateChanged {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: vec![
+                PropertyDefinition::dynamic("entity_id", "Entity", entities::ENTITIES_SOURCE)
+                    .described("The Home Assistant entity to watch. Pick one from the list or type an entity id"),
+                PropertyDefinition::select("mode", "Mode", &[("every", "Every change"), ("latest", "Latest only")])
+                    .described("What happens when several changes arrive in the same tick"),
+            ],
             type_name: "ha/state_changed".into(),
             title: "HA State Changed".into(),
             category: CATEGORY.into(),
@@ -192,6 +204,7 @@ struct GetState {
 impl PluginNode for GetState {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "ha/get_state".into(),
             title: "HA Get State".into(),
             category: CATEGORY.into(),
@@ -225,6 +238,7 @@ struct CallService {
 impl PluginNode for CallService {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "ha/call_service".into(),
             title: "HA Call Service".into(),
             category: CATEGORY.into(),

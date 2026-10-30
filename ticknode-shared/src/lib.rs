@@ -8,10 +8,12 @@ use std::collections::BTreeMap;
 pub mod condition;
 pub mod text;
 pub mod plugin;
+pub mod property;
 pub mod types;
 pub mod ui_message;
 
 pub use plugin::*;
+pub use property::*;
 pub use types::*;
 pub use ui_message::*;
 
@@ -216,6 +218,10 @@ pub struct NodeDefinition {
     #[serde(default)]
     pub help: String,
     pub pins: Vec<PinDefinition>,
+    /// Schema of properties shown on the node as a drop-down or picker. Properties that are not listed
+    /// keep the default text row.
+    #[serde(default)]
+    pub properties: Vec<PropertyDefinition>,
 }
 
 /// An unconnected input data pin's value is stored among the node's properties
@@ -353,6 +359,9 @@ pub enum ServerMessage {
         plugins: Vec<PluginInfo>,
         /// Translation resources of the engine core and every enabled plugin, merged per locale.
         translations: Translations,
+        /// Runtime options of dynamic properties published by enabled plugins.
+        #[serde(default)]
+        property_options: Vec<PropertyOptionSet>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -374,6 +383,8 @@ pub enum ServerMessage {
     /// The set of node and data types changed (plugin enabled or disabled): new definitions for the palette.
     /// Affected nodes arrive separately as `NodeUpdated`.
     Catalog { definitions: Vec<NodeDefinition>, types: Vec<TypeDefinition>, translations: Translations },
+    /// A plugin replaced the options of a dynamic property source (an empty list removes it).
+    PropertyOptions { plugin: String, source: String, options: Vec<PropertyOption> },
     /// Error for the client that caused it; translatable.
     Error(UiMessage),
 }

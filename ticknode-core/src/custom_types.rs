@@ -50,6 +50,7 @@ impl Node for TypeMakeNode {
         }];
         pins.extend(self.def.fields().iter().enumerate().map(|(i, f)| field_pin(i, f, PinDirection::Input)));
         NodeDefinition {
+            properties: Vec::new(),
             type_name: make_node_type(&self.def.name),
             title: format!("Make {}", self.def.title),
             category: "Data".into(),
@@ -97,6 +98,7 @@ impl Node for TypeBreakNode {
         }];
         pins.extend(self.def.fields().iter().enumerate().map(|(i, f)| field_pin(i, f, PinDirection::Output)));
         NodeDefinition {
+            properties: Vec::new(),
             type_name: break_node_type(&self.def.name),
             title: format!("Break {}", self.def.title),
             category: "Data".into(),

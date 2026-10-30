@@ -52,7 +52,7 @@ impl AllowedIds {
         id.starts_with("category-")
             || id.starts_with(&self.free_prefix())
             || id.starts_with(&format!("setting-{}-", self.plugin))
-            || self.nodes.iter().any(|n| under(n, &["title", "description", "help"], &["pin-"]))
+            || self.nodes.iter().any(|n| under(n, &["title", "description", "help"], &["pin-", "prop-"]))
             || self.types.iter().any(|t| under(t, &["title", "description"], &["field-", "value-"]))
     }
 
@@ -236,6 +236,10 @@ mod tests {
         let source = "\
 node-my-node-title = Title
 node-my-node-pin-In = In
+node-my-node-prop-entity_id-title = Entity
+node-my-node-prop-mode-option-every = Every
+node-my-node-prop- = empty
+node-other-prop-x-title = stolen
 node-my-node-bogus = no
 node-other-title = stolen
 node-math-add-title = hijack
@@ -252,7 +256,8 @@ category-weather = Weather
         let out = filter_plugin_resource("my_plugin", "uk", source, &allowed()).unwrap();
         let kept = message_ids(&out);
         assert_eq!(kept, [
-            "node-my-node-title", "node-my-node-pin-In", "type-my-type-field-x", "type-my-type-value-a",
+            "node-my-node-title", "node-my-node-pin-In", "node-my-node-prop-entity_id-title", "node-my-node-prop-mode-option-every",
+            "type-my-type-field-x", "type-my-type-value-a",
             "setting-my-plugin-key-title", "my-plugin-error-x", "category-weather",
         ]);
         assert!(out.contains("-my-plugin-term") && !out.contains("-other-term"));

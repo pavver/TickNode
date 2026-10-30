@@ -21,6 +21,8 @@
 //! | what | key |
 //! |------|-----|
 //! | node title / description / help | `node-<type slug>-title`, `-description`, `-help` |
+//! | property title / description | `node-<type slug>-prop-<name>-title`, `-description` (the property name as written when it consists of `[A-Za-z0-9_-]`, otherwise its slug) |
+//! | select option label | `node-<type slug>-prop-<name>-option-<value slug>` |
 //! | pin label | `node-<type slug>-pin-<pin name>`: the pin name as written when it consists of `[A-Za-z0-9_-]` (`pin-Val`), otherwise its slug (`Delay ms` -> `pin-delay-ms`) |
 //! | category | `category-<category slug>` (the first plugin that defines a category key wins) |
 //! | data type | `type-<type name slug>-title`, `-description`, `-field-<field>`, `-value-<enum value>` |
@@ -69,7 +71,7 @@ use std::collections::BTreeMap;
 
 pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
-    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
+    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind, PropertyOption, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
     UiMessage, fluent_slug as slug,
 };
 
@@ -447,6 +449,19 @@ pub mod host {
         wit_host::ws_close(id)
     }
 
+    /// Publishes the options of a dynamic property (`PropertyDefinition::dynamic(.., source)`), replacing the
+    /// previous list of that source. Usable from any plugin call. The host drops over-long strings and caps the
+    /// list at 20 000 options; an empty list removes the source; an unchanged list is not re-sent to editors.
+    pub fn set_options(source: &str, options: &[PropertyOption]) {
+        let options: Vec<wit::PropertyOption> = options.iter().map(|o| wit::PropertyOption {
+            value: o.value.clone(),
+            label: o.label.clone(),
+            detail: o.detail.clone(),
+            icon: o.icon.clone(),
+        }).collect();
+        wit_host::set_options(source, &options);
+    }
+
     /// Cancels a task belonging to this node. Returns `false` if the task has already finished.
     pub fn cancel(task: TaskId) -> bool {
         wit_host::cancel_task(task)
@@ -658,6 +673,16 @@ fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefinition {
             },
         }).collect(),
         polls,
+        properties: d.properties.into_iter().map(|p| wit::PropertyDefinition {
+            name: p.name,
+            title: p.title,
+            description: p.description,
+            kind: match p.kind {
+                PropertyKind::Text => wit::PropertyKind::Text,
+                PropertyKind::Select(options) => wit::PropertyKind::Select(options),
+                PropertyKind::Dynamic { source, .. } => wit::PropertyKind::Dynamic(source),
+            },
+        }).collect(),
     }
 }
 

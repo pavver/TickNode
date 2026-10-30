@@ -17,7 +17,7 @@ web-sys = { version = "0.3.77", features = [
     "WebSocket", "MessageEvent", "BinaryType", "CloseEvent", "Location", "Url", "Storage",
     "PointerEvent", "WheelEvent", "KeyboardEvent", "DomRect", "Element", "HtmlElement",
     "Document", "Window", "HtmlInputElement", "HtmlDocument", "ClipboardEvent", "DataTransfer",
-    "NodeList", "Navigator",
+    "NodeList", "Navigator", "ScrollIntoViewOptions", "ScrollLogicalPosition",
 ] }
 uuid = { workspace = true }
 fluent-bundle = "0.16.0"

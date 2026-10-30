@@ -321,6 +321,39 @@ pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
     pin_name.to_string()
 }
 
+/// Fluent key fragment of a property name: the name as written when it consists of `[A-Za-z0-9_-]`
+/// (`entity_id`), otherwise its slug.
+fn property_key(name: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        keys.push(name.to_string());
+    }
+    let name_slug = slug(name);
+    if !name_slug.is_empty() && !keys.contains(&name_slug) {
+        keys.push(name_slug);
+    }
+    keys
+}
+
+fn property_lookup(type_name: &str, name: &str, suffix: &str) -> Option<String> {
+    let base = format!("node-{}-prop-", node_slug(type_name));
+    property_key(name).iter().find_map(|key| lookup(&format!("{base}{key}-{suffix}")))
+}
+
+/// Title of a described property (`node-<type slug>-prop-<name>-title`), falling back to the definition's title.
+pub fn property_title(type_name: &str, prop: &PropertyDefinition) -> String {
+    property_lookup(type_name, &prop.name, "title").unwrap_or_else(|| prop.title.clone())
+}
+
+pub fn property_description(type_name: &str, prop: &PropertyDefinition) -> String {
+    property_lookup(type_name, &prop.name, "description").unwrap_or_else(|| prop.description.clone())
+}
+
+/// Label of a `Select` property option (`node-<type slug>-prop-<name>-option-<value slug>`).
+pub fn property_option_label(type_name: &str, prop_name: &str, value: &str, label: &str) -> String {
+    property_lookup(type_name, prop_name, &format!("option-{}", slug(value))).unwrap_or_else(|| label.to_string())
+}
+
 /// Make/Break pins are named after the type (pin 0) and the field titles (the rest).
 fn custom_pin_label(struct_name: &str, pin_name: &str) -> Option<String> {
     TYPES.with(|types| {
@@ -619,6 +652,7 @@ mod tests {
 
     fn def(type_name: &str) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: type_name.into(),
             title: "Weather Forecast".into(),
             category: "Weather".into(),
@@ -697,6 +731,29 @@ weather-plugin-error-no-token = Токен не задано ({ $name })
             assert_eq!(node_description(&plugin_def), "Fetches the forecast");
         });
         with_locale(Locale::En, || assert_eq!(node_title(&plugin_def), "Forecast"));
+    }
+
+    #[test]
+    fn property_texts_come_from_plugin_resources_with_definition_fallbacks() {
+        set_runtime_translations(&[
+            ("uk".to_string(), "node-weather-forecast-prop-entity_id-title = Сутність\nnode-weather-forecast-prop-mode-option-latest = Лише остання\nnode-weather-forecast-prop-mode-option-every-change = Кожна".to_string()),
+        ]);
+        let entity = PropertyDefinition::dynamic("entity_id", "Entity", "entities").described("Pick one");
+        let mode = PropertyDefinition::select("mode", "Mode", &[("every-change", "Every"), ("latest", "Latest only")]);
+        with_locale(Locale::Uk, || {
+            assert_eq!(property_title("weather/forecast", &entity), "Сутність");
+            // No translation: the definition's English text
+            assert_eq!(property_title("weather/forecast", &mode), "Mode");
+            assert_eq!(property_description("weather/forecast", &entity), "Pick one");
+            assert_eq!(property_option_label("weather/forecast", "mode", "latest", "Latest only"), "Лише остання");
+            // Option values are slugified in keys
+            assert_eq!(property_option_label("weather/forecast", "mode", "every-change", "Every"), "Кожна");
+            assert_eq!(property_option_label("weather/forecast", "mode", "other", "Other"), "Other");
+        });
+        with_locale(Locale::En, || {
+            assert_eq!(property_title("weather/forecast", &entity), "Entity");
+            assert_eq!(property_option_label("weather/forecast", "mode", "latest", "Latest only"), "Latest only");
+        });
     }
 
     #[test]

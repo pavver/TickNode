@@ -71,6 +71,36 @@ interface types {
         required: bool,
     }
 
+    variant property-kind {
+        /// Free text (the default for properties that are not described).
+        text,
+        /// Drop-down with static (value, label) options.
+        %select(list<tuple<string, string>>),
+        /// Searchable picker over the options the plugin publishes at runtime under this source name
+        /// (`host.set-options`).
+        dynamic(string),
+    }
+
+    /// Describes a node property so the editor can show a title, a drop-down or a picker.
+    record property-definition {
+        name: string,
+        title: string,
+        description: string,
+        kind: property-kind,
+    }
+
+    /// One option of a dynamic property.
+    record property-option {
+        /// The value stored in the property.
+        value: string,
+        /// Primary line.
+        label: string,
+        /// Secondary line, e.g. the entity id.
+        detail: string,
+        /// Material Design Icons name, e.g. `mdi:lightbulb`.
+        icon: option<string>,
+    }
+
     record node-definition {
         type-name: string,
         title: string,
@@ -81,6 +111,8 @@ interface types {
         pins: list<pin>,
         /// Event source node: the host calls `node.poll` every tick. Otherwise `poll` is not called.
         polls: bool,
+        /// Properties shown with a title, a drop-down or a picker. Others stay plain text rows.
+        properties: list<property-definition>,
     }
 
     variant capability {
@@ -209,7 +241,7 @@ interface types {
 /// Host services. Task-starting functions work only during `execute`/`poll`
 /// (the task belongs to the currently executing node).
 interface host {
-    use types.{log-level, task-id, http-request, ws-id};
+    use types.{log-level, task-id, http-request, ws-id, property-option};
 
     /// Log message to the editor console (on behalf of the current node). Logs are never translated:
     /// always write them in English.
@@ -241,6 +273,12 @@ interface host {
 
     /// Closes the connection; no `closed` event is delivered for it afterwards.
     ws-close: func(id: ws-id);
+
+    /// Replaces the plugin's options for a dynamic property `source` (see `property-kind.dynamic`).
+    /// Usable from any plugin call. The host caps the number of options per source (20 000) and the
+    /// length of every string (options violating the limits are dropped and logged); an empty list
+    /// removes the source. Unchanged lists are not re-sent to editors.
+    set-options: func(source: string, options: list<property-option>);
 }
 
 interface nodes {

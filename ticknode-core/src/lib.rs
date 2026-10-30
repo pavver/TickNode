@@ -819,6 +819,7 @@ impl Node for ConstNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "const".to_string(),
             title: "Constant".to_string(),
             category: "Data".to_string(),
@@ -856,6 +857,7 @@ impl Node for PureMathNode {
             MathOp::Add => "Math Add", MathOp::Sub => "Math Subtract", MathOp::Mul => "Math Multiply", MathOp::Div => "Math Divide",
         };
         NodeDefinition {
+            properties: Vec::new(),
             type_name: name.to_string(),
             title: title.to_string(),
             category: "Math".to_string(),
@@ -907,6 +909,7 @@ impl Node for MathExpressionNode {
                 direction: PinDirection::Input, required: false });
         }
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "math/expression".to_string(),
             title: "Expression".to_string(),
             category: "Math".to_string(),
@@ -978,6 +981,7 @@ impl Node for LogicalNode {
             ],
         };
         NodeDefinition {
+            properties: Vec::new(),
             type_name: name.to_string(),
             title: title.to_string(),
             category: "Logic".to_string(),
@@ -1004,6 +1008,7 @@ impl Node for VariableGetNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "variable/get".to_string(),
             title: format!("Get {}", self.var_name),
             category: "Data".to_string(),
@@ -1037,6 +1042,7 @@ impl Node for VariableSetNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "variable/set".to_string(),
             title: format!("Set {}", self.var_name),
             category: "Data".to_string(),
@@ -1134,6 +1140,7 @@ impl Node for MatchNode {
             direction: PinDirection::Output, required: false }));
         pins.push(PinDefinition { id: Self::ELSE_PIN, name: "Else".to_string(), pin_type: PinType::Exec, direction: PinDirection::Output, required: false });
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "match".to_string(),
             title: "Match".to_string(),
             category: "Control Flow".to_string(),
@@ -1207,6 +1214,7 @@ impl Node for ClockNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "clock".to_string(),
             title: "Clock".to_string(),
             category: "Events".to_string(),
@@ -1242,6 +1250,7 @@ impl Node for ConsoleNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "console".to_string(),
             title: "Console Log".to_string(),
             category: "Debug".to_string(),
@@ -1272,6 +1281,7 @@ impl Node for ClickButtonNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/click_button".to_string(),
             title: "Click Button".to_string(),
             category: "Events".to_string(),
@@ -1341,6 +1351,7 @@ impl Node for DebugNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/debug".to_string(),
             title: "Debug Log".to_string(),
             category: "Debug".to_string(),
@@ -1399,6 +1410,7 @@ impl Node for CompareNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "compare".to_string(),
             title: "Compare".to_string(),
             category: "Logic".to_string(),
@@ -1434,6 +1446,7 @@ impl Node for ForLoopNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "for_loop".to_string(),
             title: "For Loop".to_string(),
             category: "Control Flow".to_string(),
@@ -1498,6 +1511,7 @@ impl Node for SleepNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "sleep".to_string(),
             title: "Sleep".to_string(),
             category: "Time".to_string(),
@@ -1542,6 +1556,7 @@ impl Node for ListCreateNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "list/create".to_string(),
             title: "Create List".to_string(),
             category: "Lists".to_string(),
@@ -1583,6 +1598,7 @@ impl Node for ListAddNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "list/add".to_string(),
             title: "List Add".to_string(),
             category: "Lists".to_string(),
@@ -1623,6 +1639,7 @@ impl Node for ListRemoveNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "list/remove".to_string(),
             title: "List Remove".to_string(),
             category: "Lists".to_string(),
@@ -1665,6 +1682,7 @@ impl Node for ListGetNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "list/get".to_string(),
             title: "List Get".to_string(),
             category: "Lists".to_string(),
@@ -1708,6 +1726,7 @@ impl Node for ListLengthNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "list/length".to_string(),
             title: "List Length".to_string(),
             category: "Lists".to_string(),
@@ -1745,6 +1764,7 @@ impl Node for ObjectCreateNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "object/create".to_string(),
             title: "Create Object".to_string(),
             category: "Objects".to_string(),
@@ -1766,6 +1786,7 @@ impl Node for ObjectSetFieldNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "object/set_field".to_string(),
             title: "Set Object Field".to_string(),
             category: "Objects".to_string(),
@@ -1812,6 +1833,7 @@ impl Node for ObjectGetFieldNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "object/get_field".to_string(),
             title: "Get Object Field".to_string(),
             category: "Objects".to_string(),
@@ -1873,6 +1895,7 @@ impl Node for ObjectUnpackNode {
                 direction: PinDirection::Output, required: false });
         }
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "object/unpack".to_string(),
             title: "Unpack Object".to_string(),
             category: "Objects".to_string(),

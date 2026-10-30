@@ -52,6 +52,7 @@ impl Drop for WsProbe {
 impl PluginNode for WsProbe {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/ws_probe".into(),
             title: "WebSocket Probe".into(),
             category: "Test".into(),
@@ -87,6 +88,7 @@ struct Greeter;
 impl PluginNode for Greeter {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/greeter".into(),
             title: "Greeter".into(),
             category: "Test".into(),
@@ -105,6 +107,63 @@ impl PluginNode for Greeter {
     }
 }
 
+/// Node with described properties: a picker over the options the plugin publishes in `configure`
+/// (source `greetings`) and a static drop-down.
+struct Picker {
+    choice: String,
+    mode: String,
+}
+
+impl PluginNode for Picker {
+    fn definition(&self) -> NodeDefinition {
+        NodeDefinition {
+            properties: vec![
+                PropertyDefinition::dynamic("choice", "Choice", "greetings"),
+                PropertyDefinition::select("mode", "Mode", &[("a", "Option A"), ("b", "Option B")]).described("Static options"),
+            ],
+            type_name: "test/picker".into(),
+            title: "Picker".into(),
+            category: "Test".into(),
+            description: "Has described properties".into(),
+            help: "Checks property schemas and dynamic property options. Emits \"<mode>:<choice>\" on Text.".into(),
+            pins: vec![exec_in(0, "In"), data_out(1, "Text", DataType::String)],
+        }
+    }
+
+    fn properties(&self) -> Vec<(String, DataValue)> {
+        vec![("choice".into(), self.choice.clone().into()), ("mode".into(), self.mode.clone().into())]
+    }
+
+    fn set_property(&mut self, name: &str, value: DataValue) {
+        if let DataValue::String(s) = value {
+            match name {
+                "choice" => self.choice = s,
+                "mode" => self.mode = s,
+                _ => {}
+            }
+        }
+    }
+
+    fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
+        vec![Output::Data(PinId(1), format!("{}:{}", self.mode, self.choice).into())]
+    }
+}
+
+/// Publishes dynamic options derived from the greeting setting (checks `set-options` from `configure`,
+/// the host limits and clearing on disable). `flood` exceeds the limits on purpose.
+fn publish_options(greeting: &str) {
+    let option = |value: &str| PropertyOption { value: value.into(), label: value.to_uppercase(), detail: format!("detail {value}"), icon: Some("mdi:hand-wave".into()) };
+    host::set_options("greetings", &if greeting.is_empty() { Vec::new() } else { vec![option(greeting)] });
+    if greeting == "flood" {
+        let many: Vec<PropertyOption> = (0..20_005).map(|i| option(&format!("v{i}"))).collect();
+        host::set_options("flood", &many);
+        host::set_options("long", &[option(&"x".repeat(600)), option("ok"), PropertyOption { value: String::new(), ..option("empty") }]);
+    } else {
+        host::set_options("flood", &[]);
+        host::set_options("long", &[]);
+    }
+}
+
 /// Pulse counter: state is held in a node field, step is a property.
 struct Counter {
     step: i64,
@@ -114,6 +173,7 @@ struct Counter {
 impl PluginNode for Counter {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/counter".into(),
             title: "Counter".into(),
             category: "Test".into(),
@@ -152,6 +212,7 @@ struct Ticker {
 impl PluginNode for Ticker {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/ticker".into(),
             title: "Ticker".into(),
             category: "Test".into(),
@@ -179,6 +240,7 @@ struct Crash;
 impl PluginNode for Crash {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/crash".into(),
             title: "Crash".into(),
             category: "Test".into(),
@@ -208,6 +270,7 @@ struct Storage;
 impl PluginNode for Storage {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/storage".into(),
             title: "Storage".into(),
             category: "Test".into(),
@@ -237,6 +300,7 @@ struct PointSource {
 impl PluginNode for PointSource {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/point_source".into(),
             title: "Point Source".into(),
             category: "Test".into(),
@@ -271,6 +335,7 @@ struct BadSource;
 impl PluginNode for BadSource {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/bad_source".into(),
             title: "Bad Source".into(),
             category: "Test".into(),
@@ -291,6 +356,7 @@ struct PointSink;
 impl PluginNode for PointSink {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            properties: Vec::new(),
             type_name: "test/point_sink".into(),
             title: "Point Sink".into(),
             category: "Test".into(),
@@ -320,7 +386,7 @@ impl PluginNode for PointSink {
 
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] =
-        &["test/bad_source", "test/counter", "test/crash", "test/greeter", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
+        &["test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
     /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
     const TRANSLATIONS: &'static [(&'static str, &'static str)] =
         &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
@@ -343,6 +409,7 @@ impl Plugin for TestPlugin {
         CONFIG.with(|c| {
             let mut c = c.borrow_mut();
             c.greeting = setting_str(settings, "greeting").unwrap_or_default().to_string();
+            publish_options(&c.greeting);
             c.mode = setting_str(settings, "mode").unwrap_or("quiet").to_string();
             c.token = token.clone();
         });
@@ -403,6 +470,7 @@ impl Plugin for TestPlugin {
             "test/counter" => Box::new(Counter { step: 1, count: 0 }),
             "test/crash" => Box::new(Crash),
             "test/greeter" => Box::new(Greeter),
+            "test/picker" => Box::new(Picker { choice: String::new(), mode: "a".into() }),
             "test/bad_source" => Box::new(BadSource),
             "test/point_source" => Box::new(PointSource { x: 0.0, y: 0.0 }),
             "test/point_sink" => Box::new(PointSink),

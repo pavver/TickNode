@@ -9,9 +9,10 @@ use ha_core_client::{
     Action, ClientConfig, ConnectionState, PendingSubscription, Reply, Session, Source, State, StateChange, Target,
     Update, SubscriptionStatus,
 };
-use ticknode_plugin_sdk::{Emission, NodeId, Output, PinId, WsEvent, WsId};
+use ticknode_plugin_sdk::{Emission, NodeId, Output, PinId, PropertyOption, WsEvent, WsId};
 
 use crate::convert::{missing_state, state_value};
+use crate::entities::{ENTITIES_SOURCE, entity_options};
 use crate::queue::{ChangeQueue, Mode};
 
 /// Output pins of `ha/state_changed`.
@@ -30,6 +31,10 @@ pub const CALL_ERROR: PinId = PinId(7);
 
 /// How long to wait before subscribing again after a subscription failed (for example, the entity does not exist).
 const RESUBSCRIBE_DELAY: Duration = Duration::from_secs(30);
+/// How often the entity list for the picker is refreshed while connected.
+const ENTITIES_REFRESH: Duration = Duration::from_secs(5 * 60);
+/// Wait before asking for the entity list again after a failed request.
+const ENTITIES_RETRY: Duration = Duration::from_secs(30);
 
 /// What the hub needs from the host.
 pub trait Env {
@@ -39,6 +44,8 @@ pub trait Env {
     fn info(&mut self, message: &str);
     fn warn(&mut self, message: &str);
     fn error(&mut self, message: &str);
+    /// Publishes the options of a dynamic property source (`host::set_options`).
+    fn set_options(&mut self, source: &str, options: &[PropertyOption]);
 }
 
 struct Link {
@@ -82,6 +89,10 @@ pub struct Hub {
     next_serial: u64,
     /// The last connection state that was logged.
     logged: Option<ConnectionState>,
+    /// The in-flight `get_states` request that feeds the entity picker.
+    entities_reply: Option<Reply<Vec<State>>>,
+    /// When the entity list is asked for next. `None`: as soon as the connection is up.
+    entities_due: Option<Instant>,
 }
 
 /// `Output`s of a `ha/state_changed` pulse. A missing state is sent as an empty `ha.state` (see [`missing_state`]).
@@ -123,6 +134,8 @@ impl Hub {
             watch.sub = Sub::Idle;
         }
         self.logged = None;
+        self.entities_reply = None;
+        self.entities_due = None;
     }
 
     /// (Re)creates the session for new settings; the old socket is closed.
@@ -254,9 +267,39 @@ impl Hub {
         }
         self.ensure_subscriptions(now);
         let emissions = self.collect(now, env);
+        self.refresh_entities(now, env);
         self.flush(now, env);
         self.log_connection_state(env);
         emissions
+    }
+
+    /// Keeps the entity picker's options fresh: asks for all states once the connection is up (also after
+    /// every reconnect) and then every [`ENTITIES_REFRESH`]; publishes the answer through [`Env::set_options`].
+    fn refresh_entities(&mut self, now: Instant, env: &mut impl Env) {
+        let Some(link) = &mut self.link else { return };
+        if link.session.connection_state() != ConnectionState::Connected {
+            // The answer to a request made on a lost connection never comes; ask again after the reconnect
+            self.entities_reply = None;
+            self.entities_due = None;
+            return;
+        }
+        if let Some(reply) = &mut self.entities_reply {
+            match reply.poll() {
+                None => return,
+                Some(Ok(states)) => {
+                    env.set_options(ENTITIES_SOURCE, &entity_options(&states));
+                    self.entities_due = Some(now + ENTITIES_REFRESH);
+                }
+                Some(Err(e)) => {
+                    env.warn(&format!("Could not read the list of entities: {e}"));
+                    self.entities_due = Some(now + ENTITIES_RETRY);
+                }
+            }
+            self.entities_reply = None;
+        }
+        if self.entities_due.is_none_or(|due| now >= due) {
+            self.entities_reply = Some(link.session.get_states(now));
+        }
     }
 
     fn pump_actions(link: &mut Link, now: Instant, env: &mut impl Env) {
@@ -404,6 +447,9 @@ mod tests {
         sent: Vec<Value>,
         logs: Vec<String>,
         fail_connect: bool,
+        /// Latest options per source and how many times `set_options` was called.
+        options: HashMap<String, Vec<PropertyOption>>,
+        option_calls: usize,
     }
 
     impl Env for Fake {
@@ -436,6 +482,11 @@ mod tests {
         fn error(&mut self, message: &str) {
             self.logs.push(format!("error: {message}"));
         }
+
+        fn set_options(&mut self, source: &str, options: &[PropertyOption]) {
+            self.option_calls += 1;
+            self.options.insert(source.to_string(), options.to_vec());
+        }
     }
 
     fn node(n: u128) -> NodeId {
@@ -463,11 +514,15 @@ mod tests {
         /// What the fake answers to `call_service` (`None`: success).
         service_error: Option<&'static str>,
         calls: Vec<Value>,
+        /// What the fake answers to `get_states`.
+        states: Vec<Value>,
+        /// How many `get_states` requests were seen.
+        get_states_requests: usize,
     }
 
     impl Rig {
         fn new() -> Self {
-            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, calls: Vec::new() };
+            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, calls: Vec::new(), states: Vec::new(), get_states_requests: 0 };
             rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
             rig
         }
@@ -523,12 +578,29 @@ mod tests {
                                 Some(message) => json!({"id": id, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": message}}),
                             });
                         }
+                        "ping" => replies.push(json!({"id": id, "type": "pong"})),
+                        "get_states" => {
+                            self.get_states_requests += 1;
+                            replies.push(ok(Value::Array(self.states.clone())));
+                        }
                         _ => replies.push(ok(Value::Null)),
                     }
                 }
                 emissions.extend(self.recv(replies));
             }
             emissions
+        }
+
+        /// Lets `total` pass in 20 s steps, keeping the connection alive (the fake answers pings).
+        fn advance(&mut self, total: Duration) {
+            let mut left = total;
+            while !left.is_zero() {
+                let step = left.min(Duration::from_secs(20));
+                self.now += step;
+                left -= step;
+                self.tick(vec![]);
+                self.serve();
+            }
         }
 
         /// A state change of `entity` as Home Assistant's trigger subscription reports it.
@@ -693,6 +765,79 @@ mod tests {
         // The subscription is restored and works again
         let change = rig.change("light.a", "off", "on");
         assert_eq!(rig.recv(vec![change]).len(), 1);
+    }
+
+    #[test]
+    fn entity_options_are_published_after_connecting_and_refreshed() {
+        let mut rig = Rig::new();
+        rig.states = vec![
+            ha_state("light.kitchen", "on"),
+            json!({"entity_id": "binary_sensor.door", "state": "on", "attributes": {"friendly_name": "Door", "device_class": "door"},
+                "last_changed": "2026-10-28T14:45:09+00:00", "last_updated": "2026-10-28T14:45:09+00:00", "context": {"id": "01X"}}),
+        ];
+        // Nothing is asked for before the connection is up
+        rig.tick(vec![]);
+        assert_eq!(rig.get_states_requests, 0);
+        rig.connect();
+        assert_eq!(rig.get_states_requests, 1);
+        let options = &rig.env.options[ENTITIES_SOURCE];
+        assert_eq!(options.iter().map(|o| (o.value.as_str(), o.label.as_str(), o.icon.as_deref())).collect::<Vec<_>>(), [
+            ("binary_sensor.door", "Door", Some("mdi:door-open")),
+            ("light.kitchen", "Lamp", Some("mdi:lightbulb")),
+        ]);
+        assert_eq!(options[0].detail, "binary_sensor.door");
+
+        // Not asked again before the refresh interval has passed
+        rig.advance(Duration::from_secs(60));
+        assert_eq!(rig.get_states_requests, 1);
+        // Then refreshed with the new list
+        rig.states.push(ha_state("switch.new", "off"));
+        rig.advance(ENTITIES_REFRESH);
+        assert_eq!(rig.get_states_requests, 2);
+        assert_eq!(rig.env.options[ENTITIES_SOURCE].len(), 3);
+    }
+
+    #[test]
+    fn entity_options_are_published_again_after_a_reconnect() {
+        let mut rig = Rig::new();
+        rig.states = vec![ha_state("light.a", "on")];
+        rig.connect();
+        assert_eq!(rig.env.option_calls, 1);
+        let old = rig.ws;
+        rig.tick(vec![WsEvent::Closed(old, "gone".into())]);
+        rig.states.push(ha_state("light.b", "on"));
+        rig.now += Duration::from_secs(3);
+        rig.tick(vec![]);
+        rig.ws = rig.env.next_ws;
+        let new = rig.ws;
+        rig.tick(vec![WsEvent::Opened(new)]);
+        rig.recv(vec![json!({"type": "auth_required"})]);
+        rig.env.sent.remove(0);
+        rig.recv(vec![json!({"type": "auth_ok"})]);
+        rig.serve();
+        assert_eq!(rig.get_states_requests, 2);
+        assert_eq!(rig.env.options[ENTITIES_SOURCE].len(), 2);
+    }
+
+    #[test]
+    fn a_failed_entity_list_request_is_retried_later() {
+        let mut rig = Rig::new();
+        rig.states = vec![ha_state("light.a", "on")];
+        rig.connect();
+        let calls = rig.env.option_calls;
+        // The request fails: nothing is published, it is repeated after the retry delay
+        let ws = rig.ws;
+        // Keep the connection alive, but do not answer `get_states` itself
+        rig.advance(ENTITIES_REFRESH - Duration::from_secs(20));
+        rig.now += Duration::from_secs(20);
+        rig.tick(vec![]);
+        let id = rig.env.sent.iter().find(|m| m["type"] == "get_states").unwrap()["id"].as_u64().unwrap();
+        rig.env.sent.clear();
+        rig.tick(vec![WsEvent::Message(ws, json!({"id": id, "type": "result", "success": false, "error": {"code": "boom", "message": "no"}}).to_string())]);
+        assert!(rig.env.logs.iter().any(|l| l.starts_with("warn: Could not read the list of entities")), "{:?}", rig.env.logs);
+        assert_eq!(rig.env.option_calls, calls);
+        rig.advance(ENTITIES_RETRY);
+        assert_eq!(rig.env.option_calls, calls + 1);
     }
 
     #[test]

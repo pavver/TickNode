@@ -65,8 +65,8 @@ urls=()
 if [ "$host" = 0.0.0.0 ]; then
     # Listening on every interface: localhost plus the machine's LAN addresses
     urls+=("http://localhost:$port")
-    for ip in $(hostname -I 2>/dev/null); do
-        [[ $ip == *:* ]] || urls+=("http://$ip:$port")
+    for ip in $(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]}'); do
+        urls+=("http://$ip:$port")
     done
 else
     urls+=("http://$host:$port")

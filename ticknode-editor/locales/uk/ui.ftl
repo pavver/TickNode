@@ -31,12 +31,46 @@ error-plugin-crash = Аварія плагіна: { $reason }
 error-plugin-disable-blocked = Плагін «{ $plugin }» не можна вимкнути: його типи даних використовує { $dependents } — спершу вимкніть їх
 error-plugin-config-corrupt = Конфігурація плагіна пошкоджена: { $details }. Збереження налаштувань чи вмикання перезапише її
 error-plugin-config-not-saved = Стан плагіна змінено, але конфігурацію не збережено: { $details }
+error-condition-missing-pin = Не вказано номер піна («1: a > 0»)
+error-condition-not-pin-number = «{ $text }» — не номер піна
+error-condition-input-format = «{ $text }»: вхід записується як «pin:name:type»
+error-condition-invalid-input-name = «{ $name }» — некоректне ім'я входу
+error-condition-unknown-type = «{ $type }» — невідомий тип
+error-condition-expected-join = { $end ->
+    [true] Очікувалось «and» / «or», а не кінець тексту
+   *[other] Очікувалось «and» / «or», а не «{ $found }»
+}
+error-condition-expected-operand = { $end ->
+    [true] Очікувався операнд, а не кінець тексту
+   *[other] Очікувався операнд, а не «{ $found }»
+}
+error-condition-expected-operator = { $end ->
+    [true] Очікувався оператор, а не кінець тексту
+   *[other] Очікувався оператор, а не «{ $found }»
+}
+error-condition-unknown-operator = «{ $operator }» — невідомий оператор
+error-condition-unclosed-quote = Незакриті лапки
+error-condition-not-number = «{ $text }» — не число
+error-condition-doubled-operator = «{ $char }» — мабуть, «{ $char }{ $char }»
+error-condition-unexpected-char = Неочікуваний символ «{ $char }»
 
 # Автоматичні ноди типів даних плагінів
 custom-make-title = Створити { $type }
 custom-make-description = Збирає значення «{ $type }» з полів
 custom-break-title = Розібрати { $type }
 custom-break-description = Розбирає «{ $type }» на поля
+custom-make-help =
+    Збирає значення типу «{ $type }» ({ $name }) з окремих полів.
+
+    Кожне поле — це вхід: під'єднайте джерело або задайте значення прямо на ноді. Обов'язкові поля є обов'язковими входами: без них значення не створюється (у журналі з'явиться помилка). Необов'язкове поле без значення пропускається.
+
+    Чиста нода: обчислюється щоразу, коли її результат потрібен іншій ноді.
+custom-break-help =
+    Розбирає значення типу «{ $type }» ({ $name }) на окремі поля: кожне поле — вихідний пін.
+
+    Необов'язкове поле, якого немає у значенні, не має значення (пін порожній).
+
+    Чиста нода: обчислюється щоразу, коли її результат потрібен іншій ноді.
 
 # Node categories
 category-events = Події

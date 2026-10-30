@@ -498,7 +498,7 @@ pub fn effective_settings(manifest: &PluginManifest, stored: &[(String, DataValu
 pub fn missing_required(manifest: &PluginManifest, effective: &[(String, DataValue)]) -> Option<UiMessage> {
     manifest.settings.iter()
         .find(|d| d.required && !effective.iter().any(|(k, _)| *k == d.key))
-        .map(|d| UiMessage::new("error-setting-required", format!("Required setting \"{}\" is not set", d.title)).arg("setting", &d.title))
+        .map(|d| UiMessage::new("error-setting-required", format!("Required setting \"{}\" is not set", d.title)).arg("setting", &d.title).arg("plugin", &manifest.name).arg("key", &d.key))
 }
 
 /// A plugin crash reported to the user.

@@ -35,12 +35,46 @@ error-plugin-crash = Plugin crashed: { $reason }
 error-plugin-disable-blocked = Plugin "{ $plugin }" cannot be disabled: its data types are used by { $dependents }; disable them first
 error-plugin-config-corrupt = The plugin config is corrupted: { $details }. Saving settings or enabling the plugin will overwrite it
 error-plugin-config-not-saved = The plugin state was changed, but the config was not saved: { $details }
+error-condition-missing-pin = Missing pin number ("1: a > 0")
+error-condition-not-pin-number = "{ $text }" is not a pin number
+error-condition-input-format = "{ $text }": an input is written as "pin:name:type"
+error-condition-invalid-input-name = "{ $name }" is not a valid input name
+error-condition-unknown-type = "{ $type }" is an unknown type
+error-condition-expected-join = { $end ->
+    [true] Expected "and" / "or", not the end of text
+   *[other] Expected "and" / "or", not «{ $found }»
+}
+error-condition-expected-operand = { $end ->
+    [true] Expected an operand, not the end of text
+   *[other] Expected an operand, not «{ $found }»
+}
+error-condition-expected-operator = { $end ->
+    [true] Expected an operator, not the end of text
+   *[other] Expected an operator, not «{ $found }»
+}
+error-condition-unknown-operator = "{ $operator }" is an unknown operator
+error-condition-unclosed-quote = Unclosed quote
+error-condition-not-number = "{ $text }" is not a number
+error-condition-doubled-operator = "{ $char }" — probably "{ $char }{ $char }"
+error-condition-unexpected-char = Unexpected character "{ $char }"
 
 # Automatic nodes of plugin data types
 custom-make-title = Make { $type }
 custom-make-description = Builds a "{ $type }" value from fields
 custom-break-title = Break { $type }
 custom-break-description = Breaks "{ $type }" into fields
+custom-make-help =
+    Builds a value of type "{ $type }" ({ $name }) from individual fields.
+
+    Each field is an input: connect a source or set the value right on the node. Required fields are required inputs: without them no value is created (an error appears in the node's log). An optional field without a value is skipped.
+
+    Pure node: evaluated whenever its result is needed by another node.
+custom-break-help =
+    Breaks a value of type "{ $type }" ({ $name }) into individual fields: each field is an output pin.
+
+    An optional field that is absent from the value has no value (the pin is empty).
+
+    Pure node: evaluated whenever its result is needed by another node.
 
 # Node categories
 category-events = Events

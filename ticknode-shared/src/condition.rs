@@ -13,7 +13,7 @@
 use std::cmp::Ordering;
 
 use crate::text::{coerce_to, format_value};
-use crate::{DataType, DataValue, NumberValue};
+use crate::{DataType, DataValue, NumberValue, UiMessage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompareOp {
@@ -300,9 +300,9 @@ pub struct MatchCase {
 }
 
 impl MatchCase {
-    pub fn parse(text: &str) -> Result<MatchCase, String> {
-        let (pin, rest) = text.split_once(':').ok_or("missing pin number (\"1: a > 0\")")?;
-        let pin: u32 = pin.trim().parse().map_err(|_| format!("\"{}\" is not a pin number", pin.trim()))?;
+    pub fn parse(text: &str) -> Result<MatchCase, ConditionError> {
+        let (pin, rest) = text.split_once(':').ok_or(ConditionError::MissingPin)?;
+        let pin: u32 = pin.trim().parse().map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
         Ok(MatchCase { pin, conditions: parse_conditions(rest)? })
     }
 
@@ -389,17 +389,17 @@ pub fn parse_input_type(s: &str) -> Option<DataType> {
 }
 
 impl MatchInput {
-    pub fn parse(text: &str) -> Result<MatchInput, String> {
+    pub fn parse(text: &str) -> Result<MatchInput, ConditionError> {
         let mut parts = text.splitn(3, ':');
         let (Some(pin), Some(name), Some(ty)) = (parts.next(), parts.next(), parts.next()) else {
-            return Err(format!("\"{text}\": an input is written as \"pin:name:type\""));
+            return Err(ConditionError::InputFormat(text.to_string()));
         };
-        let pin: u32 = pin.trim().parse().map_err(|_| format!("\"{}\" is not a pin number", pin.trim()))?;
+        let pin: u32 = pin.trim().parse().map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
         let name = name.trim().to_string();
         if !is_input_name(&name) {
-            return Err(format!("\"{name}\" is not a valid input name"));
+            return Err(ConditionError::InvalidInputName(name));
         }
-        let value_type = parse_input_type(ty).ok_or_else(|| format!("\"{}\" is an unknown type", ty.trim()))?;
+        let value_type = parse_input_type(ty).ok_or_else(|| ConditionError::UnknownType(ty.trim().to_string()))?;
         Ok(MatchInput { pin, name, value_type })
     }
 
@@ -424,7 +424,7 @@ pub fn is_input_name(s: &str) -> bool {
         && CompareOp::parse(s).is_none()
 }
 
-fn parse_conditions(text: &str) -> Result<Vec<Condition>, String> {
+fn parse_conditions(text: &str) -> Result<Vec<Condition>, ConditionError> {
     let mut tokens = tokenize(text)?.into_iter().peekable();
     let mut conditions = Vec::new();
     while tokens.peek().is_some() {
@@ -433,17 +433,17 @@ fn parse_conditions(text: &str) -> Result<Vec<Condition>, String> {
         } else {
             match tokens.next() {
                 Some(Token::Join(j)) => j,
-                other => return Err(format!("expected \"and\" / \"or\", not {}", describe(other.as_ref()))),
+                other => return Err(ConditionError::Expected(Expected::Join, found(other.as_ref()))),
             }
         };
         let operand = |token: Option<Token>| {
-            token.clone().and_then(Token::into_operand).ok_or_else(|| format!("expected an operand, not {}", describe(token.as_ref())))
+            token.clone().and_then(Token::into_operand).ok_or_else(|| ConditionError::Expected(Expected::Operand, found(token.as_ref())))
         };
         let left = operand(tokens.next())?;
         let op = match tokens.next() {
             Some(Token::Op(op)) => op,
-            Some(Token::Ident(word)) => CompareOp::parse(&word).ok_or_else(|| format!("\"{word}\" is an unknown operator"))?,
-            other => return Err(format!("expected an operator, not {}", describe(other.as_ref()))),
+            Some(Token::Ident(word)) => CompareOp::parse(&word).ok_or_else(|| ConditionError::UnknownOperator(word))?,
+            other => return Err(ConditionError::Expected(Expected::Operator, found(other.as_ref()))),
         };
         let right = if op.is_unary() { None } else { Some(operand(tokens.next())?) };
         conditions.push(Condition { join, left, op, right });
@@ -469,17 +469,99 @@ impl Token {
     }
 }
 
-fn describe(token: Option<&Token>) -> String {
-    match token {
-        None => "end of text".into(),
-        Some(Token::Ident(s)) => format!("«{s}»"),
-        Some(Token::Value(v)) => format!("«{}»", Operand::Value(v.clone()).to_text()),
-        Some(Token::Op(op)) => format!("«{}»", op.symbol()),
-        Some(Token::Join(j)) => format!("«{}»", j.symbol()),
+/// What was found instead of the expected token: `None` is the end of the text.
+fn found(token: Option<&Token>) -> Option<String> {
+    token.map(|t| match t {
+        Token::Ident(s) => s.clone(),
+        Token::Value(v) => Operand::Value(v.clone()).to_text(),
+        Token::Op(op) => op.symbol().to_string(),
+        Token::Join(j) => j.symbol().to_string(),
+    })
+}
+
+/// A syntax error in a Match case or input. `Display` is the English text (logs); `ui_message` gives the
+/// translatable form for the user (`error-condition-*` keys in the editor's `ui.ftl`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConditionError {
+    MissingPin,
+    NotPinNumber(String),
+    InputFormat(String),
+    InvalidInputName(String),
+    UnknownType(String),
+    Expected(Expected, Option<String>),
+    UnknownOperator(String),
+    UnclosedQuote,
+    NotNumber(String),
+    DoubledOperator(char),
+    UnexpectedChar(char),
+}
+
+/// The kind of token the parser expected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Expected {
+    Join,
+    Operand,
+    Operator,
+}
+
+impl std::fmt::Display for ConditionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingPin => write!(f, "missing pin number (\"1: a > 0\")"),
+            Self::NotPinNumber(s) => write!(f, "\"{s}\" is not a pin number"),
+            Self::InputFormat(s) => write!(f, "\"{s}\": an input is written as \"pin:name:type\""),
+            Self::InvalidInputName(s) => write!(f, "\"{s}\" is not a valid input name"),
+            Self::UnknownType(s) => write!(f, "\"{s}\" is an unknown type"),
+            Self::Expected(what, found) => {
+                let what = match what {
+                    Expected::Join => "\"and\" / \"or\"",
+                    Expected::Operand => "an operand",
+                    Expected::Operator => "an operator",
+                };
+                match found {
+                    Some(s) => write!(f, "expected {what}, not «{s}»"),
+                    None => write!(f, "expected {what}, not end of text"),
+                }
+            }
+            Self::UnknownOperator(s) => write!(f, "\"{s}\" is an unknown operator"),
+            Self::UnclosedQuote => write!(f, "unclosed quote"),
+            Self::NotNumber(s) => write!(f, "\"{s}\" is not a number"),
+            Self::DoubledOperator(c) => write!(f, "\"{c}\" — probably \"{c}{c}\""),
+            Self::UnexpectedChar(c) => write!(f, "unexpected character \"{c}\""),
+        }
     }
 }
 
-fn tokenize(text: &str) -> Result<Vec<Token>, String> {
+impl std::error::Error for ConditionError {}
+
+impl ConditionError {
+    pub fn ui_message(&self) -> UiMessage {
+        let text = self.to_string();
+        match self {
+            Self::MissingPin => UiMessage::new("error-condition-missing-pin", text),
+            Self::NotPinNumber(s) => UiMessage::new("error-condition-not-pin-number", text).arg("text", s),
+            Self::InputFormat(s) => UiMessage::new("error-condition-input-format", text).arg("text", s),
+            Self::InvalidInputName(s) => UiMessage::new("error-condition-invalid-input-name", text).arg("name", s),
+            Self::UnknownType(s) => UiMessage::new("error-condition-unknown-type", text).arg("type", s),
+            Self::Expected(what, found) => {
+                let key = match what {
+                    Expected::Join => "error-condition-expected-join",
+                    Expected::Operand => "error-condition-expected-operand",
+                    Expected::Operator => "error-condition-expected-operator",
+                };
+                // `end` selects the wording in Fluent; `found` is the offending token
+                UiMessage::new(key, text).arg("end", found.is_none().to_string()).arg("found", found.clone().unwrap_or_default())
+            }
+            Self::UnknownOperator(s) => UiMessage::new("error-condition-unknown-operator", text).arg("operator", s),
+            Self::UnclosedQuote => UiMessage::new("error-condition-unclosed-quote", text),
+            Self::NotNumber(s) => UiMessage::new("error-condition-not-number", text).arg("text", s),
+            Self::DoubledOperator(c) => UiMessage::new("error-condition-doubled-operator", text).arg("char", c.to_string()),
+            Self::UnexpectedChar(c) => UiMessage::new("error-condition-unexpected-char", text).arg("char", c.to_string()),
+        }
+    }
+}
+
+fn tokenize(text: &str) -> Result<Vec<Token>, ConditionError> {
     let chars: Vec<char> = text.chars().collect();
     let mut tokens = Vec::new();
     let mut i = 0;
@@ -492,7 +574,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             i += 1;
             loop {
                 match chars.get(i) {
-                    None => return Err("unclosed quote".into()),
+                    None => return Err(ConditionError::UnclosedQuote),
                     Some('"') => break,
                     Some('\\') => {
                         s.extend(chars.get(i + 1));
@@ -513,7 +595,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
                 i += 1;
             }
             let s: String = chars[start..i].iter().collect();
-            let f: f64 = s.parse().map_err(|_| format!("\"{s}\" is not a number"))?;
+            let f: f64 = s.parse().map_err(|_| ConditionError::NotNumber(s))?;
             tokens.push(Token::Value(DataValue::Number(NumberValue::Float(f).normalize())));
         } else if c.is_alphabetic() || c == '_' {
             let start = i;
@@ -530,7 +612,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             });
         } else if c == '&' || c == '|' {
             if chars.get(i + 1) != Some(&c) {
-                return Err(format!("\"{c}\" — probably \"{c}{c}\""));
+                return Err(ConditionError::DoubledOperator(c));
             }
             i += 2;
             tokens.push(Token::Join(if c == '&' { Join::And } else { Join::Or }));
@@ -538,7 +620,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             let two: String = chars[i..(i + 2).min(chars.len())].iter().collect();
             let (op, len) = match CompareOp::parse(&two) {
                 Some(op) if two.chars().count() == 2 => (op, 2),
-                _ => (CompareOp::parse(&c.to_string()).ok_or_else(|| format!("unexpected character \"{c}\""))?, 1),
+                _ => (CompareOp::parse(&c.to_string()).ok_or(ConditionError::UnexpectedChar(c))?, 1),
             };
             i += len;
             tokens.push(Token::Op(op));
@@ -582,6 +664,16 @@ mod tests {
         assert!(MatchInput::parse("1:a").is_err());
         assert!(MatchInput::parse("1:2a:number").is_err());
         assert!(MatchInput::parse("1:a:weird").is_err());
+        assert_eq!(MatchCase::parse("a > 1"), Err(ConditionError::MissingPin));
+        assert_eq!(MatchCase::parse("1: a >"), Err(ConditionError::Expected(Expected::Operand, None)));
+        assert_eq!(MatchCase::parse("1: a > 1 b"), Err(ConditionError::Expected(Expected::Join, Some("b".into()))));
+        assert_eq!(MatchCase::parse("1: a frobnicate 1"), Err(ConditionError::UnknownOperator("frobnicate".into())));
+        assert_eq!(MatchCase::parse("1: a = \"x"), Err(ConditionError::UnclosedQuote));
+        assert_eq!(MatchInput::parse("1:a:weird"), Err(ConditionError::UnknownType("weird".into())));
+        let m = MatchCase::parse("1: a >").unwrap_err().ui_message();
+        assert_eq!(m.key, "error-condition-expected-operand");
+        assert_eq!(m.fallback, "expected an operand, not end of text");
+        assert_eq!(m.args, vec![("end".to_string(), "true".to_string()), ("found".to_string(), String::new())]);
         let input = MatchInput::parse("4:temp:list").unwrap();
         assert_eq!(input.value_type, DataType::List(Box::new(DataType::Any)));
         assert_eq!(input.to_text(), "4:temp:list");

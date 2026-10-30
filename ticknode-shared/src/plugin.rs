@@ -64,7 +64,8 @@ impl SettingDefinition {
     }
 
     /// Validates that the value matches the schema kind.
-    pub fn check(&self, value: &DataValue) -> Result<(), UiMessage> {
+    /// `plugin` is the plugin name: together with the key it lets the editor show the translated setting title.
+    pub fn check(&self, plugin: &str, value: &DataValue) -> Result<(), UiMessage> {
         let ok = match (&self.kind, value) {
             (SettingKind::Text | SettingKind::Secret, DataValue::String(_)) => true,
             (SettingKind::Url, DataValue::String(s)) => s.is_empty() || s.starts_with("http://") || s.starts_with("https://") || s.starts_with("ws://") || s.starts_with("wss://"),
@@ -76,7 +77,7 @@ impl SettingDefinition {
         if ok {
             Ok(())
         } else {
-            Err(UiMessage::new("error-setting-invalid", format!("Setting \"{}\": invalid value", self.title)).arg("setting", &self.title))
+            Err(UiMessage::new("error-setting-invalid", format!("Setting \"{}\": invalid value", self.title)).arg("setting", &self.title).arg("plugin", plugin).arg("key", &self.key))
         }
     }
 
@@ -138,13 +139,13 @@ mod tests {
     #[test]
     fn setting_values_are_checked_against_the_schema() {
         let url = SettingDefinition::url("url", "URL");
-        assert!(url.check(&DataValue::String("http://homeassistant.local:8123".into())).is_ok());
-        assert!(url.check(&DataValue::String("ftp://x".into())).is_err());
+        assert!(url.check("p", &DataValue::String("http://homeassistant.local:8123".into())).is_ok());
+        assert!(url.check("p", &DataValue::String("ftp://x".into())).is_err());
         let select = SettingDefinition::select("mode", "Mode", &[("a", "A"), ("b", "B")]);
-        assert!(select.check(&DataValue::String("a".into())).is_ok());
-        assert!(select.check(&DataValue::String("c".into())).is_err());
-        assert!(SettingDefinition::number("n", "N").check(&DataValue::String("1".into())).is_err());
-        assert!(SettingDefinition::bool("b", "B").check(&DataValue::Bool(true)).is_ok());
+        assert!(select.check("p", &DataValue::String("a".into())).is_ok());
+        assert!(select.check("p", &DataValue::String("c".into())).is_err());
+        assert!(SettingDefinition::number("n", "N").check("p", &DataValue::String("1".into())).is_err());
+        assert!(SettingDefinition::bool("b", "B").check("p", &DataValue::Bool(true)).is_ok());
         assert!(SettingDefinition::secret("t", "T").is_secret());
     }
 

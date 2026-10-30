@@ -1167,7 +1167,7 @@ impl Node for MatchNode {
             ("cases", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
                     .ok_or_else(|| "a case must be a string".to_string())
-                    .and_then(|l| l.into_iter().map(MatchCase::parse).collect());
+                    .and_then(|l| l.into_iter().map(|t| MatchCase::parse(t).map_err(|e| e.to_string())).collect());
                 match parsed {
                     Ok(cases) => self.set_cases(cases),
                     Err(e) => tracing::warn!("Match: invalid cases: {e}"),
@@ -1176,7 +1176,7 @@ impl Node for MatchNode {
             ("inputs", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
                     .ok_or_else(|| "an input must be a string".to_string())
-                    .and_then(|l| l.into_iter().map(MatchInput::parse).collect());
+                    .and_then(|l| l.into_iter().map(|t| MatchInput::parse(t).map_err(|e| e.to_string())).collect());
                 match parsed {
                     Ok(inputs) => self.set_inputs(inputs),
                     Err(e) => tracing::warn!("Match: invalid inputs: {e}"),

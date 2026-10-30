@@ -241,7 +241,7 @@ impl Plugins {
             let def = manifest.settings.iter().find(|d| d.key == key).ok_or_else(|| UiMessage::new("error-setting-unknown", format!("Unknown setting \"{key}\"")).arg("setting", &key))?;
             match update {
                 SettingUpdate::Set(value) => {
-                    def.check(&value)?;
+                    def.check(name, &value)?;
                     config.settings.insert(key, value);
                 }
                 SettingUpdate::Keep => {}

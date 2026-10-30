@@ -278,6 +278,16 @@ pub fn node_description(def: &NodeDefinition) -> String {
 }
 
 pub fn node_help(def: &NodeDefinition) -> String {
+    if let Some((kind, type_name)) = custom_node_kind(&def.type_name)
+        && let Some(title) = translated_type_title(type_name)
+    {
+        let key = if kind == "make" { "custom-make-help" } else { "custom-break-help" };
+        let description = lookup(&format!("type-{}-description", slug(type_name)))
+            .or_else(|| TYPES.with(|types| types.borrow().get(type_name).map(|d| d.description.clone())))
+            .unwrap_or_default();
+        let text = t!(key, type = title, name = type_name);
+        return format!("{text}\n\n{description}").trim_end().to_string();
+    }
     lookup(&format!("node-{}-help", node_slug(&def.type_name))).unwrap_or_else(|| {
         if def.help.trim().is_empty() {
             node_description(def)
@@ -359,8 +369,15 @@ pub fn setting_option_label(plugin: &str, def: &SettingDefinition, value: &str, 
 pub fn ui_text(message: &UiMessage) -> String {
     if !message.key.is_empty() {
         let mut args = FluentArgs::new();
+        // A setting error names the setting by its translated title (`setting-<plugin>-<key>-title`)
+        let setting_title = message.args.iter().find(|(n, _)| n == "plugin").zip(message.args.iter().find(|(n, _)| n == "key"))
+            .and_then(|((_, plugin), (_, key))| lookup(&format!("setting-{}-{}-title", slug(plugin), slug(key))));
         for (name, value) in &message.args {
-            args.set(name.clone(), FluentValue::from(value.clone()));
+            let value = match (&setting_title, name.as_str()) {
+                (Some(title), "setting") => title.clone(),
+                _ => value.clone(),
+            };
+            args.set(name.clone(), FluentValue::from(value));
         }
         if let Some(text) = try_translate(&message.key, Some(&args)) {
             return text;

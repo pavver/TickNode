@@ -2,7 +2,7 @@
 //! subscriptions and the in-flight requests. It talks to the outside world only through [`Env`], and the
 //! clock is passed in, so the whole logic runs in tests on the host target.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
 use ha_core_client::{
@@ -72,6 +72,8 @@ struct Watch<T, C> {
     sub: Sub<T>,
     /// Errors delivered from the node's poll, where host logging has the node context.
     errors: Vec<String>,
+    /// Initial subscription or restored connection needs a fresh baseline for entity data nodes.
+    snapshot_due: bool,
 }
 
 impl<T, C> Watch<T, C> {
@@ -91,7 +93,7 @@ impl<T, C> Watch<T, C> {
         if let Sub::Pending(pending) = &mut self.sub {
             match pending.poll() {
                 None => {}
-                Some(Ok(events)) => self.sub = Sub::Active(events),
+                Some(Ok(events)) => { self.sub = Sub::Active(events); self.snapshot_due = true; },
                 Some(Err(e)) => {
                     let message = format!("Subscribing to {label} failed: {e}");
                     if node_errors {
@@ -116,7 +118,7 @@ impl<T, C> Watch<T, C> {
                         SubscriptionStatus::Interrupted => {
                             env.warn(&format!("Subscription to {label} interrupted: the connection was lost"))
                         }
-                        SubscriptionStatus::Restored => env.info(&format!("Subscription to {label} restored")),
+                        SubscriptionStatus::Restored => { self.snapshot_due = true; env.info(&format!("Subscription to {label} restored")); },
                         SubscriptionStatus::Lagged { dropped } => env.warn(&format!(
                             "{label}: {dropped} change(s) were {} because the plugin fell behind",
                             if node_errors { "dropped" } else { "merged" }
@@ -145,6 +147,7 @@ impl<T, C> Watch<T, C> {
 enum Call {
     Get { entity: String, reply: Reply<State> },
     Service { reply: Reply<()> },
+    Action { reply: Reply<Box<serde_json::value::RawValue>> },
 }
 
 struct InFlight {
@@ -165,6 +168,13 @@ pub struct Hub {
     entities_reply: Option<Reply<Vec<State>>>,
     /// When the entity list is asked for next. `None`: as soon as the connection is up.
     entities_due: Option<Instant>,
+    services_reply: Option<Reply<serde_json::Value>>,
+    services_due: Option<Instant>,
+    pub services: BTreeMap<String, crate::actions::Service>,
+    entity_options: Vec<PropertyOption>,
+    domain_sources: BTreeSet<String>,
+    /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
+    entities: HashMap<NodeId, Option<Reply<State>>>,
 }
 
 /// `Output`s of a `ha/state_changed` pulse. A missing state is sent as an empty `ha.state` (see [`missing_state`]).
@@ -187,6 +197,10 @@ pub fn service_outputs(result: Result<(), String>) -> Vec<Output> {
     }
 }
 
+fn action_result(result: ha_core_client::Result<Box<serde_json::value::RawValue>>) -> Vec<Output> {
+    crate::actions::outputs(result.map_err(|e| e.to_string()).and_then(|raw| serde_json::from_str(raw.get()).map_err(|e| e.to_string())))
+}
+
 const NOT_CONFIGURED: &str = "Home Assistant is not configured (set the URL and the access token in the plugin settings)";
 
 impl Hub {
@@ -204,6 +218,7 @@ impl Hub {
         }
         for watch in self.watches.values_mut() {
             watch.sub = Sub::Idle;
+            watch.snapshot_due = false;
         }
         for watch in self.triggers.values_mut() {
             watch.sub = Sub::Idle;
@@ -213,6 +228,13 @@ impl Hub {
         self.logged = None;
         self.entities_reply = None;
         self.entities_due = None;
+        self.services_due = None;
+        self.services_reply = None;
+        self.services.clear();
+        self.entity_options.clear();
+        env.set_options("actions", &[]);
+        for source in std::mem::take(&mut self.domain_sources) { env.set_options(&source, &[]); }
+        for reply in self.entities.values_mut() { *reply = None; }
     }
 
     /// (Re)creates the session for new settings; the old socket is closed.
@@ -229,13 +251,20 @@ impl Hub {
     pub fn add_watch(&mut self, node: NodeId, mode: Mode) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
-        self.watches.insert(node, Watch { serial, config: String::new(), queue: ChangeQueue::new(mode), sub: Sub::Idle, errors: Vec::new() });
+        self.watches.insert(node, Watch { serial, config: String::new(), queue: ChangeQueue::new(mode), sub: Sub::Idle, errors: Vec::new(), snapshot_due: false });
+        serial
+    }
+
+    pub fn add_entity(&mut self, node: NodeId) -> u64 {
+        let serial = self.add_watch(node, Mode::Latest);
+        self.entities.insert(node, None);
         serial
     }
 
     /// Unregisters the node and cancels its subscription.
     pub fn remove_watch(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
         if self.watches.get(&node).is_some_and(|w| w.serial == serial) {
+            self.entities.remove(&node);
             if let Some(watch) = self.watches.remove(&node) {
                 self.cancel(watch.sub, now);
             }
@@ -250,6 +279,8 @@ impl Hub {
         }
         watch.config = entity.to_string();
         watch.queue.clear();
+        watch.snapshot_due = false;
+        if let Some(reply) = self.entities.get_mut(&node) { *reply = None; }
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
         self.ensure_subscriptions(now);
@@ -281,7 +312,7 @@ impl Hub {
     pub fn add_trigger(&mut self, node: NodeId, now: Instant) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
-        if let Some(old) = self.triggers.insert(node, Watch { serial, config: None, queue: ChangeQueue::new(Mode::Every), sub: Sub::Idle, errors: Vec::new() }) {
+        if let Some(old) = self.triggers.insert(node, Watch { serial, config: None, queue: ChangeQueue::new(Mode::Every), sub: Sub::Idle, errors: Vec::new(), snapshot_due: false }) {
             self.cancel(old.sub, now);
         }
         serial
@@ -361,6 +392,28 @@ impl Hub {
         immediate
     }
 
+    /// Session has no typed response-call helper, so use its one-shot command API.
+    pub fn action(
+        &mut self, node: NodeId, domain: &str, service: &str, entity: &str,
+        data: serde_json::Value, response: bool, now: Instant, env: &mut impl Env,
+    ) -> Option<Vec<Output>> {
+        let Some(link) = &mut self.link else { return Some(crate::actions::outputs(Err(NOT_CONFIGURED.into()))) };
+        let response = self.services.get(&format!("{domain}.{service}")).map_or(response, |s| s.response);
+        let mut request = serde_json::json!({"type":"call_service", "domain":domain, "service":service, "service_data":data});
+        if !entity.is_empty() { request["target"] = serde_json::json!({"entity_id":[entity]}); }
+        if response { request["return_response"] = serde_json::Value::Bool(true); }
+        let mut reply = match link.session.command(now, request) {
+            Ok(reply) => reply,
+            Err(e) => return Some(crate::actions::outputs(Err(e.to_string()))),
+        };
+        let result = match reply.poll() {
+            Some(result) => Some(action_result(result)),
+            None => { self.requests.push(InFlight { node, call: Call::Action { reply } }); None }
+        };
+        self.flush(now, env);
+        result
+    }
+
     // --- Tick ---
 
     /// One plugin tick: feeds the connection events to the session, runs the transport, collects
@@ -386,6 +439,7 @@ impl Hub {
         self.ensure_subscriptions(now);
         let emissions = self.collect(now, env);
         self.refresh_entities(now, env);
+        self.refresh_services(now, env);
         self.flush(now, env);
         self.log_connection_state(env);
         emissions
@@ -394,7 +448,7 @@ impl Hub {
     /// Keeps the entity picker's options fresh: asks for all states once the connection is up (also after
     /// every reconnect) and then every [`ENTITIES_REFRESH`]; publishes the answer through [`Env::set_options`].
     fn refresh_entities(&mut self, now: Instant, env: &mut impl Env) {
-        let Some(link) = &mut self.link else { return };
+        let Some(link) = &self.link else { return };
         if link.session.connection_state() != ConnectionState::Connected {
             // The answer to a request made on a lost connection never comes; ask again after the reconnect
             self.entities_reply = None;
@@ -407,7 +461,9 @@ impl Hub {
                 Some(Ok(states)) => {
                     for (source, options) in option_sources(&states) {
                         env.set_options(source, &options);
+                        if source == "entities" { self.entity_options = options; }
                     }
+                    self.publish_domain_sources(env);
                     self.entities_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -418,8 +474,52 @@ impl Hub {
             self.entities_reply = None;
         }
         if self.entities_due.is_none_or(|due| now >= due) {
-            self.entities_reply = Some(link.session.get_states(now));
+            self.entities_reply = Some(self.link.as_mut().expect("connected").session.get_states(now));
         }
+    }
+
+    fn refresh_services(&mut self, now: Instant, env: &mut impl Env) {
+        let Some(link) = &self.link else { return };
+        if link.session.connection_state() != ConnectionState::Connected {
+            self.services_reply = None;
+            self.services_due = None;
+            return;
+        }
+        if let Some(reply) = &mut self.services_reply {
+            match reply.poll() {
+                None => return,
+                Some(Ok(json)) => {
+                    self.services = crate::actions::services(&json);
+                    env.set_options("actions", &crate::actions::options(&self.services));
+                    self.publish_domain_sources(env);
+                    self.services_due = Some(now + ENTITIES_REFRESH);
+                }
+                Some(Err(e)) => {
+                    env.warn(&format!("Could not read the list of actions: {e}"));
+                    self.services_due = Some(now + ENTITIES_RETRY);
+                }
+            }
+            self.services_reply = None;
+        }
+        if self.services_due.is_none_or(|due| now >= due) {
+            self.services_reply = Some(self.link.as_mut().expect("connected").session.get_services(now));
+        }
+    }
+
+    /// Domain lists and the unions requested by cross-domain target filters; clear vanished sources.
+    fn publish_domain_sources(&mut self, env: &mut impl Env) {
+        let mut filters: BTreeSet<Vec<String>> = self.entity_options.iter()
+            .map(|o| vec![crate::icons::domain_of(&o.value).to_string()]).collect();
+        filters.extend(self.services.values().filter(|s| !s.domains.is_empty()).map(|s| s.domains.clone()));
+        let mut sources = BTreeSet::new();
+        for domains in filters {
+            let source = crate::actions::target_source(&domains);
+            let options: Vec<_> = self.entity_options.iter().filter(|o| domains.iter().any(|d| d == crate::icons::domain_of(&o.value))).cloned().collect();
+            env.set_options(&source, &options);
+            sources.insert(source);
+        }
+        for old in self.domain_sources.difference(&sources) { env.set_options(old, &[]); }
+        self.domain_sources = sources;
     }
 
     fn pump_actions(link: &mut Link, now: Instant, env: &mut impl Env) {
@@ -477,7 +577,27 @@ impl Hub {
     fn collect(&mut self, now: Instant, env: &mut impl Env) -> Vec<Emission> {
         let mut emissions = Vec::new();
         for (node, watch) in &mut self.watches {
-            if let Some(change) = watch.collect(now, &watch.config.clone(), false, env) {
+            let change = watch.collect(now, &watch.config.clone(), false, env);
+            if let Some(reply) = self.entities.get_mut(node) {
+                if let Some(change) = change {
+                    // A newer event wins over an outstanding baseline request.
+                    *reply = None;
+                    watch.snapshot_due = false;
+                    emissions.push(Emission::new(*node, crate::entity::outputs(&watch.config, change.new_state.as_ref())));
+                } else {
+                    if watch.snapshot_due {
+                        watch.snapshot_due = false;
+                        if let Some(link) = &mut self.link { *reply = Some(link.session.get_state(now, &watch.config)); }
+                    }
+                    if let Some(pending) = reply && let Some(result) = pending.poll() {
+                        match result {
+                            Ok(state) => emissions.push(Emission::new(*node, crate::entity::outputs(&watch.config, Some(&state)))),
+                            Err(e) => env.warn(&format!("Could not read entity {}: {e}", watch.config)),
+                        }
+                        *reply = None;
+                    }
+                }
+            } else if let Some(change) = change {
                 emissions.push(Emission::new(*node, change_outputs(&change)));
             }
         }
@@ -492,6 +612,7 @@ impl Hub {
             let outputs = match &mut request.call {
                 Call::Get { entity, reply } => reply.poll().map(|r| get_state_outputs(entity, r.map_err(|e| e.to_string()))),
                 Call::Service { reply } => reply.poll().map(|r| service_outputs(r.map_err(|e| e.to_string()))),
+                Call::Action { reply } => reply.poll().map(action_result),
             };
             match outputs {
                 Some(outputs) => emissions.push(Emission::new(request.node, outputs)),
@@ -541,7 +662,7 @@ mod tests {
         sent: Vec<Value>,
         logs: Vec<String>,
         fail_connect: bool,
-        /// Latest options per source and how many times `set_options` was called.
+        /// Latest options per source and how many times the complete entity list was published.
         options: HashMap<String, Vec<PropertyOption>>,
         option_calls: usize,
     }
@@ -578,7 +699,7 @@ mod tests {
         }
 
         fn set_options(&mut self, source: &str, options: &[PropertyOption]) {
-            self.option_calls += 1;
+            if source == ENTITIES_SOURCE { self.option_calls += 1; }
             self.options.insert(source.to_string(), options.to_vec());
         }
     }
@@ -615,11 +736,13 @@ mod tests {
         states: Vec<Value>,
         /// How many `get_states` requests were seen.
         get_states_requests: usize,
+        services: Value,
+        get_services_requests: usize,
     }
 
     impl Rig {
         fn new() -> Self {
-            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, trigger_error: None, trigger_requests: Vec::new(), unsubscribed: Vec::new(), calls: Vec::new(), states: Vec::new(), get_states_requests: 0 };
+            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, trigger_error: None, trigger_requests: Vec::new(), unsubscribed: Vec::new(), calls: Vec::new(), states: Vec::new(), get_states_requests: 0, services: json!({}), get_services_requests: 0 };
             rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
             rig
         }
@@ -680,11 +803,15 @@ mod tests {
                         "call_service" => {
                             self.calls.push(request.clone());
                             replies.push(match self.service_error {
-                                None => ok(Value::Null),
+                                None => ok(if request["return_response"] == true { json!({"context":{},"response":{"answer":42}}) } else { Value::Null }),
                                 Some(message) => json!({"id": id, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": message}}),
                             });
                         }
                         "ping" => replies.push(json!({"id": id, "type": "pong"})),
+                        "get_services" => {
+                            self.get_services_requests += 1;
+                            replies.push(ok(self.services.clone()));
+                        }
                         "get_states" => {
                             self.get_states_requests += 1;
                             replies.push(ok(Value::Array(self.states.clone())));
@@ -908,7 +1035,7 @@ mod tests {
         let mut rig = Rig::new();
         rig.states = vec![ha_state("light.a", "on")];
         rig.connect();
-        assert_eq!(rig.env.option_calls, 4);
+        assert_eq!(rig.env.option_calls, 1);
         let old = rig.ws;
         rig.tick(vec![WsEvent::Closed(old, "gone".into())]);
         rig.states.push(ha_state("light.b", "on"));
@@ -943,7 +1070,7 @@ mod tests {
         assert!(rig.env.logs.iter().any(|l| l.starts_with("warn: Could not read the list of entities")), "{:?}", rig.env.logs);
         assert_eq!(rig.env.option_calls, calls);
         rig.advance(ENTITIES_RETRY);
-        assert_eq!(rig.env.option_calls, calls + 4);
+        assert_eq!(rig.env.option_calls, calls + 1);
     }
 
     #[test]
@@ -1171,6 +1298,59 @@ mod tests {
         rig.connect();
         assert_eq!(rig.trigger_requests.len(), 1, "only the final config is sent after connecting");
         assert_eq!(rig.trigger_requests[0]["trigger"], json!({"trigger":"state","entity_id":["light.a"],"to":"unknown"}));
+    }
+
+    #[test]
+    fn actions_refresh_and_calls_request_response_only_when_supported() {
+        use crate::actions::{DONE, FAILED, RESPONSE};
+        let mut rig = Rig::new();
+        rig.services = json!({"light":{"turn_on":{"name":"Turn on","target":{}}},"weather":{"get_forecasts":{"response":{"optional":false}}}});
+        rig.states = vec![ha_state("light.a", "off"), ha_state("switch.a", "off")];
+        rig.connect();
+        assert_eq!(rig.get_services_requests,1);
+        assert_eq!(rig.env.options["actions"].len(),2);
+        assert_eq!(rig.env.options["entities:light"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),["light.a"]);
+        assert!(rig.hub.action(node(5), "light", "turn_on", "light.a", json!({"brightness":120}), false, rig.now, &mut rig.env).is_none());
+        let emissions = rig.serve();
+        assert!(has_exec(&emissions[0].outputs,DONE));
+        assert!(rig.calls[0].get("return_response").is_none());
+        assert!(rig.hub.action(node(5), "weather", "get_forecasts", "weather.home", json!({}), false, rig.now, &mut rig.env).is_none());
+        let emissions = rig.serve();
+        assert_eq!(rig.calls[1]["return_response"],true);
+        assert_eq!(ticknode_plugin_sdk::field_number(data(&emissions[0].outputs,RESPONSE),"answer"),Some(42.0));
+        rig.advance(ENTITIES_REFRESH);
+        assert_eq!(rig.get_services_requests,2);
+        let ws = rig.ws;
+        rig.tick(vec![WsEvent::Closed(ws,"gone".into())]);
+        let out = rig.hub.action(node(5), "light", "turn_on", "", json!({}), false, rig.now, &mut rig.env).expect("fails promptly");
+        assert!(has_exec(&out,FAILED));
+        rig.now += Duration::from_secs(3);
+        rig.connect();
+        assert_eq!(rig.get_services_requests,3);
+    }
+
+    #[test]
+    fn entity_data_has_an_initial_baseline_changes_and_a_reconnected_baseline() {
+        let mut rig = Rig::new();
+        let id = node(20);
+        let serial = rig.hub.add_entity(id);
+        rig.hub.set_entity(id,serial,"light.a",rig.now,&mut rig.env);
+        let emissions = rig.connect();
+        assert_eq!(emissions.len(),1);
+        assert_eq!(data(&emissions[0].outputs,PinId(0)), &DataValue::from("off"));
+        assert_eq!(data(&emissions[0].outputs,PinId(2)), &DataValue::Bool(false));
+        assert!(emissions[0].outputs.iter().all(|o| matches!(o,Output::Data(..))));
+        let change = rig.change("light.a","off","on");
+        let emissions = rig.recv(vec![change]);
+        assert_eq!(data(&emissions[0].outputs,PinId(2)), &DataValue::Bool(true));
+        let ws = rig.ws;
+        rig.tick(vec![WsEvent::Closed(ws,"gone".into())]);
+        // The scripted fake's current baseline is off. Reconnect must publish it again.
+        rig.now += Duration::from_secs(3);
+        let emissions = rig.connect();
+        assert!(emissions.iter().any(|e| e.node == id && e.outputs.iter().any(|o| matches!(o,Output::Data(p,v) if p.0 == 0 && *v == DataValue::from("off")))));
+        rig.hub.remove_watch(id,serial,rig.now,&mut rig.env);
+        assert!(!rig.hub.entities.contains_key(&id));
     }
 
 }

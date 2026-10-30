@@ -72,8 +72,23 @@ pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, exp
 }
 
 /// Domain default (frontend fallback icons), `mdi:bookmark` for an unknown domain.
-fn domain_icon(domain: &str) -> &'static str {
+pub fn domain_icon(domain: &str) -> &'static str {
     match domain {
+        "light" => "mdi:lightbulb",
+        "switch" => "mdi:toggle-switch-variant",
+        "fan" => "mdi:fan",
+        "cover" => "mdi:window-shutter",
+        "lock" => "mdi:lock",
+        "media_player" => "mdi:cast",
+        "automation" => "mdi:robot",
+        "sensor" => "mdi:eye",
+        "binary_sensor" => "mdi:radiobox-blank",
+        "person" | "device_tracker" => "mdi:account",
+        "sun" => "mdi:white-balance-sunny",
+        "vacuum" => "mdi:robot-vacuum",
+        "input_boolean" => "mdi:toggle-switch-outline",
+        "humidifier" => "mdi:air-humidifier",
+        "update" => "mdi:package",
         "air_quality" => "mdi:air-filter",
         "alarm_control_panel" => "mdi:shield",
         "alert" => "mdi:alert",

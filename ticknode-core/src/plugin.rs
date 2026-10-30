@@ -1252,6 +1252,42 @@ mod tests {
         assert!(engine.host_state.logs.is_empty());
     }
 
+    /// Data-only plugin emissions remain available to pull consumers on later ticks.
+    #[test]
+    fn data_only_emissions_remain_pullable_across_ticks() {
+        struct Live(NodeId);
+        impl Node for Live {
+            fn id(&self) -> NodeId { self.0 }
+            fn definition(&self) -> NodeDefinition {
+                NodeDefinition {
+                    type_name: "live".into(), title: "Live".into(), category: "Test".into(),
+                    description: String::new(), help: String::new(), properties: Vec::new(),
+                    pins: vec![PinDefinition { id: PinId(0), name: "Value".into(),
+                        pin_type: PinType::Data(DataType::Number), direction: PinDirection::Output, required: false }],
+                }
+            }
+            fn execute(&mut self, _: Option<PinId>, _: &mut NodeContext) -> Vec<NodeOutput> {
+                panic!("an emission-driven data node must not execute on pull")
+            }
+        }
+        let mut engine = TickEngine::new();
+        engine.registry.register_owned("live_plugin", Box::new(|id| Box::new(Live(id))));
+        let source = NodeId::generate();
+        let sink = NodeId::generate();
+        engine.create_node(source, "live", &[]).unwrap();
+        engine.create_node(sink, "test/debug", &[]).unwrap();
+        engine.connect_data(source, PinId(0), sink, PinId(1)).unwrap();
+        let value = DataValue::from(21.5);
+        let mut queue = std::collections::VecDeque::new();
+        engine.apply_emissions("live_plugin", vec![data_emission(source, 0, value.clone())], &mut queue);
+        assert!(queue.is_empty(), "data-only emissions do not schedule execution");
+        for _ in 0..8 { engine.tick(); }
+        engine.trigger_node(sink, PinId(0));
+        engine.tick();
+        let trace = engine.executed.iter().find(|t| t.node_id == sink).unwrap();
+        assert!(trace.inputs.contains(&(PinId(1), Some(value))));
+    }
+
     #[test]
     fn list_depth_becomes_nested_lists() {
         let t = from_wit_data_type(wit::DataType { base: wit::ScalarType::Number, list_depth: 2 });

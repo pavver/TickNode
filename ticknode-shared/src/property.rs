@@ -82,7 +82,8 @@ pub struct PropertyOptionSet {
 
 /// Limits applied by the host to `set-options`.
 pub const MAX_OPTIONS_PER_SOURCE: usize = 20_000;
-pub const MAX_OPTION_SOURCES: usize = 16;
+/// Room for integration catalogs, per-domain entity lists and target-domain unions.
+pub const MAX_OPTION_SOURCES: usize = 256;
 pub const MAX_OPTION_STRING_LEN: usize = 512;
 
 #[cfg(test)]

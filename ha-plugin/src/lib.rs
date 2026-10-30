@@ -2,11 +2,14 @@
 //!
 //! One WebSocket connection per plugin, driven from [`Plugin::tick`] by the sans-IO `Session` of
 //! `ha-core-client` (see [`hub`]). Nodes are thin: `ha/state_changed` is an event source fed by emissions,
-//! `ha/trigger_*` expose automation triggers, and `ha/get_state` and `ha/call_service` start a request
+//! `ha/entity` exposes live data, `ha/action` builds a typed action form, `ha/trigger_*` expose automation
+//! triggers, and `ha/get_state` and `ha/call_service` start a request
 //! whose answer arrives in a later tick, also as an emission.
 
+mod actions;
 mod convert;
 mod entities;
+mod entity;
 mod hub;
 mod icons;
 mod queue;
@@ -245,7 +248,7 @@ impl PluginNode for CallService {
             title: "HA Call Service".into(),
             category: CATEGORY.into(),
             description: "Calls a Home Assistant service".into(),
-            help: "On a signal at In calls the Home Assistant service Domain.Service (for example light + turn_on). \
+            help: "Low-level variant of Action: use ha/action for a searchable action form with typed field pins. On a signal at In calls the Home Assistant service Domain.Service (for example light + turn_on). \
 Entity ID is the optional target entity; Data is an optional object with the service data (for example {brightness: 120}).\n\n\
 When Home Assistant confirms the call a signal goes to Done; otherwise (not connected, rejected, timeout) Error holds the reason and a signal goes to Failed. \
 The answer arrives a little later (a few ticks); the request fails at once if the connection is down.".into(),
@@ -277,7 +280,7 @@ struct HomeAssistant;
 
 impl Plugin for HomeAssistant {
     const NODE_TYPES: &'static [&'static str] = &[
-        "ha/call_service", "ha/get_state", "ha/state_changed",
+        "ha/action", "ha/entity", "ha/call_service", "ha/get_state", "ha/state_changed",
         "ha/trigger_state", "ha/trigger_numeric_state", "ha/trigger_time", "ha/trigger_time_pattern",
         "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
         "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
@@ -316,6 +319,8 @@ impl Plugin for HomeAssistant {
 
     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> {
         Some(match type_name {
+            "ha/action" => Box::new(actions::ActionNode::new(node)),
+            "ha/entity" => Box::new(entity::Entity::new(node)),
             "ha/state_changed" => Box::new(StateChanged::new(node)),
             "ha/get_state" => Box::new(GetState { node }),
             "ha/call_service" => Box::new(CallService { node }),
@@ -349,3 +354,34 @@ impl Plugin for HomeAssistant {
 }
 
 export_plugin!(HomeAssistant);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ticknode_shared::fluent_slug;
+
+    #[test]
+    fn action_and_entity_static_texts_have_ukrainian_translations() {
+        let ftl = HomeAssistant::TRANSLATIONS[0].1;
+        let key_part = |s: &str| {
+            if s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
+                s.to_string()
+            } else {
+                fluent_slug(s)
+            }
+        };
+        for kind in ["ha/action", "ha/entity"] {
+            let node = HomeAssistant::create(kind, NodeId(ticknode_shared::Uuid::nil())).unwrap();
+            let def = node.definition();
+            let prefix = format!("node-{}", fluent_slug(kind));
+            let mut keys: Vec<_> = ["title", "description", "help"].map(|suffix|format!("{prefix}-{suffix}")).into();
+            keys.extend(def.pins.iter().map(|p|format!("{prefix}-pin-{}",key_part(&p.name))));
+            for property in def.properties {
+                for suffix in ["title", "description"] {
+                    keys.push(format!("{prefix}-prop-{}-{suffix}", key_part(&property.name)));
+                }
+            }
+            for key in keys { assert!(ftl.contains(&format!("{key} =")), "missing {key}"); }
+        }
+    }
+}

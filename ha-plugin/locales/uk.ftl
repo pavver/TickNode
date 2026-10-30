@@ -39,6 +39,8 @@ node-ha-get-state-pin-Error = Помилка
 node-ha-call-service-title = HA: викликати сервіс
 node-ha-call-service-description = Викликає сервіс Home Assistant
 node-ha-call-service-help =
+    Низькорівневий варіант ноди «Дія». Для вибору дії зі списку та типізованих полів використовуйте ha/action.
+
     За сигналом на In викликає сервіс Home Assistant Domain.Service (наприклад, домен light і сервіс turn_on). Entity ID — необов'язкова цільова сутність; Data — необов'язковий об'єкт із даними сервісу (наприклад, з полем brightness).
 
     Коли Home Assistant підтвердить виклик, сигнал піде на Done; інакше (немає зв'язку, відхилено, тайм-аут) на Error буде причина, а сигнал піде на Failed. Відповідь приходить трохи пізніше (за кілька тактів); запит одразу завершується невдачею, якщо зв'язку немає.
@@ -319,3 +321,37 @@ node-ha-trigger-template-prop-value_template-title = Шаблон значенн
 node-ha-trigger-template-prop-value_template-description = Шаблон Jinja в Home Assistant, що стає істинним
 node-ha-trigger-template-prop-for-title = Протягом
 node-ha-trigger-template-prop-for-description = Необов’язкова тривалість: 90, 1h 30m або 00:05:00
+
+# ha/action
+node-ha-action-title = Дія
+node-ha-action-description = Виконує дію Home Assistant із полями її форми
+node-ha-action-help =
+    Оберіть дію та ціль зі списків. Вхід Entity замінює вибрану ціль, якщо його задано. Вибір дії за наявності каталогу зберігає її поля як вхідні піни (розширені — наприкінці); вони відновлюються після збереження та перепідключення. Обов'язкові поля потрібно заповнити; незадані необов'язкові поля не надсилаються.
+
+    Поля з переліком варіантів приймають текст без випадного списку. Колір надсилається як RGB, тривалість — як години, хвилини та секунди, час — як HH:MM:SS. Done підтверджує успіх; Failed і Error повідомляють про відхилений запит, тайм-аут або відсутність зв'язку. Response оновлюється лише тоді, коли HA повертає дані відповіді. Повторно оберіть дію, щоб оновити схему полів після її зміни в HA.
+node-ha-action-prop-action-title = Дія
+node-ha-action-prop-action-description = Дія Home Assistant, яку потрібно виконати
+node-ha-action-prop-target-title = Ціль
+node-ha-action-prop-target-description = Цільова сутність; вхід Entity замінює цей вибір
+node-ha-action-pin-In = Вхід
+node-ha-action-pin-Entity = Сутність
+node-ha-action-pin-Done = Готово
+node-ha-action-pin-Failed = Невдача
+node-ha-action-pin-Error = Помилка
+node-ha-action-pin-Response = Відповідь
+
+# ha/entity
+node-ha-entity-title = Сутність
+node-ha-entity-description = Надає останній стан сутності Home Assistant як дані
+node-ha-entity-help =
+    Оберіть сутність. Поточний стан зчитується під час підписки та відновлення зв'язку; зміни оновлюють вихідні дані без сигналів виконання. Наступні ноди можуть зчитати останні значення будь-коли.
+
+    Number оновлюється лише для скінченних числових станів; On — для пар on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied та connected/disconnected. Інші стани залишають ці виходи без змін (очистити вихід неможливо). Unit містить unit_of_measurement. Видалена сутність надсилає порожній State та Entity state. Без зв'язку останні значення залишаються доступними; неіснуюча сутність перевіряється кожні 30 секунд.
+node-ha-entity-prop-entity_id-title = Сутність
+node-ha-entity-prop-entity_id-description = Сутність Home Assistant, останній стан якої потрібно надавати
+node-ha-entity-pin-State = Стан
+node-ha-entity-pin-Number = Число
+node-ha-entity-pin-On = Увімкнено
+node-ha-entity-pin-Unit = Одиниця
+node-ha-entity-pin-Attributes = Атрибути
+node-ha-entity-pin-entity-state = Стан сутності

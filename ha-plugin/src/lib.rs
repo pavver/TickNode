@@ -2,13 +2,15 @@
 //!
 //! One WebSocket connection per plugin, driven from [`Plugin::tick`] by the sans-IO `Session` of
 //! `ha-core-client` (see [`hub`]). Nodes are thin: `ha/state_changed` is an event source fed by emissions,
-//! `ha/get_state` and `ha/call_service` start a request whose answer arrives in a later tick, also as an emission.
+//! `ha/trigger_*` expose automation triggers, and `ha/get_state` and `ha/call_service` start a request
+//! whose answer arrives in a later tick, also as an emission.
 
 mod convert;
 mod entities;
 mod hub;
 mod icons;
 mod queue;
+mod triggers;
 
 use std::cell::RefCell;
 use std::sync::Once;
@@ -274,7 +276,13 @@ The answer arrives a little later (a few ticks); the request fails at once if th
 struct HomeAssistant;
 
 impl Plugin for HomeAssistant {
-    const NODE_TYPES: &'static [&'static str] = &["ha/call_service", "ha/get_state", "ha/state_changed"];
+    const NODE_TYPES: &'static [&'static str] = &[
+        "ha/call_service", "ha/get_state", "ha/state_changed",
+        "ha/trigger_state", "ha/trigger_numeric_state", "ha/trigger_time", "ha/trigger_time_pattern",
+        "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
+        "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
+        "ha/trigger_conversation", "ha/trigger_template",
+    ];
     const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
@@ -311,7 +319,10 @@ impl Plugin for HomeAssistant {
             "ha/state_changed" => Box::new(StateChanged::new(node)),
             "ha/get_state" => Box::new(GetState { node }),
             "ha/call_service" => Box::new(CallService { node }),
-            _ => return None,
+            _ => {
+                let platform = triggers::PLATFORMS.iter().find(|p| p.type_name() == type_name)?;
+                Box::new(triggers::TriggerNode::new(*platform, node))
+            }
         })
     }
 

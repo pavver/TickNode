@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 publish = false
-description = "Home Assistant integration plugin: entity state changes, state reads and service calls over a WebSocket"
+description = "Home Assistant integration plugin: automation triggers, entity state changes, state reads and service calls over a WebSocket"
 
 [lib]
 crate-type = ["cdylib"]
@@ -16,6 +16,4 @@ ticknode-shared = { path = "../ticknode-shared" }
 ha-core-client = { git = "https://github.com/pavver/ha-core-client", rev = "51276aee34cceab5360ef83468274d5e15b66e3f", default-features = false }
 serde_json = "1.0"
 log = "0.4"
-
-[dev-dependencies]
 chrono = { workspace = true }

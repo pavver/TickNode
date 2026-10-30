@@ -7,12 +7,13 @@ use std::time::{Duration, Instant};
 
 use ha_core_client::{
     Action, ClientConfig, ConnectionState, PendingSubscription, Reply, Session, Source, State, StateChange, Target,
-    Update, SubscriptionStatus,
+    Update, SubscriptionStatus, TriggerFired,
 };
 use ticknode_plugin_sdk::{Emission, NodeId, Output, PinId, PropertyOption, WsEvent, WsId};
 
 use crate::convert::{missing_state, state_value};
-use crate::entities::{ENTITIES_SOURCE, entity_options};
+use crate::entities::option_sources;
+use crate::triggers::{TriggerConfig, outputs as trigger_outputs};
 use crate::queue::{ChangeQueue, Mode};
 
 /// Output pins of `ha/state_changed`.
@@ -54,21 +55,91 @@ struct Link {
     ws: Option<WsId>,
 }
 
-enum Sub {
+enum Sub<T> {
     /// Not subscribed (no entity yet, or a new one was just set).
     Idle,
-    Pending(PendingSubscription<StateChange>),
-    Active(ha_core_client::SessionEvents<StateChange>),
+    Pending(PendingSubscription<T>),
+    Active(ha_core_client::SessionEvents<T>),
     /// The subscription failed or ended; try again at `retry_at`.
     Failed { retry_at: Instant },
 }
 
-struct Watch {
+struct Watch<T, C> {
     /// Distinguishes a node from an older one with the same id, so a late `Drop` cannot remove the new one.
     serial: u64,
-    entity: String,
-    queue: ChangeQueue<StateChange>,
-    sub: Sub,
+    config: C,
+    queue: ChangeQueue<T>,
+    sub: Sub<T>,
+    /// Errors delivered from the node's poll, where host logging has the node context.
+    errors: Vec<String>,
+}
+
+impl<T, C> Watch<T, C> {
+    fn ensure(&mut self, now: Instant, session: &mut Session, source: impl FnOnce(&C) -> Source<T>) {
+        let due = match self.sub {
+            Sub::Idle => true,
+            Sub::Failed { retry_at } => now >= retry_at,
+            Sub::Pending(_) | Sub::Active(_) => false,
+        };
+        if due {
+            self.sub = Sub::Pending(session.subscribe(now, source(&self.config)));
+        }
+    }
+
+    /// Common pending/active/retry lifecycle and bounded, ordered delivery for all sources.
+    fn collect(&mut self, now: Instant, label: &str, node_errors: bool, env: &mut impl Env) -> Option<T> {
+        if let Sub::Pending(pending) = &mut self.sub {
+            match pending.poll() {
+                None => {}
+                Some(Ok(events)) => self.sub = Sub::Active(events),
+                Some(Err(e)) => {
+                    let message = format!("Subscribing to {label} failed: {e}");
+                    if node_errors {
+                        self.errors.push(message);
+                    } else {
+                        env.warn(&message);
+                    }
+                    self.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
+                }
+            }
+        }
+        if let Sub::Active(events) = &mut self.sub {
+            for update in events.drain() {
+                match update {
+                    Update::Event(change) => {
+                        let dropped = self.queue.push(change);
+                        if dropped > 0 && self.queue.mode() == Mode::Every {
+                            env.warn(&format!("{label}: too many unprocessed changes, the oldest was dropped"));
+                        }
+                    }
+                    Update::Status { status, .. } => match status {
+                        SubscriptionStatus::Interrupted => {
+                            env.warn(&format!("Subscription to {label} interrupted: the connection was lost"))
+                        }
+                        SubscriptionStatus::Restored => env.info(&format!("Subscription to {label} restored")),
+                        SubscriptionStatus::Lagged { dropped } => env.warn(&format!(
+                            "{label}: {dropped} change(s) were {} because the plugin fell behind",
+                            if node_errors { "dropped" } else { "merged" }
+                        )),
+                        SubscriptionStatus::Rejected { code, message } => {
+                            let message = format!("Home Assistant rejected the subscription to {label}: {code}: {message}");
+                            if node_errors {
+                                self.errors.push(message);
+                            } else {
+                                env.error(&message);
+                            }
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+            if events.is_finished() {
+                self.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
+            }
+        }
+        self.queue.pop()
+    }
 }
 
 enum Call {
@@ -84,7 +155,8 @@ struct InFlight {
 #[derive(Default)]
 pub struct Hub {
     link: Option<Link>,
-    watches: HashMap<NodeId, Watch>,
+    watches: HashMap<NodeId, Watch<StateChange, String>>,
+    triggers: HashMap<NodeId, Watch<TriggerFired, Option<TriggerConfig>>>,
     requests: Vec<InFlight>,
     next_serial: u64,
     /// The last connection state that was logged.
@@ -133,6 +205,11 @@ impl Hub {
         for watch in self.watches.values_mut() {
             watch.sub = Sub::Idle;
         }
+        for watch in self.triggers.values_mut() {
+            watch.sub = Sub::Idle;
+            watch.queue.clear();
+            watch.errors.clear();
+        }
         self.logged = None;
         self.entities_reply = None;
         self.entities_due = None;
@@ -152,7 +229,7 @@ impl Hub {
     pub fn add_watch(&mut self, node: NodeId, mode: Mode) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
-        self.watches.insert(node, Watch { serial, entity: String::new(), queue: ChangeQueue::new(mode), sub: Sub::Idle });
+        self.watches.insert(node, Watch { serial, config: String::new(), queue: ChangeQueue::new(mode), sub: Sub::Idle, errors: Vec::new() });
         serial
     }
 
@@ -168,10 +245,10 @@ impl Hub {
 
     pub fn set_entity(&mut self, node: NodeId, serial: u64, entity: &str, now: Instant, env: &mut impl Env) {
         let Some(watch) = self.watches.get_mut(&node).filter(|w| w.serial == serial) else { return };
-        if watch.entity == entity {
+        if watch.config == entity {
             return;
         }
-        watch.entity = entity.to_string();
+        watch.config = entity.to_string();
         watch.queue.clear();
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
@@ -185,12 +262,53 @@ impl Hub {
         }
     }
 
-    fn cancel(&mut self, sub: Sub, now: Instant) {
-        if let (Sub::Active(events), Some(link)) = (&sub, &mut self.link) {
+    fn cancel<T>(&mut self, sub: Sub<T>, now: Instant) {
+        let events = match sub {
+            Sub::Active(events) => Some(events),
+            // Offline subscriptions can already be accepted before the hub polls the reply.
+            // SessionEvents does not unsubscribe on drop, so consume a ready reply first.
+            Sub::Pending(mut pending) => pending.poll().and_then(Result::ok),
+            Sub::Idle | Sub::Failed { .. } => None,
+        };
+        if let (Some(events), Some(link)) = (events, &mut self.link) {
             // The reply is not needed: the session cleans up on its own.
             let _ = link.session.unsubscribe(now, events.subscription());
         }
-        // A pending subscription is abandoned by dropping it.
+        // An unresolved pending subscription is abandoned by dropping it.
+    }
+
+    /// Registers an automation trigger; it remains idle until its configuration is complete.
+    pub fn add_trigger(&mut self, node: NodeId, now: Instant) -> u64 {
+        self.next_serial += 1;
+        let serial = self.next_serial;
+        if let Some(old) = self.triggers.insert(node, Watch { serial, config: None, queue: ChangeQueue::new(Mode::Every), sub: Sub::Idle, errors: Vec::new() }) {
+            self.cancel(old.sub, now);
+        }
+        serial
+    }
+
+    pub fn set_trigger(&mut self, node: NodeId, serial: u64, config: Option<TriggerConfig>, now: Instant, env: &mut impl Env) {
+        let Some(watch) = self.triggers.get_mut(&node).filter(|w| w.serial == serial) else { return };
+        if watch.config == config { return; }
+        watch.config = config;
+        watch.queue.clear();
+        watch.errors.clear();
+        let old = std::mem::replace(&mut watch.sub, Sub::Idle);
+        self.cancel(old, now);
+        self.ensure_subscriptions(now);
+        self.flush(now, env);
+    }
+
+    pub fn remove_trigger(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
+        if self.triggers.get(&node).is_some_and(|w| w.serial == serial) {
+            if let Some(watch) = self.triggers.remove(&node) { self.cancel(watch.sub, now); }
+            self.flush(now, env);
+        }
+    }
+
+    pub fn take_trigger_errors(&mut self, node: NodeId, serial: u64) -> Vec<String> {
+        self.triggers.get_mut(&node).filter(|w| w.serial == serial)
+            .map(|w| std::mem::take(&mut w.errors)).unwrap_or_default()
     }
 
     // --- Requests ---
@@ -287,7 +405,9 @@ impl Hub {
             match reply.poll() {
                 None => return,
                 Some(Ok(states)) => {
-                    env.set_options(ENTITIES_SOURCE, &entity_options(&states));
+                    for (source, options) in option_sources(&states) {
+                        env.set_options(source, &options);
+                    }
                     self.entities_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -343,13 +463,13 @@ impl Hub {
     fn ensure_subscriptions(&mut self, now: Instant) {
         let Some(link) = &mut self.link else { return };
         for watch in self.watches.values_mut() {
-            let due = match watch.sub {
-                Sub::Idle => true,
-                Sub::Failed { retry_at } => now >= retry_at,
-                Sub::Pending(_) | Sub::Active(_) => false,
-            };
-            if due && !watch.entity.is_empty() {
-                watch.sub = Sub::Pending(link.session.subscribe(now, Source::entity(watch.entity.as_str()).without_merging()));
+            if !watch.config.is_empty() {
+                watch.ensure(now, &mut link.session, |entity| Source::entity(entity.as_str()).without_merging());
+            }
+        }
+        for watch in self.triggers.values_mut() {
+            if watch.config.is_some() {
+                watch.ensure(now, &mut link.session, |config| Source::trigger(config.as_ref().expect("checked above").trigger.clone()));
             }
         }
     }
@@ -357,41 +477,14 @@ impl Hub {
     fn collect(&mut self, now: Instant, env: &mut impl Env) -> Vec<Emission> {
         let mut emissions = Vec::new();
         for (node, watch) in &mut self.watches {
-            if let Sub::Pending(pending) = &mut watch.sub {
-                match pending.poll() {
-                    None => {}
-                    Some(Ok(events)) => watch.sub = Sub::Active(events),
-                    Some(Err(e)) => {
-                        env.warn(&format!("Subscribing to {} failed: {e}", watch.entity));
-                        watch.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
-                    }
-                }
-            }
-            if let Sub::Active(events) = &mut watch.sub {
-                for update in events.drain() {
-                    match update {
-                        Update::Event(change) => {
-                            let dropped = watch.queue.push(change);
-                            if dropped > 0 && watch.queue.mode() == Mode::Every {
-                                env.warn(&format!("{}: too many unprocessed changes, the oldest was dropped", watch.entity));
-                            }
-                        }
-                        Update::Status { status, .. } => match status {
-                            SubscriptionStatus::Interrupted => env.warn(&format!("Subscription to {} interrupted: the connection was lost", watch.entity)),
-                            SubscriptionStatus::Restored => env.info(&format!("Subscription to {} restored", watch.entity)),
-                            SubscriptionStatus::Lagged { dropped } => env.warn(&format!("{}: {dropped} change(s) were merged because the plugin fell behind", watch.entity)),
-                            SubscriptionStatus::Rejected { code, message } => env.error(&format!("Home Assistant rejected the subscription to {}: {code}: {message}", watch.entity)),
-                            _ => {}
-                        },
-                        _ => {}
-                    }
-                }
-                if events.is_finished() {
-                    watch.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
-                }
-            }
-            if let Some(change) = watch.queue.pop() {
+            if let Some(change) = watch.collect(now, &watch.config.clone(), false, env) {
                 emissions.push(Emission::new(*node, change_outputs(&change)));
+            }
+        }
+        for (node, watch) in &mut self.triggers {
+            let Some(config) = watch.config.clone() else { continue };
+            if let Some(fired) = watch.collect(now, config.platform.type_name(), true, env) {
+                emissions.push(Emission::new(*node, trigger_outputs(&config, &fired)));
             }
         }
         let requests = std::mem::take(&mut self.requests);
@@ -433,6 +526,7 @@ impl Hub {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entities::ENTITIES_SOURCE;
     use serde_json::{Value, json};
     use ticknode_plugin_sdk::DataValue;
     use ticknode_shared::Uuid;
@@ -513,6 +607,9 @@ mod tests {
         triggers: HashMap<String, u64>,
         /// What the fake answers to `call_service` (`None`: success).
         service_error: Option<&'static str>,
+        trigger_error: Option<&'static str>,
+        trigger_requests: Vec<Value>,
+        unsubscribed: Vec<u64>,
         calls: Vec<Value>,
         /// What the fake answers to `get_states`.
         states: Vec<Value>,
@@ -522,7 +619,7 @@ mod tests {
 
     impl Rig {
         fn new() -> Self {
-            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, calls: Vec::new(), states: Vec::new(), get_states_requests: 0 };
+            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, trigger_error: None, trigger_requests: Vec::new(), unsubscribed: Vec::new(), calls: Vec::new(), states: Vec::new(), get_states_requests: 0 };
             rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
             rig
         }
@@ -562,8 +659,17 @@ mod tests {
                     let ok = |result: Value| json!({"id": id, "type": "result", "success": true, "result": result});
                     match request["type"].as_str().unwrap() {
                         "subscribe_trigger" => {
-                            let entity = request["trigger"]["entity_id"].as_str().unwrap().to_string();
-                            self.triggers.insert(entity, id);
+                            let trigger = &request["trigger"];
+                            let entity = trigger["entity_id"].as_str().or_else(|| trigger["entity_id"][0].as_str()).unwrap_or_else(|| trigger["trigger"].as_str().unwrap());
+                            self.triggers.insert(entity.to_string(), id);
+                            self.trigger_requests.push(request.clone());
+                            replies.push(match self.trigger_error {
+                                None => ok(Value::Null),
+                                Some(message) => json!({"id":id,"type":"result","success":false,"error":{"code":"invalid_format","message":message}}),
+                            });
+                        }
+                        "unsubscribe_events" => {
+                            self.unsubscribed.push(request["subscription"].as_u64().unwrap());
                             replies.push(ok(Value::Null));
                         }
                         "subscribe_entities" => {
@@ -802,7 +908,7 @@ mod tests {
         let mut rig = Rig::new();
         rig.states = vec![ha_state("light.a", "on")];
         rig.connect();
-        assert_eq!(rig.env.option_calls, 1);
+        assert_eq!(rig.env.option_calls, 4);
         let old = rig.ws;
         rig.tick(vec![WsEvent::Closed(old, "gone".into())]);
         rig.states.push(ha_state("light.b", "on"));
@@ -837,7 +943,7 @@ mod tests {
         assert!(rig.env.logs.iter().any(|l| l.starts_with("warn: Could not read the list of entities")), "{:?}", rig.env.logs);
         assert_eq!(rig.env.option_calls, calls);
         rig.advance(ENTITIES_RETRY);
-        assert_eq!(rig.env.option_calls, calls + 1);
+        assert_eq!(rig.env.option_calls, calls + 4);
     }
 
     #[test]
@@ -942,4 +1048,129 @@ mod tests {
         rig.tick(vec![]);
         assert!(rig.env.sent.iter().any(|m| m["type"] == "subscribe_trigger"), "{:?}", rig.env.sent);
     }
+
+    fn trigger_config(platform: crate::triggers::Platform, values: &[(&str, &str)]) -> TriggerConfig {
+        let mut props = platform.defaults();
+        props.extend(values.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        crate::triggers::build(platform, &props).unwrap().unwrap()
+    }
+
+    fn fire(id: u64, trigger: Value) -> Value {
+        json!({"id":id,"type":"event","event":{"variables":{"trigger":trigger}}})
+    }
+
+    #[test]
+    fn trigger_replaces_subscription_clears_queue_and_unsubscribes_on_removal() {
+        use crate::triggers::{INFO, Platform, TRIGGERED};
+        let mut rig = Rig::new();
+        rig.connect();
+        let a = node(500);
+        let serial = rig.hub.add_trigger(a, rig.now);
+        let config = trigger_config(Platform::State, &[("entity_id", "light.a"), ("to", "on")]);
+        rig.hub.set_trigger(a, serial, Some(config.clone()), rig.now, &mut rig.env);
+        rig.serve();
+        let first = rig.triggers["light.a"];
+        assert_eq!(rig.trigger_requests.last().unwrap()["trigger"], json!({"trigger":"state","entity_id":["light.a"],"to":"on"}));
+        let fired = |id, n| fire(id, json!({"entity_id":"light.a","platform":"state","description":n}));
+        let emissions = rig.recv(vec![fired(first, 1), fired(first, 2), fired(first, 3)]);
+        assert_eq!(emissions.len(), 1);
+        assert_eq!(emissions[0].node, a);
+        assert!(has_exec(&emissions[0].outputs, TRIGGERED));
+        assert_eq!(ticknode_plugin_sdk::field(data(&emissions[0].outputs, INFO), "description"), Some(&DataValue::from(1i64)));
+        let emissions = rig.tick(vec![]);
+        assert_eq!(emissions.len(), 1);
+        assert_eq!(ticknode_plugin_sdk::field(data(&emissions[0].outputs, INFO), "description"), Some(&DataValue::from(2i64)));
+        let sent = rig.trigger_requests.len();
+        rig.hub.set_trigger(a, serial, Some(config), rig.now, &mut rig.env);
+        rig.serve();
+        assert_eq!(rig.trigger_requests.len(), sent, "equivalent config keeps the subscription");
+        // Queue another fire, then invalidate the config. No queued old fire may escape.
+        rig.recv(vec![fired(first, 4), fired(first, 5)]);
+        rig.hub.set_trigger(a, serial, None, rig.now, &mut rig.env);
+        assert!(rig.serve().is_empty());
+        assert!(rig.unsubscribed.contains(&first));
+        assert!(rig.tick(vec![]).is_empty());
+        let config = trigger_config(Platform::State, &[("entity_id", "light.b")]);
+        rig.hub.set_trigger(a, serial, Some(config), rig.now, &mut rig.env);
+        rig.serve();
+        let second = rig.triggers["light.b"];
+        assert_ne!(first, second);
+        assert!(rig.recv(vec![fired(first, 6)]).is_empty());
+        rig.hub.remove_trigger(a, serial + 1, rig.now, &mut rig.env);
+        assert!(rig.hub.triggers.contains_key(&a), "late drop cannot remove another generation");
+        rig.hub.remove_trigger(a, serial, rig.now, &mut rig.env);
+        rig.serve();
+        assert!(rig.unsubscribed.contains(&second));
+        assert!(rig.recv(vec![fired(second, 7)]).is_empty());
+    }
+
+    #[test]
+    fn trigger_rejections_are_node_errors_and_retry_only_after_thirty_seconds() {
+        use crate::triggers::Platform;
+        let mut rig = Rig::new();
+        rig.connect();
+        rig.trigger_error = Some("bad template");
+        let a = node(501);
+        let b = node(502);
+        let serial = rig.hub.add_trigger(a, rig.now);
+        let other = rig.hub.add_trigger(b, rig.now);
+        let config = trigger_config(Platform::Template, &[("value_template", "{{ broken }}")]);
+        rig.hub.set_trigger(a, serial, Some(config), rig.now, &mut rig.env);
+        rig.serve();
+        assert_eq!(rig.trigger_requests.len(), 1);
+        let errors = rig.hub.take_trigger_errors(a, serial);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("bad template"));
+        assert!(rig.hub.take_trigger_errors(a, serial).is_empty());
+        assert!(rig.hub.take_trigger_errors(b, other).is_empty());
+        rig.advance(Duration::from_secs(29));
+        assert_eq!(rig.trigger_requests.len(), 1);
+        rig.trigger_error = None;
+        rig.advance(Duration::from_secs(1));
+        assert_eq!(rig.trigger_requests.len(), 2);
+        assert_eq!(rig.recv(vec![fire(rig.triggers["template"], json!({"platform":"template"}))]).len(), 1);
+    }
+
+    #[test]
+    fn offline_trigger_rejection_retries_and_reconfiguration_restores_it() {
+        use crate::triggers::Platform;
+        let mut rig = Rig::new();
+        let a = node(503);
+        let serial = rig.hub.add_trigger(a, rig.now);
+        let config = trigger_config(Platform::Event, &[("event_type", "button")]);
+        rig.hub.set_trigger(a, serial, Some(config), rig.now, &mut rig.env);
+        rig.trigger_error = Some("not allowed");
+        rig.connect();
+        let errors = rig.hub.take_trigger_errors(a, serial);
+        assert!(errors.iter().any(|e| e.contains("rejected") && e.contains("not allowed")), "{errors:?}");
+        rig.trigger_error = None;
+        rig.advance(RESUBSCRIBE_DELAY);
+        assert_eq!(rig.trigger_requests.len(), 2);
+        // Reconfigure the connection: the same node subscribes in the new session.
+        rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
+        rig.connect();
+        assert_eq!(rig.trigger_requests.len(), 3);
+        assert_eq!(rig.recv(vec![fire(rig.triggers["event"], json!({"platform":"event"}))]).len(), 1);
+    }
+
+    #[test]
+    fn trigger_edits_and_removal_before_the_first_tick_cancel_ready_pending_subscriptions() {
+        use crate::triggers::Platform;
+        let mut rig = Rig::new();
+        let a = node(504);
+        let serial = rig.hub.add_trigger(a, rig.now);
+        for to in ["off", "on", "unknown"] {
+            let config = trigger_config(Platform::State, &[("entity_id", "light.a"), ("to", to)]);
+            rig.hub.set_trigger(a, serial, Some(config), rig.now, &mut rig.env);
+        }
+        let b = node(505);
+        let removed = rig.hub.add_trigger(b, rig.now);
+        let config = trigger_config(Platform::Event, &[("event_type", "removed")]);
+        rig.hub.set_trigger(b, removed, Some(config), rig.now, &mut rig.env);
+        rig.hub.remove_trigger(b, removed, rig.now, &mut rig.env);
+        rig.connect();
+        assert_eq!(rig.trigger_requests.len(), 1, "only the final config is sent after connecting");
+        assert_eq!(rig.trigger_requests[0]["trigger"], json!({"trigger":"state","entity_id":["light.a"],"to":"unknown"}));
+    }
+
 }

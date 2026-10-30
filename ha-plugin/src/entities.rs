@@ -25,6 +25,18 @@ pub fn entity_options(states: &[State]) -> Vec<PropertyOption> {
     options
 }
 
+/// Publishes the complete catalog and domain-specific pickers with identical labels and icons.
+pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption>)> {
+    let all = entity_options(states);
+    let subset = |domains: &[&str]| all.iter().filter(|o| domains.iter().any(|d| o.value.starts_with(d))).cloned().collect();
+    vec![
+        ("persons", subset(&["person.", "device_tracker."])),
+        ("zones", subset(&["zone."])),
+        ("calendars", subset(&["calendar."])),
+        (ENTITIES_SOURCE, all),
+    ]
+}
+
 #[cfg(test)]
 pub fn test_state(entity: &str, state: &str, attributes: serde_json::Value) -> State {
     serde_json::from_value(serde_json::json!({
@@ -65,4 +77,23 @@ mod tests {
         let order: Vec<String> = entity_options(&states).into_iter().map(|o| o.value).collect();
         assert_eq!(order, ["light.a", "switch.c", "light.b", "sensor.z"]);
     }
+
+    #[test]
+    fn specialized_sources_keep_options_and_order_from_the_catalog() {
+        let states = [
+            test_state("person.me","home",json!({"friendly_name":"Alice"})),
+            test_state("device_tracker.phone","home",json!({"friendly_name":"Phone"})),
+            test_state("zone.home","1",json!({"friendly_name":"Home"})),
+            test_state("calendar.work","on",json!({"friendly_name":"Work"})),
+            test_state("light.hall","on",json!({})),
+        ];
+        let sets: std::collections::HashMap<_,_> = option_sources(&states).into_iter().collect();
+        for (source,ids) in [("persons",vec!["person.me","device_tracker.phone"]),("zones",vec!["zone.home"]),("calendars",vec!["calendar.work"])] {
+            assert_eq!(sets[source].iter().map(|o|o.value.as_str()).collect::<Vec<_>>(),ids);
+            for option in &sets[source] { assert!(sets[ENTITIES_SOURCE].contains(option)); }
+        }
+        assert_eq!(sets[ENTITIES_SOURCE].len(),5);
+        assert!(option_sources(&[]).iter().all(|(_,options)|options.is_empty()));
+    }
+
 }

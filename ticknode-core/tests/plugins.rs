@@ -1179,6 +1179,8 @@ struct FakeHa {
     connections: Arc<AtomicUsize>,
     /// `call_service` requests as received.
     calls: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+    /// Automation trigger requests, including their message ids and typed configurations.
+    trigger_requests: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
     /// What `get_states` answers.
     entity_list: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
     /// Frames to push to every connected client.
@@ -1198,10 +1200,11 @@ impl FakeHa {
             connections: Arc::default(),
             calls: Arc::default(),
             entity_list: Arc::default(),
+            trigger_requests: Arc::default(),
             push,
         };
-        let (subs, states, unsubscribed, connections, calls, push, entity_list) =
-            (server.subs.clone(), server.states.clone(), server.unsubscribed.clone(), server.connections.clone(), server.calls.clone(), server.push.clone(), server.entity_list.clone());
+        let (subs, states, unsubscribed, connections, calls, push, entity_list, trigger_requests) =
+            (server.subs.clone(), server.states.clone(), server.unsubscribed.clone(), server.connections.clone(), server.calls.clone(), server.push.clone(), server.entity_list.clone(), server.trigger_requests.clone());
         let (port_tx, port_rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
@@ -1210,7 +1213,7 @@ impl FakeHa {
                 port_tx.send(listener.local_addr().unwrap().port()).unwrap();
                 loop {
                     let (stream, _) = listener.accept().await.unwrap();
-                    let (subs, states, unsubscribed, connections, calls, entity_list) = (subs.clone(), states.clone(), unsubscribed.clone(), connections.clone(), calls.clone(), entity_list.clone());
+                    let (subs, states, unsubscribed, connections, calls, entity_list, trigger_requests) = (subs.clone(), states.clone(), unsubscribed.clone(), connections.clone(), calls.clone(), entity_list.clone(), trigger_requests.clone());
                     let mut pushed = push.subscribe();
                     tokio::spawn(async move {
                         use tokio_tungstenite::tungstenite::Message;
@@ -1244,7 +1247,14 @@ impl FakeHa {
                             let mut replies = vec![json!({"id": id, "type": "result", "success": true, "result": null})];
                             match request["type"].as_str().unwrap_or_default() {
                                 "subscribe_trigger" => {
-                                    subs.lock().unwrap().insert(request["trigger"]["entity_id"].as_str().unwrap().to_string(), id.as_u64().unwrap());
+                                    trigger_requests.lock().unwrap().push(request.clone());
+                                    let entity = &request["trigger"]["entity_id"];
+                                    if let Some(entity) = entity.as_str().or_else(|| entity[0].as_str()) {
+                                        subs.lock().unwrap().insert(entity.to_string(), id.as_u64().unwrap());
+                                    }
+                                    if request["trigger"]["event_type"][0] == "reject" {
+                                        replies = vec![json!({"id":id,"type":"result","success":false,"error":{"code":"invalid_format","message":"Trigger rejected by fake HA"}})];
+                                    }
                                 }
                                 "subscribe_entities" => {
                                     let entity = request["entity_ids"][0].as_str().unwrap();
@@ -1278,6 +1288,11 @@ impl FakeHa {
 
     fn url(&self) -> String {
         format!("ws://127.0.0.1:{}/api/websocket", self.port)
+    }
+
+    /// Pushes HA's trigger-variable envelope to a particular subscription.
+    fn fire(&self, id: u64, trigger: serde_json::Value) {
+        let _ = self.push.send(serde_json::json!({"id":id,"type":"event","event":{"variables":{"trigger":trigger},"context":{"id":"test"}}}).to_string());
     }
 
     /// Pushes a state change of `entity`, as the entity's `state` trigger subscription reports it.
@@ -1344,7 +1359,13 @@ fn ha_plugin_declares_its_nodes_and_type() {
     assert!(manifest.settings.iter().any(|s| s.key == "token" && s.is_secret() && s.required));
     assert!(manifest.settings.iter().any(|s| s.key == "url" && s.default == Some(DataValue::String("ws://homeassistant.local:8123/api/websocket".into()))));
     engine.enable_plugin("home_assistant", &[("token".into(), DataValue::String("t".into()))]).unwrap();
-    for node in ["ha/state_changed", "ha/get_state", "ha/call_service"] {
+    for node in [
+        "ha/state_changed", "ha/get_state", "ha/call_service",
+        "ha/trigger_state", "ha/trigger_numeric_state", "ha/trigger_time", "ha/trigger_time_pattern",
+        "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
+        "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
+        "ha/trigger_conversation", "ha/trigger_template",
+    ] {
         let definition = engine.registry.get_definition(node).unwrap();
         assert_eq!(definition.category, "Home Assistant");
         assert!(!definition.help.is_empty());
@@ -1566,6 +1587,10 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
         state("light.kitchen", "on", serde_json::json!({"friendly_name": "Kitchen light"})),
         state("binary_sensor.door", "off", serde_json::json!({"friendly_name": "Door", "device_class": "door"})),
         state("sensor.custom", "1", serde_json::json!({"icon": "mdi:cat"})),
+        state("person.alice", "home", serde_json::json!({"friendly_name":"Alice"})),
+        state("device_tracker.phone", "home", serde_json::json!({"friendly_name":"Phone"})),
+        state("zone.home", "1", serde_json::json!({"friendly_name":"Home"})),
+        state("calendar.work", "on", serde_json::json!({"friendly_name":"Work"})),
     ];
     let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
     let mut sets = Vec::new();
@@ -1578,15 +1603,152 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     let set = sets.iter().find(|s| s.plugin == "home_assistant" && s.source == "entities").expect("the entity options are published once connected");
-    let summary: Vec<_> = set.options.iter().map(|o| (o.value.as_str(), o.label.as_str(), o.detail.as_str(), o.icon.as_deref().unwrap())).collect();
+    let summary: Vec<_> = set.options.iter().filter(|o| !["person.","device_tracker.","zone.","calendar."].iter().any(|d|o.value.starts_with(d))).map(|o| (o.value.as_str(), o.label.as_str(), o.detail.as_str(), o.icon.as_deref().unwrap())).collect();
     assert_eq!(summary, [
         ("binary_sensor.door", "Door", "binary_sensor.door", "mdi:door-closed"),
         ("light.kitchen", "Kitchen light", "light.kitchen", "mdi:lightbulb"),
         ("sensor.custom", "sensor.custom", "sensor.custom", "mdi:cat"),
     ]);
-    assert_eq!(engine.property_options().len(), 1);
+    assert_eq!(set.options.len(),7);
+    for (source,ids) in [("persons",vec!["person.alice","device_tracker.phone"]),("zones",vec!["zone.home"]),("calendars",vec!["calendar.work"])] {
+        let subset = sets.iter().find(|s|s.source == source).unwrap();
+        assert_eq!(subset.options.iter().map(|o|o.value.as_str()).collect::<Vec<_>>(),ids);
+        assert!(subset.options.iter().all(|o|set.options.contains(o)));
+    }
+    assert_eq!(engine.property_options().len(), 4);
     // Disabling the plugin clears the options
     engine.disable_plugin("home_assistant").unwrap();
     assert!(engine.property_options().is_empty());
-    assert_eq!(engine.take_property_option_changes().iter().map(|s| s.options.len()).collect::<Vec<_>>(), [0]);
+    assert_eq!(engine.take_property_option_changes().iter().map(|s| s.options.len()).collect::<Vec<_>>(), [0,0,0,0]);
+}
+
+#[test]
+fn ha_plugin_state_and_numeric_triggers_fire_with_typed_outputs() {
+    use serde_json::json;
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let state_node = NodeId::generate();
+    let numeric_node = NodeId::generate();
+    engine
+        .create_node(
+            state_node,
+            "ha/trigger_state",
+            &[
+                ("entity_id".into(), "light.hall".into()),
+                ("from".into(), "off".into()),
+                ("to".into(), "on".into()),
+                ("for".into(), "00:05:00".into()),
+            ],
+        )
+        .unwrap();
+    engine
+        .create_node(
+            numeric_node,
+            "ha/trigger_numeric_state",
+            &[("entity_id".into(), "sensor.temperature".into()), ("above".into(), "20".into())],
+        )
+        .unwrap();
+    let state_sink = sink(&mut engine, state_node, 0);
+    let numeric_sink = sink(&mut engine, numeric_node, 0);
+    run_until(&mut engine, |_| ha.trigger_requests.lock().unwrap().len() == 2);
+    let requests = ha.trigger_requests.lock().unwrap().clone();
+    let state_request = requests.iter().find(|r| r["trigger"]["trigger"] == "state").unwrap();
+    let numeric_request = requests.iter().find(|r| r["trigger"]["trigger"] == "numeric_state").unwrap();
+    assert_eq!(state_request["trigger"], json!({"trigger":"state","entity_id":["light.hall"],"from":"off","to":"on","for":"00:05:00"}));
+    assert_eq!(numeric_request["trigger"], json!({"trigger":"numeric_state","entity_id":["sensor.temperature"],"above":20.0}));
+    let state = |entity: &str, value: &str| json!({"entity_id":entity,"state":value,"attributes":{},"last_changed":"2026-10-30T10:00:00Z","last_updated":"2026-10-30T10:00:00Z","context":{"id":"t"}});
+    ha.fire(
+        state_request["id"].as_u64().unwrap(),
+        json!({"platform":"state","entity_id":"light.hall","from_state":state("light.hall","off"),"to_state":state("light.hall","on")}),
+    );
+    count_executions(&mut engine, state_sink, 0, 1);
+    assert_eq!(output(&engine, state_node, 2), Some("light.hall".into()));
+    assert_eq!(field_text(&output(&engine, state_node, 3).unwrap(), "state").as_deref(), Some("off"));
+    assert_eq!(field_text(&output(&engine, state_node, 4).unwrap(), "state").as_deref(), Some("on"));
+    assert_eq!(output(&engine, state_node, 4).unwrap().get_type(), DataType::Named("ha.state".into()));
+    ha.fire(numeric_request["id"].as_u64().unwrap(),json!({"platform":"numeric_state","entity_id":"sensor.temperature","from_state":state("sensor.temperature","19"),"to_state":state("sensor.temperature","21.5")}));
+    count_executions(&mut engine, numeric_sink, 0, 1);
+    assert_eq!(output(&engine, numeric_node, 2), Some("sensor.temperature".into()));
+    assert_eq!(field_text(&output(&engine, numeric_node, 4).unwrap(), "state").as_deref(), Some("21.5"));
+    assert_eq!(output(&engine, numeric_node, 5), Some(DataValue::from(21.5)));
+    assert_eq!(field_text(&output(&engine, numeric_node, 1).unwrap(), "platform").as_deref(), Some("numeric_state"));
+    // Node resource Drop cancels the subscription, without removing the other trigger.
+    engine.remove_node(state_node);
+    run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) >= 1);
+    // Clearing required configuration stops the subscription; restoring it creates a fresh one.
+    engine.set_node_property(numeric_node, "entity_id", "".into()).unwrap();
+    run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) >= 2);
+    assert_eq!(ha.trigger_requests.lock().unwrap().len(), 2);
+    engine.set_node_property(numeric_node, "entity_id", "sensor.other".into()).unwrap();
+    run_until(&mut engine, |_| ha.trigger_requests.lock().unwrap().len() == 3);
+    assert_eq!(ha.trigger_requests.lock().unwrap()[2]["trigger"]["entity_id"], json!(["sensor.other"]));
+}
+
+#[test]
+fn ha_plugin_event_trigger_fires_and_rejections_log_on_the_node() {
+    use serde_json::json;
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let event_node = NodeId::generate();
+    engine
+        .create_node(
+            event_node,
+            "ha/trigger_event",
+            &[("event_type".into(), "button_pressed".into()), ("event_data".into(), r#"{"button":"door"}"#.into())],
+        )
+        .unwrap();
+    let event_sink = sink(&mut engine, event_node, 0);
+    run_until(&mut engine, |_| ha.trigger_requests.lock().unwrap().len() == 1);
+    let request = ha.trigger_requests.lock().unwrap()[0].clone();
+    assert_eq!(request["type"], "subscribe_trigger");
+    assert_eq!(request["trigger"], json!({"trigger":"event","event_type":["button_pressed"],"event_data":{"button":"door"}}));
+    ha.fire(
+        request["id"].as_u64().unwrap(),
+        json!({"platform":"event","event":{"event_type":"button_pressed","data":{"button":"door","count":2}}}),
+    );
+    count_executions(&mut engine, event_sink, 0, 1);
+    assert_eq!(output(&engine, event_node, 3), Some("button_pressed".into()));
+    assert_eq!(field_text(&output(&engine, event_node, 2).unwrap(), "button").as_deref(), Some("door"));
+    assert_eq!(output(&engine, event_node, 1).unwrap().get_type(), DataType::Object);
+    // Local JSON errors cancel the old subscription and retain the user's text for editing.
+    engine.set_node_property(event_node, "event_data", "{".into()).unwrap();
+    run_until(&mut engine, |e| {
+        e.host_state.logs.iter().any(|(node, message)| *node == event_node && message.contains("Invalid event data JSON"))
+    });
+    run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) >= 1);
+    assert_eq!(ha.trigger_requests.lock().unwrap().len(), 1);
+    engine.set_node_property(event_node, "event_data", "".into()).unwrap();
+    run_until(&mut engine, |_| ha.trigger_requests.lock().unwrap().len() >= 2);
+    // A server rejection arrives during plugin-tick, then poll logs it under this node's id.
+    engine.set_node_property(event_node, "event_type", "reject".into()).unwrap();
+    run_until(&mut engine, |e| {
+        e.host_state.logs.iter().any(|(node, message)| *node == event_node && message.contains("Trigger rejected by fake HA"))
+    });
+}
+
+#[test]
+fn ha_plugin_invalid_trigger_json_logs_once_in_node_context_without_a_connection() {
+    let Some(bytes) = plugin_bytes("ha_plugin") else { return };
+    let mut engine = TickEngine::new();
+    engine.add_plugin(&bytes, None, |_| vec![]).unwrap();
+    engine.enable_plugin("home_assistant", &[]).unwrap();
+    let node = NodeId::generate();
+    engine.create_node(node, "ha/trigger_event", &[("event_type".into(), "test".into()), ("event_data".into(), "{".into())]).unwrap();
+    engine.tick();
+    assert!(engine.host_state.logs.iter().any(|(owner, message)| *owner == node && message.contains("Invalid event data JSON")));
+    engine.host_state.logs.clear();
+    for _ in 0..3 {
+        engine.tick();
+        assert!(!engine.host_state.logs.iter().any(|(_, message)| message.contains("Invalid event data JSON")));
+    }
+    engine.set_node_property(node, "event_data", "[]".into()).unwrap();
+    engine.tick();
+    assert!(engine.host_state.logs.iter().any(|(owner, message)| *owner == node && message.contains("Event data must be a JSON object")));
+    engine.host_state.logs.clear();
+    engine.set_node_property(node, "event_data", "{}".into()).unwrap();
+    engine.tick();
+    assert!(!engine.host_state.logs.iter().any(|(_, message)| message.contains("Event data must")));
+    engine.remove_node(node);
 }

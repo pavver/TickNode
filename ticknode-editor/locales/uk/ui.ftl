@@ -88,19 +88,19 @@ category-debug = Налагодження
 category-test = Тест
 
 # Data types and input hints
-type-exec = exec
-type-number = number
-type-string = string
-type-bool = bool
-type-time = time
-type-datetime = datetime
-type-duration = duration
-type-color = color
-type-object = object
-type-list = list
-type-any = any
-type-auto = auto
-type-list-of = list<{ $inner }>
+type-exec = Виконання
+type-number = Число
+type-string = Текст
+type-bool = Так/ні
+type-time = Час
+type-datetime = Дата й час
+type-duration = Тривалість
+type-color = Колір
+type-object = Об’єкт
+type-list = Список
+type-any = Будь-що
+type-auto = Авто
+type-list-of = Список: { $inner }
 
 hint-time = ГГ:ХХ
 hint-datetime = РРРР-ММ-ДД ГГ:ХХ
@@ -335,3 +335,8 @@ picker-use-typed = Використати "{ $value }"
 
 # Implicit conversion on a data connection.
 wire-conversion = { $src } → { $dst }
+
+pin-split = Розділити пін структури
+pin-collapse = Згорнути пін структури
+pin-technical-type = Технічний тип: { $name }
+type-unavailable = Недоступний тип

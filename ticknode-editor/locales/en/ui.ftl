@@ -92,19 +92,19 @@ category-debug = Debug
 category-test = Test
 
 # Data types and input hints
-type-exec = exec
-type-number = number
-type-string = string
-type-bool = bool
-type-time = time
-type-datetime = datetime
-type-duration = duration
-type-color = color
-type-object = object
-type-list = list
-type-any = any
-type-auto = auto
-type-list-of = list<{ $inner }>
+type-exec = Execution
+type-number = Number
+type-string = Text
+type-bool = Yes/no
+type-time = Time
+type-datetime = Date and time
+type-duration = Duration
+type-color = Color
+type-object = Object
+type-list = List
+type-any = Anything
+type-auto = Auto
+type-list-of = List: { $inner }
 
 hint-time = HH:MM
 hint-datetime = YYYY-MM-DD HH:MM
@@ -338,3 +338,8 @@ picker-use-typed = Use "{ $value }"
 
 # Implicit conversion on a data connection.
 wire-conversion = { $src } → { $dst }
+
+pin-split = Split struct pin
+pin-collapse = Recombine struct pin
+pin-technical-type = Technical type: { $name }
+type-unavailable = Unavailable type

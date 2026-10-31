@@ -86,6 +86,10 @@ A plugin can declare its own **structures** (named fields with types, some optio
 - enumeration inputs show a drop-down of the allowed values right on the node;
 - a type has its own colour and title in the editor.
 
+Struct pins can also be split directly on a node. The engine stores `split:<pin>` as a generic property, projects output fields on pull, and assembles split inputs into tagged structures before calling the node. Non-optional fields are required; absent optional fields have no value. Effective definitions contain field pins in declaration order. Split/recombine removes connections to the replaced pins; settings survive graph saves, snippets and plugin stubs. `SetPinSplit { node, pin, split }` returns disconnect events followed by `NodeUpdated`, so the editor remains server-driven.
+
+Virtual field ids reserve `0x8000_0000..=0xbfff_ffff`: `0x8000_0000 | (pin << 8) | field_index` (zero-based). Real pins cannot use this range; existing high ids such as HA Action’s `u32::MAX` outputs remain valid. Splitting currently supports one level, original ids up to `0x3f_ffff`, and 1–256 fields. Append fields to preserve connections. Make/Break nodes remain available for nested structures and explicit assembly. Pin type captions and tooltips use localized titles; technical names appear only as secondary tooltip text.
+
 ### Required inputs
 
 A pin can be marked as required (every non-optional field of a Make node is). A node whose required input is neither connected nor set on the node does not run, and the editor highlights it.

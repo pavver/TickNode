@@ -8,6 +8,7 @@ use evalexpr::*;
 mod host;
 mod plugin;
 mod custom_types;
+mod split;
 mod stub;
 mod ws;
 pub mod translations;
@@ -139,6 +140,7 @@ impl NodeRegistry {
     }
 
     fn register_definition(&mut self, definition: NodeDefinition, creator: NodeCreator) {
+        assert!(definition.pins.iter().all(|p| !is_virtual_pin(p.id)), "Real pins must not use reserved virtual ids");
         let type_name = definition.type_name.clone();
         self.definitions.insert(type_name.clone(), definition);
         self.creators.insert(type_name, creator);
@@ -239,6 +241,7 @@ pub struct TickEngine {
     pub variables: HashMap<String, DataValue>,
     /// Values of unconnected inputs set in the editor (`in:<pin>` properties).
     input_values: HashMap<NodeId, BTreeMap<u32, DataValue>>,
+    split_pins: HashMap<NodeId, std::collections::BTreeSet<u32>>,
     /// Nodes for which a "missing required input" error has already been logged (to avoid repeating every tick).
     required_reported: std::collections::HashSet<NodeId>,
     pub execution_queue: VecDeque<(NodeId, PinId)>,
@@ -267,6 +270,7 @@ impl TickEngine {
             pure_cache: HashMap::new(),
             variables: HashMap::new(),
             input_values: HashMap::new(),
+            split_pins: HashMap::new(),
             required_reported: Default::default(),
             execution_queue: VecDeque::new(),
             host_state: HostState::default(),
@@ -289,6 +293,7 @@ impl TickEngine {
         for (name, value) in properties {
             match parse_input_value_property(name) {
                 Some(pin) => inputs.push((pin, value.clone())),
+                None if parse_split_pin_property(name).is_some() => {},
                 None => node.set_property(name, value.clone()),
             }
         }
@@ -300,6 +305,12 @@ impl TickEngine {
     pub fn create_node(&mut self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(), EngineError> {
         let (node, inputs) = self.build_node(id, type_name, properties)?;
         self.add_node(node);
+        self.split_pins.remove(&id);
+        for (name, value) in properties {
+            if let Some(pin) = parse_split_pin_property(name) && *value == DataValue::Bool(true) {
+                self.split_pins.entry(id).or_default().insert(pin.0);
+            }
+        }
         // Pins depend on properties, so input values are applied afterward
         for (pin, value) in inputs {
             let _ = self.set_input_value(id, pin, Some(value));
@@ -321,7 +332,7 @@ impl TickEngine {
     }
 
     pub fn node_definition(&self, node_id: NodeId) -> Option<NodeDefinition> {
-        self.nodes.get(&node_id).map(|n| n.definition())
+        self.nodes.get(&node_id).map(|n| self.effective_definition(node_id, n.definition()))
     }
 
     /// Node model for persistence/editor (position is managed by the server, defaulted here).
@@ -330,6 +341,8 @@ impl TickEngine {
             id: node_id,
             type_name: n.definition().type_name,
             properties: n.properties().into_iter()
+                .chain(self.split_pins.get(&node_id).into_iter().flatten()
+                    .map(|pin| (split_pin_property(PinId(*pin)), DataValue::Bool(true))))
                 .chain(self.input_values.get(&node_id).into_iter().flatten()
                     .map(|(pin, v)| (input_value_property(PinId(*pin)), v.clone())))
                 .collect(),
@@ -340,6 +353,7 @@ impl TickEngine {
     pub fn remove_node(&mut self, node_id: NodeId) -> RemovedConnections {
         self.nodes.remove(&node_id);
         self.input_values.remove(&node_id);
+        self.split_pins.remove(&node_id);
         self.required_reported.remove(&node_id);
         self.data_cache.remove(&node_id);
         self.pure_cache.remove(&node_id);
@@ -363,6 +377,10 @@ impl TickEngine {
 
     /// Sets a node property. If pins changed as a result, invalid connections are pruned.
     pub fn set_node_property(&mut self, node_id: NodeId, name: &str, value: DataValue) -> Result<RemovedConnections, EngineError> {
+        if let Some(pin) = parse_split_pin_property(name) {
+            let DataValue::Bool(split) = value else { return Err(EngineError::InvalidPinConnection) };
+            return self.set_pin_split(node_id, pin, split);
+        }
         if let Some(pin) = parse_input_value_property(name) {
             self.set_input_value(node_id, pin, Some(value))?;
             return Ok(RemovedConnections::default());
@@ -376,7 +394,7 @@ impl TickEngine {
         self.data_cache.remove(&node_id);
 
         // Input values whose pins disappeared or changed type are no longer valid
-        let definition = node.definition();
+        let definition = self.node_definition(node_id).expect("node exists");
         if let Some(values) = self.input_values.get_mut(&node_id) {
             values.retain(|pin, v| input_pin_type(&definition, PinId(*pin)).is_some_and(|t| input_value_fits(&self.types, &t, v)));
         }
@@ -403,10 +421,11 @@ impl TickEngine {
         if let Some(reason) = node.unavailable() {
             return Err(EngineError::PluginUnavailable(reason));
         }
+        let definition = self.node_definition(node_id).expect("node exists");
         let values = self.input_values.entry(node_id).or_default();
         match value {
             Some(value) => {
-                let pin_type = input_pin_type(&node.definition(), pin).ok_or(EngineError::InvalidPinConnection)?;
+                let pin_type = input_pin_type(&definition, pin).ok_or(EngineError::InvalidPinConnection)?;
                 if !input_value_fits(&self.types, &pin_type, &value) {
                     return Err(EngineError::TypeMismatch(value.get_type(), pin_type));
                 }
@@ -432,7 +451,7 @@ impl TickEngine {
 
     fn find_pin(&self, node_id: NodeId, pin_id: PinId, direction: PinDirection) -> Result<PinType, EngineError> {
         let node = self.nodes.get(&node_id).ok_or(EngineError::NodeNotFound(node_id))?;
-        node.definition().pins.into_iter()
+        self.effective_definition(node_id, node.definition()).pins.into_iter()
             .find(|p| p.id == pin_id && p.direction == direction)
             .map(|p| p.pin_type)
             .ok_or(EngineError::InvalidPinConnection)
@@ -596,6 +615,10 @@ impl TickEngine {
 
     fn pull_data(&mut self, node_id: NodeId, pin_id: PinId, stack: &mut Vec<NodeId>) -> Option<DataValue> {
         if stack.contains(&node_id) { return None; }
+        if let Some((parent, field)) = self.split_output_field(node_id, pin_id) {
+            let DataValue::Object { fields, .. } = self.pull_data(node_id, parent, stack)? else { return None };
+            return fields.get(&field).map(|f| f.value.clone());
+        }
 
         // Check whether this is an input pin connected to another node's output.
         // If so, recursively pull data from the source.
@@ -625,6 +648,7 @@ impl TickEngine {
                 return None;
             }
             let traced = trace_inputs(&inputs);
+            let inputs = self.native_inputs(node_id, inputs);
             let mut node = self.nodes.remove(&node_id)?;
             let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
             let outputs = node.execute(None, &mut ctx);
@@ -673,6 +697,7 @@ impl TickEngine {
         for (pin, value) in self.input_values.get(&node_id).into_iter().flatten() {
             inputs.entry(PinId(*pin)).or_insert_with(|| Some(value.clone()));
         }
+        self.assemble_split_inputs(node_id, &mut inputs);
         inputs
     }
 
@@ -711,6 +736,7 @@ impl TickEngine {
             let mut stack = Vec::new();
             let inputs = self.pull_inputs(node_id, &mut stack);
             let traced = trace_inputs(&inputs);
+            let inputs = self.native_inputs(node_id, inputs);
             let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.on_task(task, result, &mut ctx);
@@ -742,6 +768,7 @@ impl TickEngine {
                 continue;
             }
             let traced = trace_inputs(&inputs);
+            let inputs = self.native_inputs(node_id, inputs);
             let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.execute(Some(trigger_pin), &mut ctx);
@@ -799,6 +826,17 @@ impl TickEngine {
             .chain(self.pure_cache.get(&node_id).into_iter().flatten())
             .map(|(p, v)| (*p, v.clone()))
             .collect();
+        // Telemetry uses the same visible pins as the editor, without evaluating any node again.
+        if let Some(def) = self.node_definition(node_id) {
+            let projected: Vec<_> = def.pins.iter().filter(|p| p.direction == PinDirection::Output)
+                .filter_map(|p| {
+                    let (parent, field) = self.split_output_field(node_id, p.id)?;
+                    let DataValue::Object { fields, .. } = &outputs.iter().find(|(id, _)| *id == parent)?.1 else { return None };
+                    Some((p.id, fields.get(&field)?.value.clone()))
+                }).collect();
+            outputs.retain(|(id, _)| def.pins.iter().any(|p| p.id == *id && p.direction == PinDirection::Output));
+            outputs.extend(projected);
+        }
         outputs.sort_by_key(|(p, _)| p.0);
         outputs.dedup_by_key(|(p, _)| *p);
         let tick = self.host_state.current_tick;

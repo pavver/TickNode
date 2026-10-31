@@ -739,6 +739,27 @@ fn NodeView(id: NodeId) -> impl IntoView {
     .into_any()
 }
 
+/// Sends the change to the server; effective pins arrive in NodeUpdated.
+#[component]
+pub fn PinSplitControl(node: NodeId, pin: PinDefinition) -> impl IntoView {
+    let ed = use_editor();
+    let parent = split_field_parent(pin.id).map(|(parent, _)| parent);
+    let can_split = ed.types.with_untracked(|types| splittable_type(types, &pin).is_some());
+    (parent.is_some() || can_split).then(|| view! {
+        <button
+            class="mini-btn icon pin-split"
+            title=move || if parent.is_some() { t!("pin-collapse") } else { t!("pin-split") }
+            aria-label=move || if parent.is_some() { t!("pin-collapse") } else { t!("pin-split") }
+            disabled=move || ed.node_tracked(node).is_none_or(|n| n.instance.with(|i| i.unavailable.is_some()))
+            on:pointerdown=crate::match_editor::stop_on_controls
+            on:click=move |ev| {
+                ev.stop_propagation();
+                ed.send(ClientMessage::SetPinSplit { node, pin: parent.unwrap_or(pin.id), split: parent.is_none() });
+            }
+        >{if parent.is_some() { "⊟" } else { "⊞" }}</button>
+    })
+}
+
 #[component]
 pub fn Pin(
     node: NodeId,
@@ -780,7 +801,11 @@ pub fn Pin(
             PinType::Data(t) => ed.type_title(t),
         };
         let required_note = if is_required { t!("pin-required-suffix") } else { String::new() };
-        format!("{translated_pin}: {type_name}{required_note}")
+        let technical = match &pin_type_title {
+            PinType::Data(t) => format!("\n{}", t!("pin-technical-type", name = data_type_name(t))),
+            _ => String::new(),
+        };
+        format!("{translated_pin}: {type_name}{required_note}{technical}")
     };
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();
@@ -791,6 +816,8 @@ pub fn Pin(
         let (src, dst) = if dir == PinDirection::Input { (&other, &target_type) } else { (&target_type, &other) };
         ed.types.with(|types| wire_conversion(types, src, dst))
     };
+    let split_control_pin = pin.clone();
+    let is_field = split_field_parent(pin.id).is_some();
     let pin_name_label = pin.name;
     let pin_label = move || match label {
         Some(custom) => custom.get(),
@@ -804,6 +831,7 @@ pub fn Pin(
             // Single-string class attribute: a dynamic `class` would overwrite separate `class:` bindings
             class=move || {
                 let mut class = if is_input { "pin in" } else { "pin out" }.to_string();
+                if is_field { class.push_str(" split-field"); }
                 if is_input && missing() { class.push_str(" missing"); }
                 if allowed_target().is_some() { class.push_str(" connectable"); }
                 class
@@ -816,6 +844,7 @@ pub fn Pin(
         >
             <span class="socket" class:exec=exec class:connected=connected style=format!("--pin-color:{color}")></span>
             <span class="ellipsis">{pin_label}</span>
+            <PinSplitControl node=node pin=split_control_pin />
             {value}
         </div>
     }

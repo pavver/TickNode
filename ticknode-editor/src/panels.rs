@@ -256,7 +256,11 @@ fn PaletteBlock(def: NodeDefinition, color: &'static str, add: impl Fn(String) +
                     PinType::Exec => i18n::type_name_label("exec"),
                     PinType::Data(t) => ed.type_title(t),
                 };
-                format!("{pin_label}: {type_name}")
+                let technical = match &pin_type_title {
+                    PinType::Data(t) => format!("\n{}", t!("pin-technical-type", name = data_type_name(t))),
+                    _ => String::new(),
+                };
+                format!("{pin_label}: {type_name}{technical}")
             };
             let node_type_label = node_type.clone();
             let pin_name_label = p.name.clone();
@@ -537,6 +541,11 @@ fn ExecutionInfo(id: NodeId) -> impl IntoView {
                 PinType::Exec => i18n::type_name_label("exec"),
                 PinType::Data(t) => ed.type_title(t),
             };
+            let technical_type = p.pin_type.clone();
+            let technical = move || match &technical_type {
+                PinType::Data(t) => t!("pin-technical-type", name = data_type_name(t)),
+                _ => String::new(),
+            };
             let raw_pin_name = p.name.clone();
             let pin_label = move || node.instance.with(|i| instance_pin_label(i, pin, dir, &raw_pin_name));
             view! {
@@ -544,7 +553,7 @@ fn ExecutionInfo(id: NodeId) -> impl IntoView {
                     <div class="dense-row">
                         <span class="socket connected" class:exec=exec style=format!("--pin-color:{}", ed.types.with_untracked(|types| pin_color(types, &p.pin_type)))></span>
                         <span class="ellipsis" style="flex:1">{pin_label}</span>
-                        <span class="t-caption">{ty}</span>
+                        <span class="t-caption" title=technical>{ty}</span>
                     </div>
                     {move || {
                         let (text, muted, title) = value();

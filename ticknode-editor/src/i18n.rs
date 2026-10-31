@@ -441,7 +441,7 @@ pub fn type_name_label(name: &str) -> String {
 
 pub fn data_type_title(types: &TypeRegistry, t: &DataType) -> String {
     match t {
-        DataType::Named(name) => types.get(name).map_or_else(|| name.clone(), type_def_title),
+        DataType::Named(name) => types.get(name).map_or_else(|| t!("type-unavailable"), type_def_title),
         DataType::List(inner) => t!("type-list-of", inner = data_type_title(types, inner)),
         other => type_name_label(&data_type_name(other)),
     }
@@ -794,6 +794,27 @@ weather-plugin-error-no-token = Токен не задано ({ $name })
         });
         // No translated type: the server's text is kept
         with_locale(Locale::En, || assert_eq!(node_title(&make), "Make State"));
+    }
+
+    #[test]
+    fn type_display_titles_are_localized_and_recursive() {
+        let types = TypeRegistry::from_definitions([TypeDefinition::new_struct("test.point", "Point", vec![])]);
+        with_locale(Locale::Uk, || {
+            for (ty, title) in [
+                (DataType::Number, "Число"), (DataType::String, "Текст"), (DataType::Bool, "Так/ні"),
+                (DataType::Time, "Час"), (DataType::DateTime, "Дата й час"), (DataType::Duration, "Тривалість"),
+                (DataType::Color, "Колір"), (DataType::Object, "Об’єкт"), (DataType::Any, "Будь-що"),
+            ] { assert_eq!(data_type_title(&types, &ty), title); }
+            assert_eq!(data_type_title(&types, &DataType::List(Box::new(DataType::Number))), "Список: Число");
+            assert_eq!(data_type_title(&types, &DataType::Named("test.point".into())), "Point");
+            assert_eq!(data_type_title(&types, &DataType::Named("missing.type".into())), "Недоступний тип");
+        });
+        with_locale(Locale::En, || {
+            assert_eq!(data_type_title(&types, &DataType::List(Box::new(DataType::String))), "List: Text");
+        });
+        set_runtime_translations(&[("uk".into(), "type-test-point-title = Точка".into())]);
+        with_locale(Locale::Uk, || assert_eq!(data_type_title(&types, &DataType::Named("test.point".into())), "Точка"));
+        set_runtime_translations(&[]);
     }
 
     #[test]

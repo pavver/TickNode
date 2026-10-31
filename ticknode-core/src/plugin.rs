@@ -1094,7 +1094,12 @@ fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (NodeDefinition,
         category: d.category,
         description: d.description,
         help: d.help,
-        pins: d.pins.into_iter().map(|p| PinDefinition {
+        pins: d.pins.into_iter().filter(|p| {
+            if is_virtual_pin(PinId(p.id)) {
+                tracing::warn!(plugin, pin = p.id, "Ignoring plugin pin in reserved virtual id range");
+                false
+            } else { true }
+        }).map(|p| PinDefinition {
             id: PinId(p.id),
             required: p.required,
             name: p.name,

@@ -65,6 +65,7 @@ pub fn pins(def: &NodeDefinition, direction: PinDirection) -> impl Iterator<Item
 /// Input values (`in:*`) are rendered next to pins, and Match cases are rendered in their own block.
 pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
     ticknode_shared::text::is_text_type(&value.get_type()) && parse_input_value_property(name).is_none()
+        && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 
 /// Number of inline property rows on a node.
@@ -124,7 +125,18 @@ impl NodeLayout {
         let row_y = |i: usize| pins_top + i as f64 * ROW_H + ROW_H / 2.0;
         let inputs: Vec<_> = pins(def, PinDirection::Input).enumerate().map(|(i, p)| (p.id, row_y(i))).collect();
         if def.type_name == "match" {
-            let cases_top = pins_top + (inputs.len() + 1) as f64 * ROW_H;
+            // A split Match input retains its name/type editor row above its field rows.
+            let mut row = 0;
+            let mut previous_parent = None;
+            let inputs: Vec<_> = pins(def, PinDirection::Input).map(|p| {
+                let parent = ticknode_shared::split_field_parent(p.id).map(|(parent, _)| parent);
+                if parent.is_some() && parent != previous_parent { row += 1; }
+                previous_parent = parent;
+                let at = (p.id, row_y(row));
+                row += 1;
+                at
+            }).collect();
+            let cases_top = pins_top + (row + 1) as f64 * ROW_H;
             let mut y = cases_top;
             let mut outputs = Vec::new();
             for case in match_cases(properties) {
@@ -220,6 +232,30 @@ pub fn data_type_color(t: &DataType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn split_fields_use_regular_rows_and_settings_add_no_property_row() {
+        let field = ticknode_shared::split_field_pin(PinId(5), 0).unwrap();
+        let next = ticknode_shared::split_field_pin(PinId(5), 1).unwrap();
+        let mut def = NodeDefinition {
+            type_name: "example".into(), title: String::new(), category: String::new(),
+            description: String::new(), help: String::new(), properties: vec![],
+            pins: [field, next].into_iter().map(|id| PinDefinition {
+                id, name: "State.field".into(), pin_type: PinType::Data(DataType::String),
+                direction: PinDirection::Input, required: false,
+            }).collect(),
+        };
+        let properties = vec![("split:5".into(), DataValue::Bool(true)), (format!("in:{}", field.0), DataValue::from("value"))];
+        assert_eq!(prop_rows(&properties), 0);
+        let layout = NodeLayout::new(&def, &properties);
+        assert_eq!(layout.anchor(Position::default(), field, PinDirection::Input), Some((0.0, HEADER_H + BODY_PAD + ROW_H / 2.0)));
+        assert_eq!(layout.anchor(Position::default(), next, PinDirection::Input).unwrap().1, HEADER_H + BODY_PAD + ROW_H * 1.5);
+        assert_eq!(layout.height, HEADER_H + 2.0 * BODY_PAD + 2.0 * ROW_H);
+        def.type_name = "match".into();
+        let layout = NodeLayout::new(&def, &properties);
+        assert_eq!(layout.anchor(Position::default(), field, PinDirection::Input).unwrap().1, HEADER_H + BODY_PAD + ROW_H * 1.5);
+        assert_eq!(layout.cases_top, HEADER_H + BODY_PAD + 4.0 * ROW_H);
+    }
 
     #[test]
     fn zoom_keeps_cursor_point_fixed() {

@@ -9,7 +9,7 @@ use ticknode_shared::condition::*;
 use ticknode_shared::*;
 use wasm_bindgen::JsCast;
 
-use crate::canvas::Pin;
+use crate::canvas::{Pin, PinSplitControl};
 use crate::geometry::{match_cases, match_inputs_of, type_color};
 use crate::i18n::{self, t};
 use crate::inline::{InlineValue, PinValue};
@@ -274,9 +274,12 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
     let pin_title = move || format!("{}: {}", name.get(), ed.type_title(&effective.get()));
     view! {
         <div class="case-row input-row">
-            <div class="pin in match-socket" title=pin_title data-pin=pin.to_string() data-node=node.0.to_string() data-dir="in" data-kind="data">
-                <span class="socket" class:connected=move || connected.get() style=move || format!("--pin-color:{}", ed.types.with(|r| type_color(r, &effective.get())))></span>
-            </div>
+            {move || pin_def(node, pin_id, PinDirection::Input).map(|_| view! {
+                <div class="pin in match-socket" title=pin_title data-pin=pin.to_string() data-node=node.0.to_string() data-dir="in" data-kind="data">
+                    <span class="socket" class:connected=move || connected.get() style=move || format!("--pin-color:{}", ed.types.with(|r| type_color(r, &effective.get())))></span>
+                </div>
+            })}
+            {move || pin_def(node, pin_id, PinDirection::Input).map(|p| view! { <PinSplitControl node=node pin=p /> })}
             <TextField value=name on_commit=rename class="input-name" title=Signal::derive(move || t!("match-input-name-title")) />
             <select
                 class="op-select type-select"
@@ -308,6 +311,11 @@ fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: 
                 <Icon path=icons::CLOSE />
             </button>
         </div>
+        {move || ed.node_tracked(node).map(|n| n.instance.with(|i| i.definition.pins.iter()
+            .filter(|p| p.direction == PinDirection::Input && split_field_parent(p.id).is_some_and(|(parent, _)| parent == pin_id))
+            .cloned().collect::<Vec<_>>())).unwrap_or_default().into_iter().map(|p| view! {
+                <div class="case-row split-input-row"><Pin node=node pin=p dir=PinDirection::Input /></div>
+            }).collect_view()}
     }
 }
 

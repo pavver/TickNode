@@ -2051,3 +2051,50 @@ fn plugin_clears_data_and_rejects_clears_of_other_pins() {
     let errors: Vec<_> = engine.host_state.logs.iter().filter(|(id, text)| *id == node && text.contains("not a data output")).collect();
     assert_eq!(errors.len(), 4, "input, exec output and unknown pins must be rejected: {errors:?}");
 }
+
+#[test]
+fn split_plugin_struct_pins_flow_persist_and_survive_disable() {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else { return };
+    let source = NodeId::generate();
+    let sink = NodeId::generate();
+    engine.create_node(source, "test/point_source", &[("x".into(), number(5)), ("y".into(), number(7))]).unwrap();
+    engine.create_node(sink, "test/point_sink", &[]).unwrap();
+    engine.connect_data(source, PinId(1), sink, PinId(1)).unwrap();
+    assert_eq!(engine.set_pin_split(source, PinId(1), true).unwrap().data.len(), 1);
+    engine.set_pin_split(sink, PinId(1), true).unwrap();
+    for i in 0..3 {
+        let field = split_field_pin(PinId(1), i).unwrap();
+        engine.connect_data(source, field, sink, field).unwrap();
+    }
+    engine.trigger_node(source, PinId(0));
+    engine.trigger_node(sink, PinId(0));
+    // Explicit ordering: let the source's plugin output arrive before pulling the sink's inputs.
+    engine.tick();
+    engine.trigger_node(sink, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, sink, 4), Some(number(12)));
+    let trace = engine.executed.iter().find(|t| t.node_id == sink).unwrap();
+    assert!(trace.inputs.iter().any(|(p, v)| *p == split_field_pin(PinId(1), 2).unwrap() && v.is_none()));
+    let graph = engine.export_graph();
+    let before = engine.node_definition(source).unwrap();
+    engine.disable_plugin("test_plugin").unwrap();
+    assert_eq!(engine.export_graph(), graph);
+    assert_eq!(engine.node_definition(source).unwrap(), before);
+    assert!(engine.set_pin_split(source, PinId(1), false).is_err());
+    assert!(engine.load_graph(&graph).is_empty());
+    assert_eq!(engine.export_graph(), graph);
+    engine.enable_plugin("test_plugin", &[]).unwrap();
+    assert_eq!(engine.export_graph(), graph);
+    assert!(engine.load_graph(&graph).is_empty());
+    let snippet = engine.export_snippet(&[source, sink]);
+    let (map, warnings) = engine.import_snippet(&snippet);
+    assert!(warnings.is_empty());
+    let source = map.iter().find(|(old, _)| *old == source).unwrap().1;
+    let sink = map.iter().find(|(old, _)| *old == sink).unwrap().1;
+    engine.trigger_node(source, PinId(0));
+    engine.tick();
+    engine.trigger_node(sink, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, sink, 4), Some(number(12)));
+    assert_eq!(engine.set_pin_split(sink, PinId(1), false).unwrap().data.len(), 3);
+}

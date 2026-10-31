@@ -1101,3 +1101,8 @@ body:has(.palette-ghost) { cursor: copy; }
     .console { height: calc(var(--du) * 32); }
 }
 .hidden { display: none !important; }
+
+/* Split fields retain socket coordinates and row height; only their labels are indented. */
+.pin.split-field > .ellipsis { padding-inline-start: var(--du); border-inline-start: var(--border-w) solid var(--border); }
+.pin .pin-split { flex: none; padding: 0; width: calc(var(--du) * 4); min-width: 0; }
+.node.unavailable .pin-split { pointer-events: none; }

@@ -105,9 +105,10 @@ impl TickEngine {
         ids.sort_by_key(|id| id.0);
         for id in &ids {
             let Some(model) = self.node_model(*id) else { continue };
-            let definition = self.nodes[id].definition();
+            let definition = self.node_definition(*id).expect("node exists");
             self.host_state.cancel_node_tasks(*id);
             self.input_values.remove(id);
+            self.split_pins.remove(id);
             self.required_reported.remove(id);
             self.data_cache.remove(id);
             self.pure_cache.remove(id);

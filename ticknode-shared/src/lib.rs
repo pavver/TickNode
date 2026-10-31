@@ -236,6 +236,40 @@ pub fn parse_input_value_property(name: &str) -> Option<PinId> {
     name.strip_prefix(INPUT_VALUE_PREFIX)?.parse().ok().map(PinId)
 }
 
+/// The 0x8000_0000..=0xbfff_ffff range belongs to engine-generated struct field pins.
+pub const VIRTUAL_PIN_BIT: u32 = 0x8000_0000;
+pub const VIRTUAL_PIN_MASK: u32 = 0xc000_0000;
+
+pub fn is_virtual_pin(pin: PinId) -> bool {
+    pin.0 & VIRTUAL_PIN_MASK == VIRTUAL_PIN_BIT
+}
+
+/// One level of splitting: 22 bits for the original pin, 8 bits for the field index.
+pub fn split_field_pin(pin: PinId, index: usize) -> Option<PinId> {
+    (pin.0 <= 0x3f_ffff && index < 256)
+        .then_some(PinId(VIRTUAL_PIN_BIT | (pin.0 << 8) | index as u32))
+}
+
+pub fn split_field_parent(pin: PinId) -> Option<(PinId, usize)> {
+    is_virtual_pin(pin)
+        .then_some((PinId((pin.0 & !VIRTUAL_PIN_MASK) >> 8), (pin.0 & 255) as usize))
+}
+
+pub fn split_pin_property(pin: PinId) -> String {
+    format!("split:{}", pin.0)
+}
+
+pub fn parse_split_pin_property(name: &str) -> Option<PinId> {
+    name.strip_prefix("split:")?.parse().ok().map(PinId)
+}
+
+/// Only nonempty structs representable in the reserved id range can be split.
+pub fn splittable_type<'a>(types: &'a TypeRegistry, pin: &PinDefinition) -> Option<&'a TypeDefinition> {
+    let PinType::Data(t) = &pin.pin_type else { return None };
+    let def = types.definition_of(t).filter(|d| d.is_struct())?;
+    (!def.fields().is_empty() && split_field_pin(pin.id, def.fields().len() - 1).is_some()).then_some(def)
+}
+
 /// Whether an input of this type can be given a value directly on the node (entered as text, see `text`;
 /// for an enum, selected from a list).
 pub fn input_value_editable(types: &TypeRegistry, t: &DataType) -> bool {
@@ -328,6 +362,8 @@ pub enum ClientMessage {
     SetPluginEnabled { name: String, enabled: bool },
     /// Save plugin settings. Keys not present in the list remain unchanged.
     ConfigurePlugin { name: String, values: Vec<(String, SettingUpdate)> },
+    /// Replace a named struct pin with its fields, or restore the original pin.
+    SetPinSplit { node: NodeId, pin: PinId, split: bool },
 }
 
 /// What a node received and emitted during its last execution (for the editor inspector).
@@ -475,3 +511,26 @@ pub enum NodeOutput {
 }
 
 
+
+#[cfg(test)]
+mod split_pin_tests {
+    use super::*;
+
+    #[test]
+    fn virtual_pin_ids_are_stable_distinct_and_bounded() {
+        for parent in [0, 1, 255, 256, 0x3f_ffff] {
+            for index in [0, 1, 255] {
+                let id = split_field_pin(PinId(parent), index).unwrap();
+                assert_ne!(id.0 & VIRTUAL_PIN_BIT, 0);
+                assert_eq!(split_field_parent(id), Some((PinId(parent), index)));
+                assert_eq!(parse_split_pin_property(&split_pin_property(PinId(parent))), Some(PinId(parent)));
+            }
+        }
+        assert!(split_field_pin(PinId(0x40_0000), 0).is_none());
+        assert!(split_field_pin(PinId(0), 256).is_none());
+        assert!(split_field_pin(split_field_pin(PinId(0), 0).unwrap(), 0).is_none());
+        assert!(split_field_parent(PinId(0x7fff_ffff)).is_none());
+        assert!(split_field_parent(PinId(u32::MAX)).is_none());
+        assert!(parse_split_pin_property("in:0").is_none());
+    }
+}

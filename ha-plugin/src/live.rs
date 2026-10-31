@@ -62,6 +62,12 @@ impl Live {
     pub fn active(&self) -> bool {
         self.subscribed
     }
+    pub fn get(&self, entity: &str) -> Option<&State> {
+        self.states.get(entity)
+    }
+    pub fn all_states(&self) -> Vec<State> {
+        self.states.values().cloned().collect()
+    }
     pub fn state(&self, entity: &str) -> Result<&State, String> {
         if !self.ready {
             return Err("Home Assistant state cache is not ready or is disconnected".into());

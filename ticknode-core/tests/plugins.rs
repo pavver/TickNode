@@ -1642,8 +1642,8 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
     let set = sets.iter().find(|s| s.plugin == "home_assistant" && s.source == "entities").expect("the entity options are published once connected");
     let summary: Vec<_> = set.options.iter().filter(|o| !["person.","device_tracker.","zone.","calendar."].iter().any(|d|o.value.starts_with(d))).map(|o| (o.value.as_str(), o.label.as_str(), o.detail.as_str(), o.icon.as_deref().unwrap())).collect();
     assert_eq!(summary, [
-        ("binary_sensor.door", "Door", "binary_sensor.door", "mdi:door-closed"),
         ("light.kitchen", "Kitchen light", "light.kitchen", "mdi:lightbulb"),
+        ("binary_sensor.door", "Door", "binary_sensor.door", "mdi:door-closed"),
         ("sensor.custom", "sensor.custom", "sensor.custom", "mdi:cat"),
     ]);
     assert_eq!(set.options.len(),7);
@@ -1653,7 +1653,8 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
         assert!(subset.options.iter().all(|o|set.options.contains(o)));
     }
     let published = engine.property_options();
-    assert!(published.iter().any(|s| s.source == "entities:light" && s.options.iter().map(|o|o.value.as_str()).collect::<Vec<_>>() == ["light.kitchen"]));
+    assert!(published.iter().any(|s| s.source == "actions:light.kitchen" && s.options.iter().map(|o|o.value.as_str()).collect::<Vec<_>>() == ["light.turn_on"]));
+    assert!(published.iter().any(|s| s.source == "action_targets" && s.options.iter().map(|o|o.value.as_str()).collect::<Vec<_>>() == ["light.kitchen"]));
     // Disabling the plugin clears the options
     engine.disable_plugin("home_assistant").unwrap();
     assert!(engine.property_options().is_empty());
@@ -1803,18 +1804,19 @@ fn ha_plugin_action_form_sends_fields_target_and_response_requests() {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let ha = FakeHa::start();
     let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
-    run_until(&mut engine, |e| e.property_options().iter().any(|s| s.source == "actions"));
-    let actions = engine.property_options().into_iter().find(|s| s.source == "actions").unwrap();
-    let option = actions.options.iter().find(|o|o.value == "light.turn_on").unwrap();
-    assert_eq!((option.label.as_str(),option.detail.as_str(),option.icon.as_deref()),("Turn on","light.turn_on",Some("mdi:lightbulb")));
     let action = NodeId::generate();
     engine.create_node(action,"ha/action",&[]).unwrap();
-    engine.set_node_property(action,"action","light.turn_on".into()).unwrap();
     engine.set_node_property(action,"target","light.kitchen".into()).unwrap();
+    run_until(&mut engine, |e| e.property_options().iter().any(|s| s.source == "actions:light.kitchen"));
+    let actions = engine.property_options().into_iter().find(|s| s.source == "actions:light.kitchen").unwrap();
+    let option = &actions.options[0];
+    assert_eq!((option.label.as_str(),option.detail.as_str(),option.icon.as_deref()),("Turn on","light.turn_on",Some("mdi:lightbulb")));
+    engine.set_node_property(action,"action","light.turn_on".into()).unwrap();
     let def = engine.node_definition(action).unwrap();
     assert!(def.pins.iter().any(|p|p.id == PinId(2) && p.name == "Brightness" && p.required && p.pin_type == PinType::Data(DataType::Number)));
     assert_eq!(def.pins.iter().filter(|p|p.direction == PinDirection::Input).map(|p|p.name.as_str()).collect::<Vec<_>>(),["In","Entity","Brightness","effect","rgb_color","transition"]);
-    assert_eq!(def.properties[1].kind,PropertyKind::Dynamic{source:"entities:light".into(),plugin:"home_assistant".into()});
+    assert_eq!(def.properties[0].kind,PropertyKind::Dynamic{source:"action_targets".into(),plugin:"home_assistant".into()});
+    assert_eq!(def.properties[1].kind,PropertyKind::Dynamic{source:"actions:light.kitchen".into(),plugin:"home_assistant".into()});
     let done = sink(&mut engine,action,DONE);
     let failed = sink(&mut engine,action,FAILED);
     // Required fields are enforced before any request can reach HA.
@@ -1935,7 +1937,8 @@ fn ha_plugin_action_snapshot_restores_offline_through_wasm() {
     assert_eq!(def.pins[2].name, "Brightness");
     assert!(def.pins[2].required);
     assert_eq!(def.pins[3].pin_type, PinType::Data(DataType::Color));
-    assert_eq!(def.properties[1].kind, PropertyKind::Dynamic { source: "entities:light".into(), plugin: "home_assistant".into() });
+    assert_eq!(def.properties[0].kind, PropertyKind::Dynamic { source: "action_targets".into(), plugin: "home_assistant".into() });
+    assert_eq!(def.properties[1].kind, PropertyKind::Dynamic { source: "actions:light.kitchen".into(), plugin: "home_assistant".into() });
     let graph = engine.export_graph();
     let mut restored = TickEngine::new();
     restored.load_plugin(&bytes, None, |_| vec![]).unwrap();

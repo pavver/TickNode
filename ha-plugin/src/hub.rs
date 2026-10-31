@@ -183,6 +183,7 @@ pub struct Hub {
     pub services: BTreeMap<String, crate::actions::Service>,
     entity_options: Vec<PropertyOption>,
     domain_sources: BTreeSet<String>,
+    action_targets: HashMap<NodeId, String>,
     /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
     entities: HashMap<NodeId, Option<Reply<State>>>,
 }
@@ -243,7 +244,9 @@ impl Hub {
         self.services_reply = None;
         self.services.clear();
         self.entity_options.clear();
+        self.action_targets.clear();
         env.set_options("actions", &[]);
+        env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &[]);
         for source in std::mem::take(&mut self.domain_sources) { env.set_options(&source, &[]); }
         for reply in self.entities.values_mut() { *reply = None; }
     }
@@ -546,7 +549,8 @@ impl Hub {
                         env.set_options(source, &options);
                         if source == "entities" { self.entity_options = options; }
                     }
-                    self.publish_domain_sources(env);
+                    self.publish_action_targets(env);
+                    self.publish_action_sources(env);
                     self.entities_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -574,8 +578,8 @@ impl Hub {
                 None => return,
                 Some(Ok(json)) => {
                     self.services = crate::actions::services(&json);
-                    env.set_options("actions", &crate::actions::options(&self.services));
-                    self.publish_domain_sources(env);
+                    self.publish_action_targets(env);
+                    self.publish_action_sources(env);
                     self.services_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -590,20 +594,74 @@ impl Hub {
         }
     }
 
-    /// Domain lists and the unions requested by cross-domain target filters; clear vanished sources.
-    fn publish_domain_sources(&mut self, env: &mut impl Env) {
-        let mut filters: BTreeSet<Vec<String>> = self.entity_options.iter()
-            .map(|o| vec![crate::icons::domain_of(&o.value).to_string()]).collect();
-        filters.extend(self.services.values().filter(|s| !s.domains.is_empty()).map(|s| s.domains.clone()));
+    /// Publishes actionable entities for `ha/action` (`"action_targets"`).
+    fn publish_action_targets(&mut self, env: &mut impl Env) {
+        let states = self.live.all_states();
+        if states.is_empty() {
+            return;
+        }
+        let options = crate::entities::action_target_options(&states, &self.services);
+        env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &options);
+    }
+
+    /// Publishes target-less actions (`"actions"`) and per-entity action lists (`"actions:<entity>"`).
+    fn publish_action_sources(&mut self, env: &mut impl Env) {
+        if self.services.is_empty() {
+            return;
+        }
+        env.set_options("actions", &crate::actions::options_for(&self.services, None));
+        let mut targets: BTreeSet<String> = self
+            .action_targets
+            .values()
+            .filter(|t| !t.trim().is_empty())
+            .cloned()
+            .collect();
+        // Pre-publish actions for known entities up to the option sources limit (256 - ~16 overhead = 192).
+        for opt in self.entity_options.iter().take(192) {
+            targets.insert(opt.value.clone());
+        }
         let mut sources = BTreeSet::new();
-        for domains in filters {
-            let source = crate::actions::target_source(&domains);
-            let options: Vec<_> = self.entity_options.iter().filter(|o| domains.iter().any(|d| d == crate::icons::domain_of(&o.value))).cloned().collect();
+        for entity_id in targets {
+            let source = crate::actions::action_source(&entity_id);
+            let state = self.live.get(&entity_id);
+            let options = crate::actions::options_for(&self.services, Some((&entity_id, state)));
             env.set_options(&source, &options);
             sources.insert(source);
         }
-        for old in self.domain_sources.difference(&sources) { env.set_options(old, &[]); }
+        for old in self.domain_sources.difference(&sources) {
+            env.set_options(old, &[]);
+        }
         self.domain_sources = sources;
+    }
+
+    pub fn set_action_target(&mut self, node: NodeId, target: &str, env: &mut impl Env) {
+        let target = target.trim();
+        if target.is_empty() {
+            self.action_targets.remove(&node);
+            return;
+        }
+        self.action_targets.insert(node, target.to_string());
+        if self.services.is_empty() {
+            return;
+        }
+        let source = crate::actions::action_source(target);
+        if self.domain_sources.insert(source.clone()) {
+            let state = self.live.get(target);
+            let options = crate::actions::options_for(&self.services, Some((target, state)));
+            env.set_options(&source, &options);
+        }
+    }
+
+    pub fn remove_action_target(&mut self, node: NodeId, env: &mut impl Env) {
+        if let Some(target) = self.action_targets.remove(&node) {
+            let source = crate::actions::action_source(&target);
+            if !self.action_targets.values().any(|t| t == &target)
+                && !self.entity_options.iter().take(192).any(|o| o.value == target)
+            {
+                self.domain_sources.remove(&source);
+                env.set_options(&source, &[]);
+            }
+        }
     }
 
     fn pump_actions(link: &mut Link, now: Instant, env: &mut impl Env) {
@@ -1133,10 +1191,10 @@ mod tests {
         assert_eq!(rig.get_states_requests, 1);
         let options = &rig.env.options[ENTITIES_SOURCE];
         assert_eq!(options.iter().map(|o| (o.value.as_str(), o.label.as_str(), o.icon.as_deref())).collect::<Vec<_>>(), [
-            ("binary_sensor.door", "Door", Some("mdi:door-open")),
             ("light.kitchen", "Lamp", Some("mdi:lightbulb")),
+            ("binary_sensor.door", "Door", Some("mdi:door-open")),
         ]);
-        assert_eq!(options[0].detail, "binary_sensor.door");
+        assert_eq!(options[0].detail, "light.kitchen");
 
         // Not asked again before the refresh interval has passed
         rig.advance(Duration::from_secs(60));
@@ -1426,8 +1484,9 @@ mod tests {
         rig.states = vec![ha_state("light.a", "off"), ha_state("switch.a", "off")];
         rig.connect();
         assert_eq!(rig.get_services_requests,1);
-        assert_eq!(rig.env.options["actions"].len(),2);
-        assert_eq!(rig.env.options["entities:light"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),["light.a"]);
+        assert_eq!(rig.env.options["actions"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),["weather.get_forecasts"]);
+        assert_eq!(rig.env.options["action_targets"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),["light.a"]);
+        assert_eq!(rig.env.options["actions:light.a"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),["light.turn_on"]);
         assert!(rig.hub.action(node(5), "light", "turn_on", "light.a", json!({"brightness":120}), false, rig.now, &mut rig.env).is_none());
         let emissions = rig.serve();
         assert!(has_exec(&emissions[0].outputs,DONE));

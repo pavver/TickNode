@@ -464,7 +464,7 @@ fn pin_compatibility_respects_named_types() {
     assert!(engine.connect_data(make, PinId(0), sink, PinId(2)).is_err());
     let text = NodeId::generate();
     engine.create_node(text, "const", &[("value".into(), DataValue::String("auto".into()))]).unwrap();
-    assert!(engine.connect_data(text, PinId(0), sink, PinId(2)).is_err());
+    engine.connect_data(text, PinId(0), sink, PinId(2)).unwrap();
     // Number -> Named
     let num = NodeId::generate();
     engine.create_node(num, "const", &[("value".into(), number(1))]).unwrap();
@@ -1895,6 +1895,7 @@ fn ha_plugin_entity_emissions_remain_pullable_across_ticks() {
     // Retargeting subscribes anew and immediately exposes the current boolean state.
     engine.set_node_property(entity,"entity_id","light.kitchen".into()).unwrap();
     run_until(&mut engine, |e| output(e,entity,2) == Some(DataValue::Bool(false)));
+    assert_eq!(output(&engine, entity, 1), None, "retargeting to a boolean state clears the old number");
     ha.change("light.kitchen","off","on");
     run_until(&mut engine, |e| output(e,entity,2) == Some(DataValue::Bool(true)));
     for _ in 0..8 { engine.tick(); }
@@ -1903,6 +1904,10 @@ fn ha_plugin_entity_emissions_remain_pullable_across_ticks() {
     count_executions(&mut engine,probe,0,1);
     let trace = engine.executed.iter().find(|t|t.node_id == probe).unwrap();
     assert!(trace.inputs.contains(&(PinId(1),Some(DataValue::Bool(true)))),"{trace:?}");
+    ha.change("light.kitchen", "on", "unavailable");
+    run_until(&mut engine, |e| output(e, entity, 0) == Some(DataValue::from("unavailable")));
+    assert_eq!(output(&engine, entity, 1), None);
+    assert_eq!(output(&engine, entity, 2), None, "an unknown state clears the old boolean");
 }
 
 #[test]
@@ -2029,4 +2034,20 @@ fn ha_plugin_template_condition_completes_asynchronously_and_unsubscribes() {
     engine.trigger_node(gate, PinId(0));
     count_executions(&mut engine, no, 0, 1);
     assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(false)));
+}
+
+#[test]
+fn plugin_clears_data_and_rejects_clears_of_other_pins() {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else { return };
+    let node = NodeId::generate();
+    engine.create_node(node, "test/clear", &[]).unwrap();
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, node, 1), Some(number(42)));
+    engine.trigger_node(node, PinId(2));
+    engine.tick();
+    assert_eq!(output(&engine, node, 1), None);
+    assert!(engine.executed.iter().find(|t| t.node_id == node).unwrap().outputs.is_empty());
+    let errors: Vec<_> = engine.host_state.logs.iter().filter(|(id, text)| *id == node && text.contains("not a data output")).collect();
+    assert_eq!(errors.len(), 4, "input, exec output and unknown pins must be rejected: {errors:?}");
 }

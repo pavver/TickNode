@@ -507,19 +507,13 @@ impl WasmNode {
             .collect();
         let result = self.call(Some(ctx.host_state), |store, api, node| api.node().call_execute(store, node, &trigger, &inputs));
         match result {
-            Ok(outputs) => outputs.into_iter().filter_map(|o| match o {
-                wit::Output::Exec(pin) => Some(NodeOutput::Execution(PinId(pin))),
-                wit::Output::Data((pin, value)) => {
-                    let value = decode_value(&value)?;
-                    match check_output_type(&self.definition, PinId(pin), &value) {
-                        Ok(()) => Some(NodeOutput::Data(PinId(pin), value)),
-                        Err(e) => {
-                            ctx.host_state.log(self.id, format!("[ERROR] {e}"));
-                            None
-                        }
-                    }
+            Ok(outputs) => {
+                let (valid, errors) = validate_emission_outputs(&self.definition, outputs);
+                for error in errors {
+                    ctx.host_state.log(self.id, format!("[ERROR] {error}"));
                 }
-            }).collect(),
+                valid
+            }
             Err(e) => {
                 ctx.host_state.log(self.id, format!("[ERROR] {e}"));
                 Vec::new()
@@ -557,6 +551,10 @@ fn validate_emission_outputs(definition: &NodeDefinition, outputs: Vec<wit::Outp
             wit::Output::Exec(pin) => match output_pin(pin) {
                 Some(p) if p.pin_type == PinType::Exec => valid.push(NodeOutput::Execution(PinId(pin))),
                 _ => errors.push(format!("The plugin emitted an exec pulse on pin {pin}, which is not an exec output of {}", definition.type_name)),
+            },
+            wit::Output::Clear(pin) => match output_pin(pin) {
+                Some(p) if matches!(p.pin_type, PinType::Data(_)) => valid.push(NodeOutput::Clear(PinId(pin))),
+                _ => errors.push(format!("The plugin cleared pin {pin}, which is not a data output of {}", definition.type_name)),
             },
             wit::Output::Data((pin, bytes)) => match output_pin(pin) {
                 Some(p) if p.pin_type != PinType::Exec => {
@@ -1143,6 +1141,14 @@ fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pushed_clear_validates_pin_kind_and_direction() {
+        let def = crate::CompareNode { id: NodeId::generate() }.definition();
+        let (valid, errors) = validate_emission_outputs(&def, vec![wit::Output::Clear(0), wit::Output::Clear(2), wit::Output::Clear(99)]);
+        assert_eq!(valid, vec![NodeOutput::Clear(PinId(2))]);
+        assert_eq!(errors.len(), 2);
+    }
 
     #[test]
     fn domain_matching() {

@@ -156,7 +156,7 @@ impl PluginNode for StateChanged {
             category: CATEGORY.into(),
             description: "Fires when a Home Assistant entity changes".into(),
             help: "Event source: sends a signal on Changed every time the entity from the entity_id property changes its state or attributes in Home Assistant. \
-New is the state after the change and Old the state before it. If the entity did not exist before (or was removed), that state has an empty state field.\n\n\
+New is the state after the change and Old the state before it. If the entity did not exist before (or was removed), the corresponding output is cleared.\n\n\
 The mode property says what happens when several changes arrive in the same tick: \"every\" (default) sends one signal per change, in order, one per tick; \"latest\" sends only the newest change of the tick.\n\n\
 Needs the Home Assistant connection to be set up in the plugin settings. While the connection is down no changes are seen, and after it returns a change that happened meanwhile is delivered as one signal. \
 A nonexistent entity is retried every 30 seconds.".into(),
@@ -218,7 +218,7 @@ impl PluginNode for GetState {
             description: "Reads the current state of a Home Assistant entity".into(),
             help: "On a signal at In asks Home Assistant for the current state of Entity ID. The answer arrives a little later (a few ticks): \
 on success State holds the entity and a signal goes to Done; on failure (not connected, no such entity, timeout) Error holds the reason and a signal goes to Failed. \
-After a failure State is an empty state (its state field is empty).\n\nThe request fails at once if the connection to Home Assistant is down.".into(),
+After a failure State is cleared.\n\nThe request fails at once if the connection to Home Assistant is down.".into(),
             pins: vec![
                 exec_in(0, "In"),
                 data_in(1, "Entity ID", DataType::String).required(),
@@ -311,7 +311,7 @@ impl Plugin for HomeAssistant {
         vec![
             TypeDefinition::new_struct(STATE_TYPE, "HA State", vec![
                 FieldDefinition::new("entity_id", "Entity ID", DataType::String),
-                FieldDefinition::new("state", "State", DataType::String).described("The state text; empty if the entity does not exist"),
+                FieldDefinition::new("state", "State", DataType::String).described("The state text reported by Home Assistant"),
                 FieldDefinition::new("attributes", "Attributes", DataType::Object),
                 FieldDefinition::new("last_changed", "Last changed", DataType::DateTime),
                 FieldDefinition::new("last_updated", "Last updated", DataType::DateTime),

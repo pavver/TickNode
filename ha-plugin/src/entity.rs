@@ -4,12 +4,15 @@ use ha_core_client::State;
 use std::time::Instant;
 use ticknode_plugin_sdk::*;
 
-use crate::convert::{STATE_TYPE, missing_state, state_value};
+use crate::convert::{STATE_TYPE, state_value};
 use crate::{CATEGORY, text_property, try_with_hub, with_hub};
 
-pub fn outputs(entity: &str, state: Option<&State>) -> Vec<Output> {
-    let value = state.map_or_else(|| missing_state(entity), state_value);
-    let text = state.map_or("", |s| s.state.as_str());
+pub fn outputs(state: Option<&State>) -> Vec<Output> {
+    let Some(state) = state else {
+        return (0..6).map(|pin| Output::Clear(PinId(pin))).collect();
+    };
+    let value = state_value(state);
+    let text = state.state.as_str();
     let attrs = field(&value, "attributes")
         .expect("ha.state has attributes")
         .clone();
@@ -24,6 +27,8 @@ pub fn outputs(entity: &str, state: Option<&State>) -> Vec<Output> {
         && number.is_finite()
     {
         outputs.push(Output::Data(PinId(1), number.into()));
+    } else {
+        outputs.push(Output::Clear(PinId(1)));
     }
     let on = match text {
         "on" | "open" | "home" | "true" | "playing" | "locked" | "detected" | "active"
@@ -34,6 +39,8 @@ pub fn outputs(entity: &str, state: Option<&State>) -> Vec<Output> {
     };
     if let Some(on) = on {
         outputs.push(Output::Data(PinId(2), on.into()));
+    } else {
+        outputs.push(Output::Clear(PinId(2)));
     }
     outputs
 }
@@ -68,7 +75,7 @@ impl PluginNode for Entity {
         NodeDefinition {
             type_name: "ha/entity".into(), title: "Entity".into(), category: CATEGORY.into(),
             description: "Keeps the latest state of a Home Assistant entity available as data".into(),
-            help: "Choose an entity. Its current state is read on subscription and reconnection; changes update the data outputs without firing an execution signal. Downstream actions can pull the latest values at any time. Number is emitted only for finite numeric states; On only for on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied and connected/disconnected. Other states leave those outputs unchanged (an output cannot be cleared). Unit comes from unit_of_measurement. A removed entity emits an empty State and Entity state. While disconnected the last values remain available; a missing entity is retried every 30 seconds.".into(),
+            help: "Choose an entity. Its current state is read on subscription and reconnection; changes update the data outputs without firing an execution signal. Downstream actions can pull the latest values at any time. Number is emitted only for finite numeric states; On only for on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied and connected/disconnected. Other states clear the corresponding outputs. Unit comes from unit_of_measurement. A removed entity clears all outputs. While disconnected the last values remain available; a missing entity is retried every 30 seconds.".into(),
             properties: vec![PropertyDefinition::dynamic("entity_id", "Entity", "entities").described("The Home Assistant entity whose latest state to expose")],
             pins: vec![
                 data_out(0, "State", DataType::String), data_out(1, "Number", DataType::Number),
@@ -120,7 +127,7 @@ mod tests {
             "21.0",
             json!({"unit_of_measurement":"°C", "custom":42}),
         );
-        let out = outputs(&state.entity_id, Some(&state));
+        let out = outputs(Some(&state));
         assert_eq!(data(&out, 1), Some(&DataValue::from(21.0)));
         assert_eq!(data(&out, 2), None);
         assert_eq!(data(&out, 3), Some(&DataValue::from("°C")));
@@ -145,17 +152,17 @@ mod tests {
             ("detected", true),
             ("clear", false),
         ] {
-            let out = outputs("light.a", Some(&test_state("light.a", state, json!({}))));
+            let out = outputs(Some(&test_state("light.a", state, json!({}))));
             assert_eq!(data(&out, 2), Some(&DataValue::Bool(on)), "{state}");
             assert!(data(&out, 1).is_none());
-            assert!(out.iter().all(|o| matches!(o, Output::Data(..))));
+            assert!(out.contains(&Output::Clear(PinId(1))));
         }
         for state in ["hello", "unavailable", "NaN", "inf", "On"] {
-            let out = outputs("sensor.x", Some(&test_state("sensor.x", state, json!({}))));
+            let out = outputs(Some(&test_state("sensor.x", state, json!({}))));
             assert_eq!(data(&out, 0), Some(&DataValue::from(state)));
-            assert!(data(&out, 1).is_none() && data(&out, 2).is_none());
+            assert!(out.contains(&Output::Clear(PinId(1))) && out.contains(&Output::Clear(PinId(2))));
         }
-        let out = outputs("sensor.gone", None);
-        assert_eq!(data(&out, 0), Some(&DataValue::from("")));
+        let out = outputs(None);
+        assert_eq!(out, (0..6).map(|pin| Output::Clear(PinId(pin))).collect::<Vec<_>>());
     }
 }

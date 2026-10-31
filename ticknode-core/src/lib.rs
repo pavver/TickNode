@@ -448,7 +448,7 @@ impl TickEngine {
     fn validate_data_types(&self, c: &ConnectionModel) -> Result<(), EngineError> {
         match (self.find_pin(c.src_node, c.src_pin, PinDirection::Output)?, self.find_pin(c.dst_node, c.dst_pin, PinDirection::Input)?) {
             (PinType::Data(s_type), PinType::Data(d_type)) => {
-                if self.types.compatible(&s_type, &d_type) {
+                if self.types.compatible(&s_type, &d_type) || self.types.convertible(&s_type, &d_type).is_some() {
                     Ok(())
                 } else {
                     Err(EngineError::TypeMismatch(s_type, d_type))
@@ -618,30 +618,29 @@ impl TickEngine {
         let is_pure = self.nodes.get(&node_id).map(|n| n.is_pure()).unwrap_or(false);
         if is_pure {
             stack.push(node_id);
-            let mut node = self.nodes.remove(&node_id)?;
+            let definition = self.node_definition(node_id)?;
             let inputs = self.pull_inputs(node_id, stack);
-            if self.skip_for_required(node_id, &node.definition(), &inputs) {
-                self.nodes.insert(node_id, node);
+            if self.skip_for_required(node_id, &definition, &inputs) {
                 stack.pop();
                 return None;
             }
             let traced = trace_inputs(&inputs);
+            let mut node = self.nodes.remove(&node_id)?;
             let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
             let outputs = node.execute(None, &mut ctx);
             self.nodes.insert(node_id, node);
             stack.pop();
 
             let mut node_outputs = HashMap::new();
-            let mut target_val = None;
             for out in outputs {
-                if let NodeOutput::Data(p, v) = out {
-                    if p == pin_id {
-                        target_val = Some(v.clone());
-                    }
-                    node_outputs.insert(p, v);
+                match out {
+                    NodeOutput::Data(p, v) => { node_outputs.insert(p, v); }
+                    NodeOutput::Clear(p) => { node_outputs.remove(&p); }
+                    _ => {}
                 }
             }
-            self.pure_cache.entry(node_id).or_default().extend(node_outputs);
+            let target_val = node_outputs.get(&pin_id).cloned();
+            self.pure_cache.insert(node_id, node_outputs);
             self.record_trace(node_id, traced, Vec::new());
             target_val
         } else {
@@ -652,7 +651,24 @@ impl TickEngine {
     fn pull_inputs(&mut self, node_id: NodeId, stack: &mut Vec<NodeId>) -> HashMap<PinId, Option<DataValue>> {
         let connections: Vec<_> = self.data_connections.iter().filter(|c| c.dst_node == node_id).copied().collect();
         let mut inputs: HashMap<PinId, Option<DataValue>> = connections.into_iter()
-            .map(|c| (c.dst_pin, self.pull_data(c.src_node, c.src_pin, stack)))
+            .map(|c| {
+                let mut value = self.pull_data(c.src_node, c.src_pin, stack);
+                if let (Ok(PinType::Data(src)), Ok(PinType::Data(dst))) = (
+                    self.find_pin(c.src_node, c.src_pin, PinDirection::Output),
+                    self.find_pin(c.dst_node, c.dst_pin, PinDirection::Input),
+                ) && let Some(conversion) = self.types.convertible(&src, &dst)
+                    && let Some(original) = value.take()
+                {
+                    value = conversion.apply(original);
+                    if value.is_none()
+                        && let Some(pin) = self.node_definition(node_id).and_then(|d| d.pins.into_iter().find(|p| p.id == c.dst_pin && p.direction == PinDirection::Input && p.required))
+                        && self.required_reported.insert(node_id)
+                    {
+                        self.host_state.log(node_id, format!("[ERROR] Required input \"{}\" could not be converted", pin.name));
+                    }
+                }
+                (c.dst_pin, value)
+            })
             .collect();
         for (pin, value) in self.input_values.get(&node_id).into_iter().flatten() {
             inputs.entry(PinId(*pin)).or_insert_with(|| Some(value.clone()));
@@ -756,6 +772,12 @@ impl TickEngine {
                 }
                 NodeOutput::Data(pin_id, value) => {
                     self.data_cache.entry(node_id).or_default().insert(pin_id, value);
+                    state_changed = true;
+                }
+                NodeOutput::Clear(pin_id) => {
+                    if let Some(values) = self.data_cache.get_mut(&node_id) {
+                        values.remove(&pin_id);
+                    }
                     state_changed = true;
                 }
                 NodeOutput::Variable(name, value) => {
@@ -1932,6 +1954,104 @@ impl Node for ObjectUnpackNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct InputProbe { id: NodeId, required: bool, pure: bool }
+    impl Node for InputProbe {
+        fn id(&self) -> NodeId { self.id }
+        fn is_pure(&self) -> bool { self.pure }
+        fn definition(&self) -> NodeDefinition {
+            NodeDefinition {
+                type_name: "test/input_probe".into(), title: "Input probe".into(), category: "Test".into(),
+                description: String::new(), help: String::new(), properties: vec![],
+                pins: vec![
+                    PinDefinition { id: PinId(0), name: "In".into(), direction: PinDirection::Input, pin_type: PinType::Exec, required: false },
+                    PinDefinition { id: PinId(1), name: "Value".into(), direction: PinDirection::Input, pin_type: PinType::Data(DataType::Number), required: self.required },
+                    PinDefinition { id: PinId(2), name: "Present".into(), direction: PinDirection::Output, pin_type: PinType::Data(DataType::Bool), required: false },
+                ],
+            }
+        }
+        fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
+            vec![NodeOutput::Data(PinId(2), DataValue::Bool(ctx.get_value(PinId(1)).is_some()))]
+        }
+    }
+
+    #[test]
+    fn clear_removes_data_invalidates_pure_cache_and_blocks_required_inputs() {
+        let mut engine = TickEngine::new();
+        let source = NodeId::generate();
+        engine.create_node(source, "for_loop", &[]).unwrap();
+        // This test drives output application directly, as plugin emissions do.
+        let optional = NodeId::generate();
+        let required = NodeId::generate();
+        let pure = NodeId::generate();
+        for (id, required, pure) in [(optional, false, false), (required, true, false), (pure, false, true)] {
+            engine.add_node(Box::new(InputProbe { id, required, pure }));
+            engine.connect_data(source, PinId(5), id, PinId(1)).unwrap();
+        }
+        let mut next = VecDeque::new();
+        engine.apply_outputs(source, vec![], vec![NodeOutput::Data(PinId(5), num(7))], &mut next);
+        assert_eq!(engine.pull_data(pure, PinId(2), &mut vec![]), Some(DataValue::Bool(true)));
+        engine.trigger_node(optional, PinId(0));
+        engine.trigger_node(required, PinId(0));
+        engine.tick();
+        assert!(engine.executed.iter().any(|t| t.node_id == required));
+        assert_eq!(engine.pull_data(pure, PinId(2), &mut vec![]), Some(DataValue::Bool(true)));
+        engine.apply_outputs(source, vec![], vec![NodeOutput::Clear(PinId(5))], &mut next);
+        assert!(!engine.data_cache[&source].contains_key(&PinId(5)));
+        assert!(!engine.executed.iter().find(|t| t.node_id == source).unwrap().outputs.iter().any(|(p, _)| *p == PinId(5)));
+        assert_eq!(engine.pull_data(pure, PinId(2), &mut vec![]), Some(DataValue::Bool(false)));
+        engine.trigger_node(optional, PinId(0));
+        engine.trigger_node(required, PinId(0));
+        engine.tick();
+        assert!(engine.executed.iter().any(|t| t.node_id == optional && t.inputs == vec![(PinId(1), None)]));
+        assert!(!engine.executed.iter().any(|t| t.node_id == required));
+        assert!(engine.host_state.logs.is_empty(), "cleared connected sources skip silently");
+    }
+
+    #[test]
+    fn connections_convert_before_compare_and_match_and_survive_type_changes() {
+        let mut engine = TickEngine::new();
+        let source = NodeId::generate();
+        engine.create_node(source, "const", &[("value".into(), DataValue::from("21.5"))]).unwrap();
+        let compare = NodeId::generate();
+        engine.create_node(compare, "compare", &[]).unwrap();
+        engine.connect_data(source, PinId(0), compare, PinId(0)).unwrap();
+        engine.set_input_value(compare, PinId(1), Some(num(20))).unwrap();
+        assert_eq!(engine.pull_data(compare, PinId(3), &mut vec![]), Some(DataValue::Bool(true)));
+        let matcher = NodeId::generate();
+        engine.create_node(matcher, "match", &[
+            ("inputs".into(), DataValue::List { element_type: DataType::String, elements: vec![DataValue::from("1:t:number")] }),
+            cases(&["1: t > 20"]),
+        ]).unwrap();
+        engine.connect_data(source, PinId(0), matcher, PinId(1)).unwrap();
+        assert_eq!(fire(&mut engine, matcher), vec![PinId(1)]);
+        let graph = engine.export_graph();
+        let mut restored = TickEngine::new();
+        assert!(restored.load_graph(&graph).is_empty());
+        assert_eq!(fire(&mut restored, matcher), vec![PinId(1)]);
+        assert!(engine.set_node_property(source, "value", num(25)).unwrap().data.is_empty());
+        assert!(engine.set_node_property(source, "value", DataValue::from("unknown")).unwrap().data.is_empty());
+        assert_eq!(fire(&mut engine, matcher), vec![MatchNode::ELSE_PIN]);
+        let optional = NodeId::generate();
+        let required = NodeId::generate();
+        for (id, required) in [(optional, false), (required, true)] {
+            engine.add_node(Box::new(InputProbe { id, required, pure: false }));
+            engine.set_input_value(id, PinId(1), Some(num(99))).unwrap();
+            engine.connect_data(source, PinId(0), id, PinId(1)).unwrap();
+            engine.trigger_node(id, PinId(0));
+        }
+        engine.tick();
+        assert_eq!(engine.data_cache[&optional][&PinId(2)], DataValue::Bool(false));
+        assert!(!engine.executed.iter().any(|t| t.node_id == required));
+        assert_eq!(engine.host_state.logs.iter().filter(|(id, m)| *id == required && m.contains("could not be converted")).count(), 1);
+        engine.trigger_node(required, PinId(0));
+        engine.tick();
+        assert_eq!(engine.host_state.logs.iter().filter(|(id, _)| *id == required).count(), 1);
+        engine.set_node_property(source, "value", DataValue::from("22")).unwrap();
+        engine.trigger_node(required, PinId(0));
+        engine.tick();
+        assert!(engine.executed.iter().any(|t| t.node_id == required));
+    }
 
     /// Sink node with exec input PinId(0) for tracing execution flow.
     fn add_sink(engine: &mut TickEngine) -> NodeId {

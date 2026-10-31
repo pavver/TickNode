@@ -403,6 +403,8 @@ button, input, select { font: inherit; color: inherit; }
 .wire { fill: none; stroke-width: calc(var(--du) * 0.5); }
 .wire.exec { stroke: var(--text-secondary); }
 .wire.selected { stroke: var(--accent); stroke-width: calc(var(--du) * 0.75); }
+.wire.converting { stroke-dasharray: 6 4; }
+.pin.connectable .socket { border-color: var(--accent); box-shadow: 0 0 0 var(--du) var(--accent); }
 .wire.pending { stroke: var(--accent); stroke-dasharray: 6 4; }
 .wire-hit { fill: none; stroke: transparent; stroke-width: calc(var(--du) * 3); cursor: pointer; pointer-events: stroke; }
 

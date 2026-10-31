@@ -3,13 +3,13 @@
 //!
 //! Typing is strict: `Named(a)` is compatible only with `Named(a)`, `Any`, and `Object` (for structs)
 //! or `String` (for enums). Not the other way around: `Object`/`String` cannot be fed into a custom-type
-//! pin, because they guarantee neither the required fields nor a valid enum value.
+//! pin without conversion. Explicit conversion rules are separate from compatibility.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::DataType;
+use crate::{DataType, DataValue, NumberValue, text};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FieldDefinition {
@@ -113,6 +113,43 @@ pub fn is_type_name(s: &str) -> bool {
         && s.split('.').all(|seg| {
             !seg.is_empty() && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
         })
+}
+
+/// A conversion applied while pulling a connected input. Failure means no input value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Conversion {
+    Parse(DataType),
+    Format(DataType),
+    StringToBool,
+    NumberToBool,
+    BoolToNumber,
+    StringToEnum(Vec<String>),
+    List { element_type: DataType, conversion: Box<Conversion> },
+}
+
+impl Conversion {
+    pub fn apply(&self, value: DataValue) -> Option<DataValue> {
+        match (self, value) {
+            (Self::Parse(dst), DataValue::String(s)) => text::parse_value(&s, dst).ok(),
+            (Self::Format(src), value) if value.get_type() == *src => Some(DataValue::String(text::format_value(&value))),
+            (Self::StringToBool, DataValue::String(s)) => {
+                let b = match s.trim().to_ascii_lowercase().as_str() {
+                    "on" | "true" | "yes" | "1" | "open" | "home" | "playing" | "locked" | "detected" | "active" | "occupied" | "connected" => true,
+                    "off" | "false" | "no" | "0" | "closed" | "not_home" | "paused" | "unlocked" | "clear" | "inactive" | "unoccupied" | "disconnected" => false,
+                    _ => return None,
+                };
+                Some(DataValue::Bool(b))
+            }
+            (Self::NumberToBool, DataValue::Number(n)) if n.to_f64().is_finite() => Some(DataValue::Bool(n.to_f64() != 0.0)),
+            (Self::BoolToNumber, DataValue::Bool(b)) => Some(DataValue::Number(NumberValue::Int(i64::from(b)))),
+            (Self::StringToEnum(values), DataValue::String(s)) if values.contains(&s) => Some(DataValue::String(s)),
+            (Self::List { element_type, conversion }, DataValue::List { elements, .. }) => Some(DataValue::List {
+                element_type: element_type.clone(),
+                elements: elements.into_iter().map(|v| conversion.apply(v)).collect::<Option<Vec<_>>>()?,
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// Registry of declared types (keyed by full name).
@@ -228,6 +265,28 @@ impl TypeRegistry {
         }
     }
 
+    /// Returns a conversion only for differing, convertible types. Compatible types need no conversion.
+    /// Lists convert element by element; one invalid element makes the whole input unavailable.
+    pub fn convertible(&self, src: &DataType, dst: &DataType) -> Option<Conversion> {
+        use DataType::*;
+        if self.compatible(src, dst) {
+            return None;
+        }
+        Some(match (src, dst) {
+            (String, Number | Time | DateTime | Duration | Color) => Conversion::Parse(dst.clone()),
+            (Number | Bool | Time | DateTime | Duration | Color, String) => Conversion::Format(src.clone()),
+            (String, Bool) => Conversion::StringToBool,
+            (Number, Bool) => Conversion::NumberToBool,
+            (Bool, Number) => Conversion::BoolToNumber,
+            (String, Named(name)) => {
+                let def = self.get(name).filter(|d| d.is_enum())?;
+                Conversion::StringToEnum(def.values().iter().map(|v| v.value.clone()).collect())
+            }
+            (List(a), List(b)) => Conversion::List { element_type: (**b).clone(), conversion: Box::new(self.convertible(a, b)?) },
+            _ => return None,
+        })
+    }
+
     /// Default value for enum `t` — the first value in the enumeration.
     pub fn default_enum(&self, t: &DataType) -> Option<String> {
         self.definition_of(t).and_then(|d| d.values().first()).map(|v| v.value.clone())
@@ -254,6 +313,60 @@ mod tests {
 
     fn named(n: &str) -> DataType {
         DataType::Named(n.into())
+    }
+
+    #[test]
+    fn primitive_conversions_and_failures() {
+        use DataType::*;
+        let r = registry();
+        let cases = [
+            (String, Number, DataValue::from("21.5"), Some(DataValue::from(21.5))),
+            (String, Number, DataValue::from("unavailable"), None),
+            (String, Number, DataValue::from("NaN"), None),
+            (String, Number, DataValue::from("inf"), None),
+            (Number, String, DataValue::from(42i64), Some(DataValue::from("42"))),
+            (Number, String, DataValue::from(21.5), Some(DataValue::from("21.5"))),
+            (Bool, String, DataValue::Bool(false), Some(DataValue::from("false"))),
+            (Number, Bool, DataValue::from(-2i64), Some(DataValue::Bool(true))),
+            (Number, Bool, DataValue::from(0i64), Some(DataValue::Bool(false))),
+            (Bool, Number, DataValue::Bool(true), Some(DataValue::from(1i64))),
+            (Bool, Number, DataValue::Bool(false), Some(DataValue::from(0i64))),
+            (String, named("t.mode"), DataValue::from("auto"), Some(DataValue::from("auto"))),
+            (String, named("t.mode"), DataValue::from("Auto"), None),
+            (String, named("t.mode"), DataValue::from("other"), None),
+        ];
+        for (src, dst, value, expected) in cases {
+            assert_eq!(r.convertible(&src, &dst).unwrap().apply(value.clone()), expected, "{src:?} -> {dst:?}: {value:?}");
+        }
+        for (yes, no) in [("on", "off"), ("true", "false"), ("yes", "no"), ("1", "0"), ("open", "closed"), ("home", "not_home"), ("playing", "paused"), ("locked", "unlocked"), ("detected", "clear"), ("active", "inactive"), ("occupied", "unoccupied"), ("connected", "disconnected"), (" ON ", " OFF ")] {
+            let conv = r.convertible(&String, &Bool).unwrap();
+            assert_eq!(conv.apply(DataValue::from(yes)), Some(DataValue::Bool(true)));
+            assert_eq!(conv.apply(DataValue::from(no)), Some(DataValue::Bool(false)));
+        }
+        for unknown in ["unknown", "unavailable", "", "2"] {
+            assert_eq!(r.convertible(&String, &Bool).unwrap().apply(DataValue::from(unknown)), None);
+        }
+        for (dst, input) in [(Time, "07:30"), (DateTime, "2026-10-31 12:45"), (Duration, "1h 30m"), (Color, "#12345678")] {
+            let value = text::parse_value(input, &dst).unwrap();
+            assert_eq!(r.convertible(&String, &dst).unwrap().apply(DataValue::from(input)), Some(value.clone()));
+            assert_eq!(r.convertible(&dst, &String).unwrap().apply(value.clone()), Some(DataValue::from(text::format_value(&value))));
+            assert_eq!(r.convertible(&String, &dst).unwrap().apply(DataValue::from("invalid")), None);
+        }
+        for (src, dst) in [(Number, Number), (Any, Number), (named("t.mode"), String), (Object, named("t.point")), (String, named("t.point")), (Number, Time), (named("t.mode"), Number)] {
+            assert_eq!(r.convertible(&src, &dst), None, "{src:?} -> {dst:?}");
+        }
+    }
+
+    #[test]
+    fn list_conversion_is_elementwise_and_atomic() {
+        let r = registry();
+        let list = |t| DataType::List(Box::new(t));
+        let conv = r.convertible(&list(DataType::String), &list(DataType::Number)).unwrap();
+        let value = |texts: &[&str]| DataValue::List { element_type: DataType::String, elements: texts.iter().map(|s| DataValue::from(*s)).collect() };
+        assert_eq!(conv.apply(value(&["1", "2.5"])), Some(DataValue::List { element_type: DataType::Number, elements: vec![DataValue::from(1i64), DataValue::from(2.5)] }));
+        assert_eq!(conv.apply(value(&["1", "bad"])), None);
+        assert_eq!(conv.apply(value(&[])), Some(DataValue::List { element_type: DataType::Number, elements: vec![] }));
+        assert!(r.convertible(&list(DataType::Object), &list(DataType::Number)).is_none());
     }
 
     #[test]

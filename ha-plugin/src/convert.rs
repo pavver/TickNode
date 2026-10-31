@@ -85,19 +85,6 @@ pub fn state_value(state: &State) -> DataValue {
         .build()
 }
 
-/// The `ha.state` standing for "no state": the entity did not exist (before it was created, after it was
-/// removed) or the read failed. The host cannot clear an output pin, so a value is always sent instead of
-/// leaving the previous one in place. `state` is empty (Home Assistant itself never reports an empty state).
-pub fn missing_state(entity_id: &str) -> DataValue {
-    StructValue::new(STATE_TYPE)
-        .field("entity_id", entity_id)
-        .field("state", "")
-        .field("attributes", object(BTreeMap::new()))
-        .field("last_changed", DataValue::DateTime(Default::default()))
-        .field("last_updated", DataValue::DateTime(Default::default()))
-        .build()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,11 +158,4 @@ mod tests {
         assert_eq!(value_to_json(&object(fields)), json!({"brightness": 120, "rgb": [1, 2.5], "name": "x", "t": 1.5}));
     }
 
-    #[test]
-    fn missing_state_is_an_empty_ha_state() {
-        let v = missing_state("light.x");
-        assert_eq!(v.get_type(), DataType::Named(STATE_TYPE.into()));
-        assert_eq!(field(&v, "state"), &DataValue::String(String::new()));
-        assert_eq!(field(&v, "entity_id"), &DataValue::String("light.x".into()));
-    }
 }

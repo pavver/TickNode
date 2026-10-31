@@ -166,7 +166,7 @@ fn state_numeric_and_zone_outputs_keep_states_and_full_info() {
         assert_eq!(field_string(&info, "platform"), Some("numeric_state"));
         assert_eq!(crate::convert::value_to_json(field(&info, "extra").unwrap()), json!({"a":true}));
         assert_eq!(data(&outputs, 2), DataValue::from("sensor.t"));
-        assert_eq!(field_string(&data(&outputs, 3), "state"), Some(""));
+        assert!(outputs.contains(&Output::Clear(PinId(3))));
         assert_eq!(field_string(&data(&outputs, 4), "state"), Some("23.5"));
         if platform == Platform::NumericState {
             assert_eq!(data(&outputs, 5), DataValue::from(23.5));
@@ -177,7 +177,7 @@ fn state_numeric_and_zone_outputs_keep_states_and_full_info() {
     for attribute in ["missing", "temperature"] {
         let mut raw = raw.clone();
         raw["to_state"]["attributes"]["temperature"] = json!("unknown");
-        assert!(!sample(Platform::NumericState, raw, attribute).iter().any(|o| matches!(o, Output::Data(PinId(5), _))));
+        assert!(sample(Platform::NumericState, raw, attribute).contains(&Output::Clear(PinId(5))));
     }
 }
 

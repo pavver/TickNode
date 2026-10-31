@@ -335,3 +335,6 @@ picker-empty = Nothing found
 picker-no-options = No list available yet (the plugin has not published one). You can type a value.
 picker-more = { $count } more - refine the search
 picker-use-typed = Use "{ $value }"
+
+# Implicit conversion on a data connection.
+wire-conversion = { $src } → { $dst }

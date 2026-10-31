@@ -470,6 +470,8 @@ pub enum NodeOutput {
     Execution(PinId),
     Data(PinId, DataValue),
     Variable(String, DataValue),
+    /// Remove the current value from a data output.
+    Clear(PinId),
 }
 
 

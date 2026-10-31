@@ -8,6 +8,16 @@ use ticknode_shared::{
     TypeRegistry, parse_input_value_property,
 };
 
+/// Connection presentation: solid for compatible pins, dashed for conversion, absent if invalid.
+pub fn wire_conversion(types: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<bool> {
+    match (src, dst) {
+        (PinType::Exec, PinType::Exec) => Some(false),
+        (PinType::Data(a), PinType::Data(b)) if types.compatible(a, b) => Some(false),
+        (PinType::Data(a), PinType::Data(b)) if types.convertible(a, b).is_some() => Some(true),
+        _ => None,
+    }
+}
+
 pub const DU: f64 = 4.0;
 pub const NODE_WIDTH: f64 = 60.0 * DU;
 /// Match is wider: each condition row holds an input, an operator, and an operand.
@@ -286,6 +296,18 @@ mod tests {
         assert!(color("p.evil").starts_with("hsl("), "an invalid color does not reach the CSS");
         assert_ne!(color("p.plain"), color("p.evil"));
         assert_eq!(type_color(&types, &DataType::Number), "var(--accent)");
+    }
+
+    #[test]
+    fn wire_conversion_matches_connection_rules() {
+        let reg = TypeRegistry::new();
+        let data = PinType::Data;
+        assert_eq!(wire_conversion(&reg, &data(DataType::String), &data(DataType::Number)), Some(true));
+        assert_eq!(wire_conversion(&reg, &data(DataType::Number), &data(DataType::Number)), Some(false));
+        assert_eq!(wire_conversion(&reg, &data(DataType::Any), &data(DataType::Number)), Some(false));
+        assert_eq!(wire_conversion(&reg, &data(DataType::Object), &data(DataType::Number)), None);
+        assert_eq!(wire_conversion(&reg, &PinType::Exec, &PinType::Exec), Some(false));
+        assert_eq!(wire_conversion(&reg, &PinType::Exec, &data(DataType::Number)), None);
     }
 
     #[test]

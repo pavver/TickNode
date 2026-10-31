@@ -214,6 +214,8 @@ interface types {
         exec(u32),
         /// New value on an output data pin.
         data(tuple<u32, value>),
+        /// Remove the current value from an output data pin.
+        clear(u32),
     }
 
     /// Graph node id: the (high, low) 64-bit halves of its UUID (WIT has no 128-bit integer).

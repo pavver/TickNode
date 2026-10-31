@@ -332,3 +332,6 @@ picker-empty = Нічого не знайдено
 picker-no-options = Списку поки немає (плагін його ще не надав). Можна ввести значення вручну.
 picker-more = Ще { $count } - уточніть пошук
 picker-use-typed = Використати "{ $value }"
+
+# Implicit conversion on a data connection.
+wire-conversion = { $src } → { $dst }

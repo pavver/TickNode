@@ -30,6 +30,13 @@ struct WireEnd {
     exec: bool,
 }
 
+#[derive(Clone, Copy)]
+struct PendingConnection(RwSignal<Option<WireEnd>>);
+
+fn connection_pin(ed: Editor, node: NodeId, pin: PinId, dir: PinDirection) -> Option<PinType> {
+    ed.node_tracked(node)?.instance.with(|i| pin_type(&i.definition, pin, dir).cloned())
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Drag {
     Idle,
@@ -176,6 +183,7 @@ pub fn Canvas() -> impl IntoView {
     let panning = RwSignal::new(false);
     let cursor = RwSignal::new((0.0, 0.0));
     let pending_wire = RwSignal::new(None::<WireEnd>);
+    provide_context(PendingConnection(pending_wire));
     let select_box = RwSignal::new(None::<SelectBox>);
     let pointers = StoredValue::new(HashMap::<i32, (f64, f64)>::new());
 
@@ -601,14 +609,25 @@ fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
             .and_then(|n| n.instance.with(|i| pin_type(&i.definition, conn.src_pin, PinDirection::Output).map(|t| ed.types.with(|types| pin_color(types, t)))))
             .unwrap_or_else(|| "var(--border-strong)".to_string())
     });
+    let conversion = Memo::new(move |_| {
+        let src = connection_pin(ed, conn.src_node, conn.src_pin, PinDirection::Output)?;
+        let dst = connection_pin(ed, conn.dst_node, conn.dst_pin, PinDirection::Input)?;
+        ed.types.with(|types| wire_conversion(types, &src, &dst)).filter(|converts| *converts)?;
+        match (src, dst) {
+            (PinType::Data(src), PinType::Data(dst)) => Some(t!("wire-conversion", src = ed.type_title(&src), dst = ed.type_title(&dst))),
+            _ => None,
+        }
+    });
     let selection = if exec { Selection::Exec(conn) } else { Selection::Data(conn) };
     let selected = Memo::new(move |_| ed.selection.with(|s| s.as_ref() == Some(&selection)));
     move || {
         path.get().map(|d| {
             view! {
                 <g>
+                    <title>{move || conversion.get().unwrap_or_default()}</title>
                     <path
                         class="wire"
+                        class:converting=move || conversion.get().is_some()
                         class:exec=exec
                         class:selected=selected
                         style=move || if exec || selected.get() { String::new() } else { format!("stroke:{}", color.get()) }
@@ -763,6 +782,15 @@ pub fn Pin(
         let required_note = if is_required { t!("pin-required-suffix") } else { String::new() };
         format!("{translated_pin}: {type_name}{required_note}")
     };
+    let pending = use_context::<PendingConnection>();
+    let target_type = pin.pin_type.clone();
+    let allowed_target = move || {
+        let from = pending?.0.get()?;
+        if from.dir == dir || from.node == node { return None; }
+        let other = connection_pin(ed, from.node, from.pin, from.dir)?;
+        let (src, dst) = if dir == PinDirection::Input { (&other, &target_type) } else { (&target_type, &other) };
+        ed.types.with(|types| wire_conversion(types, src, dst))
+    };
     let pin_name_label = pin.name;
     let pin_label = move || match label {
         Some(custom) => custom.get(),
@@ -774,10 +802,11 @@ pub fn Pin(
     view! {
         <div
             // Single-string class attribute: a dynamic `class` would overwrite separate `class:` bindings
-            class=move || match (is_input, missing()) {
-                (true, true) => "pin in missing",
-                (true, false) => "pin in",
-                (false, _) => "pin out",
+            class=move || {
+                let mut class = if is_input { "pin in" } else { "pin out" }.to_string();
+                if is_input && missing() { class.push_str(" missing"); }
+                if allowed_target().is_some() { class.push_str(" connectable"); }
+                class
             }
             title=pin_title
             data-pin=pin_id.0.to_string()

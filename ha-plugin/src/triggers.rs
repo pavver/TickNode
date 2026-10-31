@@ -8,7 +8,7 @@ use ha_core_client::{TriggerFired, triggers::*};
 use serde_json::Value;
 use ticknode_plugin_sdk::{Trigger as NodeTrigger, *};
 
-use crate::convert::{STATE_TYPE, json_to_value, missing_state, state_value};
+use crate::convert::{STATE_TYPE, json_to_value, state_value};
 use crate::{CATEGORY, text_property, try_with_hub, with_hub};
 
 pub const TRIGGERED: PinId = PinId(0);
@@ -74,12 +74,12 @@ impl Platform {
             Self::State => (
                 "State",
                 "Fires when an entity matches a state transition",
-                "Choose an entity and optionally an attribute, From and To values. Empty From/To fields impose no filter (attribute-only changes can fire too). For holds the matching state for a duration such as 90, 1h 30m or 00:05:00. From and To outputs contain ha.state values; an absent state has an empty state field.",
+                "Choose an entity and optionally an attribute, From and To values. Empty From/To fields impose no filter (attribute-only changes can fire too). For holds the matching state for a duration such as 90, 1h 30m or 00:05:00. From and To outputs contain ha.state values; an absent state clears the corresponding output.",
             ),
             Self::NumericState => (
                 "Numeric state",
                 "Fires when an entity crosses a numeric threshold",
-                "Choose an entity and Above and/or Below thresholds (exclusive). Each threshold is a number or a numeric entity id. Home Assistant fires when the value enters the range, rather than on every update inside it. Attribute selects a numeric attribute; Value template can transform the value in Home Assistant. For requires the range to hold for a duration. Value outputs the numeric To state or selected attribute; it does not evaluate Value template locally and is omitted when nonnumeric.",
+                "Choose an entity and Above and/or Below thresholds (exclusive). Each threshold is a number or a numeric entity id. Home Assistant fires when the value enters the range, rather than on every update inside it. Attribute selects a numeric attribute; Value template can transform the value in Home Assistant. For requires the range to hold for a duration. Value outputs the numeric To state or selected attribute; it does not evaluate Value template locally and is cleared when nonnumeric. Missing From/To states clear their corresponding outputs.",
             ),
             Self::Time => (
                 "Time",
@@ -99,7 +99,7 @@ impl Platform {
             Self::Zone => (
                 "Zone",
                 "Fires when a person or device enters or leaves a zone",
-                "Choose a person or device tracker, a zone, and Enter or Leave. Home Assistant detects the zone crossing. Entity, From and To describe the tracked entity; an absent state has an empty state field.",
+                "Choose a person or device tracker, a zone, and Enter or Leave. Home Assistant detects the zone crossing. Entity, From and To describe the tracked entity; an absent state clears the corresponding output.",
             ),
             Self::Event => (
                 "Event",
@@ -506,9 +506,9 @@ pub fn outputs(config: &TriggerConfig, fired: &TriggerFired) -> Vec<Output> {
             let entity = fired.entity_id().unwrap_or_default();
             let to = fired.to_state();
             let mut values = vec![
-                DataValue::from(entity),
-                fired.from_state().as_ref().map_or_else(|| missing_state(entity), state_value),
-                to.as_ref().map_or_else(|| missing_state(entity), state_value),
+                Some(DataValue::from(entity)),
+                fired.from_state().as_ref().map(state_value),
+                to.as_ref().map(state_value),
             ];
             if config.platform == Platform::NumericState {
                 let number = to
@@ -521,11 +521,14 @@ pub fn outputs(config: &TriggerConfig, fired: &TriggerFired) -> Vec<Output> {
                         }
                     })
                     .filter(|n| n.is_finite());
-                if let Some(number) = number {
-                    values.push(DataValue::from(number));
-                }
+                values.push(number.map(DataValue::from));
             }
-            values
+            outputs.extend(values.into_iter().enumerate().map(|(i, v)| {
+                let pin = PinId(i as u32 + 2);
+                v.map_or(Output::Clear(pin), |value| Output::Data(pin, value))
+            }));
+            outputs.push(Output::Exec(TRIGGERED));
+            return outputs;
         }
         Platform::Event => vec![object(&raw["event"]["data"]), string(&raw["event"]["event_type"])],
         Platform::Mqtt => vec![string(&raw["topic"]), string(&raw["payload"])],

@@ -11,7 +11,7 @@ use ha_core_client::{
 };
 use ticknode_plugin_sdk::{Emission, NodeId, Output, PinId, PropertyOption, WsEvent, WsId};
 
-use crate::convert::{missing_state, state_value};
+use crate::convert::state_value;
 use crate::entities::option_sources;
 use crate::triggers::{TriggerConfig, outputs as trigger_outputs};
 use crate::queue::{ChangeQueue, Mode};
@@ -145,7 +145,7 @@ impl<T, C> Watch<T, C> {
 }
 
 enum Call {
-    Get { entity: String, reply: Reply<State> },
+    Get { reply: Reply<State> },
     Service { reply: Reply<()> },
     Action { reply: Reply<Box<serde_json::value::RawValue>> },
 }
@@ -187,16 +187,16 @@ pub struct Hub {
     entities: HashMap<NodeId, Option<Reply<State>>>,
 }
 
-/// `Output`s of a `ha/state_changed` pulse. A missing state is sent as an empty `ha.state` (see [`missing_state`]).
+/// Outputs of a `ha/state_changed` pulse. Missing states clear their output pins.
 pub fn change_outputs(change: &StateChange) -> Vec<Output> {
-    let value = |state: &Option<State>| state.as_ref().map_or_else(|| missing_state(&change.entity_id), state_value);
-    vec![Output::Data(NEW, value(&change.new_state)), Output::Data(OLD, value(&change.old_state)), Output::Exec(CHANGED)]
+    let value = |pin, state: &Option<State>| state.as_ref().map_or(Output::Clear(pin), |s| Output::Data(pin, state_value(s)));
+    vec![value(NEW, &change.new_state), value(OLD, &change.old_state), Output::Exec(CHANGED)]
 }
 
-pub fn get_state_outputs(entity: &str, result: Result<State, String>) -> Vec<Output> {
+pub fn get_state_outputs(result: Result<State, String>) -> Vec<Output> {
     match result {
         Ok(state) => vec![Output::Data(GET_STATE, state_value(&state)), Output::Data(GET_ERROR, "".into()), Output::Exec(GET_DONE)],
-        Err(error) => vec![Output::Data(GET_STATE, missing_state(entity)), Output::Data(GET_ERROR, error.into()), Output::Exec(GET_FAILED)],
+        Err(error) => vec![Output::Clear(GET_STATE), Output::Data(GET_ERROR, error.into()), Output::Exec(GET_FAILED)],
     }
 }
 
@@ -425,14 +425,14 @@ impl Hub {
     /// while disconnected), otherwise the node gets its outputs from a later emission.
     pub fn get_state(&mut self, node: NodeId, entity: &str, now: Instant, env: &mut impl Env) -> Option<Vec<Output>> {
         let Some(link) = &mut self.link else {
-            return Some(get_state_outputs(entity, Err(NOT_CONFIGURED.into())));
+            return Some(get_state_outputs(Err(NOT_CONFIGURED.into())));
         };
         let mut reply = link.session.get_state(now, entity);
         let first = reply.poll();
         let immediate = match first {
-            Some(result) => Some(get_state_outputs(entity, result.map_err(|e| e.to_string()))),
+            Some(result) => Some(get_state_outputs(result.map_err(|e| e.to_string()))),
             None => {
-                self.requests.push(InFlight { node, call: Call::Get { entity: entity.to_string(), reply } });
+                self.requests.push(InFlight { node, call: Call::Get { reply } });
                 None
             }
         };
@@ -667,7 +667,7 @@ impl Hub {
                     // A newer event wins over an outstanding baseline request.
                     *reply = None;
                     watch.snapshot_due = false;
-                    emissions.push(Emission::new(*node, crate::entity::outputs(&watch.config, change.new_state.as_ref())));
+                    emissions.push(Emission::new(*node, crate::entity::outputs(change.new_state.as_ref())));
                 } else {
                     if watch.snapshot_due {
                         watch.snapshot_due = false;
@@ -675,7 +675,7 @@ impl Hub {
                     }
                     if let Some(pending) = reply && let Some(result) = pending.poll() {
                         match result {
-                            Ok(state) => emissions.push(Emission::new(*node, crate::entity::outputs(&watch.config, Some(&state)))),
+                            Ok(state) => emissions.push(Emission::new(*node, crate::entity::outputs(Some(&state)))),
                             Err(e) => env.warn(&format!("Could not read entity {}: {e}", watch.config)),
                         }
                         *reply = None;
@@ -694,7 +694,7 @@ impl Hub {
         let requests = std::mem::take(&mut self.requests);
         for mut request in requests {
             let outputs = match &mut request.call {
-                Call::Get { entity, reply } => reply.poll().map(|r| get_state_outputs(entity, r.map_err(|e| e.to_string()))),
+                Call::Get { reply } => reply.poll().map(|r| get_state_outputs(r.map_err(|e| e.to_string()))),
                 Call::Service { reply } => reply.poll().map(|r| service_outputs(r.map_err(|e| e.to_string()))),
                 Call::Action { reply } => reply.poll().map(action_result),
             };
@@ -1012,12 +1012,33 @@ mod tests {
     }
 
     #[test]
+    fn absent_states_clear_change_and_trigger_outputs() {
+        let change = StateChange { entity_id: "light.a".into(), old_state: None, new_state: None };
+        let out = change_outputs(&change);
+        assert!(out.contains(&Output::Clear(OLD)) && out.contains(&Output::Clear(NEW)));
+        for platform in [crate::triggers::Platform::State, crate::triggers::Platform::NumericState, crate::triggers::Platform::Zone] {
+            let properties = match platform {
+                crate::triggers::Platform::NumericState => vec![("entity_id", "sensor.a"), ("above", "1")],
+                crate::triggers::Platform::Zone => vec![("entity_id", "person.a"), ("zone", "zone.home")],
+                _ => vec![("entity_id", "light.a")],
+            };
+            let config = trigger_config(platform, &properties);
+            let fired = TriggerFired { trigger: json!({"entity_id":"light.a", "from_state":null, "to_state":null}), context: None };
+            let out = trigger_outputs(&config, &fired);
+            assert!(out.contains(&Output::Clear(PinId(3))) && out.contains(&Output::Clear(PinId(4))));
+            if platform == crate::triggers::Platform::NumericState {
+                assert!(out.contains(&Output::Clear(PinId(5))));
+            }
+        }
+    }
+
+    #[test]
     fn requests_fail_promptly_when_not_connected() {
         let mut rig = Rig::new();
         // Configured but the socket is not up yet
         let outputs = rig.hub.get_state(node(9), "light.a", rig.now, &mut rig.env).expect("an immediate answer");
         assert!(has_exec(&outputs, GET_FAILED));
-        assert_eq!(state_of(data(&outputs, GET_STATE)), "");
+        assert!(outputs.contains(&Output::Clear(GET_STATE)));
         let outputs = rig.hub.call_service(node(9), "light", "turn_on", "", Value::Null, rig.now, &mut rig.env).expect("an immediate answer");
         assert!(has_exec(&outputs, CALL_FAILED));
         assert!(matches!(data(&outputs, CALL_ERROR), DataValue::String(e) if e.contains("not connected")));
@@ -1436,7 +1457,8 @@ mod tests {
         assert_eq!(emissions.len(),1);
         assert_eq!(data(&emissions[0].outputs,PinId(0)), &DataValue::from("off"));
         assert_eq!(data(&emissions[0].outputs,PinId(2)), &DataValue::Bool(false));
-        assert!(emissions[0].outputs.iter().all(|o| matches!(o,Output::Data(..))));
+        assert!(emissions[0].outputs.iter().all(|o| matches!(o, Output::Data(..) | Output::Clear(..))));
+        assert!(emissions[0].outputs.contains(&Output::Clear(PinId(1))));
         let change = rig.change("light.a","off","on");
         let emissions = rig.recv(vec![change]);
         assert_eq!(data(&emissions[0].outputs,PinId(2)), &DataValue::Bool(true));

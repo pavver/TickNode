@@ -159,6 +159,8 @@ pub enum Output {
     Exec(PinId),
     /// Value on an output data pin.
     Data(PinId, DataValue),
+    /// Remove the current value from an output data pin.
+    Clear(PinId),
 }
 
 /// Handle of a plugin-owned WebSocket connection (see [`host::ws_connect`]). Void after the plugin
@@ -537,6 +539,7 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
             outputs: e.outputs.into_iter().map(|o| match o {
                 Output::Exec(pin) => wit::Output::Exec(pin.0),
                 Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
+                Output::Clear(pin) => wit::Output::Clear(pin.0),
             }).collect(),
         }).collect()
     }
@@ -575,6 +578,7 @@ impl wit_nodes::GuestNode for NodeHandle {
         self.0.borrow_mut().execute(trigger, &inputs).into_iter().map(|o| match o {
             Output::Exec(pin) => wit::Output::Exec(pin.0),
             Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
+            Output::Clear(pin) => wit::Output::Clear(pin.0),
         }).collect()
     }
 

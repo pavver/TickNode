@@ -55,6 +55,8 @@ Time is divided into ticks, 100 ms by default (`TICKNODE_TICK_MS`). One tick:
 - **Pure nodes** have no exec pins. They are evaluated on demand when another node pulls their outputs, and the result is cached for the rest of the tick.
 - **Event sources** start chains by themselves (Clock, plugin triggers).
 
+`NodeOutput::Clear(pin)` removes a data output value, invalidates pure results, and leaves that pin out of execution traces. Omitting an output keeps its previous value. Connected inputs without a source value receive no value; required inputs wait silently.
+
 Global variables (`variable/set`, `variable/get`) share state between branches of the graph. Plugins cannot touch them directly, only through pins.
 
 ## 2. Data types
@@ -72,6 +74,8 @@ Global variables (`variable/set`, `variable/get`) share state between branches o
 | `object` | untyped set of named fields |
 | `any` | accepts everything; operators adapt to the value |
 | **named types** | declared by plugins, see below |
+
+Connections accept exact compatibility or a shared `TypeRegistry::convertible` rule: text ↔ number/boolean/time/date-time/duration/colour, number ↔ boolean, and text → enum (only stored member values). Boolean text accepts common state pairs such as on/off, yes/no, open/closed and home/not_home; unknown text produces no value. During input pulling, the engine converts each connection value without changing the source cache. Failed conversions leave the input without a value; required inputs block execution and log once until recovery. Lists convert element by element; any invalid element makes the whole input unavailable. Structures are never unpacked implicitly. Converting wires are dashed and show localized source/destination types; the editor uses the same shared rules.
 
 ### Plugin-defined types
 

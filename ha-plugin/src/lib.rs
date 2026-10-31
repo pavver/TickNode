@@ -3,15 +3,17 @@
 //! One WebSocket connection per plugin, driven from [`Plugin::tick`] by the sans-IO `Session` of
 //! `ha-core-client` (see [`hub`]). Nodes are thin: `ha/state_changed` is an event source fed by emissions,
 //! `ha/entity` exposes live data, `ha/action` builds a typed action form, `ha/trigger_*` expose automation
-//! triggers, and `ha/get_state` and `ha/call_service` start a request
-//! whose answer arrives in a later tick, also as an emission.
+//! triggers, and `ha/condition_*` gate execution using cached states (or async Jinja). `ha/get_state`
+//! and `ha/call_service` start a request whose answer arrives in a later tick, also as an emission.
 
 mod actions;
+mod conditions;
 mod convert;
 mod entities;
 mod entity;
 mod hub;
 mod icons;
+mod live;
 mod queue;
 mod triggers;
 
@@ -285,6 +287,8 @@ impl Plugin for HomeAssistant {
         "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
         "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
         "ha/trigger_conversation", "ha/trigger_template",
+        "ha/condition_state", "ha/condition_numeric_state", "ha/condition_time",
+        "ha/condition_sun", "ha/condition_zone", "ha/condition_template",
     ];
     const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
 
@@ -325,8 +329,12 @@ impl Plugin for HomeAssistant {
             "ha/get_state" => Box::new(GetState { node }),
             "ha/call_service" => Box::new(CallService { node }),
             _ => {
-                let platform = triggers::PLATFORMS.iter().find(|p| p.type_name() == type_name)?;
-                Box::new(triggers::TriggerNode::new(*platform, node))
+                if let Some(kind) = conditions::KINDS.iter().find(|k| k.type_name() == type_name) {
+                    Box::new(conditions::ConditionNode::new(*kind, node))
+                } else {
+                    let platform = triggers::PLATFORMS.iter().find(|p| p.type_name() == type_name)?;
+                    Box::new(triggers::TriggerNode::new(*platform, node))
+                }
             }
         })
     }
@@ -361,7 +369,7 @@ mod tests {
     use ticknode_shared::fluent_slug;
 
     #[test]
-    fn action_and_entity_static_texts_have_ukrainian_translations() {
+    fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
         let ftl = HomeAssistant::TRANSLATIONS[0].1;
         let key_part = |s: &str| {
             if s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
@@ -370,13 +378,16 @@ mod tests {
                 fluent_slug(s)
             }
         };
-        for kind in ["ha/action", "ha/entity"] {
+        for kind in ["ha/action", "ha/entity"].into_iter().chain(conditions::KINDS.iter().map(|k| k.type_name())) {
             let node = HomeAssistant::create(kind, NodeId(ticknode_shared::Uuid::nil())).unwrap();
             let def = node.definition();
             let prefix = format!("node-{}", fluent_slug(kind));
             let mut keys: Vec<_> = ["title", "description", "help"].map(|suffix|format!("{prefix}-{suffix}")).into();
             keys.extend(def.pins.iter().map(|p|format!("{prefix}-pin-{}",key_part(&p.name))));
             for property in def.properties {
+                if let PropertyKind::Select(options) = &property.kind {
+                    keys.extend(options.iter().map(|(value, _)| format!("{prefix}-prop-{}-option-{}", key_part(&property.name), fluent_slug(value))));
+                }
                 for suffix in ["title", "description"] {
                     keys.push(format!("{prefix}-prop-{}-{suffix}", key_part(&property.name)));
                 }

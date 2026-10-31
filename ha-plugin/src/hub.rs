@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use ha_core_client::{
     Action, ClientConfig, ConnectionState, PendingSubscription, Reply, Session, Source, State, StateChange, Target,
-    Update, SubscriptionStatus, TriggerFired,
+    Update, SubscriptionStatus, TriggerFired, TemplateUpdate,
 };
 use ticknode_plugin_sdk::{Emission, NodeId, Output, PinId, PropertyOption, WsEvent, WsId};
 
@@ -155,8 +155,18 @@ struct InFlight {
     call: Call,
 }
 
+struct TemplateCall {
+    node: NodeId,
+    serial: u64,
+    sub: Sub<TemplateUpdate<serde_json::Value>>,
+    deadline: Instant,
+}
+
 #[derive(Default)]
 pub struct Hub {
+    pub live: crate::live::Live,
+    conditions: HashMap<NodeId, u64>,
+    templates: Vec<TemplateCall>,
     link: Option<Link>,
     watches: HashMap<NodeId, Watch<StateChange, String>>,
     triggers: HashMap<NodeId, Watch<TriggerFired, Option<TriggerConfig>>>,
@@ -226,6 +236,7 @@ impl Hub {
             watch.errors.clear();
         }
         self.logged = None;
+        self.live.reset();
         self.entities_reply = None;
         self.entities_due = None;
         self.services_due = None;
@@ -344,6 +355,72 @@ impl Hub {
 
     // --- Requests ---
 
+    pub fn add_condition(&mut self, node: NodeId) -> u64 {
+        self.next_serial += 1;
+        self.conditions.insert(node, self.next_serial);
+        self.next_serial
+    }
+
+    pub fn cancel_templates(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
+        for call in std::mem::take(&mut self.templates) {
+            if call.node == node && call.serial == serial { self.cancel(call.sub, now); }
+            else { self.templates.push(call); }
+        }
+        self.flush(now, env);
+    }
+
+    pub fn remove_condition(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
+        self.cancel_templates(node, serial, now, env);
+        if self.conditions.get(&node) == Some(&serial) { self.conditions.remove(&node); }
+    }
+
+    pub fn render_condition(&mut self, node: NodeId, serial: u64, template: &str, now: Instant, env: &mut impl Env) -> Vec<Output> {
+        if template.is_empty() || self.templates.len() >= 64 || self.link.as_ref().is_none_or(|l| !l.session.is_connected()) {
+            env.warn("Template condition cannot render: empty template, disconnected, or too many pending requests; returning No");
+            return crate::conditions::outputs(false);
+        }
+        let sub = self.link.as_mut().unwrap().session.subscribe(now, Source::template(template));
+        self.templates.push(TemplateCall { node, serial, sub: Sub::Pending(sub), deadline: now + Duration::from_secs(30) });
+        self.flush(now, env);
+        Vec::new()
+    }
+
+    fn collect_templates(&mut self, now: Instant, env: &mut impl Env) -> Vec<Emission> {
+        let mut emissions = Vec::new();
+        for mut call in std::mem::take(&mut self.templates) {
+            if self.conditions.get(&call.node) != Some(&call.serial) { self.cancel(call.sub, now); continue; }
+            let mut result: Option<Result<bool, String>> = None;
+            if self.link.as_ref().is_none_or(|l| !l.session.is_connected()) {
+                result = Some(Err("Home Assistant disconnected".into()));
+            } else if now >= call.deadline { result = Some(Err("Template render timed out".into())); }
+            if result.is_none() && let Sub::Pending(p) = &mut call.sub && let Some(reply) = p.poll() {
+                match reply {
+                    Ok(events) => call.sub = Sub::Active(events),
+                    Err(e) => result = Some(Err(e.to_string())),
+                }
+            }
+            if result.is_none() && let Sub::Active(events) = &mut call.sub {
+                for update in events.drain() {
+                    match update {
+                        Update::Event(TemplateUpdate::Rendered(value)) => { result = Some(Ok(crate::conditions::template_bool(&value))); break; }
+                        Update::Event(error) => { result = Some(Err(format!("Template render failed: {error:?}"))); break; }
+                        Update::Status { status: SubscriptionStatus::Interrupted | SubscriptionStatus::Lagged { .. }, .. } => {
+                            result = Some(Err("Template subscription was interrupted or lost events".into())); break;
+                        }
+                        _ => {}
+                    }
+                }
+                if result.is_none() && events.is_finished() { result = Some(Err("Template subscription ended".into())); }
+            }
+            if let Some(result) = result {
+                let value = match result { Ok(value) => value, Err(e) => { env.warn(&format!("Template condition {}: {e}; returning No", call.node.0)); false } };
+                emissions.push(Emission::new(call.node, crate::conditions::outputs(value)));
+                self.cancel(call.sub, now);
+            } else { self.templates.push(call); }
+        }
+        emissions
+    }
+
     /// Starts reading a state. `Some(outputs)` when the result is already known (for example a failure
     /// while disconnected), otherwise the node gets its outputs from a later emission.
     pub fn get_state(&mut self, node: NodeId, entity: &str, now: Instant, env: &mut impl Env) -> Option<Vec<Output>> {
@@ -437,7 +514,12 @@ impl Hub {
             Self::pump_actions(link, now, env);
         }
         self.ensure_subscriptions(now);
-        let emissions = self.collect(now, env);
+        if let Some(link) = &mut self.link && self.live.tick(now, &mut link.session, env) {
+            self.entities_reply = None;
+            self.entities_due = None;
+        }
+        let mut emissions = self.collect(now, env);
+        emissions.extend(self.collect_templates(now, env));
         self.refresh_entities(now, env);
         self.refresh_services(now, env);
         self.flush(now, env);
@@ -449,7 +531,7 @@ impl Hub {
     /// every reconnect) and then every [`ENTITIES_REFRESH`]; publishes the answer through [`Env::set_options`].
     fn refresh_entities(&mut self, now: Instant, env: &mut impl Env) {
         let Some(link) = &self.link else { return };
-        if link.session.connection_state() != ConnectionState::Connected {
+        if link.session.connection_state() != ConnectionState::Connected || !self.live.active() {
             // The answer to a request made on a lost connection never comes; ask again after the reconnect
             self.entities_reply = None;
             self.entities_due = None;
@@ -459,6 +541,7 @@ impl Hub {
             match reply.poll() {
                 None => return,
                 Some(Ok(states)) => {
+                    self.live.snapshot(&states);
                     for (source, options) in option_sources(&states) {
                         env.set_options(source, &options);
                         if source == "entities" { self.entity_options = options; }
@@ -474,6 +557,7 @@ impl Hub {
             self.entities_reply = None;
         }
         if self.entities_due.is_none_or(|due| now >= due) {
+            self.live.begin_snapshot();
             self.entities_reply = Some(self.link.as_mut().expect("connected").session.get_states(now));
         }
     }
@@ -738,11 +822,13 @@ mod tests {
         get_states_requests: usize,
         services: Value,
         get_services_requests: usize,
+        cache_id: Option<u64>,
+        render_ids: Vec<u64>,
     }
 
     impl Rig {
         fn new() -> Self {
-            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, trigger_error: None, trigger_requests: Vec::new(), unsubscribed: Vec::new(), calls: Vec::new(), states: Vec::new(), get_states_requests: 0, services: json!({}), get_services_requests: 0 };
+            let mut rig = Rig { hub: Hub::default(), env: Fake::default(), now: Instant::now(), ws: 0, triggers: HashMap::new(), service_error: None, trigger_error: None, trigger_requests: Vec::new(), unsubscribed: Vec::new(), calls: Vec::new(), states: Vec::new(), get_states_requests: 0, services: json!({}), get_services_requests: 0, cache_id: None, render_ids: Vec::new() };
             rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
             rig
         }
@@ -790,6 +876,17 @@ mod tests {
                                 None => ok(Value::Null),
                                 Some(message) => json!({"id":id,"type":"result","success":false,"error":{"code":"invalid_format","message":message}}),
                             });
+                        }
+                        "subscribe_events" if request["event_type"] == "state_changed" => {
+                            self.cache_id = Some(id);
+                            replies.push(ok(Value::Null));
+                        }
+                        "get_config" => replies.push(ok(json!({"time_zone":"Europe/Kyiv"}))),
+                        "render_template" => {
+                            replies.push(ok(Value::Null));
+                            if request["template"].as_str().unwrap().contains("utcoffset") {
+                                replies.push(json!({"id":id,"type":"event","event":{"result":7200,"listeners":{}}}));
+                            } else { self.render_ids.push(id); }
                         }
                         "unsubscribe_events" => {
                             self.unsubscribed.push(request["subscription"].as_u64().unwrap());
@@ -1351,6 +1448,75 @@ mod tests {
         assert!(emissions.iter().any(|e| e.node == id && e.outputs.iter().any(|o| matches!(o,Output::Data(p,v) if p.0 == 0 && *v == DataValue::from("off")))));
         rig.hub.remove_watch(id,serial,rig.now,&mut rig.env);
         assert!(!rig.hub.entities.contains_key(&id));
+    }
+
+    #[test]
+    fn live_cache_applies_pushes_removals_and_invalidates_on_disconnect() {
+        let mut rig = Rig::new();
+        rig.states = vec![ha_state("light.test", "off")];
+        rig.connect();
+        assert_eq!(rig.hub.live.state("light.test").unwrap().state, "off");
+        assert_eq!(rig.hub.live.offset().unwrap().local_minus_utc(), 7200);
+        let id = rig.cache_id.unwrap();
+        let event = |state: Value| json!({"id":id,"type":"event","event":{"event_type":"state_changed",
+            "data":{"entity_id":"light.test","old_state":ha_state("light.test","off"),"new_state":state},
+            "origin":"LOCAL","time_fired":"2026-10-30T10:00:00Z","context":{"id":"t"}}});
+        rig.recv(vec![event(ha_state("light.test","on"))]);
+        assert_eq!(rig.hub.live.state("light.test").unwrap().state, "on");
+        // An event racing a get_states response wins over the older snapshot.
+        rig.hub.live.begin_snapshot();
+        rig.recv(vec![event(ha_state("light.test","newer"))]);
+        rig.hub.live.snapshot(&[serde_json::from_value(ha_state("light.test","old")).unwrap()]);
+        assert_eq!(rig.hub.live.state("light.test").unwrap().state, "newer");
+        rig.hub.live.begin_snapshot();
+        rig.recv(vec![event(Value::Null)]);
+        rig.hub.live.snapshot(&[serde_json::from_value(ha_state("light.test","old")).unwrap()]);
+        assert!(rig.hub.live.state("light.test").is_err(), "removal must win over a stale snapshot");
+        rig.tick(vec![WsEvent::Closed(rig.ws, "gone".into())]);
+        assert!(rig.hub.live.state("light.test").is_err());
+        assert!(rig.hub.live.offset().is_err());
+    }
+
+    #[test]
+    fn template_condition_first_render_errors_timeout_cancellation_and_disconnect() {
+        let mut rig = Rig::new();
+        rig.connect();
+        let node = node(700);
+        let serial = rig.hub.add_condition(node);
+        let start = |rig: &mut Rig| {
+            assert!(rig.hub.render_condition(node, serial, "{{ test }}", rig.now, &mut rig.env).is_empty());
+            rig.serve();
+            *rig.render_ids.last().unwrap()
+        };
+        let id = start(&mut rig);
+        let event = |id, result| json!({"id":id,"type":"event","event":{"result":result,"listeners":{}}});
+        let emissions = rig.recv(vec![event(id, json!(true)),event(id, json!(false))]);
+        assert_eq!(emissions.len(), 1);
+        assert!(has_exec(&emissions[0].outputs, crate::conditions::YES));
+        assert_eq!(data(&emissions[0].outputs, crate::conditions::RESULT), &DataValue::Bool(true));
+        rig.serve();
+        assert!(rig.unsubscribed.contains(&id));
+        let id = start(&mut rig);
+        let emissions = rig.recv(vec![json!({"id":id,"type":"event","event":{"error":"render failed","level":"ERROR"}})]);
+        assert_eq!(emissions.len(),1);
+        assert!(has_exec(&emissions[0].outputs, crate::conditions::NO));
+        let id = start(&mut rig);
+        rig.now += Duration::from_secs(31);
+        let emissions = rig.tick(vec![]);
+        assert_eq!(emissions.len(),1);
+        assert!(has_exec(&emissions[0].outputs, crate::conditions::NO));
+        rig.serve();
+        assert!(rig.unsubscribed.contains(&id));
+        let id = start(&mut rig);
+        rig.hub.cancel_templates(node,serial,rig.now,&mut rig.env);
+        assert!(rig.hub.templates.is_empty());
+        assert!(rig.recv(vec![event(id,json!(true))]).is_empty());
+        rig.serve();
+        assert!(rig.unsubscribed.contains(&id));
+        start(&mut rig);
+        let emissions = rig.tick(vec![WsEvent::Closed(rig.ws,"lost".into())]);
+        assert_eq!(emissions.len(),1);
+        assert!(has_exec(&emissions[0].outputs, crate::conditions::NO));
     }
 
 }

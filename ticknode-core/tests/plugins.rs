@@ -1271,6 +1271,17 @@ impl FakeHa {
                                         replies = vec![json!({"id":id,"type":"result","success":false,"error":{"code":"invalid_format","message":"Trigger rejected by fake HA"}})];
                                     }
                                 }
+                                "subscribe_events" if request["event_type"] == "state_changed" => {
+                                    subs.lock().unwrap().insert("__cache".into(), id.as_u64().unwrap());
+                                }
+                                "get_config" => {
+                                    replies = vec![json!({"id":id,"type":"result","success":true,"result":{"time_zone":"Europe/Kyiv"}})];
+                                }
+                                "render_template" => {
+                                    let value = if request["template"].as_str().unwrap().contains("utcoffset") { json!(7200) }
+                                        else if request["template"] == "{{ true }}" { json!(true) } else { json!(false) };
+                                    replies.push(json!({"id":id,"type":"event","event":{"result":value,"listeners":{}}}));
+                                }
                                 "subscribe_entities" => {
                                     let entity = request["entity_ids"][0].as_str().unwrap();
                                     let state = states.lock().unwrap().get(entity).cloned().unwrap_or_else(|| "off".into());
@@ -1326,7 +1337,10 @@ impl FakeHa {
             "context": {"id": "01X", "parent_id": null, "user_id": null}
         });
         self.states.lock().unwrap().insert(entity.to_string(), to.to_string());
-        let id = self.subs.lock().unwrap()[entity];
+        if let Some(id) = self.subs.lock().unwrap().get("__cache").copied() {
+            let _ = self.push.send(serde_json::json!({"id":id,"type":"event","event":{"event_type":"state_changed","data":{"entity_id":entity,"old_state":state(from),"new_state":state(to)},"origin":"LOCAL","time_fired":"2026-10-30T10:00:00Z","context":{"id":"cache"}}}).to_string());
+        }
+        let Some(id) = self.subs.lock().unwrap().get(entity).copied() else { return };
         let event = serde_json::json!({"id": id, "type": "event", "event": {"variables": {"trigger": {
             "id": "0", "idx": "0", "alias": null, "platform": "state", "entity_id": entity,
             "from_state": state(from), "to_state": state(to), "for": null, "attribute": null,
@@ -1386,6 +1400,8 @@ fn ha_plugin_declares_its_nodes_and_type() {
         "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
         "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
         "ha/trigger_conversation", "ha/trigger_template",
+        "ha/condition_state", "ha/condition_numeric_state", "ha/condition_time",
+        "ha/condition_sun", "ha/condition_zone", "ha/condition_template",
     ] {
         let definition = engine.registry.get_definition(node).unwrap();
         assert_eq!(definition.category, "Home Assistant");
@@ -1925,4 +1941,92 @@ fn ha_plugin_action_snapshot_restores_offline_through_wasm() {
     restored.tick();
     assert!(matches!(output(&restored, action, u32::MAX - 1), Some(DataValue::String(e)) if e.contains("not configured")));
     assert!(restored.executed.iter().any(|t|t.node_id == action && t.fired.contains(&PinId(u32::MAX - 2))));
+}
+
+fn condition_test_state(entity: &str, state: &str) -> serde_json::Value {
+    serde_json::json!({"entity_id":entity,"state":state,"attributes":{},"last_changed":"2026-10-30T10:00:00Z","last_updated":"2026-10-30T10:00:00Z"})
+}
+
+#[test]
+fn ha_plugin_state_condition_routes_using_the_live_cache() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    *ha.entity_list.lock().unwrap() = vec![condition_test_state("light.kitchen", "off")];
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let gate = NodeId::generate();
+    engine.create_node(gate, "ha/condition_state", &[("entity_id".into(), "light.kitchen".into()), ("state".into(), "on".into())]).unwrap();
+    let yes = sink(&mut engine, gate, 1);
+    let no = sink(&mut engine, gate, 2);
+    let entity = NodeId::generate();
+    engine.create_node(entity, "ha/entity", &[("entity_id".into(), "light.kitchen".into())]).unwrap();
+    run_until(&mut engine, |e| e.property_options().iter().any(|s| s.source == "entities" && !s.options.is_empty()));
+    engine.trigger_node(gate, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(false)));
+    engine.tick();
+    assert!(engine.executed.iter().any(|t| t.node_id == no));
+    assert!(!engine.executed.iter().any(|t| t.node_id == yes));
+    ha.change("light.kitchen", "off", "on");
+    run_until(&mut engine, |e| output(e, entity, 2) == Some(DataValue::Bool(true)));
+    engine.trigger_node(gate, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(true)));
+    engine.tick();
+    assert!(engine.executed.iter().any(|t| t.node_id == yes));
+    assert!(!engine.executed.iter().any(|t| t.node_id == no));
+    // Unknown entities fail closed and log only once while the situation remains unchanged.
+    engine.set_node_property(gate, "entity_id", "light.missing".into()).unwrap();
+    for expected in [1, 0] {
+        engine.host_state.logs.clear();
+        engine.trigger_node(gate, PinId(0)); engine.tick();
+        assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(false)));
+        assert_eq!(engine.host_state.logs.iter().filter(|(_, message)| message.contains("returning No")).count(), expected);
+    }
+}
+
+#[test]
+fn ha_plugin_numeric_condition_uses_a_live_entity_bound() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    *ha.entity_list.lock().unwrap() = vec![condition_test_state("sensor.temp", "21"), condition_test_state("input_number.bound", "20")];
+    ha.states.lock().unwrap().insert("input_number.bound".into(), "20".into());
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let gate = NodeId::generate();
+    engine.create_node(gate, "ha/condition_numeric_state", &[("entity_id".into(), "sensor.temp".into()), ("above".into(), "input_number.bound".into()), ("below".into(), "22".into())]).unwrap();
+    let yes = sink(&mut engine, gate, 1);
+    let no = sink(&mut engine, gate, 2);
+    let entity = NodeId::generate();
+    engine.create_node(entity, "ha/entity", &[("entity_id".into(), "input_number.bound".into())]).unwrap();
+    run_until(&mut engine, |e| e.property_options().iter().any(|s| s.source == "entities" && !s.options.is_empty()));
+    engine.trigger_node(gate, PinId(0));
+    count_executions(&mut engine, yes, 0, 1);
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(true)));
+    ha.change("input_number.bound", "20", "21");
+    run_until(&mut engine, |e| output(e, entity, 1) == Some(DataValue::from(21.0)));
+    engine.trigger_node(gate, PinId(0));
+    count_executions(&mut engine, no, 0, 1);
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(false)));
+}
+
+#[test]
+fn ha_plugin_template_condition_completes_asynchronously_and_unsubscribes() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let ha = FakeHa::start();
+    let Some(mut engine) = ha_engine(&ha, HA_TOKEN, &runtime) else { return };
+    let gate = NodeId::generate();
+    engine.create_node(gate, "ha/condition_template", &[("value_template".into(), "{{ true }}".into())]).unwrap();
+    let yes = sink(&mut engine, gate, 1);
+    let no = sink(&mut engine, gate, 2);
+    run_until(&mut engine, |_| ha.subs.lock().unwrap().contains_key("__cache"));
+    let before = ha.unsubscribed.load(Ordering::SeqCst);
+    engine.trigger_node(gate, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, gate, 3), None, "rendering is asynchronous");
+    count_executions(&mut engine, yes, 0, 1);
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(true)));
+    run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) > before);
+    engine.set_node_property(gate, "value_template", "{{ false }}".into()).unwrap();
+    engine.trigger_node(gate, PinId(0));
+    count_executions(&mut engine, no, 0, 1);
+    assert_eq!(output(&engine, gate, 3), Some(DataValue::Bool(false)));
 }

@@ -1,0 +1,93 @@
+//! Node frame, header and body.
+
+use leptos::prelude::*;
+use ticknode_shared::*;
+
+use crate::categories::{category_color, category_label};
+use crate::geometry::*;
+use crate::i18n::{self, t};
+use crate::inline::NodeProps;
+use crate::match_editor::MatchBody;
+use crate::state::{EXEC_HIGHLIGHT_MS, use_editor};
+use crate::ui::{Icon, icons};
+use super::pins::Pin;
+
+/// Pin used to trigger a node manually: first exec input; for event sources (Clock, button),
+/// their exec output.
+pub fn trigger_pin(def: &NodeDefinition) -> Option<PinId> {
+    let exec = |dir| def.pins.iter().find(|p| p.direction == dir && p.pin_type == PinType::Exec).map(|p| p.id);
+    exec(PinDirection::Input).or_else(|| exec(PinDirection::Output))
+}
+
+#[component]
+pub(super) fn NodeView(id: NodeId) -> impl IntoView {
+    let ed = use_editor();
+    let Some(node) = ed.nodes.with_untracked(|n| n.get(&id).copied()) else {
+        return ().into_any();
+    };
+    let def = Memo::new(move |_| node.instance.with(|i| i.definition.clone()));
+    let layout = Memo::new(move |_| node.instance.with(NodeLayout::of));
+    let is_match = move || def.with(|d| d.type_name == "match");
+    let style = move || {
+        let p = node.pos.get();
+        def.with(|d| format!(
+            "left:{}px;top:{}px;width:{}px;height:{}px;--cat-color:{}",
+            p.x, p.y, layout.with(|l| l.width), layout.with(|l| l.height), category_color(&d.category)
+        ))
+    };
+    let pins_style = move || format!("top:{}px", layout.with(|l| l.pins_top));
+    let pin_list = move |dir: PinDirection| {
+        def.with(|d| pins(d, dir).cloned().collect::<Vec<_>>())
+            .into_iter()
+            .map(|p| view! { <Pin node=id pin=p dir=dir /> })
+            .collect_view()
+    };
+    // Stub node: its plugin is unavailable — the node is dimmed and properties are read-only
+    let unavailable = Memo::new(move |_| node.instance.with(|i| i.unavailable.clone()));
+    let trigger = Memo::new(move |_| if unavailable.with(Option::is_some) { None } else { def.with(super::trigger_pin) });
+    view! {
+        <div
+            class="node"
+            class:unavailable=move || unavailable.with(Option::is_some)
+            title=move || unavailable.get().map(|m| i18n::ui_text(&m)).unwrap_or_default()
+            data-node=id.0.to_string()
+            class:missing=move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))
+            class:selected=move || ed.is_selected(id)
+            class:active=move || ed.now.get() - node.last_exec.get() < EXEC_HIGHLIGHT_MS
+            style=style
+        >
+            <div class="node-header">
+                <span class="node-title ellipsis">{move || def.with(i18n::node_title)}</span>
+                <span class="node-cat ellipsis" class:node-unavailable=move || unavailable.with(Option::is_some)>
+                    {move || if unavailable.with(Option::is_some) { t!("node-plugin-unavailable") } else { def.with(|d| category_label(&d.category)) }}
+                </span>
+                {move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p))).then(|| view! {
+                    <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
+                })}
+                {move || trigger.get().map(|pin| view! {
+                    // For ClickButton, triggering is its entire purpose, so "run" is always visible; for others, on hover
+                    <button
+                        class="node-run"
+                        class:always=move || def.with(|d| d.type_name == "test/click_button")
+                        title=move || t!("node-run-title")
+                        on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
+                        on:click=move |_| ed.send(ClientMessage::TriggerNode { id, pin })
+                    >
+                        <Icon path=icons::PLAY />
+                    </button>
+                })}
+            </div>
+            <NodeProps id=id />
+            // Match renders its own rows: named/typed inputs followed by cases
+            {move || if is_match() {
+                view! { <MatchBody id=id top=Signal::derive(move || layout.with(|l| l.pins_top)) /> }.into_any()
+            } else {
+                view! {
+                    <div class="pins in" style=pins_style>{move || pin_list(PinDirection::Input)}</div>
+                    <div class="pins out" style=pins_style>{move || pin_list(PinDirection::Output)}</div>
+                }.into_any()
+            }}
+        </div>
+    }
+    .into_any()
+}

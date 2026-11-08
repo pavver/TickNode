@@ -1,0 +1,149 @@
+//! Translated UI messages, value hints and Match condition presentation.
+
+use fluent_bundle::{FluentArgs, FluentValue};
+use ticknode_shared::condition::{CompareOp, Join, MatchCase, Operand};
+use ticknode_shared::*;
+use super::{lookup, slug, t, try_translate, type_def_title};
+
+/// Text of a message for the user: the translation of its key (searched in the editor's own and the
+/// server-provided texts, arguments substituted), otherwise the English fallback.
+pub fn ui_text(message: &UiMessage) -> String {
+    if !message.key.is_empty() {
+        let mut args = FluentArgs::new();
+        // A setting error names the setting by its translated title (`setting-<plugin>-<key>-title`)
+        let setting_title = message.args.iter().find(|(n, _)| n == "plugin").zip(message.args.iter().find(|(n, _)| n == "key"))
+            .and_then(|((_, plugin), (_, key))| lookup(&format!("setting-{}-{}-title", slug(plugin), slug(key))));
+        for (name, value) in &message.args {
+            let value = match (&setting_title, name.as_str()) {
+                (Some(title), "setting") => title.clone(),
+                _ => value.clone(),
+            };
+            args.set(name.clone(), FluentValue::from(value));
+        }
+        if let Some(text) = try_translate(&message.key, Some(&args)) {
+            return text;
+        }
+    }
+    message.fallback.clone()
+}
+
+// --- Data types, field hints, and value parsing ---
+
+pub fn type_name_label(name: &str) -> String {
+    match name {
+        "exec" => t!("type-exec"),
+        "number" => t!("type-number"),
+        "string" => t!("type-string"),
+        "bool" => t!("type-bool"),
+        "time" => t!("type-time"),
+        "datetime" => t!("type-datetime"),
+        "duration" => t!("type-duration"),
+        "color" => t!("type-color"),
+        "object" => t!("type-object"),
+        "list" => t!("type-list"),
+        "any" => t!("type-any"),
+        "auto" => t!("type-auto"),
+        other => other.to_string(),
+    }
+}
+
+pub fn data_type_title(types: &TypeRegistry, t: &DataType) -> String {
+    match t {
+        DataType::Named(name) => types.get(name).map_or_else(|| t!("type-unavailable"), type_def_title),
+        DataType::List(inner) => t!("type-list-of", inner = data_type_title(types, inner)),
+        other => type_name_label(&data_type_name(other)),
+    }
+}
+
+pub fn type_hint(t: &DataType) -> String {
+    match t {
+        DataType::Time => t!("hint-time"),
+        DataType::DateTime => t!("hint-datetime"),
+        DataType::Duration => t!("hint-duration"),
+        DataType::Color => t!("hint-color"),
+        _ => t!("hint-default"),
+    }
+}
+
+pub fn parse_value_localized(input: &str, t: &DataType) -> Result<DataValue, String> {
+    let trimmed = input.trim();
+    text::parse_value(input, t).map_err(|_| match t {
+        DataType::Number => t!("parse-error-number", value = trimmed),
+        DataType::Bool => t!("parse-error-bool", value = trimmed),
+        DataType::Time => t!("parse-error-time", value = trimmed),
+        DataType::DateTime => t!("parse-error-datetime", value = trimmed),
+        DataType::Duration => t!("parse-error-duration", value = trimmed),
+        DataType::Color => t!("parse-error-color", value = trimmed),
+        _ => t!("parse-error-not-text", type = data_type_name(t)),
+    })
+}
+
+// --- Match condition operators and formatting ---
+
+pub fn op_symbol(op: CompareOp) -> String {
+    match op {
+        CompareOp::Eq => t!("match-op-eq"),
+        CompareOp::Ne => t!("match-op-ne"),
+        CompareOp::Lt => t!("match-op-lt"),
+        CompareOp::Le => t!("match-op-le"),
+        CompareOp::Gt => t!("match-op-gt"),
+        CompareOp::Ge => t!("match-op-ge"),
+        CompareOp::Contains => t!("match-op-contains"),
+        CompareOp::NotContains => t!("match-op-not-contains"),
+        CompareOp::StartsWith => t!("match-op-starts-with"),
+        CompareOp::EndsWith => t!("match-op-ends-with"),
+        CompareOp::IsEmpty => t!("match-op-is-empty"),
+        CompareOp::NotEmpty => t!("match-op-not-empty"),
+        CompareOp::IsTrue => t!("match-op-is-true"),
+        CompareOp::IsFalse => t!("match-op-is-false"),
+        CompareOp::HasField => t!("match-op-has-field"),
+        CompareOp::NoField => t!("match-op-no-field"),
+        CompareOp::LenEq => t!("match-op-len-eq"),
+        CompareOp::LenGt => t!("match-op-len-gt"),
+        CompareOp::LenLt => t!("match-op-len-lt"),
+        CompareOp::HasValue => t!("match-op-has-value"),
+        CompareOp::NoValue => t!("match-op-no-value"),
+    }
+}
+
+pub fn op_label_for(op: CompareOp, t: &DataType) -> String {
+    let time = matches!(t, DataType::Time | DataType::DateTime);
+    match op {
+        CompareOp::Lt if time => t!("match-op-lt-time"),
+        CompareOp::Le if time => t!("match-op-le-time"),
+        CompareOp::Gt if time => t!("match-op-gt-time"),
+        CompareOp::Ge if time => t!("match-op-ge-time"),
+        CompareOp::Lt if *t == DataType::Duration => t!("match-op-lt-duration"),
+        CompareOp::Gt if *t == DataType::Duration => t!("match-op-gt-duration"),
+        other => op_symbol(other),
+    }
+}
+
+pub fn join_symbol(join: Join) -> String {
+    match join {
+        Join::And => t!("match-join-and"),
+        Join::Or => t!("match-join-or"),
+    }
+}
+
+pub fn format_match_case(case: &MatchCase) -> String {
+    if case.conditions.is_empty() {
+        return t!("match-always");
+    }
+    case.conditions
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let cond = match &c.right {
+                Some(r) => format!("{} {} {}", c.left.to_text(), op_symbol(c.op), Operand::to_text(r)),
+                None => format!("{} {}", c.left.to_text(), op_symbol(c.op)),
+            };
+            if i == 0 {
+                cond
+            } else {
+                format!("{} {}", join_symbol(c.join), cond)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}

@@ -1,0 +1,148 @@
+use ticknode_shared::*;
+use crate::{RemovedConnections, TickEngine};
+use super::{lock, PluginChange, WasmNode};
+
+/// Effective settings for a plugin: stored values, falling back to manifest defaults for missing ones.
+/// An empty string is treated as unset.
+pub fn effective_settings(manifest: &PluginManifest, stored: &[(String, DataValue)]) -> Vec<(String, DataValue)> {
+    manifest.settings.iter().filter_map(|def| {
+        let value = stored.iter().find(|(k, v)| *k == def.key && !matches!(v, DataValue::String(s) if s.is_empty())).map(|(_, v)| v.clone());
+        Some((def.key.clone(), value.or_else(|| def.default.clone())?))
+    }).collect()
+}
+
+/// First required setting that has no value.
+pub fn missing_required(manifest: &PluginManifest, effective: &[(String, DataValue)]) -> Option<UiMessage> {
+    manifest.settings.iter()
+        .find(|d| d.required && !effective.iter().any(|(k, _)| *k == d.key))
+        .map(|d| UiMessage::new("error-setting-required", format!("Required setting \"{}\" is not set", d.title)).arg("setting", &d.title).arg("plugin", &manifest.name).arg("key", &d.key))
+}
+
+/// A plugin crash reported to the user.
+pub(super) fn crash_message(reason: &str) -> UiMessage {
+    UiMessage::new("error-plugin-crash", format!("Plugin crashed: {reason}")).arg("reason", reason)
+}
+
+fn plugin_not_loaded(name: &str) -> UiMessage {
+    UiMessage::new("error-plugin-not-loaded", format!("Plugin {name} is not loaded")).arg("plugin", name)
+}
+
+fn named_types(t: &DataType, out: &mut Vec<String>) {
+    match t {
+        DataType::Named(name) => out.push(name.clone()),
+        DataType::List(inner) => named_types(inner, out),
+        _ => {}
+    }
+}
+
+impl TickEngine {
+    /// Error from the last `configure` call ("settings error"); the plugin remains loaded.
+    pub fn plugin_settings_error(&self, name: &str) -> Option<UiMessage> {
+        self.plugins.get(name)?.settings_error.clone()
+    }
+
+    /// Enables a plugin: registers its types, applies settings (`settings` already includes defaults,
+    /// see `effective_settings`), and revives stubs of its types into real nodes.
+    pub fn enable_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<PluginChange, UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
+        if slot.active {
+            return Err(UiMessage::plain(format!("Plugin {name} is already enabled")));
+        }
+        let (definitions, types, runtime) = (slot.definitions.clone(), slot.types.clone(), slot.runtime.clone());
+        for (def, _) in &definitions {
+            if self.registry.get_definition(&def.type_name).is_some() {
+                return Err(UiMessage::plain(format!("Node type {} is already registered", def.type_name)));
+            }
+        }
+        let node_definitions: Vec<NodeDefinition> = definitions.iter().map(|(d, _)| d.clone()).collect();
+        self.register_types_owned(Some(name), &types, &node_definitions).map_err(|e| UiMessage::plain(format!("Plugin {name}: {e}")))?;
+        for (def, polls) in definitions {
+            let runtime = runtime.clone();
+            self.registry.register_owned(name, Box::new(move |id| Box::new(WasmNode::new(id, def.clone(), polls, runtime.clone()))));
+        }
+
+        let settings_error = self.apply_settings(name, settings);
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
+        slot.active = true;
+        slot.settings_error = settings_error;
+
+        let (replaced, removed) = self.revive_stubs();
+        Ok(PluginChange { replaced, removed })
+    }
+
+    /// Disables a plugin: its nodes become stubs (connections and properties are preserved), node
+    /// and data types are unregistered, and the plugin instance is dropped. Rejected if another
+    /// enabled plugin uses this plugin's data types.
+    pub fn disable_plugin(&mut self, name: &str) -> Result<PluginChange, UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
+        if !slot.active {
+            return Err(UiMessage::plain(format!("Plugin {name} is already disabled")));
+        }
+        let owned: Vec<&String> = self.type_owners.iter().filter(|(_, o)| *o == name).map(|(t, _)| t).collect();
+        let dependents: Vec<&str> = self.plugins.iter()
+            .filter(|(other, p)| other.as_str() != name && p.active)
+            .filter(|(_, p)| {
+                let mut used = Vec::new();
+                for (def, _) in &p.definitions {
+                    for pin in &def.pins {
+                        if let PinType::Data(t) = &pin.pin_type {
+                            named_types(t, &mut used);
+                        }
+                    }
+                }
+                for t in &p.types {
+                    for f in t.fields() {
+                        named_types(&f.data_type, &mut used);
+                    }
+                }
+                used.iter().any(|u| owned.contains(&u))
+            })
+            .map(|(other, _)| other.as_str())
+            .collect();
+        if !dependents.is_empty() {
+            let list = dependents.iter().map(|d| format!("\"{d}\"")).collect::<Vec<_>>().join(", ");
+            return Err(UiMessage::new(
+                "error-plugin-disable-blocked",
+                format!("Plugin \"{name}\" cannot be disabled: its data types are used by {list}; disable {} first", if dependents.len() == 1 { "it" } else { "them" }),
+            ).arg("plugin", name).arg("dependents", list));
+        }
+
+        let node_types: std::collections::HashSet<String> = self.registry.types_owned_by(name).into_iter().collect();
+        let replaced = self.replace_with_stubs(&node_types, name);
+        self.registry.unregister_owner(name);
+        let type_names: Vec<String> = self.type_owners.iter().filter(|(_, o)| *o == name).map(|(t, _)| t.clone()).collect();
+        for t in type_names {
+            self.type_owners.remove(&t);
+            self.types.remove(&t);
+        }
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
+        slot.active = false;
+        slot.settings_error = None;
+        // Node resources were already dropped when replaced with stubs; the instance is no longer needed
+        {
+            let mut rt = lock(&slot.runtime);
+            rt.discard();
+            lock(&rt.options).clear();
+        }
+        Ok(PluginChange { replaced, removed: RemovedConnections::default() })
+    }
+
+    /// Passes new settings to the plugin (`settings` already includes defaults). Does nothing for a
+    /// disabled plugin: settings will be applied when enabled. `Err` is the plugin's response, which
+    /// is also recorded as the settings error.
+    pub fn configure_plugin(&mut self, name: &str, settings: &[(String, DataValue)]) -> Result<(), UiMessage> {
+        let slot = self.plugins.get(name).ok_or_else(|| plugin_not_loaded(name))?;
+        if !slot.active {
+            return Ok(());
+        }
+        let error = self.apply_settings(name, settings);
+        let slot = self.plugins.get_mut(name).expect("the plugin was just found");
+        slot.settings_error = error.clone();
+        error.map_or(Ok(()), Err)
+    }
+
+    fn apply_settings(&self, name: &str, settings: &[(String, DataValue)]) -> Option<UiMessage> {
+        let slot = &self.plugins[name];
+        lock(&slot.runtime).configure(settings, self.host_state.runtime.clone()).err().or_else(|| missing_required(&slot.manifest, settings))
+    }
+}

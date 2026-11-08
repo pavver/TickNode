@@ -7,6 +7,7 @@ impl Node for ConsoleNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "console".to_string(),
             title: "Console Log".to_string(),
@@ -67,6 +68,7 @@ impl Node for DebugNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "test/debug".to_string(),
             title: "Debug Log".to_string(),

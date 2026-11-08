@@ -39,6 +39,7 @@ impl Drop for StateChanged {
 impl PluginNode for StateChanged {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 2,
             properties: vec![
                 PropertyDefinition::dynamic("entity_id", "Entity", entities::ENTITIES_SOURCE)
                     .described("The Home Assistant entity to watch. Pick one from the list or type an entity id"),

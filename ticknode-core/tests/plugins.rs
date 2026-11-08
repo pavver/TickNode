@@ -415,6 +415,7 @@ fn type_conflicts_and_unknown_types_are_rejected() {
 
     // Node pin referencing an unknown type
     let node = NodeDefinition {
+        cost: 1,
         properties: Vec::new(),
         type_name: "other/node".into(),
         title: "N".into(),
@@ -2100,4 +2101,24 @@ fn split_plugin_struct_pins_flow_persist_and_survive_disable() {
     engine.tick();
     assert_eq!(output(&engine, sink, 4), Some(number(12)));
     assert_eq!(engine.set_pin_split(sink, PinId(1), false).unwrap().data.len(), 3);
+}
+
+#[test]
+fn plugin_cost_tracks_properties_and_controls_budget() {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else { return };
+    let id = NodeId::generate();
+    engine.create_node(id, "test/cost", &[("cost".into(), number(7))]).unwrap();
+    assert_eq!(engine.node_definition(id).unwrap().cost, 7);
+    engine.budget.limit = Some(3);
+    engine.trigger_node(id, PinId(0));
+    engine.trigger_node(id, PinId(0));
+    engine.tick();
+    assert_eq!(engine.last_tick, TickStats { spent: 7, deferred: 1 });
+    engine.set_node_property(id, "cost", number(2)).unwrap();
+    assert_eq!(engine.node_definition(id).unwrap().cost, 2);
+    engine.tick();
+    assert_eq!(engine.last_tick, TickStats { spent: 2, deferred: 0 });
+    let graph = engine.export_graph();
+    assert!(engine.load_graph(&graph).is_empty());
+    assert_eq!(engine.node_definition(id).unwrap().cost, 2);
 }

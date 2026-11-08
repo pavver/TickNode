@@ -347,3 +347,6 @@ pin-technical-type = Технічний тип: { $name }
 type-unavailable = Недоступний тип
 
 error-batch-command = Ця команда не дозволена всередині групи
+
+inspector-cost = вартість { $cost }
+inspector-cost-help = Відносний обсяг роботи за виклик; базова логіка коштує 1. Бюджет тіку розподіляє роботу з черги між тіками.

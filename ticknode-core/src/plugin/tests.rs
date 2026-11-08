@@ -23,6 +23,7 @@
 
     fn consumer_slot(runtime: Arc<Mutex<Runtime>>, pins: Vec<PinDefinition>, types: Vec<TypeDefinition>) -> PluginSlot {
         let definition = NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "consumer/node".into(),
             title: "Consumer".into(),
@@ -129,6 +130,7 @@
             fn id(&self) -> NodeId { self.0 }
             fn definition(&self) -> NodeDefinition {
                 NodeDefinition {
+                    cost: 1,
                     type_name: "live".into(), title: "Live".into(), category: "Test".into(),
                     description: String::new(), help: String::new(), properties: Vec::new(),
                     pins: vec![PinDefinition { id: PinId(0), name: "Value".into(),
@@ -161,4 +163,24 @@
     fn list_depth_becomes_nested_lists() {
         let t = from_wit_data_type(wit::DataType { base: wit::ScalarType::Number, list_depth: 2 });
         assert_eq!(t, DataType::List(Box::new(DataType::List(Box::new(DataType::Number)))));
+    }
+
+    #[test]
+    fn plugin_emission_cost_reduces_queue_allowance() {
+        let mut engine = TickEngine::new();
+        engine.budget.limit = Some(2);
+        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: 1i64.into() })));
+        let source = NodeId::generate();
+        engine.create_node(source, "const", &[]).unwrap();
+        let ids: Vec<_> = (0..3).map(|_| {
+            let id = NodeId::generate();
+            engine.create_node(id, "test/click_button", &[]).unwrap();
+            engine.trigger_node(id, PinId(0));
+            id
+        }).collect();
+        let mut next = std::collections::VecDeque::new();
+        engine.apply_emissions("mine", vec![data_emission(source, 0, 1i64.into())], &mut next);
+        engine.run_queue(&mut next);
+        assert_eq!(engine.executed.iter().map(|t| t.node_id).collect::<Vec<_>>(), [source, ids[0]]);
+        assert_eq!(engine.last_tick, crate::TickStats { spent: 2, deferred: 2 });
     }

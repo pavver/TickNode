@@ -121,6 +121,7 @@ impl PluginNode for StringNode {
         let mut pins = vec![exec_in(b, "In"), exec_out(b + 1, "Out")];
         pins.extend(data);
         NodeDefinition {
+            cost: 2,
             properties: Vec::new(),
             type_name: type_name.into(),
             title: title.into(),

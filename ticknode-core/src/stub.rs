@@ -27,6 +27,7 @@ impl StubNode {
     /// Definition for a type whose pins are known only from graph connections.
     pub fn bare_definition(type_name: &str, pins: Vec<PinDefinition>) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: type_name.into(),
             title: type_name.into(),

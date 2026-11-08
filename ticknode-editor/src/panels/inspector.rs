@@ -78,7 +78,7 @@ fn NodeInspector(id: NodeId) -> impl IntoView {
                 <span class="t-row ellipsis">{move || def.with(i18n::node_title)}</span>
                 {move || view! { <InfoButton def=def.get() /> }}
             </div>
-            <span class="t-caption">{move || def.with(|d| format!("{} · {}", category_label(&d.category), d.type_name))}</span>
+            <span class="t-caption" title=move || t!("inspector-cost-help")>{move || def.with(|d| format!("{} · {} · {}", category_label(&d.category), d.type_name, t!("inspector-cost", cost = d.cost)))}</span>
             <span class="t-body-small">{move || def.with(i18n::node_description)}</span>
         </div>
         // Properties, input values, conditions, and triggers live directly on the node

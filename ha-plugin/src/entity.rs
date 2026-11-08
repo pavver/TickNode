@@ -71,6 +71,7 @@ impl Drop for Entity {
 impl PluginNode for Entity {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 2,
             type_name: "ha/entity".into(), title: "Entity".into(), category: CATEGORY.into(),
             description: "Keeps the latest state of a Home Assistant entity available as data".into(),
             help: "Choose an entity. Its current state is read on subscription and reconnection; changes update the data outputs without firing an execution signal. Downstream actions can pull the latest values at any time. Number is emitted only for finite numeric states; On only for on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied and connected/disconnected. Other states clear the corresponding outputs. Unit comes from unit_of_measurement. A removed entity clears all outputs. While disconnected the last values remain available; a missing entity is retried every 30 seconds.".into(),

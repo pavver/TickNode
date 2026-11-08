@@ -167,6 +167,7 @@ impl Kind {
             ),
         };
         NodeDefinition {
+            cost: 2,
             type_name: self.type_name().into(),
             title: title.into(),
             description: description.into(),

@@ -17,3 +17,17 @@ fn virtual_pin_ids_are_stable_distinct_and_bounded() {
     assert!(split_field_parent(PinId(u32::MAX)).is_none());
     assert!(parse_split_pin_property("in:0").is_none());
 }
+
+#[test]
+fn old_json_definition_defaults_to_native_cost() {
+    let def: NodeDefinition = serde_json::from_str(r#"{
+        "type_name":"old", "title":"Old", "category":"Test",
+        "description":"", "pins":[]
+    }"#).unwrap();
+    assert_eq!(def.cost, 1);
+    let mut json = serde_json::to_value(&def).unwrap();
+    json["cost"] = 42.into();
+    let def: NodeDefinition = serde_json::from_value(json).unwrap();
+    assert_eq!(def.cost, 42);
+    assert_eq!(def.clone().cost(7).cost, 7);
+}

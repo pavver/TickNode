@@ -6,6 +6,7 @@ mod settings;
 mod websocket;
 mod execution;
 mod typed;
+mod cost;
 
 use settings::{CONFIG, Greeter, Picker, publish_options};
 use websocket::{WS, WsProbe, ws_emit};
@@ -16,7 +17,7 @@ struct TestPlugin;
 
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] =
-        &["test/clear", "test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
+        &["test/cost", "test/clear", "test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
     /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
     const TRANSLATIONS: &'static [(&'static str, &'static str)] =
         &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
@@ -97,6 +98,7 @@ impl Plugin for TestPlugin {
 
     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> {
         Some(match type_name {
+            "test/cost" => Box::new(cost::CostProbe::default()),
             "test/clear" => Box::new(ClearProbe),
             "test/counter" => Box::new(Counter { step: 1, count: 0 }),
             "test/crash" => Box::new(Crash),

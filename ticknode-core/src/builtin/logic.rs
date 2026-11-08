@@ -19,6 +19,7 @@ impl Node for LogicalNode {
             ],
         };
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: name.to_string(),
             title: title.to_string(),
@@ -46,6 +47,7 @@ impl Node for CompareNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "compare".to_string(),
             title: "Compare".to_string(),

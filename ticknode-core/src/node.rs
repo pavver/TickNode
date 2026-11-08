@@ -41,8 +41,9 @@ pub trait Node: Send + Sync {
     /// The node has been restored: properties from `create_node` have been applied. Subsequent
     /// `set_property` calls are live edits rather than saved state restoration.
     fn restored(&mut self) {}
-    /// Event source nodes (timers, triggers): called at the start of every tick.
-    /// A returned pin triggers execution of the node in the same tick.
+    /// Whether the node is an event source polled (and charged) at the start of every tick.
+    fn polls(&self) -> bool { false }
+    /// Poll an event source. A returned pin queues its activation for the current tick's budget.
     fn poll(&mut self, _host: &mut HostState) -> Option<PinId> { None }
     /// A task started by the node via `HostState` (delay, HTTP) has completed.
     /// Called on the completion tick, before executing the queue.

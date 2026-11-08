@@ -7,6 +7,7 @@ impl Node for ClockNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "clock".to_string(),
             title: "Clock".to_string(),
@@ -23,6 +24,7 @@ impl Node for ClockNode {
     fn execute(&mut self, _: Option<PinId>, _: &mut NodeContext) -> Vec<NodeOutput> {
         vec![NodeOutput::Execution(PinId(0))]
     }
+    fn polls(&self) -> bool { true }
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
         (host.current_tick % self.interval_ticks.max(1) == 0).then_some(PinId(0))
     }
@@ -43,6 +45,7 @@ impl Node for SleepNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "sleep".to_string(),
             title: "Sleep".to_string(),

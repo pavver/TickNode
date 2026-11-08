@@ -350,3 +350,6 @@ pin-technical-type = Technical type: { $name }
 type-unavailable = Unavailable type
 
 error-batch-command = This command is not allowed inside a batch
+
+inspector-cost = cost { $cost }
+inspector-cost-help = Relative work per call; native logic costs 1. The tick budget spreads queued work over ticks.

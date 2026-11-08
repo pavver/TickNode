@@ -111,6 +111,7 @@ fn node_definitions_keep_pin_types_directions_and_property_metadata() {
     ];
     for (kind, expected) in types.into_iter().zip(expected) {
         let d = NodeDefinition {
+            cost: 1,
             type_name: "demo/node".into(),
             title: "Title".into(),
             category: "Data".into(),
@@ -132,7 +133,8 @@ fn node_definitions_keep_pin_types_directions_and_property_metadata() {
                 PropertyDefinition::dynamic("dynamic", "Dynamic", "source"),
             ],
         };
-        let wire = to_wit_definition(d, true);
+        let wire = to_wit_definition(d.cost(17), true);
+        assert_eq!(wire.cost, 17);
         assert_eq!(wire.type_name, "demo/node");
         assert!(wire.polls);
         assert!(matches!(wire.pins[0].pin_type, wit::PinType::Exec));

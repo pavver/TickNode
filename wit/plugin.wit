@@ -113,6 +113,8 @@ interface types {
         polls: bool,
         /// Properties shown with a title, a drop-down or a picker. Others stay plain text rows.
         properties: list<property-definition>,
+        /// Relative work per node call; native logic costs one unit.
+        cost: u32,
     }
 
     variant capability {

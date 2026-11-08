@@ -11,6 +11,7 @@ impl Node for ClickButtonNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "test/click_button".to_string(),
             title: "Click Button".to_string(),

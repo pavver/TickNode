@@ -83,6 +83,7 @@ pub(crate) fn to_wit_type_definition(t: TypeDefinition) -> wit::TypeDefinition {
 
 pub(crate) fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefinition {
     wit::NodeDefinition {
+        cost: d.cost,
         type_name: d.type_name,
         title: d.title,
         category: d.category,

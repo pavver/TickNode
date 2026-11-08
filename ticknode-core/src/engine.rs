@@ -20,6 +20,10 @@ pub struct RemovedConnections {
 }
 
 pub struct TickEngine {
+    /// Scheduling policy consulted before queued activations; unlimited by default.
+    pub budget: crate::TickBudget,
+    /// Work accounting for the most recent tick, including tasks, emissions, polls and pure pulls.
+    pub last_tick: crate::TickStats,
     pub(crate) nodes: HashMap<NodeId, Box<dyn Node>>,
     pub(crate) exec_connections: Vec<ConnectionModel>,
     pub(crate) data_connections: Vec<ConnectionModel>,
@@ -53,6 +57,8 @@ impl Default for TickEngine {
 impl TickEngine {
     pub fn new() -> Self {
         Self {
+            budget: Default::default(),
+            last_tick: Default::default(),
             nodes: HashMap::new(),
             exec_connections: Vec::new(),
             data_connections: Vec::new(),

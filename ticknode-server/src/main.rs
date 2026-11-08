@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::routing::get;
-use ticknode_core::TickEngine;
+use ticknode_core::{TickBudget, TickEngine};
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -21,6 +21,7 @@ struct Config {
     web_dir: PathBuf,
     bundled_plugins_dir: Option<PathBuf>,
     tick: Duration,
+    budget: TickBudget,
 }
 
 impl Config {
@@ -32,6 +33,7 @@ impl Config {
             web_dir: var("TICKNODE_WEB_DIR", "ticknode-editor/dist").into(),
             bundled_plugins_dir: std::env::var("TICKNODE_BUNDLED_PLUGINS_DIR").ok().filter(|v| !v.is_empty()).map(PathBuf::from),
             tick: Duration::from_millis(var("TICKNODE_TICK_MS", "100").parse().unwrap_or(100)),
+            budget: TickBudget { limit: var("TICKNODE_TICK_BUDGET", "").trim().parse::<u32>().ok().filter(|v| *v != 0) },
         }
     }
 }
@@ -46,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
 
     let mut engine = TickEngine::new();
+    engine.budget = config.budget;
     // Plugins may open connections already in `configure` while loading
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs

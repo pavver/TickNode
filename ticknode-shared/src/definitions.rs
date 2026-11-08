@@ -48,6 +48,19 @@ pub struct NodeDefinition {
     /// keep the default text row.
     #[serde(default)]
     pub properties: Vec<PropertyDefinition>,
+    /// Relative work per call; native logic costs one unit.
+    #[serde(default = "default_cost")]
+    pub cost: u32,
+}
+
+fn default_cost() -> u32 { 1 }
+
+impl NodeDefinition {
+    /// Set relative work for this definition (also re-exported by the plugin SDK).
+    pub fn cost(mut self, cost: u32) -> Self {
+        self.cost = cost;
+        self
+    }
 }
 
 /// An unconnected input data pin's value is stored among the node's properties

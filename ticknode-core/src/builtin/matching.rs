@@ -71,6 +71,7 @@ impl Node for MatchNode {
             direction: PinDirection::Output, required: false }));
         pins.push(PinDefinition { id: Self::ELSE_PIN, name: "Else".to_string(), pin_type: PinType::Exec, direction: PinDirection::Output, required: false });
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "match".to_string(),
             title: "Match".to_string(),

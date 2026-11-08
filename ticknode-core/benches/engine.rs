@@ -2,6 +2,9 @@
 //! Graph construction, validation, trigger enqueueing and plugin loading are untimed.
 //! Active measurements include per-tick telemetry cleanup, as a server consumer would do.
 
+#[path = "support/budgeted.rs"]
+mod budgeted;
+
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -265,6 +268,6 @@ criterion_group! {
     config = Criterion::default()
         .warm_up_time(Duration::from_secs(1))
         .measurement_time(Duration::from_secs(3));
-    targets = idle_tick, hop, burst, plugin_tick_idle
+    targets = idle_tick, hop, burst, plugin_tick_idle, budgeted::burst_budgeted
 }
 criterion_main!(benches);

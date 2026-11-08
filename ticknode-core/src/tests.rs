@@ -9,6 +9,7 @@
         fn is_pure(&self) -> bool { self.pure }
         fn definition(&self) -> NodeDefinition {
             NodeDefinition {
+                cost: 1,
                 type_name: "test/input_probe".into(), title: "Input probe".into(), category: "Test".into(),
                 description: String::new(), help: String::new(), properties: vec![],
                 pins: vec![

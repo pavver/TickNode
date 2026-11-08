@@ -10,6 +10,7 @@ impl Node for ListCreateNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "list/create".to_string(),
             title: "Create List".to_string(),
@@ -48,6 +49,7 @@ impl Node for ListAddNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 5,
             properties: Vec::new(),
             type_name: "list/add".to_string(),
             title: "List Add".to_string(),
@@ -85,6 +87,7 @@ impl Node for ListRemoveNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 5,
             properties: Vec::new(),
             type_name: "list/remove".to_string(),
             title: "List Remove".to_string(),
@@ -124,6 +127,7 @@ impl Node for ListGetNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "list/get".to_string(),
             title: "List Get".to_string(),
@@ -164,6 +168,7 @@ impl Node for ListLengthNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "list/length".to_string(),
             title: "List Length".to_string(),

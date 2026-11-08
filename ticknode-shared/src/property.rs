@@ -94,6 +94,7 @@ mod tests {
     #[test]
     fn property_schema_roundtrips_through_postcard() {
         let def = NodeDefinition {
+            cost: 1,
             type_name: "x/y".into(), title: "X".into(), category: "Test".into(), description: String::new(), help: String::new(),
             pins: vec![],
             properties: vec![

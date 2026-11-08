@@ -61,6 +61,7 @@ impl PluginNode for MathNode {
         pins.push(exec_out(base + 1, "Out"));
         pins.push(data_out(base + 2 + args.len() as u32, "Res", DataType::Number));
         NodeDefinition {
+            cost: 2,
             properties: Vec::new(),
             type_name: type_name.into(),
             title: title.into(),

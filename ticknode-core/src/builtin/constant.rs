@@ -7,6 +7,7 @@ impl Node for ConstNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "const".to_string(),
             title: "Constant".to_string(),

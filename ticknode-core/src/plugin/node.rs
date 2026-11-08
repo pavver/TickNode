@@ -171,10 +171,9 @@ impl Node for WasmNode {
         self.run(wit::Trigger::Task(wit::TaskDone { id: task, result }), ctx)
     }
 
+    fn polls(&self) -> bool { self.polls }
+
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
-        if !self.polls {
-            return None;
-        }
         let tick = host.current_tick;
         let id = self.id;
         match self.call(Some(&mut *host), |store, api, node| api.node().call_poll(store, node, tick)) {

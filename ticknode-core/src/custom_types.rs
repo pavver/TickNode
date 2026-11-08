@@ -51,6 +51,7 @@ impl Node for TypeMakeNode {
 
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: make_node_type(&self.def.name),
             title: format!("Make {}", self.def.title),
@@ -91,6 +92,7 @@ impl Node for TypeBreakNode {
 
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: break_node_type(&self.def.name),
             title: format!("Break {}", self.def.title),

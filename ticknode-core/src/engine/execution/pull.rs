@@ -76,6 +76,7 @@ impl TickEngine {
         let mut node = self.nodes.remove(&node_id)?;
         let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
         let outputs = node.execute(None, &mut ctx);
+        self.last_tick.charge(definition.cost);
         self.nodes.insert(node_id, node);
         stack.pop();
 

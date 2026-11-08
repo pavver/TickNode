@@ -10,6 +10,7 @@ impl Node for PureMathNode {
     fn definition(&self) -> NodeDefinition {
         let (name, title) = operation_identity(self.op);
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: name.to_string(),
             title: title.to_string(),
@@ -62,6 +63,7 @@ impl Node for MathExpressionNode {
                 direction: PinDirection::Input, required: false });
         }
         NodeDefinition {
+            cost: 1,
             properties: Vec::new(),
             type_name: "math/expression".to_string(),
             title: "Expression".to_string(),

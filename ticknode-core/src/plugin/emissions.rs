@@ -37,6 +37,7 @@ impl TickEngine {
                 self.host_state.log(id, format!("[ERROR] {e}"));
             }
             if !outputs.is_empty() {
+                self.last_tick.charge(definition.cost);
                 self.apply_outputs(id, Vec::new(), outputs, next_tick_queue);
             }
         }

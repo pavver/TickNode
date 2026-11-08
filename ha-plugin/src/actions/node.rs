@@ -70,6 +70,7 @@ impl PluginNode for ActionNode {
             data_out(RESPONSE.0, "Response", DataType::Object),
         ]);
         NodeDefinition {
+            cost: 50,
             type_name: "ha/action".into(), title: "Action".into(), category: CATEGORY.into(),
             description: "Runs a Home Assistant action with fields from its form".into(),
             help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),

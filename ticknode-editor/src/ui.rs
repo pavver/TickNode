@@ -293,3 +293,6 @@ pub fn Terminal(#[prop(into)] lines: Signal<Vec<LogLine>>) -> impl IntoView {
         </div>
     }
 }
+
+#[cfg(test)]
+mod tests;

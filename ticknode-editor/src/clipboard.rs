@@ -124,3 +124,6 @@ pub fn copy_via_command() -> bool {
         .and_then(|d| d.exec_command("copy").ok())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests;

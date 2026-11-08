@@ -109,14 +109,9 @@ fn PluginCard(name: String) -> impl IntoView {
     });
 
     let state = move || info.with(|i| i.as_ref().map_or(PluginState::Error, |i| i.state));
-    let chip = move || match state() {
-        PluginState::Enabled => (ControlState::Success, t!("plugins-state-enabled")),
-        PluginState::Disabled => (ControlState::Idle, t!("plugins-state-disabled")),
-        PluginState::Error => (ControlState::Error, t!("plugins-state-error")),
-    };
+    let chip = move || state_chip(state());
     let settings_error = move || info.with(|i| i.as_ref().and_then(|i| i.settings_error.clone()));
     let load_error = move || info.with(|i| i.as_ref().and_then(|i| i.error.clone()));
-    let no_manifest = initial.version.is_empty() && initial.settings.is_empty() && initial.capabilities.is_empty() && initial.author.is_empty();
 
     let toggle_name = name.clone();
     let on_toggle = Callback::new(move |enabled: bool| {
@@ -127,19 +122,15 @@ fn PluginCard(name: String) -> impl IntoView {
     let save_name = name.clone();
     let save_defs = initial.settings.clone();
     let save = Callback::new(move |()| {
-        let mut updates = Vec::new();
-        for def in &save_defs {
-            let draft = drafts.with_untracked(|d| d.get(&def.key).cloned().unwrap_or_default());
-            let is_cleared = cleared.with_untracked(|c| c.contains(&def.key));
-            match update_of(&save_name, def, &draft, is_cleared) {
-                Ok(update) => updates.push((def.key.clone(), update)),
-                Err(e) => {
-                    ed.log(LogKind::Error, format!("[ERROR] {e}"));
-                    flash(saving, ControlState::Error);
-                    return;
-                }
+        let updates = drafts.with_untracked(|drafts| cleared.with_untracked(|cleared| form_updates(&save_name, &save_defs, drafts, cleared)));
+        let updates = match updates {
+            Ok(updates) => updates,
+            Err(error) => {
+                ed.log(LogKind::Error, format!("[ERROR] {error}"));
+                flash(saving, ControlState::Error);
+                return;
             }
-        }
+        };
         saving.set(ControlState::Pending);
         ed.send(ClientMessage::ConfigurePlugin { name: save_name.clone(), values: updates });
     });
@@ -154,7 +145,7 @@ fn PluginCard(name: String) -> impl IntoView {
                 <div class="plugin-title">
                     <span class="t-row ellipsis">{initial.name.clone()}</span>
                     <span class="t-caption ellipsis">
-                        {if no_manifest { initial.file.clone() } else { format!("v{} · {}", initial.version, initial.author) }}
+                        {plugin_caption(&initial)}
                     </span>
                 </div>
                 <Switch
@@ -190,6 +181,26 @@ fn PluginCard(name: String) -> impl IntoView {
         </section>
     }
     .into_any()
+}
+
+fn state_chip(state: PluginState) -> (ControlState, String) {
+    match state {
+        PluginState::Enabled => (ControlState::Success, t!("plugins-state-enabled")),
+        PluginState::Disabled => (ControlState::Idle, t!("plugins-state-disabled")),
+        PluginState::Error => (ControlState::Error, t!("plugins-state-error")),
+    }
+}
+
+fn plugin_caption(info: &PluginInfo) -> String {
+    let no_manifest = info.version.is_empty() && info.settings.is_empty() && info.capabilities.is_empty() && info.author.is_empty();
+    if no_manifest { info.file.clone() } else { format!("v{} · {}", info.version, info.author) }
+}
+
+fn form_updates(plugin: &str, definitions: &[SettingDefinition], drafts: &BTreeMap<String, String>, cleared: &BTreeSet<String>) -> Result<Vec<(String, SettingUpdate)>, String> {
+    definitions.iter().map(|def| {
+        let draft = drafts.get(&def.key).map_or("", String::as_str);
+        update_of(plugin, def, draft, cleared.contains(&def.key)).map(|update| (def.key.clone(), update))
+    }).collect()
 }
 
 /// Single form field rendered according to the setting kind.

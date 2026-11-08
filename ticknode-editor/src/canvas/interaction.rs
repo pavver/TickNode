@@ -16,6 +16,10 @@ use super::selection::{SelectBox, nodes_in_box};
 use super::wires::WireEnd;
 
 mod motion;
+mod decisions;
+mod start;
+
+use decisions::{Press, Gesture, press, gesture};
 
 /// Pointer movement threshold (px) after which a press is treated as a drag rather than a click.
 const DRAG_THRESHOLD: f64 = 3.0;
@@ -66,13 +70,11 @@ fn parse_pin(el: &Element) -> Option<WireEnd> {
 }
 
 fn parse_wire(el: &Element) -> Option<Selection> {
-    let c = ConnectionModel {
-        src_node: parse_node_id(&el.get_attribute("data-src")?)?,
-        src_pin: PinId(el.get_attribute("data-src-pin")?.parse().ok()?),
-        dst_node: parse_node_id(&el.get_attribute("data-dst")?)?,
-        dst_pin: PinId(el.get_attribute("data-dst-pin")?.parse().ok()?),
-    };
-    Some(if el.get_attribute("data-wire")? == "exec" { Selection::Exec(c) } else { Selection::Data(c) })
+    decisions::wire_selection(
+        &el.get_attribute("data-src")?, &el.get_attribute("data-src-pin")?,
+        &el.get_attribute("data-dst")?, &el.get_attribute("data-dst-pin")?,
+        &el.get_attribute("data-wire")?,
+    )
 }
 
 fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
@@ -108,22 +110,13 @@ impl Interaction {
     }
 
     pub(super) fn pointer_down(self, ev: PointerEvent) {
-        let Self { ed, canvas, drag, panning, cursor, pending_wire, pointers, .. } = self;
+        let Self { ed, canvas, drag, panning, pending_wire, pointers, .. } = self;
         let p = self.local_point(&ev);
-        // Paste placement: LMB (or tap) places, RMB cancels, middle button pans as usual
-        if ed.pending_paste.with_untracked(|p| p.is_some()) && ev.button() != 1 {
-            match ev.button() {
-                0 => {
-                    move_paste(ed, p);
-                    clipboard::place_paste(ed);
-                }
-                2 => { clipboard::cancel_paste(ed); }
-                _ => {}
-            }
-            return;
-        }
-        if ev.pointer_type() == "mouse" && ev.button() != 0 && ev.button() != 1 {
-            return;
+        match press(ed.pending_paste.with_untracked(|p| p.is_some()), &ev.pointer_type(), ev.button()) {
+            Press::Place => { move_paste(ed, p); clipboard::place_paste(ed); return; }
+            Press::Cancel => { clipboard::cancel_paste(ed); return; }
+            Press::Ignore => return,
+            Press::Continue => {}
         }
         pointers.update_value(|ps| {
             ps.insert(ev.pointer_id(), p);
@@ -147,53 +140,23 @@ impl Interaction {
             return;
         }
 
+        let target = ev.target();
+        let pin = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el));
+        let wire = closest(target.clone(), "[data-wire]").and_then(|el| parse_wire(&el));
+        let node = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
         let view = ed.view.get_untracked();
         let world = view.to_world(p.0, p.1);
-        let target = ev.target();
-        if ev.button() == 1 {
-            // Middle button pans the canvas (CAD-style), regardless of where the press started
-            ev.prevent_default();
-            drag.set_value(Drag::Pan { start: p, origin: view, moved: true });
-            panning.set(true);
-        } else if let Some(end) = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el)) {
-            let mut from = end;
-            // Dragging from a connected data input disconnects and relocates the existing wire
-            if end.dir == PinDirection::Input && !end.exec {
-                let existing = ed.data.with_untracked(|d| d.iter().find(|c| c.dst_node == end.node && c.dst_pin == end.pin).copied());
-                if let Some(c) = existing {
-                    ed.send(ClientMessage::DisconnectData { dst_node: c.dst_node, dst_pin: c.dst_pin });
-                    from = WireEnd { node: c.src_node, pin: c.src_pin, dir: PinDirection::Output, exec: false };
-                }
+        match gesture(ev.button(), &ev.pointer_type(), additive(&ev), pin, wire, node) {
+            Gesture::Pan { moved } => {
+                if moved { ev.prevent_default(); }
+                drag.set_value(Drag::Pan { start: p, origin: view, moved });
+                panning.set(true);
             }
-            cursor.set(world);
-            pending_wire.set(Some(from));
-            drag.set_value(Drag::Wire { from });
-        } else if let Some(sel) = closest(target.clone(), "[data-wire]").and_then(|el| parse_wire(&el)) {
-            ed.selection.set(Some(sel));
-        } else if let Some(id) = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s)) {
-            if additive(&ev) {
-                // Shift/Ctrl+click toggles the node in the selection
-                let mut ids = ed.selected_nodes();
-                match ids.iter().position(|n| *n == id) {
-                    Some(i) => { ids.remove(i); }
-                    None => ids.push(id),
-                }
-                ed.select_nodes(ids);
-                return;
-            }
-            if !ed.selection.with_untracked(|s| matches!(s, Some(Selection::Nodes(set)) if set.contains(&id))) {
-                ed.select_nodes([id]);
-            }
-            let origins = ed.selected_nodes().into_iter()
-                .filter_map(|n| ed.node(n).map(|node| (n, node.pos.get_untracked())))
-                .collect();
-            drag.set_value(Drag::Nodes { origins, start_world: world, start: p, moved: false, clicked: id });
-        } else if ev.pointer_type() == "touch" {
-            // On touch screens, dragging the background with one finger pans the canvas
-            drag.set_value(Drag::Pan { start: p, origin: view, moved: false });
-            panning.set(true);
-        } else {
-            drag.set_value(Drag::Box { start: p, additive: additive(&ev) });
+            Gesture::Wire(from) => self.start_wire(from, world),
+            Gesture::Select(selection) => ed.selection.set(Some(selection)),
+            Gesture::Toggle(id) => self.toggle_node(id),
+            Gesture::Nodes(id) => self.start_nodes(id, p, world),
+            Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),
         }
     }
 }

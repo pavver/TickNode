@@ -17,6 +17,7 @@ use crate::ui::{Icon, icons};
 
 mod cases;
 mod inputs;
+mod editing;
 
 use cases::CaseBlock;
 use inputs::InputRow;
@@ -66,22 +67,25 @@ fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
         c.right = None;
         return;
     };
-    let fits = match &c.right {
-        Some(Operand::Input(_)) => true,
-        Some(Operand::Value(v)) => rt == DataType::Any || input_value_fits(reg, &rt, v) || reg.compatible(&v.get_type(), &rt),
-        None => false,
-    };
-    if !fits {
-        let converted = match &c.right {
-            Some(Operand::Value(v)) if text::is_text_type_in(reg, &rt) => text::parse_value_in(reg, &text::format_value(v), &rt).ok(),
-            _ => None,
-        };
-        let default = || match reg.default_enum(&rt) {
-            Some(first) => DataValue::String(first),
-            None => text::default_of(&rt),
-        };
-        c.right = Some(Operand::Value(converted.unwrap_or_else(default)));
+    if !operand_fits(reg, c.right.as_ref(), &rt) {
+        c.right = Some(Operand::Value(fit_value(reg, c.right.as_ref(), &rt)));
     }
+}
+
+fn operand_fits(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> bool {
+    match right {
+        Some(Operand::Input(_)) => true,
+        Some(Operand::Value(value)) => *expected == DataType::Any || input_value_fits(reg, expected, value) || reg.compatible(&value.get_type(), expected),
+        None => false,
+    }
+}
+
+fn fit_value(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> DataValue {
+    let converted = match right {
+        Some(Operand::Value(value)) if text::is_text_type_in(reg, expected) => text::parse_value_in(reg, &text::format_value(value), expected).ok(),
+        _ => None,
+    };
+    converted.unwrap_or_else(|| reg.default_enum(expected).map_or_else(|| text::default_of(expected), DataValue::String))
 }
 
 /// First unused name: a, b, c, … then in1, in2, …

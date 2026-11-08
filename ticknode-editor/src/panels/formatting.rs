@@ -8,20 +8,21 @@ use crate::i18n::{self, t};
 pub(super) const MAX_VALUE_CHARS: usize = 400;
 
 pub fn property_label(name: &str) -> String {
-    match name {
-        "value" => t!("prop-value"),
-        "var_name" => t!("prop-var-name"),
-        "expression" => t!("prop-expression"),
-        "prefix" => t!("prop-prefix"),
-        "label" => t!("prop-label"),
-        "element_type" => t!("prop-element-type"),
-        "field_type" => t!("prop-field-type"),
-        "fields_list" => t!("prop-fields-list"),
-        "interval_ticks" => t!("prop-interval-ticks"),
-        "all_matches" => t!("prop-all-matches"),
-        "cases" => t!("prop-cases"),
-        other => other.to_string(),
-    }
+    const LABELS: &[(&str, &str)] = &[
+        ("value", "prop-value"),
+        ("var_name", "prop-var-name"),
+        ("expression", "prop-expression"),
+        ("prefix", "prop-prefix"),
+        ("label", "prop-label"),
+        ("element_type", "prop-element-type"),
+        ("field_type", "prop-field-type"),
+        ("fields_list", "prop-fields-list"),
+        ("interval_ticks", "prop-interval-ticks"),
+        ("all_matches", "prop-all-matches"),
+        ("cases", "prop-cases"),
+    ];
+    LABELS.iter().find(|(value, _)| *value == name)
+        .map_or_else(|| name.to_string(), |(_, key)| t!(*key))
 }
 
 /// Formats a value for display in the inspector: strings are quoted to distinguish `"5"` from `5`.
@@ -74,3 +75,6 @@ pub(super) fn instance_pin_label(instance: &NodeInstance, pin: PinId, dir: PinDi
     }
     i18n::node_pin_label(&instance.definition.type_name, fallback)
 }
+
+#[cfg(test)]
+mod tests;

@@ -21,6 +21,11 @@ fn translated_type_title(type_name: &str) -> Option<String> {
     lookup(&format!("type-{}-title", slug(type_name)))
 }
 
+fn translated_custom_node(type_name: &str) -> Option<(&'static str, &str, String)> {
+    let (kind, name) = custom_node_kind(type_name)?;
+    Some((kind, name, translated_type_title(name)?))
+}
+
 pub fn node_title(def: &NodeDefinition) -> String {
     // On the canvas, variable nodes include the dynamic variable name in their title (`Get counter`, `Set x`)
     if (def.type_name == "variable/get" && def.title != "Get my_var")
@@ -28,8 +33,7 @@ pub fn node_title(def: &NodeDefinition) -> String {
     {
         return def.title.clone();
     }
-    if let Some((kind, type_name)) = custom_node_kind(&def.type_name)
-        && let Some(title) = translated_type_title(type_name)
+    if let Some((kind, _, title)) = translated_custom_node(&def.type_name)
     {
         return t!(if kind == "make" { "custom-make-title" } else { "custom-break-title" }, type = title);
     }
@@ -37,8 +41,7 @@ pub fn node_title(def: &NodeDefinition) -> String {
 }
 
 pub fn node_description(def: &NodeDefinition) -> String {
-    if let Some((kind, type_name)) = custom_node_kind(&def.type_name)
-        && let Some(title) = translated_type_title(type_name)
+    if let Some((kind, _, title)) = translated_custom_node(&def.type_name)
     {
         return t!(if kind == "make" { "custom-make-description" } else { "custom-break-description" }, type = title);
     }
@@ -46,8 +49,7 @@ pub fn node_description(def: &NodeDefinition) -> String {
 }
 
 pub fn node_help(def: &NodeDefinition) -> String {
-    if let Some((kind, type_name)) = custom_node_kind(&def.type_name)
-        && let Some(title) = translated_type_title(type_name)
+    if let Some((kind, type_name, title)) = translated_custom_node(&def.type_name)
     {
         let key = if kind == "make" { "custom-make-help" } else { "custom-break-help" };
         let description = lookup(&format!("type-{}-description", slug(type_name)))

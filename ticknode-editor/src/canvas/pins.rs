@@ -52,59 +52,30 @@ pub fn Pin(
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
     // An unconnected data input can have an inline value set right here
-    let value = match &pin.pin_type {
-        PinType::Data(t) if is_input && ed.types.with_untracked(|types| input_value_editable(types, t)) => {
-            let t = t.clone();
-            Some(move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() /> }))
-        }
-        _ => None,
-    };
+    let value_type = ed.types.with_untracked(|types| inline_type(types, dir, &pin.pin_type));
+    let value = value_type.map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() /> }));
     let pin_name_title = pin.name.clone();
     let pin_type_title = pin.pin_type.clone();
     let pin_title = move || {
-        let translated_pin = ed.node_tracked(node).map_or_else(
-            || pin_name_title.clone(),
-            |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, &pin_name_title)),
-        );
-        let type_name = match &pin_type_title {
-            PinType::Exec => i18n::type_name_label("exec"),
-            PinType::Data(t) => ed.type_title(t),
-        };
-        let required_note = if is_required { t!("pin-required-suffix") } else { String::new() };
-        let technical = match &pin_type_title {
-            PinType::Data(t) => format!("\n{}", t!("pin-technical-type", name = data_type_name(t))),
-            _ => String::new(),
-        };
-        format!("{translated_pin}: {type_name}{required_note}{technical}")
+        let translated_pin = translated_pin_name(ed, node, &pin_name_title);
+        let type_name = pin_type_title_label(ed, &pin_type_title);
+        pin_tooltip(&translated_pin, &type_name, &pin_type_title, is_required)
     };
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();
-    let allowed_target = move || {
-        let from = pending?.0.get()?;
-        if from.dir == dir || from.node == node { return None; }
-        let other = connection_pin(ed, from.node, from.pin, from.dir)?;
-        let (src, dst) = if dir == PinDirection::Input { (&other, &target_type) } else { (&target_type, &other) };
-        ed.types.with(|types| wire_conversion(types, src, dst))
-    };
+    let allowed_target = move || target_conversion(ed, pending?.0.get()?, node, dir, &target_type);
     let split_control_pin = pin.clone();
     let is_field = split_field_parent(pin.id).is_some();
     let pin_name_label = pin.name;
     let pin_label = move || match label {
         Some(custom) => custom.get(),
-        None => ed.node_tracked(node).map_or_else(
-            || pin_name_label.clone(),
-            |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, &pin_name_label)),
-        ),
+        None => translated_pin_name(ed, node, &pin_name_label),
     };
     view! {
         <div
             // Single-string class attribute: a dynamic `class` would overwrite separate `class:` bindings
             class=move || {
-                let mut class = if is_input { "pin in" } else { "pin out" }.to_string();
-                if is_field { class.push_str(" split-field"); }
-                if is_input && missing() { class.push_str(" missing"); }
-                if allowed_target().is_some() { class.push_str(" connectable"); }
-                class
+                pin_class(is_input, is_field, is_input && missing(), allowed_target().is_some())
             }
             title=pin_title
             data-pin=pin_id.0.to_string()
@@ -119,3 +90,45 @@ pub fn Pin(
         </div>
     }
 }
+
+fn translated_pin_name(ed: crate::state::Editor, node: NodeId, name: &str) -> String {
+    ed.node_tracked(node).map_or_else(|| name.to_string(), |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, name)))
+}
+
+fn pin_type_title_label(ed: crate::state::Editor, pin: &PinType) -> String {
+    match pin { PinType::Exec => i18n::type_name_label("exec"), PinType::Data(t) => ed.type_title(t) }
+}
+
+fn pin_tooltip(name: &str, type_name: &str, pin: &PinType, required: bool) -> String {
+    let required_note = if required { t!("pin-required-suffix") } else { String::new() };
+    let technical = match pin {
+        PinType::Data(t) => format!("\n{}", t!("pin-technical-type", name = data_type_name(t))),
+        _ => String::new(),
+    };
+    format!("{name}: {type_name}{required_note}{technical}")
+}
+
+fn inline_type(types: &TypeRegistry, dir: PinDirection, pin: &PinType) -> Option<DataType> {
+    match pin {
+        PinType::Data(t) if dir == PinDirection::Input && input_value_editable(types, t) => Some(t.clone()),
+        _ => None,
+    }
+}
+
+fn target_conversion(ed: crate::state::Editor, from: super::wires::WireEnd, node: NodeId, dir: PinDirection, target: &PinType) -> Option<bool> {
+    if from.dir == dir || from.node == node { return None; }
+    let other = connection_pin(ed, from.node, from.pin, from.dir)?;
+    let (src, dst) = if dir == PinDirection::Input { (&other, target) } else { (target, &other) };
+    ed.types.with(|types| wire_conversion(types, src, dst))
+}
+
+fn pin_class(is_input: bool, is_field: bool, missing: bool, connectable: bool) -> String {
+    let mut class = if is_input { "pin in" } else { "pin out" }.to_string();
+    if is_field { class.push_str(" split-field"); }
+    if missing { class.push_str(" missing"); }
+    if connectable { class.push_str(" connectable"); }
+    class
+}
+
+#[cfg(test)]
+mod tests;

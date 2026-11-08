@@ -33,19 +33,16 @@ pub enum Locale {
 }
 
 impl Locale {
-    pub fn code(self) -> &'static str {
+    fn labels(self) -> (&'static str, &'static str) {
         match self {
-            Self::Uk => "uk",
-            Self::En => "en",
+            Self::Uk => ("uk", "UK"),
+            Self::En => ("en", "EN"),
         }
     }
 
-    pub fn badge(self) -> &'static str {
-        match self {
-            Self::Uk => "UK",
-            Self::En => "EN",
-        }
-    }
+    pub fn code(self) -> &'static str { self.labels().0 }
+
+    pub fn badge(self) -> &'static str { self.labels().1 }
 
     pub fn toggle(self) -> Self {
         match self {

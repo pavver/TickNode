@@ -36,26 +36,7 @@ pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
                     PinDirection::Input => ed.is_input_connected(id, pin),
                     PinDirection::Output => ed.is_output_connected(id, pin),
                 };
-                node.trace.with(|trace| {
-                    let Some(trace) = trace else {
-                        return ("—".into(), true, t!("exec-node-never-hint"));
-                    };
-                    match (dir, exec) {
-                        (PinDirection::Input, true) => (String::new(), true, String::new()),
-                        (PinDirection::Output, true) if trace.fired.contains(&pin) => (t!("exec-fired"), false, String::new()),
-                        (PinDirection::Output, true) => ("—".into(), true, t!("exec-not-fired-hint")),
-                        (PinDirection::Input, false) => match trace.inputs.iter().find(|(p, _)| *p == pin) {
-                            Some((_, Some(v))) => shown(v),
-                            Some((_, None)) => (t!("exec-no-value"), true, t!("exec-no-value-hint")),
-                            None if connected => ("—".into(), true, t!("exec-connected-after-hint")),
-                            None => (t!("exec-not-connected"), true, t!("exec-default-used-hint")),
-                        },
-                        (PinDirection::Output, false) => match trace.outputs.iter().find(|(p, _)| *p == pin) {
-                            Some((_, v)) => shown(v),
-                            None => ("—".into(), true, t!("exec-output-not-emitted-hint")),
-                        },
-                    }
-                })
+                node.trace.with(|trace| trace_value(trace.as_ref(), dir, exec, pin, connected))
             };
             let pin_type = p.pin_type.clone();
             let ty = move || match &pin_type {
@@ -105,3 +86,32 @@ fn shown(value: &DataValue) -> (String, bool, String) {
     let full = display_value(value);
     (truncate(full.clone(), MAX_VALUE_CHARS), false, truncate(full, 5000))
 }
+
+/// Text, muted state and tooltip of a pin in the last execution.
+fn trace_value(trace: Option<&NodeTrace>, dir: PinDirection, exec: bool, pin: PinId, connected: bool) -> (String, bool, String) {
+    let Some(trace) = trace else {
+        return ("—".into(), true, t!("exec-node-never-hint"));
+    };
+    match (dir, exec) {
+        (PinDirection::Input, true) => (String::new(), true, String::new()),
+        (PinDirection::Output, true) if trace.fired.contains(&pin) => (t!("exec-fired"), false, String::new()),
+        (PinDirection::Output, true) => ("—".into(), true, t!("exec-not-fired-hint")),
+        (PinDirection::Input, false) => input_trace_value(trace, pin, connected),
+        (PinDirection::Output, false) => match trace.outputs.iter().find(|(p, _)| *p == pin) {
+            Some((_, v)) => shown(v),
+            None => ("—".into(), true, t!("exec-output-not-emitted-hint")),
+        },
+    }
+}
+
+fn input_trace_value(trace: &NodeTrace, pin: PinId, connected: bool) -> (String, bool, String) {
+    match trace.inputs.iter().find(|(p, _)| *p == pin) {
+        Some((_, Some(v))) => shown(v),
+        Some((_, None)) => (t!("exec-no-value"), true, t!("exec-no-value-hint")),
+        None if connected => ("—".into(), true, t!("exec-connected-after-hint")),
+        None => (t!("exec-not-connected"), true, t!("exec-default-used-hint")),
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -22,25 +22,28 @@ impl SelectBox {
     pub(super) fn rect(&self) -> (f64, f64, f64, f64) {
         (self.start.0.min(self.end.0), self.start.1.min(self.end.1), self.start.0.max(self.end.0), self.start.1.max(self.end.1))
     }
+
+    fn hits(&self, view: Camera, position: Position, (width, height): (f64, f64)) -> bool {
+        let (x0, y0, x1, y1) = self.rect();
+        let (wx0, wy0) = view.to_world(x0, y0);
+        let (wx1, wy1) = view.to_world(x1, y1);
+        let (nx0, ny0) = (position.x as f64, position.y as f64);
+        let (nx1, ny1) = (nx0 + width, ny0 + height);
+        if self.crossing() {
+            nx0 <= wx1 && nx1 >= wx0 && ny0 <= wy1 && ny1 >= wy0
+        } else {
+            nx0 >= wx0 && nx1 <= wx1 && ny0 >= wy0 && ny1 <= wy1
+        }
+    }
+
 }
 
 /// Nodes captured by the selection box (in world coordinates).
 pub(super) fn nodes_in_box(ed: Editor, b: SelectBox) -> Vec<NodeId> {
     let view = ed.view.get_untracked();
-    let (x0, y0, x1, y1) = b.rect();
-    let (wx0, wy0) = view.to_world(x0, y0);
-    let (wx1, wy1) = view.to_world(x1, y1);
-    let crossing = b.crossing();
     ed.nodes.with_untracked(|nodes| {
-        nodes.iter().filter(|(_, n)| {
-            let p = n.pos.get_untracked();
-            let (w, h) = n.instance.with_untracked(instance_size);
-            let (nx0, ny0, nx1, ny1) = (p.x as f64, p.y as f64, p.x as f64 + w, p.y as f64 + h);
-            if crossing {
-                nx0 <= wx1 && nx1 >= wx0 && ny0 <= wy1 && ny1 >= wy0
-            } else {
-                nx0 >= wx0 && nx1 <= wx1 && ny0 >= wy0 && ny1 <= wy1
-            }
+        nodes.iter().filter(|(_, node)| {
+            b.hits(view, node.pos.get_untracked(), node.instance.with_untracked(instance_size))
         }).map(|(id, _)| *id).collect()
     })
 }
@@ -83,3 +86,6 @@ pub(super) fn SelectionBounds() -> impl IntoView {
         </div>
     })
 }
+
+#[cfg(test)]
+mod tests;

@@ -6,6 +6,7 @@ use crate::geometry::type_color;
 use crate::inline::PinValue;
 use crate::state::LogKind;
 use crate::ui::{ControlState, flash};
+use super::editing::{validate_name, rename_input, set_input_type, remove_input};
 
 #[component]
 pub(super) fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: usize, pin: u32, edit: Callback<EditFn>) -> impl IntoView {
@@ -18,48 +19,12 @@ pub(super) fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputT
     let connected = Memo::new(move |_| ed.is_input_connected(node, pin_id));
 
     let rename = Callback::new(move |new: String| -> Result<(), String> {
-        let new = new.trim().to_string();
-        if !is_input_name(&new) {
-            return Err(t!("match-error-bad-input-name", name = new));
-        }
-        if state.with_untracked(|s| s.inputs.iter().enumerate().any(|(j, i)| j != ii && i.name == new)) {
-            return Err(t!("match-error-duplicate-input", name = new));
-        }
-        edit.run(EditFn::new(move |s, _| {
-            let old = std::mem::replace(&mut s.inputs[ii].name, new.clone());
-            for c in &mut s.cases {
-                c.rename_input(&old, &new);
-            }
-        }));
+        let new = state.with_untracked(|s| validate_name(s, ii, &new))?;
+        edit.run(EditFn::new(move |s, _| rename_input(s, ii, new)));
         Ok(())
     });
-    let set_type = move |t: DataType| edit.run(EditFn::new(move |s, env| {
-        let types = &env.types;
-        let name = s.inputs[ii].name.clone();
-        s.inputs[ii].value_type = t.clone();
-        // For "auto", use operators matching the effective type
-        let left = if t == DataType::Any { type_of(types, &Operand::Input(name.clone())) } else { t };
-        for c in s.cases.iter_mut().flat_map(|c| c.conditions.iter_mut()) {
-            if c.left == Operand::Input(name.clone()) {
-                fit_condition(&env.reg, c, &left);
-            }
-        }
-    }));
-    let remove = move |_| edit.run(EditFn::new(move |s, env| {
-        let types = &env.types;
-        let name = s.inputs.remove(ii).name;
-        let gone = Operand::Input(name);
-        for case in &mut s.cases {
-            case.conditions.retain(|c| c.left != gone);
-            for c in &mut case.conditions {
-                if c.right.as_ref() == Some(&gone) {
-                    c.right = None;
-                    let t = type_of(types, &c.left);
-                    fit_condition(&env.reg, c, &t);
-                }
-            }
-        }
-    }));
+    let set_type = move |t: DataType| edit.run(EditFn::new(move |s, env| set_input_type(s, env, ii, t)));
+    let remove = move |_| edit.run(EditFn::new(move |s, env| remove_input(s, env, ii)));
     let pin_title = move || format!("{}: {}", name.get(), ed.type_title(&effective.get()));
     view! {
         <div class="case-row input-row">

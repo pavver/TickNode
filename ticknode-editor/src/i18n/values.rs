@@ -30,21 +30,22 @@ pub fn ui_text(message: &UiMessage) -> String {
 // --- Data types, field hints, and value parsing ---
 
 pub fn type_name_label(name: &str) -> String {
-    match name {
-        "exec" => t!("type-exec"),
-        "number" => t!("type-number"),
-        "string" => t!("type-string"),
-        "bool" => t!("type-bool"),
-        "time" => t!("type-time"),
-        "datetime" => t!("type-datetime"),
-        "duration" => t!("type-duration"),
-        "color" => t!("type-color"),
-        "object" => t!("type-object"),
-        "list" => t!("type-list"),
-        "any" => t!("type-any"),
-        "auto" => t!("type-auto"),
-        other => other.to_string(),
-    }
+    const LABELS: &[(&str, &str)] = &[
+        ("exec", "type-exec"),
+        ("number", "type-number"),
+        ("string", "type-string"),
+        ("bool", "type-bool"),
+        ("time", "type-time"),
+        ("datetime", "type-datetime"),
+        ("duration", "type-duration"),
+        ("color", "type-color"),
+        ("object", "type-object"),
+        ("list", "type-list"),
+        ("any", "type-any"),
+        ("auto", "type-auto"),
+    ];
+    LABELS.iter().find(|(value, _)| *value == name)
+        .map_or_else(|| name.to_string(), |(_, key)| t!(*key))
 }
 
 pub fn data_type_title(types: &TypeRegistry, t: &DataType) -> String {

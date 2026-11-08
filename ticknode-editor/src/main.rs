@@ -6,12 +6,14 @@ mod categories;
 mod clipboard;
 mod connection;
 mod geometry;
+mod events;
 pub mod i18n;
 mod inline;
 mod match_editor;
 mod panels;
 mod picker;
 mod plugins_panel;
+mod shortcuts;
 mod state;
 mod ui;
 mod toolbar;
@@ -83,6 +85,21 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
     }
 }
 
+fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
+    use shortcuts::Shortcut;
+    match action {
+        Shortcut::Delete => clipboard::delete_selection(editor),
+        Shortcut::Escape => {
+            if !clipboard::cancel_paste(editor) { editor.selection.set(None); }
+        }
+        Shortcut::Fit => fit_view(editor),
+        Shortcut::Undo => editor.send(ClientMessage::Undo),
+        Shortcut::Redo => editor.send(ClientMessage::Redo),
+        Shortcut::SelectAll => editor.select_nodes(editor.nodes.with_untracked(|n| n.keys().copied().collect::<Vec<_>>())),
+        Shortcut::Duplicate => clipboard::duplicate(editor),
+    }
+}
+
 #[component]
 fn App() -> impl IntoView {
     let locale = i18n::provide_locale(i18n::detect_locale());
@@ -111,39 +128,7 @@ fn App() -> impl IntoView {
     let resize = window_event_listener(ev::resize, move |_| {
         editor.narrow.set(window_width() <= NARROW_WIDTH);
     });
-    let keys = window_event_listener(ev::keydown, move |ev| {
-        if typing_in_field(&ev) {
-            return;
-        }
-        let ctrl = ev.ctrl_key() || ev.meta_key();
-        if ctrl {
-            // Keyboard paste is not a primary selection paste, even if a middle-button release was missed
-            editor.middle_button_at.set_value(f64::NEG_INFINITY);
-        }
-        match (ctrl, ev.key().to_lowercase().as_str()) {
-            (false, "delete" | "backspace") => clipboard::delete_selection(editor),
-            (false, "escape") => {
-                if !clipboard::cancel_paste(editor) {
-                    editor.selection.set(None);
-                }
-            }
-            (false, "f" | "а") => fit_view(editor),
-            (true, "z" | "я" | "y" | "н") if editor.pending_paste.with_untracked(|p| p.is_none()) => {
-                ev.prevent_default();
-                let redo = ev.shift_key() || matches!(ev.key().to_lowercase().as_str(), "y" | "н");
-                editor.send(if redo { ClientMessage::Redo } else { ClientMessage::Undo });
-            }
-            (true, "a" | "ф") => {
-                ev.prevent_default();
-                editor.select_nodes(editor.nodes.with_untracked(|n| n.keys().copied().collect::<Vec<_>>()));
-            }
-            (true, "d" | "в") => {
-                ev.prevent_default();
-                clipboard::duplicate(editor);
-            }
-            _ => {}
-        }
-    });
+    let keys = window_event_listener(ev::keydown, move |ev| events::keydown(editor, ev));
     // Copy/paste uses clipboard events: works without HTTPS and across browser tabs.
     let copy = window_event_listener(ev::copy, move |ev| copy_selection(editor, &ev, false));
     let cut = window_event_listener(ev::cut, move |ev| copy_selection(editor, &ev, true));
@@ -160,38 +145,10 @@ fn App() -> impl IntoView {
         }
     });
     // The "info" tooltip is dismissed by pressing anywhere outside the info button itself
-    let hide_tooltip = window_event_listener(ev::pointerdown, move |ev| {
-        let on_info = ev.target()
-            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-            .and_then(|el| el.closest(".info-btn").ok().flatten())
-            .is_some();
-        if !on_info && editor.tooltip.with_untracked(|t| t.is_some()) {
-            editor.tooltip.set(None);
-        }
-    });
+    let hide_tooltip = window_event_listener(ev::pointerdown, move |ev| events::hide_tooltip(editor, ev));
     // The property picker popup closes on a press anywhere outside it and outside its field
-    let hide_picker = window_event_listener(ev::pointerdown, move |ev| {
-        let inside = ev.target()
-            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-            .and_then(|el| el.closest(".picker-popup, .picker-field").ok().flatten())
-            .is_some();
-        if !inside && editor.picker.with_untracked(|p| p.is_some()) {
-            editor.picker.set(None);
-        }
-    });
-    let paste = window_event_listener(ev::paste, move |ev| {
-        if typing_in_field(&ev) {
-            return;
-        }
-        if now_ms() - editor.middle_button_at.get_value() < MIDDLE_PASTE_WINDOW_MS {
-            ev.prevent_default();
-            return;
-        }
-        if let Some(text) = ev.clipboard_data().and_then(|d| d.get_data("text/plain").ok()) {
-            ev.prevent_default();
-            clipboard::paste_text(editor, &text);
-        }
-    });
+    let hide_picker = window_event_listener(ev::pointerdown, move |ev| events::hide_picker(editor, ev));
+    let paste = window_event_listener(ev::paste, move |ev| events::paste(editor, ev));
     on_cleanup(move || {
         resize.remove();
         keys.remove();

@@ -1,6 +1,32 @@
 use super::*;
 
 #[test]
+fn every_builtin_pin_color_is_stable() {
+    for (ty, expected) in [(DataType::Bool, "var(--error)"), (DataType::Number, "var(--accent)"),
+        (DataType::String, "var(--warning)"), (DataType::Time, "var(--info)"),
+        (DataType::DateTime, "var(--info)"), (DataType::Duration, "var(--info)"),
+        (DataType::Color, "var(--magenta)"), (DataType::List(Box::new(DataType::Any)), "var(--success)"),
+        (DataType::Object, "var(--text-secondary)"), (DataType::Any, "var(--border-strong)"),
+        (DataType::Named("test.value".into()), "var(--text-secondary)")] {
+        assert_eq!(data_type_color(&ty), expected);
+    }
+    assert_eq!(pin_color(&TypeRegistry::new(), &PinType::Exec), "var(--text-primary)");
+}
+
+#[test]
+fn match_inputs_skip_bad_entries_and_keep_their_order() {
+    assert!(match_inputs_of(&[]).is_empty());
+    assert!(match_inputs_of(&[("inputs".into(), DataValue::Bool(false))]).is_empty());
+    let properties = [("inputs".into(), DataValue::List { element_type: DataType::Any, elements: vec![
+        DataValue::String("3:reading:number".into()), DataValue::Bool(true), DataValue::String("invalid".into()),
+        DataValue::String("1:name:string".into()),
+    ] })];
+    let inputs = match_inputs_of(&properties);
+    assert_eq!(inputs.iter().map(|i| (i.pin, i.name.as_str(), &i.value_type)).collect::<Vec<_>>(),
+        [(3, "reading", &DataType::Number), (1, "name", &DataType::String)]);
+}
+
+#[test]
 fn split_fields_use_regular_rows_and_settings_add_no_property_row() {
     let field = ticknode_shared::split_field_pin(PinId(5), 0).unwrap();
     let next = ticknode_shared::split_field_pin(PinId(5), 1).unwrap();

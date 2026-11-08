@@ -73,37 +73,16 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
         let pick = pick.clone();
         move |ev: web_sys::KeyboardEvent| {
             let count = found.with_untracked(|(shown, _)| shown.len());
-            match ev.key().as_str() {
-                "ArrowDown" => {
-                    ev.prevent_default();
-                    if count > 0 {
-                        let next = (active.get_untracked() + 1).min(count - 1);
-                        active.set(next);
-                        scroll_to(next);
-                    }
-                }
-                "ArrowUp" => {
-                    ev.prevent_default();
-                    let next = active.get_untracked().saturating_sub(1);
-                    active.set(next);
-                    scroll_to(next);
-                }
-                "Enter" => {
-                    ev.prevent_default();
+            let action = key_action(&ev.key(), active.get_untracked(), count);
+            if action != KeyAction::Ignore { ev.prevent_default(); }
+            match action {
+                KeyAction::Move(next) => { active.set(next); scroll_to(next); }
+                KeyAction::Pick => {
                     let chosen = found.with_untracked(|(shown, _)| shown.get(active.get_untracked()).copied());
-                    let typed = query.get_untracked().trim().to_string();
-                    match chosen {
-                        Some(i) => pick(options.get_untracked()[i].value.clone()),
-                        // No match: the typed text itself is the value (an entity the list does not know yet)
-                        None if !typed.is_empty() => pick(typed),
-                        None => {}
-                    }
+                    if let Some(value) = chosen_value(&options.get_untracked(), chosen, &query.get_untracked()) { pick(value); }
                 }
-                "Escape" => {
-                    ev.prevent_default();
-                    ed.picker.set(None);
-                }
-                _ => {}
+                KeyAction::Close => ed.picker.set(None),
+                KeyAction::Handled | KeyAction::Ignore => {}
             }
         }
     };
@@ -167,15 +146,7 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
                     let (shown, total) = found.get();
                     let typed = query.get().trim().to_string();
                     let exact = options.with(|o| o.iter().any(|o| o.value == typed));
-                    let note = if options.with(|o| o.is_empty()) && typed.is_empty() {
-                        Some(t!("picker-no-options"))
-                    } else if shown.is_empty() && typed.is_empty() {
-                        Some(t!("picker-empty"))
-                    } else if total > shown.len() {
-                        Some(t!("picker-more", count = total - shown.len()))
-                    } else {
-                        None
-                    };
+                    let note = list_note(options.with(|o| o.is_empty()), typed.is_empty(), shown.len(), total);
                     let use_typed = (!typed.is_empty() && !exact).then(|| {
                         let pick = typed_pick.clone();
                         let value = typed.clone();
@@ -201,3 +172,35 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
 pub(super) fn option_is_current(current: &str, value: &str) -> bool {
     !current.is_empty() && current == value
 }
+
+#[derive(Debug, PartialEq)]
+enum KeyAction { Move(usize), Pick, Close, Handled, Ignore }
+
+fn key_action(key: &str, active: usize, count: usize) -> KeyAction {
+    match key {
+        "ArrowDown" if count > 0 => KeyAction::Move((active + 1).min(count - 1)),
+        "ArrowDown" => KeyAction::Handled,
+        "ArrowUp" => KeyAction::Move(active.saturating_sub(1)),
+        "Enter" => KeyAction::Pick,
+        "Escape" => KeyAction::Close,
+        _ => KeyAction::Ignore,
+    }
+}
+
+fn chosen_value(options: &[PropertyOption], chosen: Option<usize>, typed: &str) -> Option<String> {
+    match chosen {
+        Some(i) => Some(options[i].value.clone()),
+        None if !typed.trim().is_empty() => Some(typed.trim().to_string()),
+        None => None,
+    }
+}
+
+fn list_note(no_options: bool, no_query: bool, shown: usize, total: usize) -> Option<String> {
+    if no_options && no_query { Some(t!("picker-no-options")) }
+    else if shown == 0 && no_query { Some(t!("picker-empty")) }
+    else if total > shown { Some(t!("picker-more", count = total - shown)) }
+    else { None }
+}
+
+#[cfg(test)]
+mod tests;

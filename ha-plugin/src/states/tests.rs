@@ -1,0 +1,38 @@
+use super::*;
+use serde_json::json;
+
+#[test]
+fn state_options_for_light_include_on_off_and_current() {
+    let state = crate::entities::test_state("light.hall", "on", json!({}));
+    let options = state_options("light.hall", Some(&state), true);
+    assert_eq!(options[0].value, "");
+    assert_eq!(options[1].value, "on");
+    assert!(options[1].label.contains("Поточний стан"));
+    assert!(options.iter().any(|o| o.value == "off"));
+    assert!(options.iter().any(|o| o.value == "unavailable"));
+}
+
+#[test]
+fn state_options_for_door_use_open_closed_labels() {
+    let state = crate::entities::test_state(
+        "binary_sensor.front_door",
+        "off",
+        json!({"device_class": "door"}),
+    );
+    let options = state_options("binary_sensor.front_door", Some(&state), false);
+    assert_eq!(options[0].value, "off");
+    assert!(options.iter().any(|o| o.value == "on" && o.label.contains("Відкрито")));
+}
+
+#[test]
+fn attribute_options_list_attributes_with_values() {
+    let state = crate::entities::test_state(
+        "light.hall",
+        "on",
+        json!({"brightness": 255, "friendly_name": "Hall light"}),
+    );
+    let options = attribute_options("light.hall", Some(&state));
+    assert_eq!(options[0].value, "");
+    assert!(options.iter().any(|o| o.value == "brightness" && o.detail.contains("255")));
+    assert!(options.iter().any(|o| o.value == "friendly_name"));
+}

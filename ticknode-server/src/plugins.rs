@@ -7,11 +7,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
-use serde::{Deserialize, Serialize};
 use ticknode_core::{PluginChange, TickEngine, effective_settings};
 use ticknode_shared::*;
 use tracing::{info, warn};
+
+mod config;
+pub use config::PluginConfig;
+use config::stored;
 
 /// Key of the error recorded for a corrupted config file (overwritten by saving settings or enabling).
 const CONFIG_CORRUPT_KEY: &str = "error-plugin-config-corrupt";
@@ -26,20 +28,6 @@ fn not_found(name: &str) -> UiMessage {
 
 fn not_loaded(name: &str) -> UiMessage {
     UiMessage::new("error-plugin-not-loaded", format!("Plugin {name} is not loaded")).arg("plugin", name)
-}
-
-/// Persisted state of a single plugin.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PluginConfig {
-    pub enabled: bool,
-    #[serde(default)]
-    pub settings: BTreeMap<String, DataValue>,
-}
-
-impl Default for PluginConfig {
-    fn default() -> Self {
-        Self { enabled: true, settings: BTreeMap::new() }
-    }
 }
 
 struct Entry {
@@ -84,23 +72,6 @@ impl Plugins {
     pub fn with_bundled_dir(mut self, dir: Option<PathBuf>) -> Self {
         self.bundled_dir = dir;
         self
-    }
-
-    fn config_path(&self, name: &str) -> PathBuf {
-        self.config_dir.join(format!("{name}.json"))
-    }
-
-    fn read_config(&self, name: &str) -> anyhow::Result<PluginConfig> {
-        let path = self.config_path(name);
-        if !path.exists() {
-            return Ok(PluginConfig::default());
-        }
-        let text = std::fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-        serde_json::from_str(&text).with_context(|| format!("invalid JSON in {}", path.display()))
-    }
-
-    fn write_config(&self, name: &str, config: &PluginConfig) -> anyhow::Result<()> {
-        write_private(&self.config_dir, &self.config_path(name), &(serde_json::to_string_pretty(config)? + "\n"))
     }
 
     /// Discovers `*.wasm` files, reads manifests, and enables plugins that are not disabled in config.
@@ -269,11 +240,6 @@ impl Plugins {
     }
 }
 
-/// Settings saved in the config, completed with environment overrides.
-fn stored(manifest: &PluginManifest, config: &PluginConfig) -> Vec<(String, DataValue)> {
-    stored_with_env(manifest, config, &|name| std::env::var(name).ok())
-}
-
 /// Name of the environment variable that supplies setting `key` of `plugin`:
 /// `*.wasm` files of the user directory plus the bundled one, sorted by path; on a file name clash the user's file wins.
 fn plugin_paths(user_dir: &Path, bundled_dir: Option<&Path>) -> Vec<PathBuf> {
@@ -296,142 +262,5 @@ fn plugin_paths(user_dir: &Path, bundled_dir: Option<&Path>) -> Vec<PathBuf> {
     paths
 }
 
-/// `TICKNODE_PLUGIN_<PLUGIN>_<KEY>`, both uppercased with every non-alphanumeric character turned into `_`.
-fn env_var_name(plugin: &str, key: &str) -> String {
-    let norm = |s: &str| s.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect::<String>();
-    format!("TICKNODE_PLUGIN_{}_{}", norm(plugin), norm(key))
-}
-
-/// Parses an environment value according to the setting kind (`None` if it does not fit).
-fn parse_env_value(plugin: &str, def: &SettingDefinition, text: &str) -> Option<DataValue> {
-    let value = match &def.kind {
-        SettingKind::Number => DataValue::from(text.trim().parse::<f64>().ok().filter(|n| n.is_finite())?),
-        SettingKind::Bool => match text.trim().to_ascii_lowercase().as_str() {
-            "true" | "1" | "yes" | "on" => DataValue::Bool(true),
-            "false" | "0" | "no" | "off" => DataValue::Bool(false),
-            _ => return None,
-        },
-        _ => DataValue::String(text.to_string()),
-    };
-    def.check(plugin, &value).ok()?;
-    Some(value)
-}
-
-/// The stored settings plus values from `TICKNODE_PLUGIN_<PLUGIN>_<KEY>` for keys the config has no value for
-/// (stored values win; an empty string counts as no value). `lookup` reads the environment.
-fn stored_with_env(manifest: &PluginManifest, config: &PluginConfig, lookup: &dyn Fn(&str) -> Option<String>) -> Vec<(String, DataValue)> {
-    let mut values: Vec<(String, DataValue)> = config.settings.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    for def in &manifest.settings {
-        let unset = config.settings.get(&def.key).is_none_or(|v| matches!(v, DataValue::String(s) if s.is_empty()));
-        if !unset {
-            continue;
-        }
-        let var = env_var_name(&manifest.name, &def.key);
-        let Some(text) = lookup(&var).filter(|t| !t.is_empty()) else { continue };
-        match parse_env_value(&manifest.name, def, &text) {
-            Some(value) => {
-                values.retain(|(k, _)| *k != def.key);
-                values.push((def.key.clone(), value));
-            }
-            None => warn!(variable = %var, "Ignoring the environment value: it does not fit the setting"),
-        }
-    }
-    values
-}
-
-/// Atomic write (tmp + rename) with mode 0600: the file may contain tokens.
-fn write_private(dir: &Path, path: &Path, contents: &str) -> anyhow::Result<()> {
-    use std::io::Write;
-    std::fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-    }
-    let tmp = path.with_extension("json.tmp");
-    let _ = std::fs::remove_file(&tmp);
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&tmp).with_context(|| format!("failed to write {}", tmp.display()))?;
-    file.write_all(contents.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-    std::fs::rename(&tmp, path).with_context(|| format!("failed to replace {}", path.display()))?;
-    Ok(())
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn user_plugin_overrides_bundled_one() {
-        let (user, bundled) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        for (dir, name) in [(&user, "a.wasm"), (&bundled, "a.wasm"), (&bundled, "b.wasm"), (&bundled, "notes.txt")] {
-            std::fs::write(dir.path().join(name), b"").unwrap();
-        }
-        let paths = plugin_paths(user.path(), Some(bundled.path()));
-        assert_eq!(paths, vec![user.path().join("a.wasm"), bundled.path().join("b.wasm")]);
-        assert_eq!(plugin_paths(user.path(), None), vec![user.path().join("a.wasm")]);
-    }
-
-    #[test]
-    fn config_file_is_private_and_atomic() {
-        let dir = tempfile::tempdir().unwrap();
-        let plugins = Plugins::new(dir.path());
-        let mut config = PluginConfig::default();
-        config.settings.insert("token".into(), DataValue::String("secret".into()));
-        plugins.write_config("p", &config).unwrap();
-        assert_eq!(plugins.read_config("p").unwrap(), config);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(plugins.config_path("p")).unwrap().permissions().mode() & 0o777;
-            assert_eq!(mode, 0o600);
-        }
-        // Rewriting leaves no leftover temp files
-        plugins.write_config("p", &config).unwrap();
-        assert_eq!(std::fs::read_dir(dir.path().join("plugin-config")).unwrap().count(), 1);
-        // Missing file defaults to enabled with default settings
-        assert_eq!(plugins.read_config("none").unwrap(), PluginConfig::default());
-    }
-
-    fn env_manifest() -> PluginManifest {
-        PluginManifest::new("home_assistant", "1", "t")
-            .setting(SettingDefinition::url("base-url", "URL"))
-            .setting(SettingDefinition::secret("token", "Token").required())
-            .setting(SettingDefinition::number("retries", "Retries"))
-            .setting(SettingDefinition::bool("debug", "Debug"))
-    }
-
-    #[test]
-    fn environment_supplies_missing_settings_only() {
-        assert_eq!(env_var_name("home_assistant", "base-url"), "TICKNODE_PLUGIN_HOME_ASSISTANT_BASE_URL");
-        let manifest = env_manifest();
-        let env = |name: &str| match name {
-            "TICKNODE_PLUGIN_HOME_ASSISTANT_TOKEN" => Some("from-env".to_string()),
-            "TICKNODE_PLUGIN_HOME_ASSISTANT_BASE_URL" => Some("ws://env/api/websocket".to_string()),
-            "TICKNODE_PLUGIN_HOME_ASSISTANT_RETRIES" => Some("3".to_string()),
-            "TICKNODE_PLUGIN_HOME_ASSISTANT_DEBUG" => Some("maybe".to_string()),
-            _ => None,
-        };
-        let mut config = PluginConfig::default();
-        config.settings.insert("base-url".into(), DataValue::String("ws://stored/api/websocket".into()));
-        let effective = effective_settings(&manifest, &stored_with_env(&manifest, &config, &env));
-        let get = |k: &str| effective.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
-        // The stored value wins, missing ones come from the environment, an invalid one is ignored.
-        assert_eq!(get("base-url"), Some(DataValue::String("ws://stored/api/websocket".into())));
-        assert_eq!(get("token"), Some(DataValue::String("from-env".into())));
-        assert_eq!(get("retries"), Some(DataValue::from(3.0)));
-        assert_eq!(get("debug"), None);
-        // An empty stored string counts as unset.
-        config.settings.insert("token".into(), DataValue::String(String::new()));
-        let effective = effective_settings(&manifest, &stored_with_env(&manifest, &config, &env));
-        assert!(effective.contains(&("token".to_string(), DataValue::String("from-env".into()))));
-    }
-}
+mod tests;

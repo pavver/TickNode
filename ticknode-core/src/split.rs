@@ -38,6 +38,7 @@ impl TickEngine {
         }
         let set = self.split_pins.entry(node).or_default();
         if split { set.insert(pin.0); } else { set.remove(&pin.0); }
+        self.invalidate_definition(node);
         self.pure_cache.clear();
         self.required_reported.remove(&node);
         let effective = self.node_definition(node).expect("node exists");
@@ -58,6 +59,7 @@ impl TickEngine {
     }
 
     pub(crate) fn assemble_split_inputs(&self, node: NodeId, inputs: &mut HashMap<PinId, Option<DataValue>>) {
+        if self.split_pins.get(&node).is_none_or(|pins| pins.is_empty()) { return; }
         let Some(n) = self.nodes.get(&node) else { return };
         for pin in n.definition().pins.iter().filter(|p| p.direction == PinDirection::Input && self.pin_is_split(node, p.id)) {
             let Some(t) = splittable_type(&self.types, pin) else { continue };

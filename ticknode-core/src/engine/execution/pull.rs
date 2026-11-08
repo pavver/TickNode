@@ -37,15 +37,18 @@ impl TickEngine {
         let mut inputs: HashMap<PinId, Option<DataValue>> = connections.into_iter()
             .map(|c| {
                 let mut value = self.pull_data(c.src_node, c.src_pin, stack);
-                if let (Ok(PinType::Data(src)), Ok(PinType::Data(dst))) = (
-                    self.find_pin(c.src_node, c.src_pin, PinDirection::Output),
-                    self.find_pin(c.dst_node, c.dst_pin, PinDirection::Input),
-                ) && let Some(conversion) = self.types.convertible(&src, &dst)
+                let src_def = self.definition_arc(c.src_node);
+                let dst_def = self.definition_arc(c.dst_node);
+                let src_pin = src_def.as_ref().and_then(|d| d.pins.iter().find(|p| p.id == c.src_pin && p.direction == PinDirection::Output));
+                let dst_pin = dst_def.as_ref().and_then(|d| d.pins.iter().find(|p| p.id == c.dst_pin && p.direction == PinDirection::Input));
+                if let (Some(PinType::Data(src)), Some(PinType::Data(dst))) = (
+                    src_pin.map(|p| &p.pin_type), dst_pin.map(|p| &p.pin_type),
+                ) && let Some(conversion) = self.types.convertible(src, dst)
                     && let Some(original) = value.take()
                 {
                     value = conversion.apply(original);
                     if value.is_none()
-                        && let Some(pin) = self.node_definition(node_id).and_then(|d| d.pins.into_iter().find(|p| p.id == c.dst_pin && p.direction == PinDirection::Input && p.required))
+                        && let Some(pin) = dst_pin.filter(|p| p.required)
                         && self.required_reported.insert(node_id)
                     {
                         self.host_state.log(node_id, format!("[ERROR] Required input \"{}\" could not be converted", pin.name));
@@ -63,7 +66,7 @@ impl TickEngine {
 
     fn pull_pure(&mut self, node_id: NodeId, pin_id: PinId, stack: &mut Vec<NodeId>) -> Option<DataValue> {
         stack.push(node_id);
-        let definition = self.node_definition(node_id)?;
+        let definition = self.definition_arc(node_id)?;
         let inputs = self.pull_inputs(node_id, stack);
         if self.skip_for_required(node_id, &definition, &inputs) {
             stack.pop();

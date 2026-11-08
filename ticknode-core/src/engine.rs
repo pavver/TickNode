@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::Arc;
 use ticknode_shared::*;
 use crate::{HostState, Node, NodeRegistry, plugin};
 
@@ -27,6 +28,7 @@ pub struct TickEngine {
     /// Work accounting for the most recent tick, including tasks, emissions, polls and pure pulls.
     pub last_tick: crate::TickStats,
     pub(crate) nodes: HashMap<NodeId, Box<dyn Node>>,
+    definitions: HashMap<NodeId, (u64, Arc<NodeDefinition>)>,
     pub(crate) connections: ConnectionIndex,
     pub registry: NodeRegistry,
     /// Custom data types declared by plugins.
@@ -61,6 +63,7 @@ impl TickEngine {
             budget: Default::default(),
             last_tick: Default::default(),
             nodes: HashMap::new(),
+            definitions: HashMap::new(),
             connections: ConnectionIndex::default(),
             registry: NodeRegistry::new(),
             types: TypeRegistry::new(),

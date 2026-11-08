@@ -58,7 +58,7 @@ impl TickEngine {
     pub(crate) fn run_queue(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
         let mut current_tick_queue = std::mem::take(&mut self.execution_queue);
         while let Some((node_id, trigger_pin)) = current_tick_queue.pop_front() {
-            let Some(def) = self.node_definition(node_id) else { continue };
+            let Some(def) = self.definition_arc(node_id) else { continue };
             if self.budget.should_defer(self.last_tick.spent, def.cost) {
                 current_tick_queue.push_front((node_id, trigger_pin));
                 self.last_tick.deferred = current_tick_queue.len();
@@ -84,7 +84,7 @@ impl TickEngine {
     fn deliver_finished(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
         // Completed tasks (delays, HTTP) are delivered to their owning nodes.
         for (node_id, task, result) in self.host_state.take_finished() {
-            let Some(def) = self.node_definition(node_id) else { continue };
+            let Some(def) = self.definition_arc(node_id) else { continue };
             self.last_tick.charge(def.cost);
             let mut stack = Vec::new();
             let inputs = self.pull_inputs(node_id, &mut stack);
@@ -100,11 +100,13 @@ impl TickEngine {
 
     fn poll_sources(&mut self) {
         let mut fired = Vec::new();
-        for (id, node) in self.nodes.iter_mut() {
-            if !node.polls() { continue; }
-            self.last_tick.charge(node.definition().cost);
+        let sources: Vec<_> = self.nodes.iter().filter(|(_, node)| node.polls()).map(|(id, _)| *id).collect();
+        for id in sources {
+            let Some(def) = self.definition_arc(id) else { continue };
+            self.last_tick.charge(def.cost);
+            let node = self.nodes.get_mut(&id).expect("event source exists");
             if let Some(pin) = node.poll(&mut self.host_state) {
-                fired.push((*id, pin));
+                fired.push((id, pin));
             }
         }
         for (id, pin) in fired {

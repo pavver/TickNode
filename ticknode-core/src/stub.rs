@@ -109,7 +109,7 @@ impl TickEngine {
             self.data_cache.remove(id);
             self.pure_cache.remove(id);
             // Old node (WasmNode) drops its plugin resource when replaced
-            self.nodes.insert(*id, Box::new(StubNode::new(*id, definition, model.properties, Some(plugin.to_string()))));
+            self.add_node(Box::new(StubNode::new(*id, definition, model.properties, Some(plugin.to_string()))));
         }
         self.pure_cache.clear();
         ids

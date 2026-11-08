@@ -18,6 +18,7 @@ pub struct WasmNode {
     /// Resource in the plugin instance with its `generation`; created on first use.
     handle: Option<(u64, ResourceAny)>,
     definition: NodeDefinition,
+    definition_revision: u64,
     /// Event source node (`poll` on every tick). Other nodes avoid paying WASM call overhead each tick.
     polls: bool,
     properties: Vec<(String, DataValue)>,
@@ -51,7 +52,7 @@ impl std::fmt::Display for CallError {
 impl WasmNode {
     pub(super) fn new(id: NodeId, definition: NodeDefinition, polls: bool, runtime: Arc<Mutex<Runtime>>) -> Self {
         let plugin = lock(&runtime).grants.name.clone();
-        Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, polls, properties: Vec::new(), failed: false, plugin }
+        Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, definition_revision: 0, polls, properties: Vec::new(), failed: false, plugin }
     }
 
     /// Calls a method on the node resource. If `host` is passed, it is moved into the plugin for the
@@ -98,6 +99,7 @@ impl WasmNode {
             Ok((api.node().call_definition(&mut *store, node)?, api.node().call_properties(&mut *store, node)?))
         })?;
         (self.definition, self.polls) = from_wit_definition(definition, &self.plugin);
+        self.definition_revision = self.definition_revision.wrapping_add(1);
         self.properties = properties.into_iter().filter_map(|p| Some((p.name, decode_value(&p.value)?))).collect();
         Ok(())
     }
@@ -155,6 +157,7 @@ fn create_resource(
 impl Node for WasmNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition { self.definition.clone() }
+    fn definition_revision(&self) -> u64 { self.definition_revision }
 
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         match trigger_pin {

@@ -133,6 +133,7 @@ impl TickEngine {
         self.check_generated_types(&generated, nodes)?;
 
         self.types = types;
+        self.clear_definitions();
         if let Some(owner) = owner {
             self.type_owners.extend(defs.iter().map(|d| (d.name.clone(), owner.to_string())));
         }

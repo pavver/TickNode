@@ -56,6 +56,7 @@ impl TickEngine {
         }
         let node_definitions: Vec<NodeDefinition> = definitions.iter().map(|(d, _)| d.clone()).collect();
         self.register_types_owned(Some(name), &types, &node_definitions).map_err(|e| UiMessage::plain(format!("Plugin {name}: {e}")))?;
+        self.clear_definitions();
         for (def, polls) in definitions {
             let runtime = runtime.clone();
             self.registry.register_owned(name, Box::new(move |id| Box::new(WasmNode::new(id, def.clone(), polls, runtime.clone()))));
@@ -95,6 +96,7 @@ impl TickEngine {
         }
 
         let node_types: std::collections::HashSet<String> = self.registry.types_owned_by(name).into_iter().collect();
+        self.clear_definitions();
         let replaced = self.replace_with_stubs(&node_types, name);
         self.registry.unregister_owner(name);
         let type_names: Vec<String> = self.type_owners.iter().filter(|(_, o)| *o == name).map(|(t, _)| t.clone()).collect();

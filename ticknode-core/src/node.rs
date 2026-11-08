@@ -33,6 +33,8 @@ impl<'a> NodeContext<'a> {
 pub trait Node: Send + Sync {
     fn id(&self) -> NodeId;
     fn definition(&self) -> NodeDefinition;
+    /// Changes whenever this node's definition changes outside set_property/restored (e.g. a plugin node refreshed after a trap)
+    fn definition_revision(&self) -> u64 { 0 }
     fn is_pure(&self) -> bool { false }
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput>;
     fn set_property(&mut self, _name: &str, _value: DataValue) {}

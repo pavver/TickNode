@@ -1,10 +1,12 @@
 use ticknode_shared::*;
+use std::sync::Arc;
 use crate::{EngineError, Node, RemovedConnections, TickEngine};
 
 impl TickEngine {
     // --- Nodes ---
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
+        self.invalidate_definition(node.id());
         self.nodes.insert(node.id(), node);
     }
 
@@ -59,6 +61,32 @@ impl TickEngine {
         self.nodes.get(&node_id).map(|n| self.effective_definition(node_id, n.definition()))
     }
 
+    pub(crate) fn definition_arc(&mut self, id: NodeId) -> Option<Arc<NodeDefinition>> {
+        let node = self.nodes.get(&id)?;
+        let revision = node.definition_revision();
+        if let Some((cached_revision, definition)) = self.definitions.get(&id)
+            && *cached_revision == revision
+        {
+            return Some(Arc::clone(definition));
+        }
+        let definition = Arc::new(self.effective_definition(id, node.definition()));
+        self.definitions.insert(id, (revision, Arc::clone(&definition)));
+        Some(definition)
+    }
+
+    pub(crate) fn invalidate_definition(&mut self, id: NodeId) {
+        self.definitions.remove(&id);
+    }
+
+    pub(crate) fn clear_definitions(&mut self) {
+        self.definitions.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fresh_node_definition(&self, id: NodeId) -> Option<NodeDefinition> {
+        self.nodes.get(&id).map(|node| self.effective_definition(id, node.definition()))
+    }
+
     /// Node model for persistence/editor (position is managed by the server, defaulted here).
     pub fn node_model(&self, node_id: NodeId) -> Option<NodeModel> {
         self.nodes.get(&node_id).map(|n| NodeModel {
@@ -75,6 +103,7 @@ impl TickEngine {
     }
 
     pub fn remove_node(&mut self, node_id: NodeId) -> RemovedConnections {
+        self.invalidate_definition(node_id);
         self.nodes.remove(&node_id);
         self.input_values.remove(&node_id);
         self.split_pins.remove(&node_id);
@@ -106,6 +135,7 @@ impl TickEngine {
             return Err(EngineError::PluginUnavailable(reason));
         }
         node.set_property(name, value);
+        self.invalidate_definition(node_id);
         self.pure_cache.remove(&node_id);
         self.data_cache.remove(&node_id);
 

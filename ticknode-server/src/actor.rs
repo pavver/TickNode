@@ -73,7 +73,7 @@ pub fn spawn(
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default() };
+    let actor = Actor { engine, positions, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
@@ -91,6 +91,8 @@ struct Actor {
     dirty_since: Option<Instant>,
     /// Latest execution of each node (in-memory only: runtime state, not part of the graph).
     traces: HashMap<NodeId, (NodeTrace, Instant)>,
+    /// Traces and logs waiting for the next telemetry interval.
+    telemetry: telemetry::Telemetry,
 }
 
 impl Actor {
@@ -164,13 +166,13 @@ impl Actor {
         }
         if self.events.receiver_count() == 0 {
             self.engine.host_state.logs.clear();
+            self.telemetry.discard();
             return;
         }
-        if !self.engine.executed.is_empty() {
-            self.broadcast(&ServerMessage::Executed(self.engine.executed.clone()));
-        }
-        for (node_id, message) in std::mem::take(&mut self.engine.host_state.logs) {
-            self.broadcast(&ServerMessage::Log { node_id, message });
+        self.telemetry.add_traces(&self.engine.executed);
+        self.telemetry.add_logs(std::mem::take(&mut self.engine.host_state.logs));
+        for message in self.telemetry.flush(now) {
+            self.broadcast(&message);
         }
     }
 
@@ -232,6 +234,7 @@ impl Actor {
 
 mod commands;
 mod history;
+mod telemetry;
 mod settings;
 
 #[cfg(test)]

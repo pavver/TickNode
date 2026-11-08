@@ -5,7 +5,7 @@ fn actor(dir: &std::path::Path) -> Actor {
     Actor {
         engine: TickEngine::new(), positions: HashMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
-        events, dirty_since: None, traces: HashMap::new(), history: Default::default(),
+        events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
     }
 }
 

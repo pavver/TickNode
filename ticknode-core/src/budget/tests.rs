@@ -20,7 +20,7 @@ impl Node for Probe {
 
 fn probe(engine: &mut TickEngine, cost: u32, pure: bool, polls: bool) -> NodeId {
     let id = NodeId::generate();
-    engine.nodes.insert(id, Box::new(Probe { id, cost, pure, polls }));
+    engine.add_node(Box::new(Probe { id, cost, pure, polls }));
     id
 }
 fn queued(engine: &mut TickEngine, count: usize) -> Vec<NodeId> {
@@ -41,7 +41,7 @@ fn budget_limits_burst_and_preserves_fifo_ahead_of_new_hops() {
     let ids = queued(&mut engine, 5);
     let child = probe(&mut engine, 1, false, false);
     // A real exec source creates next-tick work while the original burst is draining.
-    engine.nodes.insert(ids[0], Box::new(ClickButtonNode { id: ids[0], label: String::new(), clicked: false }));
+    engine.add_node(Box::new(ClickButtonNode { id: ids[0], label: String::new(), clicked: false }));
     engine.connections.add_exec(ConnectionModel { src_node: ids[0], src_pin: PinId(0), dst_node: child, dst_pin: PinId(0) });
     engine.tick();
     assert_eq!(ran(&engine), ids[..2]);

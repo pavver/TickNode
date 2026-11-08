@@ -6,8 +6,22 @@ impl TickEngine {
     // --- Nodes ---
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
-        self.invalidate_definition(node.id());
-        self.nodes.insert(node.id(), node);
+        let id = node.id();
+        self.invalidate_definition(id);
+        self.nodes.insert(id, node);
+        self.update_roles(id);
+    }
+
+    /// Keeps the per-tick node sets (event sources, plugin nodes kept live) in step with the node map.
+    /// Called wherever a node is added, removed or changes its definition.
+    fn update_roles(&mut self, id: NodeId) {
+        let node = self.nodes.get(&id);
+        for (set, member) in [
+            (&mut self.sources, node.is_some_and(|n| n.polls())),
+            (&mut self.live_nodes, node.is_some_and(|n| n.needs_live())),
+        ] {
+            if member { set.insert(id); } else { set.remove(&id); }
+        }
     }
 
     /// Creates a node via the registry and applies its properties. Input values (`in:<pin>`) are returned
@@ -105,6 +119,7 @@ impl TickEngine {
     pub fn remove_node(&mut self, node_id: NodeId) -> RemovedConnections {
         self.invalidate_definition(node_id);
         self.nodes.remove(&node_id);
+        self.update_roles(node_id);
         self.input_values.remove(&node_id);
         self.split_pins.remove(&node_id);
         self.required_reported.remove(&node_id);
@@ -136,6 +151,7 @@ impl TickEngine {
         }
         node.set_property(name, value);
         self.invalidate_definition(node_id);
+        self.update_roles(node_id);
         self.pure_cache.remove(&node_id);
         self.data_cache.remove(&node_id);
 

@@ -46,8 +46,10 @@ impl TickEngine {
         self.deliver_finished(&mut next_tick_queue);
 
         // Plugin-level events (connections) and emissions to the plugins' nodes.
-        for node in self.nodes.values_mut() {
-            node.ensure_live();
+        for id in &self.live_nodes {
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.ensure_live();
+            }
         }
         self.tick_plugins(&mut next_tick_queue);
 
@@ -101,11 +103,11 @@ impl TickEngine {
 
     fn poll_sources(&mut self) {
         let mut fired = Vec::new();
-        let sources: Vec<_> = self.nodes.iter().filter(|(_, node)| node.polls()).map(|(id, _)| *id).collect();
+        let sources: Vec<_> = self.sources.iter().copied().collect();
         for id in sources {
             let Some(def) = self.definition_arc(id) else { continue };
             self.last_tick.charge(def.cost);
-            let node = self.nodes.get_mut(&id).expect("event source exists");
+            let Some(node) = self.nodes.get_mut(&id) else { continue };
             if let Some(pin) = node.poll(&mut self.host_state) {
                 fired.push((id, pin));
             }

@@ -8,6 +8,10 @@ fn assert_definitions(engine: &mut TickEngine) {
         assert_eq!(*cached, engine.fresh_node_definition(id).unwrap(), "node {id:?}");
         assert!(Arc::ptr_eq(&cached, &engine.definition_arc(id).unwrap()), "cache miss for {id:?}");
     }
+    // The per-tick node sets follow the same edits as the definition cache.
+    let expected = |pick: fn(&dyn Node) -> bool| engine.nodes.iter().filter(|(_, n)| pick(n.as_ref())).map(|(id, _)| *id).collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(engine.sources, expected(|n| n.polls()));
+    assert_eq!(engine.live_nodes, expected(|n| n.needs_live()));
 }
 
 #[test]
@@ -93,7 +97,10 @@ fn definitions_follow_plugin_trap_refresh_and_stub_revival() {
     let crash = NodeId::generate();
     engine.create_node(cost, "test/cost", &[("cost".into(), 7i64.into())]).unwrap();
     engine.create_node(crash, "test/crash", &[]).unwrap();
+    let ticker = NodeId::generate();
+    engine.create_node(ticker, "test/ticker", &[]).unwrap();
     assert_definitions(&mut engine);
+    assert!(engine.sources.contains(&ticker));
     let before = engine.definition_arc(cost).unwrap();
     let revision = engine.nodes[&cost].definition_revision();
     engine.trigger_node(crash, PinId(0));
@@ -111,13 +118,17 @@ fn definitions_follow_plugin_trap_refresh_and_stub_revival() {
     assert_eq!(after.cost, 2);
     engine.trigger_node(cost, PinId(0));
     engine.tick();
-    assert_eq!(engine.last_tick.spent, 2);
+    // The ticker fires on every poll, so it pays for the poll and for its activation.
+    let ticker_cost = engine.definition_arc(ticker).unwrap().cost;
+    assert_eq!(engine.last_tick.spent, 2 + 2 * ticker_cost);
     assert_definitions(&mut engine);
     engine.disable_plugin("test_plugin").unwrap();
     assert_definitions(&mut engine);
     assert!(engine.node_unavailable(cost).is_some());
+    assert!(engine.sources.is_empty() && engine.live_nodes.is_empty());
     engine.enable_plugin("test_plugin", &[]).unwrap();
     assert_definitions(&mut engine);
     assert!(engine.node_unavailable(cost).is_none());
+    assert!(engine.sources.contains(&ticker) && engine.live_nodes.len() == 3);
     assert_eq!(engine.definition_arc(cost).unwrap().cost, 2);
 }

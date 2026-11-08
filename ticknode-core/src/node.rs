@@ -54,6 +54,9 @@ pub trait Node: Send + Sync {
     /// the current plugin instance, so the plugin knows every live node (and its id) even before the node
     /// has executed, and again after the instance was recreated following a crash.
     fn ensure_live(&mut self) {}
+    /// Whether `ensure_live` does anything for this node. The engine calls it only for such nodes, so an idle
+    /// tick does not visit every node of the graph.
+    fn needs_live(&self) -> bool { false }
     /// Stub node (plugin for this type is unavailable): explanation for the editor. Such a node does not
     /// execute or accept property changes, but preserves pins and properties so the graph can be saved.
     fn unavailable(&self) -> Option<UiMessage> { None }

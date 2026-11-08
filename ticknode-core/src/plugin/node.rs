@@ -216,6 +216,8 @@ impl Node for WasmNode {
         }
     }
 
+    fn needs_live(&self) -> bool { true }
+
     fn ensure_live(&mut self) {
         if self.failed {
             return;

@@ -13,3 +13,4 @@ pkg/
 
 # Local dev server data (dev.sh)
 /.dev-data/
+.metrics/

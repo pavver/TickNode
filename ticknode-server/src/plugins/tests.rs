@@ -1,3 +1,4 @@
+use super::discovery::plugin_paths;
 use super::*;
 use super::config::{env_var_name, stored_with_env};
 
@@ -65,4 +66,78 @@ fn environment_supplies_missing_settings_only() {
     config.settings.insert("token".into(), DataValue::String(String::new()));
     let effective = effective_settings(&manifest, &stored_with_env(&manifest, &config, &env));
     assert!(effective.contains(&("token".to_string(), DataValue::String("from-env".into()))));
+}
+
+fn fixture(dir: &Path) {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
+    std::fs::create_dir_all(dir.join("plugins")).unwrap();
+    std::fs::copy(source, dir.join("plugins/test.wasm")).expect("build test-plugin for wasm32-wasip2 first");
+}
+
+#[test]
+fn discovery_records_invalid_components_and_user_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let bundled = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("plugins")).unwrap();
+    std::fs::write(dir.path().join("plugins/bad.wasm"), b"invalid").unwrap();
+    std::fs::write(bundled.path().join("bad.wasm"), b"invalid").unwrap();
+    let mut engine = TickEngine::new();
+    let mut plugins = Plugins::new(dir.path()).with_bundled_dir(Some(bundled.path().into()));
+    plugins.load_all(&mut engine);
+    let infos = plugins.infos(&engine);
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].name, "bad");
+    assert_eq!(infos[0].state, PluginState::Error);
+    assert!(infos[0].error.as_ref().unwrap().fallback.starts_with("Invalid component:"));
+    assert_eq!(plugins.set_enabled(&mut engine, "bad", true).err(), infos[0].error);
+}
+
+#[test]
+fn plugin_settings_and_enable_state_survive_discovery() {
+    let dir = tempfile::tempdir().unwrap();
+    fixture(dir.path());
+    let mut engine = TickEngine::new();
+    let mut plugins = Plugins::new(dir.path());
+    plugins.load_all(&mut engine);
+    assert_eq!(plugins.info(&engine, "test_plugin").unwrap().state, PluginState::Enabled);
+    plugins.configure(&mut engine, "test_plugin", vec![
+        ("token".into(), SettingUpdate::Set(DataValue::from("secret"))),
+        ("greeting".into(), SettingUpdate::Set(DataValue::from("Hola"))),
+    ]).unwrap();
+    let info = plugins.info(&engine, "test_plugin").unwrap();
+    assert_eq!(info.settings_error, None);
+    assert!(info.values.contains(&("token".into(), SettingValueView::Secret { is_set: true })));
+    assert!(info.values.contains(&("greeting".into(), SettingValueView::Value(DataValue::from("Hola")))));
+    plugins.configure(&mut engine, "test_plugin", vec![("token".into(), SettingUpdate::Keep)]).unwrap();
+    assert_eq!(plugins.read_config("test_plugin").unwrap().settings["token"], DataValue::from("secret"));
+    plugins.configure(&mut engine, "test_plugin", vec![("token".into(), SettingUpdate::Clear)]).unwrap();
+    assert!(!plugins.read_config("test_plugin").unwrap().settings.contains_key("token"));
+    assert!(plugins.info(&engine, "test_plugin").unwrap().settings_error.is_some());
+    assert_eq!(plugins.configure(&mut engine, "test_plugin", vec![("unknown".into(), SettingUpdate::Keep)]).unwrap_err().key, "error-setting-unknown");
+    plugins.set_enabled(&mut engine, "test_plugin", false).unwrap();
+    let mut restored = Plugins::new(dir.path());
+    let mut restored_engine = TickEngine::new();
+    restored.load_all(&mut restored_engine);
+    assert_eq!(restored.info(&restored_engine, "test_plugin").unwrap().state, PluginState::Disabled);
+    restored.set_enabled(&mut restored_engine, "test_plugin", true).unwrap();
+    assert_eq!(restored.info(&restored_engine, "test_plugin").unwrap().state, PluginState::Enabled);
+}
+
+#[test]
+fn corrupt_plugin_config_stays_visible_until_explicit_save() {
+    let dir = tempfile::tempdir().unwrap();
+    fixture(dir.path());
+    std::fs::create_dir(dir.path().join("plugin-config")).unwrap();
+    std::fs::write(dir.path().join("plugin-config/test_plugin.json"), b"broken").unwrap();
+    let mut engine = TickEngine::new();
+    let mut plugins = Plugins::new(dir.path());
+    plugins.load_all(&mut engine);
+    let info = plugins.info(&engine, "test_plugin").unwrap();
+    assert_eq!(info.state, PluginState::Error);
+    assert_eq!(info.error.unwrap().key, CONFIG_CORRUPT_KEY);
+    assert!(!engine.plugin_active("test_plugin"));
+    assert_eq!(std::fs::read_to_string(dir.path().join("plugin-config/test_plugin.json")).unwrap(), "broken");
+    plugins.configure(&mut engine, "test_plugin", vec![("greeting".into(), SettingUpdate::Set(DataValue::from("Saved")))]).unwrap();
+    assert_eq!(plugins.info(&engine, "test_plugin").unwrap().state, PluginState::Disabled);
+    assert_eq!(plugins.read_config("test_plugin").unwrap().settings["greeting"], DataValue::from("Saved"));
 }

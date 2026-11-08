@@ -1,3 +1,4 @@
+    mod behavior;
     use super::*;
     use std::collections::VecDeque;
     use ticknode_shared::*;

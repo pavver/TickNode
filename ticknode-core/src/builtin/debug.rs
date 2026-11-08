@@ -30,16 +30,6 @@ impl Node for ConsoleNode {
 
 pub fn format_data_value(val: &DataValue) -> String {
     match val {
-        DataValue::Bool(b) => b.to_string(),
-        DataValue::Number(num) => match num {
-            NumberValue::Int(i) => i.to_string(),
-            NumberValue::Float(f) => f.to_string(),
-        },
-        DataValue::String(s) => s.clone(),
-        DataValue::Time(t) => t.to_string(),
-        DataValue::DateTime(dt) => dt.to_string(),
-        DataValue::Duration(d) => format!("{:?}", d),
-        DataValue::Color(c) => format!("Color(r:{}, g:{}, b:{}, a:{})", c.r, c.g, c.b, c.a),
         DataValue::List { elements, .. } => {
             let items: Vec<String> = elements.iter().map(format_data_value).collect();
             format!("[{}]", items.join(", "))
@@ -51,7 +41,21 @@ pub fn format_data_value(val: &DataValue) -> String {
             items.sort();
             format!("{{{}}}", items.join(", "))
         }
+        _ => format_scalar_log(val).expect("a non-collection is a scalar"),
     }
+}
+
+fn format_scalar_log(val: &DataValue) -> Option<String> {
+    Some(match val {
+        DataValue::Bool(b) => b.to_string(),
+        DataValue::Number(num) => format_log_number(*num),
+        DataValue::String(s) => s.clone(),
+        DataValue::Time(t) => t.to_string(),
+        DataValue::DateTime(dt) => dt.to_string(),
+        DataValue::Duration(d) => format!("{:?}", d),
+        DataValue::Color(c) => format!("Color(r:{}, g:{}, b:{}, a:{})", c.r, c.g, c.b, c.a),
+        _ => return None,
+    })
 }
 
 pub struct DebugNode {
@@ -97,4 +101,8 @@ impl Node for DebugNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("prefix".to_string(), DataValue::String(self.prefix.clone()))]
     }
+}
+
+fn format_log_number(num: NumberValue) -> String {
+    match num { NumberValue::Int(i) => i.to_string(), NumberValue::Float(f) => f.to_string() }
 }

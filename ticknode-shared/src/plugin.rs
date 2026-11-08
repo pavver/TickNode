@@ -68,7 +68,7 @@ impl SettingDefinition {
     pub fn check(&self, plugin: &str, value: &DataValue) -> Result<(), UiMessage> {
         let ok = match (&self.kind, value) {
             (SettingKind::Text | SettingKind::Secret, DataValue::String(_)) => true,
-            (SettingKind::Url, DataValue::String(s)) => s.is_empty() || s.starts_with("http://") || s.starts_with("https://") || s.starts_with("ws://") || s.starts_with("wss://"),
+            (SettingKind::Url, DataValue::String(s)) => valid_setting_url(s),
             (SettingKind::Number, DataValue::Number(_)) => true,
             (SettingKind::Bool, DataValue::Bool(_)) => true,
             (SettingKind::Select(options), DataValue::String(s)) => options.iter().any(|(v, _)| v == s),
@@ -161,4 +161,8 @@ mod tests {
         let back: PluginInfo = postcard::from_bytes(&postcard::to_allocvec(&info).unwrap()).unwrap();
         assert_eq!(back, info);
     }
+}
+
+fn valid_setting_url(s: &str) -> bool {
+    s.is_empty() || ["http://", "https://", "ws://", "wss://"].iter().any(|prefix| s.starts_with(prefix))
 }

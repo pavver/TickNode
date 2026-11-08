@@ -112,19 +112,23 @@ impl Actor {
             data: result.disconnected.data.into_iter().filter(exists).collect(),
         };
         events.extend(super::commands::removed_events(disconnected));
-        let mut moved = Vec::new();
-        for node in &target.nodes {
-            if !self.engine.has_node(node.id) { continue; }
-            let old = self.positions.insert(node.id, node.position).unwrap_or_default();
-            if !result.added_nodes.contains(&node.id) && old != node.position {
-                moved.push(ServerMessage::NodeMoved { id: node.id, position: node.position });
-            }
-        }
+        let moved = self.restore_positions(&target, &result.added_nodes);
         events.extend(result.added_nodes.into_iter().filter_map(|id| self.instance(id)).map(ServerMessage::NodeAdded));
         events.extend(moved);
         events.extend(result.connected_exec.into_iter().map(ServerMessage::ExecConnected));
         events.extend(result.connected_data.into_iter().map(ServerMessage::DataConnected));
         self.dirty_since.get_or_insert_with(Instant::now);
         events
+    }
+    fn restore_positions(&mut self, target: &GraphModel, added_nodes: &[NodeId]) -> Vec<ServerMessage> {
+        let mut moved = Vec::new();
+        for node in &target.nodes {
+            if !self.engine.has_node(node.id) { continue; }
+            let old = self.positions.insert(node.id, node.position).unwrap_or_default();
+            if !added_nodes.contains(&node.id) && old != node.position {
+                moved.push(ServerMessage::NodeMoved { id: node.id, position: node.position });
+            }
+        }
+        moved
     }
 }

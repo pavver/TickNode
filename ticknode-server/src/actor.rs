@@ -112,25 +112,7 @@ impl Actor {
 
             let deadline = self.dirty_since.map_or(next_tick, |t| next_tick.min(t + SAVE_DEBOUNCE));
             match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(Command::Client { msg, reply }) => match self.apply(msg, &reply) {
-                    Ok((events, created)) => {
-                        events.iter().for_each(|e| self.broadcast(e));
-                        // Enabling, disabling or configuring a plugin may change its options
-                        self.broadcast_option_changes();
-                        // Sent after broadcast: `NodeAdded` is already in the event channel, and the ws session delivers it first
-                        if let Some(ids) = created {
-                            let _ = reply.send(ServerMessage::Created(ids));
-                        }
-                    }
-                    Err(e) => { let _ = reply.send(ServerMessage::Error(e)); }
-                },
-                Ok(Command::Snapshot(tx)) => { let _ = tx.send(self.snapshot()); }
-                Ok(Command::Shutdown(done)) => {
-                    self.save();
-                    info!("Engine stopped");
-                    let _ = done.send(());
-                    return;
-                }
+                Ok(command) => { if self.handle_command(command) { return; } }
                 Err(std_mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std_mpsc::RecvTimeoutError::Disconnected) => {
                     self.save();
@@ -138,6 +120,31 @@ impl Actor {
                 }
             }
         }
+    }
+
+    fn handle_command(&mut self, command: Command) -> bool {
+        match command {
+            Command::Client { msg, reply } => match self.apply(msg, &reply) {
+                Ok((events, created)) => {
+                    events.iter().for_each(|e| self.broadcast(e));
+                    // Enabling, disabling or configuring a plugin may change its options
+                    self.broadcast_option_changes();
+                    // Sent after broadcast: `NodeAdded` is already in the event channel, and the ws session delivers it first
+                    if let Some(ids) = created {
+                        let _ = reply.send(ServerMessage::Created(ids));
+                    }
+                }
+                Err(e) => { let _ = reply.send(ServerMessage::Error(e)); }
+            },
+            Command::Snapshot(tx) => { let _ = tx.send(self.snapshot()); }
+            Command::Shutdown(done) => {
+                self.save();
+                info!("Engine stopped");
+                let _ = done.send(());
+                return true;
+            }
+        }
+        false
     }
 
     /// Broadcasts the dynamic property options that plugins changed since the last check.
@@ -221,7 +228,6 @@ impl Actor {
     fn require_node(&self, id: NodeId) -> Result<(), UiMessage> {
         if self.engine.has_node(id) { Ok(()) } else { Err(EngineError::NodeNotFound(id).ui_message()) }
     }
-
 }
 
 mod commands;

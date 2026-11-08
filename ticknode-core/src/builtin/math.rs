@@ -8,12 +8,7 @@ impl Node for PureMathNode {
     fn id(&self) -> NodeId { self.id }
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
-        let name = match self.op {
-            MathOp::Add => "math/add", MathOp::Sub => "math/sub", MathOp::Mul => "math/mul", MathOp::Div => "math/div",
-        };
-        let title = match self.op {
-            MathOp::Add => "Math Add", MathOp::Sub => "Math Subtract", MathOp::Mul => "Math Multiply", MathOp::Div => "Math Divide",
-        };
+        let (name, title) = operation_identity(self.op);
         NodeDefinition {
             properties: Vec::new(),
             type_name: name.to_string(),
@@ -114,4 +109,13 @@ pub fn expression_variables(expression: &str) -> HashMap<String, PinId> {
     names.sort();
     names.dedup();
     names.into_iter().enumerate().map(|(i, n)| (n, PinId(i as u32 + 1))).collect()
+}
+
+fn operation_identity(op: MathOp) -> (&'static str, &'static str) {
+    match op {
+        MathOp::Add => ("math/add", "Math Add"),
+        MathOp::Sub => ("math/sub", "Math Subtract"),
+        MathOp::Mul => ("math/mul", "Math Multiply"),
+        MathOp::Div => ("math/div", "Math Divide"),
+    }
 }

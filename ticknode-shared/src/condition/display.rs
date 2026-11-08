@@ -6,26 +6,27 @@ use CompareOp::*;
 impl CompareOp {
     /// Storage (and input) representation.
     pub fn text(self) -> &'static str {
-        match self {
-            Eq => "=", Ne => "!=", Lt => "<", Le => "<=", Gt => ">", Ge => ">=",
-            Contains => "contains", NotContains => "not_contains", StartsWith => "starts_with", EndsWith => "ends_with",
-            IsEmpty => "is_empty", NotEmpty => "not_empty", IsTrue => "is_true", IsFalse => "is_false",
-            HasField => "has_field", NoField => "no_field",
-            LenEq => "len_eq", LenGt => "len_gt", LenLt => "len_lt",
-            HasValue => "has_value", NoValue => "no_value",
-        }
+        self.presentation().0
     }
 
     /// Display symbol in a condition on a node.
     pub fn symbol(self) -> &'static str {
-        match self {
-            Eq => "=", Ne => "≠", Lt => "<", Le => "≤", Gt => ">", Ge => "≥",
-            Contains => "contains", NotContains => "not contains", StartsWith => "starts with", EndsWith => "ends with",
-            IsEmpty => "is empty", NotEmpty => "is not empty", IsTrue => "= true", IsFalse => "= false",
-            HasField => "has field", NoField => "no field",
-            LenEq => "length =", LenGt => "length >", LenLt => "length <",
-            HasValue => "has value", NoValue => "no value",
-        }
+        self.presentation().1
+    }
+
+    fn presentation(self) -> (&'static str, &'static str) {
+        const FORMS: &[(CompareOp, &str, &str)] = &[
+            (Eq, "=", "="), (Ne, "!=", "≠"), (Lt, "<", "<"), (Le, "<=", "≤"), (Gt, ">", ">"), (Ge, ">=", "≥"),
+            (Contains, "contains", "contains"), (NotContains, "not_contains", "not contains"),
+            (StartsWith, "starts_with", "starts with"), (EndsWith, "ends_with", "ends with"),
+            (IsEmpty, "is_empty", "is empty"), (NotEmpty, "not_empty", "is not empty"),
+            (IsTrue, "is_true", "= true"), (IsFalse, "is_false", "= false"),
+            (HasField, "has_field", "has field"), (NoField, "no_field", "no field"),
+            (LenEq, "len_eq", "length ="), (LenGt, "len_gt", "length >"), (LenLt, "len_lt", "length <"),
+            (HasValue, "has_value", "has value"), (NoValue, "no_value", "no value"),
+        ];
+        let (_, text, symbol) = FORMS.iter().find(|(op, _, _)| *op == self).expect("every operator has a presentation");
+        (text, symbol)
     }
 
     /// Label in the operator selector — type-aware (for time, `<` means "earlier").
@@ -66,7 +67,7 @@ impl Join {
         match self { Self::And => "and", Self::Or => "or" }
     }
     fn text(self) -> &'static str {
-        match self { Self::And => "and", Self::Or => "or" }
+        self.symbol()
     }
 }
 

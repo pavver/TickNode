@@ -52,12 +52,14 @@ impl Node for ObjectSetFieldNode {
             category: "Objects".to_string(),
             description: "Sets the value of an object field".to_string(),
             help: "Outputs OutObj — a copy of object Obj where field Name has value Val. If the field did not exist, it is added; otherwise it is replaced.\n\nThe type of Val is selected on the node. Until all inputs are provided, no output is produced.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
-            pins: vec![
-                PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
+            pins: {
+                let mut pins = field_inputs();
+                pins.extend([
                 PinDefinition { id: PinId(2), name: "Val".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(3), name: "OutObj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Output, required: false },
-            ],
+                ]);
+                pins
+            },
         }
     }
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
@@ -76,11 +78,7 @@ impl Node for ObjectSetFieldNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "field_type" {
-            if let DataValue::String(s) = value {
-                self.field_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("field_type".to_string(), DataValue::String(data_type_name(&self.field_type)))]
@@ -99,12 +97,14 @@ impl Node for ObjectGetFieldNode {
             category: "Objects".to_string(),
             description: "Gets the value of an object field".to_string(),
             help: "Looks up field Name in object Obj:\n• Val — the field value;\n• Found — whether the field exists.\n\nThe type of Val is selected on the node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
-            pins: vec![
-                PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
+            pins: {
+                let mut pins = field_inputs();
+                pins.extend([
                 PinDefinition { id: PinId(2), name: "Val".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Output, required: false },
                 PinDefinition { id: PinId(3), name: "Found".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
-            ],
+                ]);
+                pins
+            },
         }
     }
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
@@ -124,11 +124,7 @@ impl Node for ObjectGetFieldNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "field_type" {
-            if let DataValue::String(s) = value {
-                self.field_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("field_type".to_string(), DataValue::String(data_type_name(&self.field_type)))]
@@ -187,4 +183,11 @@ impl Node for ObjectUnpackNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("fields_list".to_string(), DataValue::String(self.fields_list.clone()))]
     }
+}
+
+fn field_inputs() -> Vec<PinDefinition> {
+    vec![
+        PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
+        PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
+    ]
 }

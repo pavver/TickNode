@@ -67,10 +67,9 @@ pub(super) fn sanitize_options(source_count_ok: bool, source: &str, options: Vec
         warnings.push(format!("Source \"{source}\" has {} options, keeping the first {MAX_OPTIONS_PER_SOURCE}", options.len()));
         options.truncate(MAX_OPTIONS_PER_SOURCE);
     }
-    let too_long = |s: &str| s.len() > MAX_OPTION_STRING_LEN;
     let mut dropped = 0usize;
     let accepted = options.into_iter().filter_map(|o| {
-        if o.value.is_empty() || too_long(&o.value) || too_long(&o.label) || too_long(&o.detail) || o.icon.as_deref().is_some_and(too_long) {
+        if invalid_option(&o) {
             dropped += 1;
             return None;
         }
@@ -80,4 +79,10 @@ pub(super) fn sanitize_options(source_count_ok: bool, source: &str, options: Vec
         warnings.push(format!("Source \"{source}\": dropped {dropped} option(s) with an empty value or a string longer than {MAX_OPTION_STRING_LEN} bytes"));
     }
     (accepted, warnings)
+}
+
+fn invalid_option(option: &wit::PropertyOption) -> bool {
+    let too_long = |s: &str| s.len() > MAX_OPTION_STRING_LEN;
+    option.value.is_empty() || [&*option.value, &*option.label, &*option.detail].into_iter().any(too_long)
+        || option.icon.as_deref().is_some_and(too_long)
 }

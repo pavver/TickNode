@@ -49,28 +49,7 @@ pub fn parse_duration(text: &str) -> Option<Duration> {
             i += 1;
             continue;
         }
-        let start = i;
-        while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-            i += 1;
-        }
-        let number: f64 = chars[start..i].iter().collect::<String>().parse().ok()?;
-        while i < chars.len() && chars[i].is_whitespace() {
-            i += 1;
-        }
-        let unit_start = i;
-        while i < chars.len() && chars[i].is_alphabetic() {
-            i += 1;
-        }
-        let unit: String = chars[unit_start..i].iter().collect::<String>().to_lowercase();
-        let scale = match unit.as_str() {
-            "ms" | "мс" => 0.001,
-            "s" | "sec" | "с" | "сек" => 1.0,
-            "m" | "min" | "хв" => 60.0,
-            "h" | "год" => 3600.0,
-            "d" | "дн" | "д" => 86_400.0,
-            _ => return None,
-        };
-        total += number * scale;
+        total += duration_part(&chars, &mut i)?;
         parts += 1;
     }
     if parts == 0 {
@@ -79,11 +58,46 @@ pub fn parse_duration(text: &str) -> Option<Duration> {
     Duration::try_from_secs_f64(total).ok()
 }
 
+fn duration_part(chars: &[char], position: &mut usize) -> Option<f64> {
+    let mut i = *position;
+    let start = i;
+    while chars.get(i).is_some_and(|ch| ch.is_ascii_digit() || *ch == '.') {
+        i += 1;
+    }
+    let number: f64 = chars[start..i].iter().collect::<String>().parse().ok()?;
+    while chars.get(i).is_some_and(|ch| ch.is_whitespace()) {
+        i += 1;
+    }
+    let unit_start = i;
+    while chars.get(i).is_some_and(|ch| ch.is_alphabetic()) {
+        i += 1;
+    }
+    let unit: String = chars[unit_start..i].iter().collect::<String>().to_lowercase();
+    let scale = duration_scale(&unit)?;
+    *position = i;
+    Some(number * scale)
+}
+
+fn duration_scale(unit: &str) -> Option<f64> {
+    Some(match unit {
+        "ms" | "мс" => 0.001,
+        "s" | "sec" | "с" | "сек" => 1.0,
+        "m" | "min" | "хв" => 60.0,
+        "h" | "год" => 3600.0,
+        "d" | "дн" | "д" => 86_400.0,
+        _ => return None,
+    })
+}
+
 pub fn parse_color(text: &str) -> Option<Color> {
     let hex = text.trim().strip_prefix('#')?;
     if !hex.is_ascii() || !(hex.len() == 6 || hex.len() == 8) {
         return None;
     }
+    color_from_hex(hex)
+}
+
+fn color_from_hex(hex: &str) -> Option<Color> {
     let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
     Some(Color { r: byte(0)?, g: byte(2)?, b: byte(4)?, a: if hex.len() == 8 { byte(6)? } else { 255 } })
 }
@@ -117,20 +131,40 @@ pub fn format_duration(d: Duration) -> String {
 /// Text representation of a value for an input field (unquoted for strings). `parse_value` parses it back.
 pub fn format_value(value: &DataValue) -> String {
     match value {
-        DataValue::String(s) => s.clone(),
-        DataValue::Number(NumberValue::Int(i)) => i.to_string(),
-        DataValue::Number(NumberValue::Float(f)) => f.to_string(),
-        DataValue::Bool(b) => b.to_string(),
-        DataValue::Time(t) => t.format(if t.format("%S").to_string() == "00" { "%H:%M" } else { "%H:%M:%S" }).to_string(),
-        DataValue::DateTime(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
-        DataValue::Duration(d) => format_duration(*d),
-        DataValue::Color(c) if c.a == 255 => format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b),
-        DataValue::Color(c) => format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),
         DataValue::List { elements, .. } => format!("[{}]", elements.iter().map(format_value).collect::<Vec<_>>().join(", ")),
         DataValue::Object { fields, .. } => {
             let fields: Vec<_> = fields.iter().map(|(k, f)| format!("{k}: {}", format_value(&f.value))).collect();
             format!("{{{}}}", fields.join(", "))
         }
+        _ => format_scalar(value).expect("a non-collection is a scalar"),
+    }
+}
+
+fn format_scalar(value: &DataValue) -> Option<String> {
+    Some(match value {
+        DataValue::String(s) => s.clone(),
+        DataValue::Number(n) => format_number(*n),
+        DataValue::Bool(b) => b.to_string(),
+        DataValue::Time(t) => format_time(*t),
+        DataValue::DateTime(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+        DataValue::Duration(d) => format_duration(*d),
+        DataValue::Color(c) => format_color(*c),
+        _ => return None,
+    })
+}
+
+fn format_number(n: NumberValue) -> String {
+    match n { NumberValue::Int(i) => i.to_string(), NumberValue::Float(f) => f.to_string() }
+}
+
+fn format_time(time: NaiveTime) -> String {
+    time.format(if time.format("%S").to_string() == "00" { "%H:%M" } else { "%H:%M:%S" }).to_string()
+}
+
+fn format_color(color: Color) -> String {
+    match color {
+        Color { r, g, b, a: 255 } => format!("#{r:02x}{g:02x}{b:02x}"),
+        Color { r, g, b, a } => format!("#{r:02x}{g:02x}{b:02x}{a:02x}"),
     }
 }
 
@@ -194,22 +228,36 @@ pub fn default_of(t: &DataType) -> DataValue {
 
 /// Parses text as a value of type `t`.
 pub fn parse_value(text: &str, t: &DataType) -> Result<DataValue, String> {
-    let bad = |what: &str| format!("\"{}\" is not {what}", text.trim());
-    Ok(match t {
-        DataType::Number => DataValue::Number(parse_number(text).ok_or_else(|| bad("a number"))?),
-        DataType::String => DataValue::String(text.to_string()),
-        DataType::Bool => match text.trim() {
-            "true" | "так" | "1" => DataValue::Bool(true),
-            "false" | "ні" | "0" => DataValue::Bool(false),
-            _ => return Err(bad("true/false")),
-        },
-        DataType::Time => DataValue::Time(parse_time(text).ok_or_else(|| bad("a time (HH:MM or HH:MM:SS)"))?),
-        DataType::DateTime => DataValue::DateTime(parse_datetime(text).ok_or_else(|| bad("a date-time (YYYY-MM-DD HH:MM)"))?),
-        DataType::Duration => DataValue::Duration(parse_duration(text).ok_or_else(|| bad("a duration (90, 1h 30m, 500ms)"))?),
-        DataType::Color => DataValue::Color(parse_color(text).ok_or_else(|| bad("a color (#rrggbb)"))?),
-        DataType::Any => parse_any(text),
-        DataType::List(_) | DataType::Object | DataType::Named(_) => return Err(format!("a value of type {} cannot be entered as text", crate::data_type_name(t))),
-    })
+    match t {
+        DataType::String => Ok(DataValue::String(text.to_string())),
+        DataType::Any => Ok(parse_any(text)),
+        _ => parse_typed_text(text, t),
+    }
+}
+
+type TextParser = fn(&str) -> Option<DataValue>;
+
+fn parse_typed_text(text: &str, t: &DataType) -> Result<DataValue, String> {
+    const PARSERS: &[(DataType, TextParser, &str)] = &[
+        (DataType::Number, |s| parse_number(s).map(DataValue::Number), "a number"),
+        (DataType::Bool, parse_bool, "true/false"),
+        (DataType::Time, |s| parse_time(s).map(DataValue::Time), "a time (HH:MM or HH:MM:SS)"),
+        (DataType::DateTime, |s| parse_datetime(s).map(DataValue::DateTime), "a date-time (YYYY-MM-DD HH:MM)"),
+        (DataType::Duration, |s| parse_duration(s).map(DataValue::Duration), "a duration (90, 1h 30m, 500ms)"),
+        (DataType::Color, |s| parse_color(s).map(DataValue::Color), "a color (#rrggbb)"),
+    ];
+    let Some((_, parser, description)) = PARSERS.iter().find(|(ty, _, _)| ty == t) else {
+        return Err(format!("a value of type {} cannot be entered as text", crate::data_type_name(t)));
+    };
+    parser(text).ok_or_else(|| format!("\"{}\" is not {description}", text.trim()))
+}
+
+fn parse_bool(text: &str) -> Option<DataValue> {
+    match text.trim() {
+        "true" | "так" | "1" => Some(DataValue::Bool(true)),
+        "false" | "ні" | "0" => Some(DataValue::Bool(false)),
+        _ => None,
+    }
 }
 
 /// Like `parse_value`, but custom-type aware: an enum value is a string from the enumeration

@@ -30,6 +30,15 @@ fn field_pin(index: usize, field: &FieldDefinition, direction: PinDirection) -> 
     }
 }
 
+fn struct_pins(def: &TypeDefinition, value_direction: PinDirection, field_direction: PinDirection) -> Vec<PinDefinition> {
+    let mut pins = vec![PinDefinition {
+        id: PinId(0), name: def.title.clone(), pin_type: PinType::Data(DataType::Named(def.name.clone())),
+        direction: value_direction, required: false,
+    }];
+    pins.extend(def.fields().iter().enumerate().map(|(i, f)| field_pin(i, f, field_direction)));
+    pins
+}
+
 /// `Make <Type>`: fields → typed value.
 pub struct TypeMakeNode {
     id: NodeId,
@@ -41,14 +50,6 @@ impl Node for TypeMakeNode {
     fn is_pure(&self) -> bool { true }
 
     fn definition(&self) -> NodeDefinition {
-        let mut pins = vec![PinDefinition {
-            id: PinId(0),
-            name: self.def.title.clone(),
-            pin_type: PinType::Data(DataType::Named(self.def.name.clone())),
-            direction: PinDirection::Output,
-            required: false,
-        }];
-        pins.extend(self.def.fields().iter().enumerate().map(|(i, f)| field_pin(i, f, PinDirection::Input)));
         NodeDefinition {
             properties: Vec::new(),
             type_name: make_node_type(&self.def.name),
@@ -60,7 +61,7 @@ impl Node for TypeMakeNode {
                  Required fields are required inputs: without them no value is created (an error appears in the node's log). An optional field without a value is skipped.\n\nPure node: evaluated whenever its result is needed by another node.\n\n{}",
                 self.def.title, self.def.name, self.def.description
             ).trim_end().to_string(),
-            pins,
+            pins: struct_pins(&self.def, PinDirection::Output, PinDirection::Input),
         }
     }
 
@@ -89,14 +90,6 @@ impl Node for TypeBreakNode {
     fn is_pure(&self) -> bool { true }
 
     fn definition(&self) -> NodeDefinition {
-        let mut pins = vec![PinDefinition {
-            id: PinId(0),
-            name: self.def.title.clone(),
-            pin_type: PinType::Data(DataType::Named(self.def.name.clone())),
-            direction: PinDirection::Input,
-            required: false,
-        }];
-        pins.extend(self.def.fields().iter().enumerate().map(|(i, f)| field_pin(i, f, PinDirection::Output)));
         NodeDefinition {
             properties: Vec::new(),
             type_name: break_node_type(&self.def.name),
@@ -108,7 +101,7 @@ impl Node for TypeBreakNode {
                  An optional field that is absent from the value has no value (the pin is empty).\n\nPure node: evaluated whenever its result is needed by another node.\n\n{}",
                 self.def.title, self.def.name, self.def.description
             ).trim_end().to_string(),
-            pins,
+            pins: struct_pins(&self.def, PinDirection::Input, PinDirection::Output),
         }
     }
 
@@ -131,24 +124,11 @@ impl TickEngine {
     pub fn register_types_owned(&mut self, owner: Option<&str>, defs: &[TypeDefinition], nodes: &[NodeDefinition]) -> Result<(), String> {
         let mut types = self.types.clone();
         types.insert_all(defs)?;
-        for node in nodes {
-            for pin in &node.pins {
-                if let PinType::Data(t) = &pin.pin_type {
-                    types.check_known(t).map_err(|e| format!("Node {}, pin {}: {e}", node.type_name, pin.name))?;
-                }
-            }
-        }
+        check_node_types(&types, nodes)?;
         let generated: Vec<String> = defs.iter().filter(|d| d.is_struct())
             .flat_map(|d| [make_node_type(&d.name), break_node_type(&d.name)])
             .collect();
-        for name in &generated {
-            if self.registry.get_definition(name).is_some() {
-                return Err(format!("Node type {name} is already registered"));
-            }
-        }
-        if let Some(clash) = nodes.iter().find(|n| generated.contains(&n.type_name)) {
-            return Err(format!("Node type {} is reserved for automatic struct nodes", clash.type_name));
-        }
+        self.check_generated_types(&generated, nodes)?;
 
         self.types = types;
         if let Some(owner) = owner {
@@ -166,4 +146,26 @@ impl TickEngine {
         }
         Ok(())
     }
+    fn check_generated_types(&self, generated: &[String], nodes: &[NodeDefinition]) -> Result<(), String> {
+        for name in generated {
+            if self.registry.get_definition(name).is_some() {
+                return Err(format!("Node type {name} is already registered"));
+            }
+        }
+        if let Some(clash) = nodes.iter().find(|n| generated.contains(&n.type_name)) {
+            return Err(format!("Node type {} is reserved for automatic struct nodes", clash.type_name));
+        }
+        Ok(())
+    }
+}
+
+fn check_node_types(types: &TypeRegistry, nodes: &[NodeDefinition]) -> Result<(), String> {
+    for node in nodes {
+        for pin in &node.pins {
+            if let PinType::Data(t) = &pin.pin_type {
+                types.check_known(t).map_err(|e| format!("Node {}, pin {}: {e}", node.type_name, pin.name))?;
+            }
+        }
+    }
+    Ok(())
 }

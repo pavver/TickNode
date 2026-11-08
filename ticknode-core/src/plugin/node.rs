@@ -58,7 +58,7 @@ impl WasmNode {
     /// duration of the call (tasks, logs) and restored afterward.
     fn call<R>(
         &mut self,
-        mut host: Option<&mut HostState>,
+        host: Option<&mut HostState>,
         f: impl FnOnce(&mut Store<PluginState>, &NodesApi, ResourceAny) -> wasmtime::Result<R>,
     ) -> Result<R, CallError> {
         if self.failed {
@@ -76,24 +76,21 @@ impl WasmNode {
         let result = match resource {
             Ok(resource) => {
                 self.handle = Some((generation, resource));
-                if let Some(h) = &mut host {
-                    store.data_mut().call = Some(CallCtx { node_id: self.id, host: std::mem::take(*h) });
-                }
-                let result = f(store, api, resource);
-                if let Some(h) = host {
-                    *h = store.data_mut().call.take().expect("the call context is in place").host;
-                }
-                result.map_err(trap_error)
+                call_with_host(store, api, resource, self.id, host, f)
             }
             Err(e) => Err(e),
         };
         if let Err(e) = &result {
-            self.failed = true;
-            if matches!(e, CallError::Trap(_)) {
-                rt.discard();
-            }
+            self.fail_call(&mut rt, e);
         }
         result
+    }
+
+    fn fail_call(&mut self, rt: &mut Runtime, e: &CallError) {
+        self.failed = true;
+        if matches!(e, CallError::Trap(_)) {
+            rt.discard();
+        }
     }
 
     fn refresh(&mut self) -> Result<(), CallError> {
@@ -124,6 +121,21 @@ impl WasmNode {
             }
         }
     }
+}
+
+fn call_with_host<R>(
+    store: &mut Store<PluginState>, api: &NodesApi, resource: ResourceAny, node_id: NodeId,
+    mut host: Option<&mut HostState>,
+    f: impl FnOnce(&mut Store<PluginState>, &NodesApi, ResourceAny) -> wasmtime::Result<R>,
+) -> Result<R, CallError> {
+    if let Some(h) = &mut host {
+        store.data_mut().call = Some(CallCtx { node_id, host: std::mem::take(*h) });
+    }
+    let result = f(store, api, resource);
+    if let Some(h) = host {
+        *h = store.data_mut().call.take().expect("the call context is in place").host;
+    }
+    result.map_err(trap_error)
 }
 
 fn create_resource(

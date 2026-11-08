@@ -118,6 +118,12 @@ fn history_plugin_toggle_clears_both_stacks() {
     std::fs::copy(wasm, dir.path().join("plugins/test.wasm")).unwrap();
     actor.plugins.load_all(&mut actor.engine);
     let name = actor.plugins.infos(&actor.engine)[0].name.clone();
+    let events = apply(&mut actor, ClientMessage::ConfigurePlugin {
+        name: name.clone(), values: vec![("greeting".into(), SettingUpdate::Set(DataValue::from("Hello actor")))],
+    });
+    assert!(matches!(&events[0], ServerMessage::PluginUpdated(info) if info.values.contains(&(
+        "greeting".into(), SettingValueView::Value(DataValue::from("Hello actor")),
+    ))));
     add(&mut actor, 1.0);
     add(&mut actor, 2.0);
     apply(&mut actor, ClientMessage::Undo);
@@ -125,6 +131,89 @@ fn history_plugin_toggle_clears_both_stacks() {
     let events = apply(&mut actor, ClientMessage::SetPluginEnabled { name, enabled: false });
     state(&actor, false, false);
     assert!(matches!(events.last(), Some(ServerMessage::History(HistoryState { can_undo: false, can_redo: false }))));
+}
+
+#[test]
+fn connection_commands_only_broadcast_actual_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let b = add(&mut actor, 2.0);
+    let exec = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
+    let data = ConnectionModel { src_pin: PinId(5), dst_pin: PinId(1), ..exec };
+    assert!(matches!(apply(&mut actor, ClientMessage::ConnectExec(exec))[0], ServerMessage::ExecConnected(c) if c == exec));
+    assert!(apply(&mut actor, ClientMessage::ConnectExec(exec)).is_empty());
+    assert!(matches!(apply(&mut actor, ClientMessage::ConnectData(data))[0], ServerMessage::DataConnected(c) if c == data));
+    assert!(apply(&mut actor, ClientMessage::ConnectData(data)).is_empty());
+    assert!(matches!(apply(&mut actor, ClientMessage::DisconnectExec(exec))[0], ServerMessage::ExecDisconnected(c) if c == exec));
+    assert!(apply(&mut actor, ClientMessage::DisconnectExec(exec)).is_empty());
+    let disconnect = ClientMessage::DisconnectData { dst_node: b, dst_pin: PinId(1) };
+    assert!(matches!(apply(&mut actor, disconnect.clone())[0], ServerMessage::DataDisconnected { dst_node, dst_pin } if dst_node == b && dst_pin == PinId(1)));
+    assert!(apply(&mut actor, disconnect).is_empty());
+    assert!(actor.engine.exec_connections().is_empty());
+    assert!(actor.engine.data_connections().is_empty());
+}
+
+#[test]
+fn paste_returns_created_ids_positions_warnings_and_limit_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let b = add(&mut actor, 2.0);
+    let mut snippet = actor.graph_snapshot();
+    snippet.data_connections.push(ConnectionModel { src_node: a, src_pin: PinId(99), dst_node: b, dst_pin: PinId(1) });
+    let expected_positions = snippet.nodes.iter().map(|node| node.position).collect::<Vec<_>>();
+    let (reply, mut replies) = mpsc::unbounded_channel();
+    let (events, created) = actor.apply(ClientMessage::Paste(snippet.clone()), &reply).unwrap();
+    let ids = created.unwrap();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().all(|id| *id != a && *id != b));
+    let positions = events.iter().filter_map(|event| match event {
+        ServerMessage::NodeAdded(node) => Some(node.model.position), _ => None,
+    }).collect::<Vec<_>>();
+    assert_eq!(positions, expected_positions);
+    let Ok(ServerMessage::Error(warning)) = replies.try_recv() else { panic!("missing paste warning") };
+    assert_eq!(warning.key, "error-paste-incomplete");
+    assert!(warning.fallback.contains("Data connection"));
+    let node = snippet.nodes[0].clone();
+    snippet.nodes = vec![node; MAX_PASTE_NODES + 1];
+    let error = actor.apply(ClientMessage::Paste(snippet), &reply).unwrap_err();
+    assert_eq!(error.key, "error-paste-too-many");
+    assert_eq!(error.args, vec![("count".into(), "1001".into()), ("max".into(), "1000".into())]);
+    assert_eq!(actor.engine.node_ids().len(), 4);
+}
+
+#[tokio::test]
+async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut engine = TickEngine::new();
+    let id = NodeId::generate();
+    engine.create_node(id, "console", &[]).unwrap();
+    engine.set_input_value(id, PinId(1), Some(DataValue::from("tick output"))).unwrap();
+    let handle = spawn(engine, HashMap::new(), Storage::new(dir.path().join("graph.json")),
+        Plugins::new(dir.path()), Duration::from_millis(5)).unwrap();
+    let mut events = handle.subscribe();
+    let (reply, _) = mpsc::unbounded_channel();
+    handle.send(ClientMessage::TriggerNode { id, pin: PinId(0) }, reply);
+    let mut executed = false;
+    let mut logged = false;
+    while !executed || !logged {
+        let bytes = tokio::time::timeout(Duration::from_secs(5), events.recv()).await.unwrap().unwrap();
+        match postcard::from_bytes::<ServerMessage>(&bytes).unwrap() {
+            ServerMessage::Executed(traces) => {
+                assert!(traces.iter().any(|trace| trace.node_id == id && trace.inputs.contains(&(PinId(1), Some(DataValue::from("tick output"))))));
+                executed = true;
+            }
+            ServerMessage::Log { node_id, message } => {
+                assert_eq!((node_id, message.as_str()), (id, "tick output"));
+                logged = true;
+            }
+            _ => {},
+        }
+    }
+    let Some(ServerMessage::Init { traces, .. }) = handle.snapshot().await else { panic!("missing snapshot") };
+    assert!(traces.iter().any(|(trace, _)| trace.node_id == id));
+    handle.shutdown().await;
 }
 
 #[test]

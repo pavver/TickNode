@@ -6,12 +6,7 @@ impl Node for LogicalNode {
     fn id(&self) -> NodeId { self.id }
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
-        let name = match self.op {
-            LogOp::And => "logical/and", LogOp::Or => "logical/or", LogOp::Not => "logical/not",
-        };
-        let title = match self.op {
-            LogOp::And => "Logical And", LogOp::Or => "Logical Or", LogOp::Not => "Logical Not",
-        };
+        let (name, title) = operation_identity(self.op);
         let pins = match self.op {
             LogOp::And | LogOp::Or => vec![
                 PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Input, required: false },
@@ -74,5 +69,13 @@ impl Node for CompareNode {
             NodeOutput::Data(PinId(3), DataValue::Bool(a > b)),
             NodeOutput::Data(PinId(4), DataValue::Bool(a < b)),
         ]
+    }
+}
+
+fn operation_identity(op: LogOp) -> (&'static str, &'static str) {
+    match op {
+        LogOp::And => ("logical/and", "Logical And"),
+        LogOp::Or => ("logical/or", "Logical Or"),
+        LogOp::Not => ("logical/not", "Logical Not"),
     }
 }

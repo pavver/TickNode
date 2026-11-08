@@ -66,11 +66,6 @@ impl TickEngine {
     /// from the other end of the connection, or `Any` if the other end is also a stub.
     pub(crate) fn infer_stub_pins(&self, id: NodeId, graph: &GraphModel, map_id: &impl Fn(NodeId) -> NodeId) -> Vec<PinDefinition> {
         let mut pins: Vec<PinDefinition> = Vec::new();
-        let mut add = |pin: PinId, direction: PinDirection, pin_type: PinType| {
-            if !pins.iter().any(|p| p.id == pin && p.direction == direction) {
-                pins.push(PinDefinition { id: pin, name: format!("#{}", pin.0), pin_type, direction, required: false });
-            }
-        };
         let other_type = |node: NodeId, pin: PinId, direction: PinDirection| {
             self.node_definition(node)
                 .and_then(|d| d.pins.into_iter().find(|p| p.id == pin && p.direction == direction))
@@ -78,18 +73,18 @@ impl TickEngine {
         };
         for c in &graph.exec_connections {
             if map_id(c.src_node) == id {
-                add(c.src_pin, PinDirection::Output, PinType::Exec);
+                add_stub_pin(&mut pins, c.src_pin, PinDirection::Output, PinType::Exec);
             }
             if map_id(c.dst_node) == id {
-                add(c.dst_pin, PinDirection::Input, PinType::Exec);
+                add_stub_pin(&mut pins, c.dst_pin, PinDirection::Input, PinType::Exec);
             }
         }
         for c in &graph.data_connections {
             if map_id(c.src_node) == id {
-                add(c.src_pin, PinDirection::Output, other_type(map_id(c.dst_node), c.dst_pin, PinDirection::Input));
+                add_stub_pin(&mut pins, c.src_pin, PinDirection::Output, other_type(map_id(c.dst_node), c.dst_pin, PinDirection::Input));
             }
             if map_id(c.dst_node) == id {
-                add(c.dst_pin, PinDirection::Input, other_type(map_id(c.src_node), c.src_pin, PinDirection::Output));
+                add_stub_pin(&mut pins, c.dst_pin, PinDirection::Input, other_type(map_id(c.src_node), c.src_pin, PinDirection::Output));
             }
         }
         pins.sort_by_key(|p| (p.direction == PinDirection::Output, p.id.0));
@@ -139,5 +134,11 @@ impl TickEngine {
         self.pure_cache.clear();
         let removed = self.prune_connections(|c| revived.contains(&c.src_node) || revived.contains(&c.dst_node));
         (revived, removed)
+    }
+}
+
+fn add_stub_pin(pins: &mut Vec<PinDefinition>, pin: PinId, direction: PinDirection, pin_type: PinType) {
+    if !pins.iter().any(|p| p.id == pin && p.direction == direction) {
+        pins.push(PinDefinition { id: pin, name: format!("#{}", pin.0), pin_type, direction, required: false });
     }
 }

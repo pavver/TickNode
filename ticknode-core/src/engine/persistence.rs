@@ -60,14 +60,7 @@ impl TickEngine {
                 Err(e) => warnings.push(format!("Node {:?}: {}", n.id, e)),
             }
         }
-        // An unknown type (plugin disabled or not loaded) does not lose the node: a stub preserves
-        // properties and connections so the graph saves back without data loss
-        for n in unknown {
-            let id = map_id(n.id);
-            let pins = self.infer_stub_pins(id, graph, &map_id);
-            tracing::warn!(node = ?n.id, "Unknown node type {}: created a stub", n.type_name);
-            self.add_node(Box::new(StubNode::new(id, StubNode::bare_definition(&n.type_name, pins), n.properties.clone(), None)));
-        }
+        self.insert_unknown_nodes(unknown, graph, &map_id);
         for c in &graph.exec_connections {
             if let Err(e) = self.connect_exec(map_id(c.src_node), c.src_pin, map_id(c.dst_node), c.dst_pin) {
                 warnings.push(format!("Exec connection {:?}: {}", c, e));
@@ -79,5 +72,15 @@ impl TickEngine {
             }
         }
         warnings
+    }
+    fn insert_unknown_nodes(&mut self, unknown: Vec<&NodeModel>, graph: &GraphModel, map_id: &impl Fn(NodeId) -> NodeId) {
+        // An unknown type (plugin disabled or not loaded) does not lose the node: a stub preserves
+        // properties and connections so the graph saves back without data loss
+        for n in unknown {
+            let id = map_id(n.id);
+            let pins = self.infer_stub_pins(id, graph, &map_id);
+            tracing::warn!(node = ?n.id, "Unknown node type {}: created a stub", n.type_name);
+            self.add_node(Box::new(StubNode::new(id, StubNode::bare_definition(&n.type_name, pins), n.properties.clone(), None)));
+        }
     }
 }

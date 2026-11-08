@@ -95,24 +95,44 @@ fn binary(op: CompareOp, a: &DataValue, b: DataValue) -> bool {
         Ne => !loosely_equal(a, &b),
         Lt | Le | Gt | Ge => ordering(a, &coerce_to(b, &a.get_type())).is_some_and(|ord| op.holds(ord)),
         Contains | NotContains => {
-            let found = match a {
-                DataValue::String(s) => Some(s.contains(&format_value(&b))),
-                DataValue::List { elements, .. } => Some(elements.iter().any(|e| loosely_equal(e, &b))),
-                DataValue::Object { fields, .. } => Some(fields.contains_key(&format_value(&b))),
-                _ => None,
-            };
+            let found = contains(a, &b);
             found.is_some_and(|f| f == (op == Contains))
         }
-        StartsWith => matches!(a, DataValue::String(s) if s.starts_with(&format_value(&b))),
-        EndsWith => matches!(a, DataValue::String(s) if s.ends_with(&format_value(&b))),
-        HasField | NoField => match a {
-            DataValue::Object { fields, .. } => fields.contains_key(&format_value(&b)) == (op == HasField),
-            _ => false,
-        },
-        LenEq | LenGt | LenLt => match (length(a), coerce_to(b, &DataType::Number)) {
-            (Some(n), DataValue::Number(m)) => (n as f64).partial_cmp(&m.to_f64()).is_some_and(|ord| op.holds(ord)),
-            _ => false,
-        },
+        StartsWith | EndsWith => string_boundary(op, a, &b),
+        HasField | NoField => has_field(a, &b).is_some_and(|found| found == (op == HasField)),
+        LenEq | LenGt | LenLt => compare_length(op, a, b),
+        _ => false,
+    }
+}
+
+fn string_boundary(op: CompareOp, a: &DataValue, b: &DataValue) -> bool {
+    let DataValue::String(s) = a else { return false };
+    match op {
+        StartsWith => s.starts_with(&format_value(b)),
+        EndsWith => s.ends_with(&format_value(b)),
+        _ => false,
+    }
+}
+
+fn contains(a: &DataValue, b: &DataValue) -> Option<bool> {
+    match a {
+        DataValue::String(s) => Some(s.contains(&format_value(b))),
+        DataValue::List { elements, .. } => Some(elements.iter().any(|e| loosely_equal(e, b))),
+        DataValue::Object { fields, .. } => Some(fields.contains_key(&format_value(b))),
+        _ => None,
+    }
+}
+
+fn has_field(a: &DataValue, b: &DataValue) -> Option<bool> {
+    match a {
+        DataValue::Object { fields, .. } => Some(fields.contains_key(&format_value(b))),
+        _ => None,
+    }
+}
+
+fn compare_length(op: CompareOp, a: &DataValue, b: DataValue) -> bool {
+    match (length(a), coerce_to(b, &DataType::Number)) {
+        (Some(n), DataValue::Number(m)) => (n as f64).partial_cmp(&m.to_f64()).is_some_and(|ord| op.holds(ord)),
         _ => false,
     }
 }

@@ -14,6 +14,7 @@ use crate::{DataType, DataValue};
 
 mod operators;
 mod parsing;
+mod lexer;
 mod evaluation;
 mod display;
 mod error;

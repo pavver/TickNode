@@ -35,11 +35,7 @@ impl Node for ListCreateNode {
         )]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "element_type" {
-            if let DataValue::String(s) = value {
-                self.element_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
@@ -76,11 +72,7 @@ impl Node for ListAddNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "element_type" {
-            if let DataValue::String(s) = value {
-                self.element_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
@@ -119,11 +111,7 @@ impl Node for ListRemoveNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "element_type" {
-            if let DataValue::String(s) = value {
-                self.element_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
@@ -163,11 +151,7 @@ impl Node for ListGetNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "element_type" {
-            if let DataValue::String(s) = value {
-                self.element_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
@@ -201,11 +185,7 @@ impl Node for ListLengthNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "element_type" {
-            if let DataValue::String(s) = value {
-                self.element_type = parse_data_type(&s).unwrap_or(DataType::Number);
-            }
-        }
+        super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]

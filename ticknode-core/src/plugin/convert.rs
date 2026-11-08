@@ -101,20 +101,24 @@ pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
             wit::Capability::Storage => Capability::Storage,
             wit::Capability::Websocket(allowed_hosts) => Capability::WebSocket { allowed_hosts },
         }).collect(),
-        settings: m.settings.into_iter().map(|s| SettingDefinition {
-            key: s.key,
-            title: s.title,
-            description: s.description,
-            kind: match s.kind {
-                wit::SettingKind::Text => SettingKind::Text,
-                wit::SettingKind::Number => SettingKind::Number,
-                wit::SettingKind::Bool => SettingKind::Bool,
-                wit::SettingKind::Secret => SettingKind::Secret,
-                wit::SettingKind::Url => SettingKind::Url,
-                wit::SettingKind::Select(options) => SettingKind::Select(options),
-            },
-            required: s.required,
-            default: s.default.as_deref().and_then(decode_value),
-        }).collect(),
+        settings: m.settings.into_iter().map(from_wit_setting).collect(),
+    }
+}
+
+fn from_wit_setting(s: wit::SettingDefinition) -> SettingDefinition {
+    SettingDefinition {
+        key: s.key,
+        title: s.title,
+        description: s.description,
+        kind: match s.kind {
+            wit::SettingKind::Text => SettingKind::Text,
+            wit::SettingKind::Number => SettingKind::Number,
+            wit::SettingKind::Bool => SettingKind::Bool,
+            wit::SettingKind::Secret => SettingKind::Secret,
+            wit::SettingKind::Url => SettingKind::Url,
+            wit::SettingKind::Select(options) => SettingKind::Select(options),
+        },
+        required: s.required,
+        default: s.default.as_deref().and_then(decode_value),
     }
 }

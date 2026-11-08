@@ -133,20 +133,12 @@ impl Conversion {
             (Self::Parse(dst), DataValue::String(s)) => text::parse_value(&s, dst).ok(),
             (Self::Format(src), value) if value.get_type() == *src => Some(DataValue::String(text::format_value(&value))),
             (Self::StringToBool, DataValue::String(s)) => {
-                let b = match s.trim().to_ascii_lowercase().as_str() {
-                    "on" | "true" | "yes" | "1" | "open" | "home" | "playing" | "locked" | "detected" | "active" | "occupied" | "connected" => true,
-                    "off" | "false" | "no" | "0" | "closed" | "not_home" | "paused" | "unlocked" | "clear" | "inactive" | "unoccupied" | "disconnected" => false,
-                    _ => return None,
-                };
-                Some(DataValue::Bool(b))
+                parse_switch_state(&s).map(DataValue::Bool)
             }
             (Self::NumberToBool, DataValue::Number(n)) if n.to_f64().is_finite() => Some(DataValue::Bool(n.to_f64() != 0.0)),
             (Self::BoolToNumber, DataValue::Bool(b)) => Some(DataValue::Number(NumberValue::Int(i64::from(b)))),
-            (Self::StringToEnum(values), DataValue::String(s)) if values.contains(&s) => Some(DataValue::String(s)),
-            (Self::List { element_type, conversion }, DataValue::List { elements, .. }) => Some(DataValue::List {
-                element_type: element_type.clone(),
-                elements: elements.into_iter().map(|v| conversion.apply(v)).collect::<Option<Vec<_>>>()?,
-            }),
+            (Self::StringToEnum(values), DataValue::String(s)) => values.contains(&s).then_some(DataValue::String(s)),
+            (Self::List { element_type, conversion }, DataValue::List { elements, .. }) => convert_list(element_type, conversion, elements),
             _ => None,
         }
     }
@@ -205,32 +197,28 @@ impl TypeRegistry {
             }
         }
         for def in defs {
-            match &def.kind {
-                TypeKind::Struct { fields } => {
-                    let mut seen = Vec::new();
-                    for f in fields {
-                        if f.name.is_empty() || seen.contains(&f.name) {
-                            return Err(format!("Type {}: empty or duplicate field name {:?}", def.name, f.name));
-                        }
-                        seen.push(f.name.clone());
-                        next.check_known(&f.data_type).map_err(|e| format!("Type {}, field {}: {e}", def.name, f.name))?;
-                    }
-                }
-                TypeKind::Enum { values } => {
-                    if values.is_empty() {
-                        return Err(format!("Type {}: empty enumeration", def.name));
-                    }
-                    let mut seen = Vec::new();
-                    for v in values {
-                        if seen.contains(&&v.value) {
-                            return Err(format!("Type {}: duplicate value {:?}", def.name, v.value));
-                        }
-                        seen.push(&v.value);
-                    }
-                }
-            }
+            next.validate_definition(def)?;
         }
         *self = next;
+        Ok(())
+    }
+
+    fn validate_definition(&self, def: &TypeDefinition) -> Result<(), String> {
+        match &def.kind {
+            TypeKind::Struct { fields } => self.validate_fields(&def.name, fields),
+            TypeKind::Enum { values } => validate_enum(&def.name, values),
+        }
+    }
+
+    fn validate_fields(&self, name: &str, fields: &[FieldDefinition]) -> Result<(), String> {
+        let mut seen = Vec::new();
+        for field in fields {
+            if field.name.is_empty() || seen.contains(&field.name) {
+                return Err(format!("Type {name}: empty or duplicate field name {:?}", field.name));
+            }
+            seen.push(field.name.clone());
+            self.check_known(&field.data_type).map_err(|e| format!("Type {name}, field {}: {e}", field.name))?;
+        }
         Ok(())
     }
 
@@ -273,17 +261,12 @@ impl TypeRegistry {
             return None;
         }
         Some(match (src, dst) {
-            (String, Number | Time | DateTime | Duration | Color) => Conversion::Parse(dst.clone()),
-            (Number | Bool | Time | DateTime | Duration | Color, String) => Conversion::Format(src.clone()),
-            (String, Bool) => Conversion::StringToBool,
-            (Number, Bool) => Conversion::NumberToBool,
-            (Bool, Number) => Conversion::BoolToNumber,
             (String, Named(name)) => {
                 let def = self.get(name).filter(|d| d.is_enum())?;
                 Conversion::StringToEnum(def.values().iter().map(|v| v.value.clone()).collect())
             }
             (List(a), List(b)) => Conversion::List { element_type: (**b).clone(), conversion: Box::new(self.convertible(a, b)?) },
-            _ => return None,
+            _ => scalar_conversion(src, dst)?,
         })
     }
 
@@ -291,6 +274,45 @@ impl TypeRegistry {
     pub fn default_enum(&self, t: &DataType) -> Option<String> {
         self.definition_of(t).and_then(|d| d.values().first()).map(|v| v.value.clone())
     }
+}
+
+fn convert_list(element_type: &DataType, conversion: &Conversion, elements: Vec<DataValue>) -> Option<DataValue> {
+    Some(DataValue::List {
+        element_type: element_type.clone(),
+        elements: elements.into_iter().map(|value| conversion.apply(value)).collect::<Option<Vec<_>>>()?,
+    })
+}
+
+fn scalar_conversion(src: &DataType, dst: &DataType) -> Option<Conversion> {
+    use DataType::*;
+    Some(match (src, dst) {
+        (String, Number | Time | DateTime | Duration | Color) => Conversion::Parse(dst.clone()),
+        (Number | Bool | Time | DateTime | Duration | Color, String) => Conversion::Format(src.clone()),
+        (String, Bool) => Conversion::StringToBool,
+        (Number, Bool) => Conversion::NumberToBool,
+        (Bool, Number) => Conversion::BoolToNumber,
+        _ => return None,
+    })
+}
+
+fn parse_switch_state(text: &str) -> Option<bool> {
+    match text.trim().to_ascii_lowercase().as_str() {
+        "on" | "true" | "yes" | "1" | "open" | "home" | "playing" | "locked" | "detected" | "active" | "occupied" | "connected" => Some(true),
+        "off" | "false" | "no" | "0" | "closed" | "not_home" | "paused" | "unlocked" | "clear" | "inactive" | "unoccupied" | "disconnected" => Some(false),
+        _ => None,
+    }
+}
+
+fn validate_enum(name: &str, values: &[EnumValue]) -> Result<(), String> {
+    if values.is_empty() { return Err(format!("Type {name}: empty enumeration")); }
+    let mut seen = Vec::new();
+    for value in values {
+        if seen.contains(&&value.value) {
+            return Err(format!("Type {name}: duplicate value {:?}", value.value));
+        }
+        seen.push(&value.value);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

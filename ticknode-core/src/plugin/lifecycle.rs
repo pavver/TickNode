@@ -82,20 +82,7 @@ impl TickEngine {
         let dependents: Vec<&str> = self.plugins.iter()
             .filter(|(other, p)| other.as_str() != name && p.active)
             .filter(|(_, p)| {
-                let mut used = Vec::new();
-                for (def, _) in &p.definitions {
-                    for pin in &def.pins {
-                        if let PinType::Data(t) = &pin.pin_type {
-                            named_types(t, &mut used);
-                        }
-                    }
-                }
-                for t in &p.types {
-                    for f in t.fields() {
-                        named_types(&f.data_type, &mut used);
-                    }
-                }
-                used.iter().any(|u| owned.contains(&u))
+                uses_owned_types(p, &owned)
             })
             .map(|(other, _)| other.as_str())
             .collect();
@@ -145,4 +132,21 @@ impl TickEngine {
         let slot = &self.plugins[name];
         lock(&slot.runtime).configure(settings, self.host_state.runtime.clone()).err().or_else(|| missing_required(&slot.manifest, settings))
     }
+}
+
+fn uses_owned_types(plugin: &super::PluginSlot, owned: &[&String]) -> bool {
+    let mut used = Vec::new();
+    for (def, _) in &plugin.definitions {
+        for pin in &def.pins {
+            if let PinType::Data(t) = &pin.pin_type {
+                named_types(t, &mut used);
+            }
+        }
+    }
+    for t in &plugin.types {
+        for f in t.fields() {
+            named_types(&f.data_type, &mut used);
+        }
+    }
+    used.iter().any(|u| owned.contains(&u))
 }

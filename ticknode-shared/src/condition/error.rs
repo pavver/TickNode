@@ -26,58 +26,57 @@ pub enum Expected {
 }
 
 impl std::fmt::Display for ConditionError {
+    /// The English text is the fallback of the translatable message, so both always agree.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::MissingPin => write!(f, "missing pin number (\"1: a > 0\")"),
-            Self::NotPinNumber(s) => write!(f, "\"{s}\" is not a pin number"),
-            Self::InputFormat(s) => write!(f, "\"{s}\": an input is written as \"pin:name:type\""),
-            Self::InvalidInputName(s) => write!(f, "\"{s}\" is not a valid input name"),
-            Self::UnknownType(s) => write!(f, "\"{s}\" is an unknown type"),
-            Self::Expected(what, found) => {
-                let what = match what {
-                    Expected::Join => "\"and\" / \"or\"",
-                    Expected::Operand => "an operand",
-                    Expected::Operator => "an operator",
-                };
-                match found {
-                    Some(s) => write!(f, "expected {what}, not «{s}»"),
-                    None => write!(f, "expected {what}, not end of text"),
-                }
-            }
-            Self::UnknownOperator(s) => write!(f, "\"{s}\" is an unknown operator"),
-            Self::UnclosedQuote => write!(f, "unclosed quote"),
-            Self::NotNumber(s) => write!(f, "\"{s}\" is not a number"),
-            Self::DoubledOperator(c) => write!(f, "\"{c}\" — probably \"{c}{c}\""),
-            Self::UnexpectedChar(c) => write!(f, "unexpected character \"{c}\""),
-        }
+        f.write_str(&self.ui_message().fallback)
     }
 }
 
 impl std::error::Error for ConditionError {}
 
 impl ConditionError {
+    /// The single place that decides each error's key, arguments and English text.
     pub fn ui_message(&self) -> UiMessage {
-        let text = self.to_string();
         match self {
-            Self::MissingPin => UiMessage::new("error-condition-missing-pin", text),
-            Self::NotPinNumber(s) => UiMessage::new("error-condition-not-pin-number", text).arg("text", s),
-            Self::InputFormat(s) => UiMessage::new("error-condition-input-format", text).arg("text", s),
-            Self::InvalidInputName(s) => UiMessage::new("error-condition-invalid-input-name", text).arg("name", s),
-            Self::UnknownType(s) => UiMessage::new("error-condition-unknown-type", text).arg("type", s),
-            Self::Expected(what, found) => {
-                let key = match what {
-                    Expected::Join => "error-condition-expected-join",
-                    Expected::Operand => "error-condition-expected-operand",
-                    Expected::Operator => "error-condition-expected-operator",
-                };
-                // `end` selects the wording in Fluent; `found` is the offending token
-                UiMessage::new(key, text).arg("end", found.is_none().to_string()).arg("found", found.clone().unwrap_or_default())
-            }
-            Self::UnknownOperator(s) => UiMessage::new("error-condition-unknown-operator", text).arg("operator", s),
-            Self::UnclosedQuote => UiMessage::new("error-condition-unclosed-quote", text),
-            Self::NotNumber(s) => UiMessage::new("error-condition-not-number", text).arg("text", s),
-            Self::DoubledOperator(c) => UiMessage::new("error-condition-doubled-operator", text).arg("char", c.to_string()),
-            Self::UnexpectedChar(c) => UiMessage::new("error-condition-unexpected-char", text).arg("char", c.to_string()),
+            Self::MissingPin => UiMessage::new("error-condition-missing-pin", "missing pin number (\"1: a > 0\")"),
+            Self::NotPinNumber(s) => UiMessage::new("error-condition-not-pin-number", format!("\"{s}\" is not a pin number")).arg("text", s),
+            Self::InputFormat(s) => UiMessage::new("error-condition-input-format", format!("\"{s}\": an input is written as \"pin:name:type\"")).arg("text", s),
+            Self::InvalidInputName(s) => UiMessage::new("error-condition-invalid-input-name", format!("\"{s}\" is not a valid input name")).arg("name", s),
+            Self::UnknownType(s) => UiMessage::new("error-condition-unknown-type", format!("\"{s}\" is an unknown type")).arg("type", s),
+            Self::Expected(what, found) => expected_message(*what, found.as_deref()),
+            Self::UnknownOperator(s) => UiMessage::new("error-condition-unknown-operator", format!("\"{s}\" is an unknown operator")).arg("operator", s),
+            Self::UnclosedQuote => UiMessage::new("error-condition-unclosed-quote", "unclosed quote"),
+            Self::NotNumber(s) => UiMessage::new("error-condition-not-number", format!("\"{s}\" is not a number")).arg("text", s),
+            Self::DoubledOperator(c) => UiMessage::new("error-condition-doubled-operator", format!("\"{c}\" — probably \"{c}{c}\"")).arg("char", c.to_string()),
+            Self::UnexpectedChar(c) => UiMessage::new("error-condition-unexpected-char", format!("unexpected character \"{c}\"")).arg("char", c.to_string()),
+        }
+    }
+}
+
+/// `end` selects the wording in Fluent; `found` is the offending token.
+fn expected_message(what: Expected, found: Option<&str>) -> UiMessage {
+    let description = what.description();
+    let text = match found {
+        Some(s) => format!("expected {description}, not «{s}»"),
+        None => format!("expected {description}, not end of text"),
+    };
+    UiMessage::new(what.key(), text).arg("end", found.is_none().to_string()).arg("found", found.unwrap_or_default())
+}
+
+impl Expected {
+    fn description(self) -> &'static str {
+        match self {
+            Self::Join => "\"and\" / \"or\"",
+            Self::Operand => "an operand",
+            Self::Operator => "an operator",
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::Join => "error-condition-expected-join",
+            Self::Operand => "error-condition-expected-operand",
+            Self::Operator => "error-condition-expected-operator",
         }
     }
 }

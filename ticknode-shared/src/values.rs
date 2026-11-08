@@ -161,40 +161,29 @@ pub fn types_compatible(src: &DataType, dst: &DataType) -> bool {
     TypeRegistry::default().compatible(src, dst)
 }
 
+const BUILTIN_TYPES: &[(DataType, &str)] = &[
+    (DataType::Bool, "bool"), (DataType::Number, "number"), (DataType::String, "string"),
+    (DataType::Time, "time"), (DataType::DateTime, "datetime"), (DataType::Duration, "duration"),
+    (DataType::Color, "color"), (DataType::Object, "object"), (DataType::Any, "any"),
+];
+
 pub fn parse_data_type(s: &str) -> Option<DataType> {
-    Some(match s.trim().to_lowercase().as_str() {
-        "bool" => DataType::Bool,
-        "number" => DataType::Number,
-        "string" => DataType::String,
-        "time" => DataType::Time,
-        "datetime" => DataType::DateTime,
-        "duration" => DataType::Duration,
-        "color" => DataType::Color,
-        "object" => DataType::Object,
-        "any" => DataType::Any,
-        other => {
-            if let Some(inner) = other.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
-                return parse_data_type(inner).map(|t| DataType::List(Box::new(t)));
-            }
-            // Custom type: case is preserved (type names are lowercase, but we do not guess)
-            let name = s.trim();
-            return is_type_name(name).then(|| DataType::Named(name.to_string()));
-        }
-    })
+    let lower = s.trim().to_lowercase();
+    if let Some((ty, _)) = BUILTIN_TYPES.iter().find(|(_, name)| *name == lower) {
+        return Some(ty.clone());
+    }
+    if let Some(inner) = lower.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
+        return parse_data_type(inner).map(|t| DataType::List(Box::new(t)));
+    }
+    // Custom type: case is preserved (type names are lowercase, but we do not guess)
+    let name = s.trim();
+    is_type_name(name).then(|| DataType::Named(name.to_string()))
 }
 
 pub fn data_type_name(t: &DataType) -> String {
     match t {
-        DataType::Bool => "bool".into(),
-        DataType::Number => "number".into(),
-        DataType::String => "string".into(),
-        DataType::Time => "time".into(),
-        DataType::DateTime => "datetime".into(),
-        DataType::Duration => "duration".into(),
-        DataType::Color => "color".into(),
-        DataType::Object => "object".into(),
-        DataType::Any => "any".into(),
         DataType::Named(name) => name.clone(),
         DataType::List(inner) => format!("list<{}>", data_type_name(inner)),
+        _ => BUILTIN_TYPES.iter().find(|(ty, _)| ty == t).expect("every built-in type has a name").1.into(),
     }
 }

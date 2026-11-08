@@ -1,4 +1,7 @@
 use super::*;
+use ticknode_shared::{ConnectionModel, DataValue, PinId};
+
+type Applied = (Vec<ServerMessage>, Option<Vec<NodeId>>);
 
 impl Actor {
     /// Applies an editor command; returns events to broadcast to all editors and the IDs of nodes
@@ -7,133 +10,155 @@ impl Actor {
         &mut self,
         msg: ClientMessage,
         reply: &mpsc::UnboundedSender<ServerMessage>,
-    ) -> Result<(Vec<ServerMessage>, Option<Vec<NodeId>>), UiMessage> {
+    ) -> Result<Applied, UiMessage> {
         let mutates = !matches!(msg, ClientMessage::TriggerNode { .. } | ClientMessage::SetPluginEnabled { .. } | ClientMessage::ConfigurePlugin { .. });
-        let mut created = None;
-        let events = match msg {
-            ClientMessage::AddNode { type_name, position } => {
-                let id = NodeId::generate();
-                self.engine.create_node(id, &type_name, &[]).map_err(|e| e.ui_message())?;
-                self.positions.insert(id, position);
-                created = Some(vec![id]);
-                vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))]
-            }
-            ClientMessage::RemoveNode(id) => {
-                self.require_node(id)?;
-                self.engine.remove_node(id);
-                self.positions.remove(&id);
-                self.traces.remove(&id);
-                vec![ServerMessage::NodeRemoved(id)]
-            }
-            ClientMessage::MoveNode { id, position } => {
-                self.require_node(id)?;
-                if self.positions.get(&id).copied().unwrap_or_default() == position { return Ok((vec![], None)); }
-                self.positions.insert(id, position);
-                vec![ServerMessage::NodeMoved { id, position }]
-            }
-            ClientMessage::SetProperty { id, name, value } => {
-                let before = self.engine.node_model(id);
-                let removed = self.engine.set_node_property(id, &name, value).map_err(|e| e.ui_message())?;
-                if self.engine.node_model(id) == before { return Ok((vec![], None)); }
-                let mut events = removed_events(removed);
-                events.push(ServerMessage::NodeUpdated(self.instance(id).expect("the node exists")));
-                events
-            }
-            ClientMessage::SetPinSplit { node, pin, split } => {
-                let before = self.engine.node_model(node);
-                let removed = self.engine.set_pin_split(node, pin, split).map_err(|e| e.ui_message())?;
-                if self.engine.node_model(node) == before { return Ok((vec![], None)); }
-                let mut events = removed_events(removed);
-                events.push(ServerMessage::NodeUpdated(self.instance(node).expect("the node exists")));
-                events
-            }
-            ClientMessage::SetInputValue { id, pin, value } => {
-                let before = self.engine.node_model(id);
-                self.engine.set_input_value(id, pin, value).map_err(|e| e.ui_message())?;
-                if self.engine.node_model(id) == before { return Ok((vec![], None)); }
-                vec![ServerMessage::NodeUpdated(self.instance(id).expect("the node exists"))]
-            }
-            ClientMessage::ConnectExec(c) => {
-                if self.engine.exec_connections().contains(&c) { return Ok((vec![], None)); }
-                self.engine.connect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
-                vec![ServerMessage::ExecConnected(c)]
-            }
-            ClientMessage::DisconnectExec(c) => {
-                if self.engine.disconnect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin) {
-                    vec![ServerMessage::ExecDisconnected(c)]
-                } else {
-                    vec![]
-                }
-            }
-            ClientMessage::ConnectData(c) => {
-                if self.engine.data_connections().contains(&c) { return Ok((vec![], None)); }
-                self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
-                vec![ServerMessage::DataConnected(c)]
-            }
-            ClientMessage::DisconnectData { dst_node, dst_pin } => {
-                if self.engine.disconnect_data(dst_node, dst_pin) {
-                    vec![ServerMessage::DataDisconnected { dst_node, dst_pin }]
-                } else {
-                    vec![]
-                }
-            }
-            ClientMessage::TriggerNode { id, pin } => {
-                self.require_node(id)?;
-                self.engine.trigger_node(id, pin);
-                vec![]
-            }
-            ClientMessage::Paste(snippet) => {
-                if snippet.nodes.len() > MAX_PASTE_NODES {
-                    return Err(UiMessage::new(
-                        "error-paste-too-many",
-                        format!("Too many nodes to paste: {} (maximum {})", snippet.nodes.len(), MAX_PASTE_NODES),
-                    ).arg("count", snippet.nodes.len()).arg("max", MAX_PASTE_NODES));
-                }
-                let (imported, warnings) = self.engine.import_snippet(&snippet);
-                if !warnings.is_empty() {
-                    let details = warnings.join("; ");
-                    let _ = reply.send(ServerMessage::Error(
-                        UiMessage::new("error-paste-incomplete", format!("Not everything was pasted: {details}")).arg("details", details),
-                    ));
-                }
-                let positions: HashMap<NodeId, Position> = snippet.nodes.iter().map(|n| (n.id, n.position)).collect();
-                let ids: Vec<NodeId> = imported.iter().map(|(_, new)| *new).collect();
-                for (old, new) in &imported {
-                    self.positions.insert(*new, positions.get(old).copied().unwrap_or_default());
-                }
-                let mut events: Vec<ServerMessage> = ids.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeAdded).collect();
-                let inner = self.engine.export_snippet(&ids);
-                events.extend(inner.exec_connections.into_iter().map(ServerMessage::ExecConnected));
-                events.extend(inner.data_connections.into_iter().map(ServerMessage::DataConnected));
-                created = Some(ids);
-                events
-            }
-            ClientMessage::SetPluginEnabled { name, enabled } => {
-                let outcome = self.plugins.set_enabled(&mut self.engine, &name, enabled)?;
-                self.history = Default::default();
-                if let Some(warning) = outcome.warning {
-                    let _ = reply.send(ServerMessage::Error(warning));
-                }
-                // Send new definitions first so the editor knows the pins of converted nodes
-                let mut events = vec![self.catalog()];
-                events.extend(outcome.change.replaced.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeUpdated));
-                if !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {
-                    self.dirty_since.get_or_insert_with(Instant::now);
-                }
-                events.extend(removed_events(outcome.change.removed));
-                events.extend(self.plugins.info(&self.engine, &name).map(ServerMessage::PluginUpdated));
-                events
-            }
-            ClientMessage::ConfigurePlugin { name, values } => {
-                self.plugins.configure(&mut self.engine, &name, values)?;
-                self.plugins.info(&self.engine, &name).map(ServerMessage::PluginUpdated).into_iter().collect()
-            }
+        let only = |events: Vec<ServerMessage>| (events, None);
+        let result = match msg {
+            ClientMessage::AddNode { type_name, position } => self.add_node(&type_name, position)?,
+            ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
+            ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
+            ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
+            ClientMessage::SetProperty { id, name, value } => only(self.set_property(id, &name, value)?),
+            ClientMessage::SetPinSplit { node, pin, split } => only(self.set_pin_split(node, pin, split)?),
+            ClientMessage::SetInputValue { id, pin, value } => only(self.set_input_value(id, pin, value)?),
+            ClientMessage::ConnectExec(c) => only(self.connect_exec(c)?),
+            ClientMessage::DisconnectExec(c) => only(self.disconnect_exec(c)),
+            ClientMessage::ConnectData(c) => only(self.connect_data(c)?),
+            ClientMessage::DisconnectData { dst_node, dst_pin } => only(self.disconnect_data(dst_node, dst_pin)),
+            ClientMessage::TriggerNode { id, pin } => only(self.trigger(id, pin)?),
+            ClientMessage::SetPluginEnabled { name, enabled } => only(self.set_plugin_enabled(&name, enabled, reply)?),
+            ClientMessage::ConfigurePlugin { name, values } => only(self.configure_plugin(&name, values)?),
             ClientMessage::Undo | ClientMessage::Redo | ClientMessage::Batch(_) => return Err(super::history::batch_error()),
         };
+        self.mark_command_dirty(mutates, &result.0);
+        Ok(result)
+    }
+
+    fn mark_command_dirty(&mut self, mutates: bool, events: &[ServerMessage]) {
         if mutates && !events.is_empty() {
             self.dirty_since.get_or_insert_with(Instant::now);
         }
-        Ok((events, created))
+    }
+
+    fn add_node(&mut self, type_name: &str, position: Position) -> Result<Applied, UiMessage> {
+        let id = NodeId::generate();
+        self.engine.create_node(id, type_name, &[]).map_err(|e| e.ui_message())?;
+        self.positions.insert(id, position);
+        Ok((vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))], Some(vec![id])))
+    }
+
+    fn remove_node(&mut self, id: NodeId) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_node(id)?;
+        self.engine.remove_node(id);
+        self.positions.remove(&id);
+        self.traces.remove(&id);
+        Ok(vec![ServerMessage::NodeRemoved(id)])
+    }
+
+    fn move_node(&mut self, id: NodeId, position: Position) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_node(id)?;
+        if self.positions.get(&id).copied().unwrap_or_default() == position { return Ok(vec![]); }
+        self.positions.insert(id, position);
+        Ok(vec![ServerMessage::NodeMoved { id, position }])
+    }
+
+    fn paste(&mut self, snippet: ticknode_shared::GraphModel, reply: &mpsc::UnboundedSender<ServerMessage>) -> Result<Applied, UiMessage> {
+        if snippet.nodes.len() > MAX_PASTE_NODES {
+            return Err(UiMessage::new(
+                "error-paste-too-many",
+                format!("Too many nodes to paste: {} (maximum {})", snippet.nodes.len(), MAX_PASTE_NODES),
+            ).arg("count", snippet.nodes.len()).arg("max", MAX_PASTE_NODES));
+        }
+        let (imported, warnings) = self.engine.import_snippet(&snippet);
+        if !warnings.is_empty() {
+            let details = warnings.join("; ");
+            let _ = reply.send(ServerMessage::Error(
+                UiMessage::new("error-paste-incomplete", format!("Not everything was pasted: {details}")).arg("details", details),
+            ));
+        }
+        let positions: HashMap<NodeId, Position> = snippet.nodes.iter().map(|n| (n.id, n.position)).collect();
+        let ids: Vec<NodeId> = imported.iter().map(|(_, new)| *new).collect();
+        for (old, new) in &imported {
+            self.positions.insert(*new, positions.get(old).copied().unwrap_or_default());
+        }
+        let mut events: Vec<ServerMessage> = ids.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeAdded).collect();
+        let inner = self.engine.export_snippet(&ids);
+        events.extend(inner.exec_connections.into_iter().map(ServerMessage::ExecConnected));
+        events.extend(inner.data_connections.into_iter().map(ServerMessage::DataConnected));
+        Ok((events, Some(ids)))
+    }
+
+    fn set_property(&mut self, id: NodeId, name: &str, value: DataValue) -> Result<Vec<ServerMessage>, UiMessage> {
+        let before = self.engine.node_model(id);
+        let removed = self.engine.set_node_property(id, name, value).map_err(|e| e.ui_message())?;
+        Ok(self.updated_events(id, before, removed))
+    }
+
+    fn set_pin_split(&mut self, node: NodeId, pin: PinId, split: bool) -> Result<Vec<ServerMessage>, UiMessage> {
+        let before = self.engine.node_model(node);
+        let removed = self.engine.set_pin_split(node, pin, split).map_err(|e| e.ui_message())?;
+        Ok(self.updated_events(node, before, removed))
+    }
+
+    fn set_input_value(&mut self, id: NodeId, pin: PinId, value: Option<DataValue>) -> Result<Vec<ServerMessage>, UiMessage> {
+        let before = self.engine.node_model(id);
+        self.engine.set_input_value(id, pin, value).map_err(|e| e.ui_message())?;
+        Ok(self.updated_events(id, before, RemovedConnections::default()))
+    }
+
+    fn updated_events(&self, id: NodeId, before: Option<ticknode_shared::NodeModel>, removed: RemovedConnections) -> Vec<ServerMessage> {
+        if self.engine.node_model(id) == before { return vec![]; }
+        let mut events = removed_events(removed);
+        events.push(ServerMessage::NodeUpdated(self.instance(id).expect("the node exists")));
+        events
+    }
+
+    fn disconnect_exec(&mut self, c: ConnectionModel) -> Vec<ServerMessage> {
+        if self.engine.disconnect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin) { vec![ServerMessage::ExecDisconnected(c)] } else { vec![] }
+    }
+
+    fn disconnect_data(&mut self, dst_node: NodeId, dst_pin: PinId) -> Vec<ServerMessage> {
+        if self.engine.disconnect_data(dst_node, dst_pin) { vec![ServerMessage::DataDisconnected { dst_node, dst_pin }] } else { vec![] }
+    }
+
+    fn connect_exec(&mut self, c: ConnectionModel) -> Result<Vec<ServerMessage>, UiMessage> {
+        if self.engine.exec_connections().contains(&c) { return Ok(vec![]); }
+        self.engine.connect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
+        Ok(vec![ServerMessage::ExecConnected(c)])
+    }
+
+    fn connect_data(&mut self, c: ConnectionModel) -> Result<Vec<ServerMessage>, UiMessage> {
+        if self.engine.data_connections().contains(&c) { return Ok(vec![]); }
+        self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
+        Ok(vec![ServerMessage::DataConnected(c)])
+    }
+
+    fn trigger(&mut self, id: NodeId, pin: PinId) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_node(id)?;
+        self.engine.trigger_node(id, pin);
+        Ok(vec![])
+    }
+
+    fn configure_plugin(&mut self, name: &str, values: Vec<(String, ticknode_shared::SettingUpdate)>) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.plugins.configure(&mut self.engine, name, values)?;
+        Ok(self.plugins.info(&self.engine, name).map(ServerMessage::PluginUpdated).into_iter().collect())
+    }
+
+    fn set_plugin_enabled(&mut self, name: &str, enabled: bool, reply: &mpsc::UnboundedSender<ServerMessage>) -> Result<Vec<ServerMessage>, UiMessage> {
+        let outcome = self.plugins.set_enabled(&mut self.engine, name, enabled)?;
+        self.history = Default::default();
+        if let Some(warning) = outcome.warning {
+            let _ = reply.send(ServerMessage::Error(warning));
+        }
+        // Send new definitions first so the editor knows the pins of converted nodes
+        let mut events = vec![self.catalog()];
+        events.extend(outcome.change.replaced.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeUpdated));
+        if !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {
+            self.dirty_since.get_or_insert_with(Instant::now);
+        }
+        events.extend(removed_events(outcome.change.removed));
+        events.extend(self.plugins.info(&self.engine, name).map(ServerMessage::PluginUpdated));
+        Ok(events)
     }
 }
 

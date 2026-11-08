@@ -39,8 +39,8 @@ pub fn state_options(
     if allow_empty {
         options.push(PropertyOption {
             value: String::new(),
-            label: "Будь-який стан (не вказано)".into(),
-            detail: "Спрацьовуватиме на будь-яку зміну".into(),
+            label: "Any state (not set)".into(),
+            detail: "Triggers on any change".into(),
             icon: Some("mdi:circle-outline".into()),
         });
     }
@@ -56,7 +56,7 @@ pub fn state_options(
     {
         options.push(PropertyOption {
             value: s.state.clone(),
-            label: format!("Поточний стан ({})", s.state),
+            label: format!("Current state ({})", s.state),
             detail: entity_id.to_string(),
             icon: Some("mdi:history".into()),
         });
@@ -76,8 +76,8 @@ pub fn state_options(
 
     // Universal special states
     for (value, label) in [
-        ("unavailable", "Недоступний (unavailable)"),
-        ("unknown", "Невідомий (unknown)"),
+        ("unavailable", "Unavailable (unavailable)"),
+        ("unknown", "Unknown (unknown)"),
     ] {
         if !options.iter().any(|o| o.value == value) {
             options.push(PropertyOption {
@@ -95,8 +95,8 @@ pub fn state_options(
 pub fn attribute_options(_entity_id: &str, state: Option<&State>) -> Vec<PropertyOption> {
     let mut options = vec![PropertyOption {
         value: String::new(),
-        label: "Основний стан (без атрибута)".into(),
-        detail: "Перевіряти стан сутності".into(),
+        label: "Main state (no attribute)".into(),
+        detail: "Check entity state".into(),
         icon: Some("mdi:circle-outline".into()),
     }];
 
@@ -119,7 +119,7 @@ pub fn attribute_options(_entity_id: &str, state: Option<&State>) -> Vec<Propert
                 options.push(PropertyOption {
                     value: key.clone(),
                     label: key.clone(),
-                    detail: format!("Значення: {val_str}"),
+                    detail: format!("Value: {val_str}"),
                     icon: Some("mdi:code-tags".into()),
                 });
             }

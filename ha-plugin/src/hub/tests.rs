@@ -830,7 +830,7 @@ fn state_and_attribute_options_publish_for_tracked_nodes() {
     rig.hub.set_state_node_entity(node1, "light.hall", &mut rig.env);
     assert!(rig.env.options.contains_key("states:light.hall"));
     assert!(rig.env.options.contains_key("attributes:light.hall"));
-    assert!(rig.env.options["states:light.hall"].iter().any(|o| o.value == "on" && o.label.contains("Поточний стан")));
+    assert!(rig.env.options["states:light.hall"].iter().any(|o| o.value == "on" && o.label.contains("Current state")));
 
     rig.hub.set_state_node_entity(node2, "light.hall", &mut rig.env);
 

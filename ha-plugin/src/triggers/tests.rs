@@ -255,3 +255,25 @@ fn trigger_properties_round_trip_and_all_texts_are_translated() {
         }
     }
 }
+
+#[test]
+fn state_trigger_definition_uses_entity_specific_option_sources() {
+    let node = NodeId(ticknode_shared::Uuid::nil());
+    let mut trigger = TriggerNode::new(Platform::State, node);
+    let def = trigger.definition();
+    let from_prop = def.properties.iter().find(|p| p.name == "from").unwrap();
+    let to_prop = def.properties.iter().find(|p| p.name == "to").unwrap();
+    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
+    assert_eq!(from_prop.kind, PropertyKind::Dynamic { source: "states".into(), plugin: String::new() });
+    assert_eq!(to_prop.kind, PropertyKind::Dynamic { source: "states".into(), plugin: String::new() });
+    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes".into(), plugin: String::new() });
+
+    trigger.set_property("entity_id", DataValue::from("switch.heater"));
+    let def = trigger.definition();
+    let from_prop = def.properties.iter().find(|p| p.name == "from").unwrap();
+    let to_prop = def.properties.iter().find(|p| p.name == "to").unwrap();
+    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
+    assert_eq!(from_prop.kind, PropertyKind::Dynamic { source: "states:switch.heater".into(), plugin: String::new() });
+    assert_eq!(to_prop.kind, PropertyKind::Dynamic { source: "states:switch.heater".into(), plugin: String::new() });
+    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes:switch.heater".into(), plugin: String::new() });
+}

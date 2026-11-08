@@ -184,6 +184,8 @@ pub struct Hub {
     entity_options: Vec<PropertyOption>,
     domain_sources: BTreeSet<String>,
     action_targets: HashMap<NodeId, String>,
+    state_nodes: HashMap<NodeId, String>,
+    state_sources: BTreeSet<String>,
     /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
     entities: HashMap<NodeId, Option<Reply<State>>>,
 }
@@ -245,9 +247,13 @@ impl Hub {
         self.services.clear();
         self.entity_options.clear();
         self.action_targets.clear();
+        self.state_nodes.clear();
         env.set_options("actions", &[]);
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &[]);
+        env.set_options(crate::states::STATES_SOURCE, &[]);
+        env.set_options(crate::states::ATTRIBUTES_SOURCE, &[]);
         for source in std::mem::take(&mut self.domain_sources) { env.set_options(&source, &[]); }
+        for source in std::mem::take(&mut self.state_sources) { env.set_options(&source, &[]); }
         for reply in self.entities.values_mut() { *reply = None; }
     }
 
@@ -551,6 +557,7 @@ impl Hub {
                     }
                     self.publish_action_targets(env);
                     self.publish_action_sources(env);
+                    self.publish_state_sources(env);
                     self.entities_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -660,6 +667,79 @@ impl Hub {
             {
                 self.domain_sources.remove(&source);
                 env.set_options(&source, &[]);
+            }
+        }
+    }
+
+    /// Publishes generic state/attribute fallback options and entity-specific options for active trigger/condition nodes.
+    pub fn publish_state_sources(&mut self, env: &mut impl Env) {
+        env.set_options(
+            crate::states::STATES_SOURCE,
+            &crate::states::state_options("", None, true),
+        );
+        env.set_options(
+            crate::states::ATTRIBUTES_SOURCE,
+            &crate::states::attribute_options("", None),
+        );
+        let mut sources = BTreeSet::new();
+        for entity in self.state_nodes.values().filter(|e| !e.trim().is_empty()) {
+            let state_src = crate::states::state_source(entity);
+            let attr_src = crate::states::attribute_source(entity);
+            let state = self.live.get(entity);
+            env.set_options(&state_src, &crate::states::state_options(entity, state, true));
+            env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
+            sources.insert(state_src);
+            sources.insert(attr_src);
+        }
+        for old in self.state_sources.difference(&sources) {
+            env.set_options(old, &[]);
+        }
+        self.state_sources = sources;
+    }
+
+    pub fn set_state_node_entity(&mut self, node: NodeId, entity: &str, env: &mut impl Env) {
+        let entity = entity.trim();
+        let old = self.state_nodes.insert(node, entity.to_string());
+        if let Some(old_entity) = old {
+            if !old_entity.is_empty() && old_entity != entity && !self.state_nodes.values().any(|e| e == &old_entity) {
+                let old_state_src = crate::states::state_source(&old_entity);
+                let old_attr_src = crate::states::attribute_source(&old_entity);
+                self.state_sources.remove(&old_state_src);
+                self.state_sources.remove(&old_attr_src);
+                env.set_options(&old_state_src, &[]);
+                env.set_options(&old_attr_src, &[]);
+            }
+        }
+        if entity.is_empty() {
+            self.state_nodes.remove(&node);
+            env.set_options(
+                crate::states::STATES_SOURCE,
+                &crate::states::state_options("", None, true),
+            );
+            env.set_options(
+                crate::states::ATTRIBUTES_SOURCE,
+                &crate::states::attribute_options("", None),
+            );
+            return;
+        }
+        let state_src = crate::states::state_source(entity);
+        let attr_src = crate::states::attribute_source(entity);
+        let state = self.live.get(entity);
+        self.state_sources.insert(state_src.clone());
+        self.state_sources.insert(attr_src.clone());
+        env.set_options(&state_src, &crate::states::state_options(entity, state, true));
+        env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
+    }
+
+    pub fn remove_state_node(&mut self, node: NodeId, env: &mut impl Env) {
+        if let Some(entity) = self.state_nodes.remove(&node) {
+            if !entity.is_empty() && !self.state_nodes.values().any(|e| e == &entity) {
+                let state_src = crate::states::state_source(&entity);
+                let attr_src = crate::states::attribute_source(&entity);
+                self.state_sources.remove(&state_src);
+                self.state_sources.remove(&attr_src);
+                env.set_options(&state_src, &[]);
+                env.set_options(&attr_src, &[]);
             }
         }
     }
@@ -1598,6 +1678,36 @@ mod tests {
         let emissions = rig.tick(vec![WsEvent::Closed(rig.ws,"lost".into())]);
         assert_eq!(emissions.len(),1);
         assert!(has_exec(&emissions[0].outputs, crate::conditions::NO));
+    }
+
+    #[test]
+    fn state_and_attribute_options_publish_for_tracked_nodes() {
+        let mut rig = Rig::new();
+        rig.states = vec![
+            ha_state("light.hall", "on"),
+            ha_state("cover.garage", "open"),
+        ];
+        rig.connect();
+
+        assert!(rig.env.options.contains_key("states"));
+        assert!(rig.env.options.contains_key("attributes"));
+
+        let node1 = node(10);
+        let node2 = node(20);
+
+        rig.hub.set_state_node_entity(node1, "light.hall", &mut rig.env);
+        assert!(rig.env.options.contains_key("states:light.hall"));
+        assert!(rig.env.options.contains_key("attributes:light.hall"));
+        assert!(rig.env.options["states:light.hall"].iter().any(|o| o.value == "on" && o.label.contains("Поточний стан")));
+
+        rig.hub.set_state_node_entity(node2, "light.hall", &mut rig.env);
+
+        rig.hub.remove_state_node(node1, &mut rig.env);
+        assert!(!rig.env.options["states:light.hall"].is_empty());
+
+        rig.hub.remove_state_node(node2, &mut rig.env);
+        assert!(rig.env.options["states:light.hall"].is_empty());
+        assert!(rig.env.options["attributes:light.hall"].is_empty());
     }
 
 }

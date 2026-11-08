@@ -80,12 +80,10 @@ impl Kind {
                 "State accepts comma-separated alternatives (any of). Attribute optionally selects an attribute. For accepts 90, 1h 30m or 00:05:00 and checks the entity's last_changed, also when testing an attribute; it does not track attribute-only duration. An empty State matches an empty string.",
                 vec![
                     entity(),
-                    attribute(),
-                    text(
-                        "state",
-                        "State",
-                        "Expected state or comma-separated alternatives",
-                    ),
+                    PropertyDefinition::dynamic("attribute", "Attribute", crate::states::ATTRIBUTES_SOURCE)
+                        .described("Optional attribute; empty tests the entity state"),
+                    PropertyDefinition::dynamic("state", "State", crate::states::STATES_SOURCE)
+                        .described("Expected state or comma-separated alternatives"),
                     text(
                         "for",
                         "For",
@@ -393,7 +391,14 @@ impl ConditionNode {
                 )
             })
             .collect();
-        let serial = (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_condition(node)));
+        let serial = (!node.0.is_nil()).then(|| {
+            with_hub(|hub, env| {
+                if kind == Kind::State {
+                    hub.set_state_node_entity(node, "", env);
+                }
+                hub.add_condition(node)
+            })
+        });
         Self {
             node,
             serial,
@@ -416,6 +421,9 @@ impl ConditionNode {
 }
 impl Drop for ConditionNode {
     fn drop(&mut self) {
+        if self.kind == Kind::State {
+            try_with_hub(|hub, env| hub.remove_state_node(self.node, env));
+        }
         if let Some(serial) = self.serial {
             try_with_hub(|hub, env| hub.remove_condition(self.node, serial, Instant::now(), env));
         }
@@ -423,7 +431,20 @@ impl Drop for ConditionNode {
 }
 impl PluginNode for ConditionNode {
     fn definition(&self) -> NodeDefinition {
-        self.kind.definition()
+        let mut def = self.kind.definition();
+        if self.kind == Kind::State {
+            let entity = self.properties.get("entity_id").map(String::as_str).unwrap_or("");
+            let state_src = crate::states::state_source(entity);
+            let attr_src = crate::states::attribute_source(entity);
+            for prop in &mut def.properties {
+                match prop.name.as_str() {
+                    "state" => prop.kind = PropertyKind::Dynamic { source: state_src.clone(), plugin: String::new() },
+                    "attribute" => prop.kind = PropertyKind::Dynamic { source: attr_src.clone(), plugin: String::new() },
+                    _ => {}
+                }
+            }
+        }
+        def
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         self.properties
@@ -452,7 +473,10 @@ impl PluginNode for ConditionNode {
         {
             return;
         }
-        self.properties.insert(name.into(), text);
+        self.properties.insert(name.into(), text.clone());
+        if self.kind == Kind::State && self.serial.is_some() && name == "entity_id" {
+            with_hub(|hub, env| hub.set_state_node_entity(self.node, &text, env));
+        }
         self.warning = None;
         if let Some(serial) = self.serial {
             with_hub(|hub, env| hub.cancel_templates(self.node, serial, Instant::now(), env));

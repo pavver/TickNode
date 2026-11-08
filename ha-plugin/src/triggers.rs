@@ -156,9 +156,12 @@ impl Platform {
         match self {
             Self::State => vec![
                 entity("entities"),
-                attribute(),
-                text("from", "From", "Optional previous state or attribute value"),
-                text("to", "To", "Optional new state or attribute value"),
+                PropertyDefinition::dynamic("attribute", "Attribute", crate::states::ATTRIBUTES_SOURCE)
+                    .described("Optional attribute to watch instead of the state"),
+                PropertyDefinition::dynamic("from", "From", crate::states::STATES_SOURCE)
+                    .described("Optional previous state or attribute value"),
+                PropertyDefinition::dynamic("to", "To", crate::states::STATES_SOURCE)
+                    .described("Optional new state or attribute value"),
                 duration(),
             ],
             Self::NumericState => vec![
@@ -556,6 +559,9 @@ impl TriggerNode {
         let properties = platform.defaults();
         let serial = (!node.0.is_nil()).then(|| {
             with_hub(|hub, env| {
+                if platform == Platform::State {
+                    hub.set_state_node_entity(node, "", env);
+                }
                 let serial = hub.add_trigger(node, Instant::now());
                 hub.set_trigger(node, serial, build(platform, &properties).ok().flatten(), Instant::now(), env);
                 serial
@@ -567,6 +573,9 @@ impl TriggerNode {
 
 impl Drop for TriggerNode {
     fn drop(&mut self) {
+        if self.platform == Platform::State {
+            try_with_hub(|hub, env| hub.remove_state_node(self.node, env));
+        }
         if let Some(serial) = self.serial {
             try_with_hub(|hub, env| hub.remove_trigger(self.node, serial, Instant::now(), env));
         }
@@ -575,7 +584,20 @@ impl Drop for TriggerNode {
 
 impl PluginNode for TriggerNode {
     fn definition(&self) -> NodeDefinition {
-        self.platform.definition()
+        let mut def = self.platform.definition();
+        if self.platform == Platform::State {
+            let entity = self.properties.get("entity_id").map(String::as_str).unwrap_or("");
+            let state_src = crate::states::state_source(entity);
+            let attr_src = crate::states::attribute_source(entity);
+            for prop in &mut def.properties {
+                match prop.name.as_str() {
+                    "from" | "to" => prop.kind = PropertyKind::Dynamic { source: state_src.clone(), plugin: String::new() },
+                    "attribute" => prop.kind = PropertyKind::Dynamic { source: attr_src.clone(), plugin: String::new() },
+                    _ => {}
+                }
+            }
+        }
+        def
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         self.properties.iter().map(|(k, v)| (k.clone(), DataValue::from(v.as_str()))).collect()
@@ -592,7 +614,10 @@ impl PluginNode for TriggerNode {
         {
             return;
         }
-        self.properties.insert(name.into(), text);
+        self.properties.insert(name.into(), text.clone());
+        if self.platform == Platform::State && self.serial.is_some() && name == "entity_id" {
+            with_hub(|hub, env| hub.set_state_node_entity(self.node, &text, env));
+        }
         self.local_error = None;
         let config = match build(self.platform, &self.properties) {
             Ok(config) => config,

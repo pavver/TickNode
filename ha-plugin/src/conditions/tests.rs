@@ -121,6 +121,8 @@ fn numeric_exclusive_bounds_and_attributes() {
         );
     }
 }
+
+
 #[test]
 fn local_time_windows_midnight_weekdays_and_boundaries() {
     let live = live();
@@ -315,4 +317,22 @@ fn equal_time_boundaries_cover_a_full_day() {
             .unwrap()
         );
     }
+}
+
+#[test]
+fn state_condition_definition_uses_entity_specific_option_sources() {
+    let node = NodeId(ticknode_shared::Uuid::nil());
+    let mut cond = ConditionNode::new(Kind::State, node);
+    let def = cond.definition();
+    let state_prop = def.properties.iter().find(|p| p.name == "state").unwrap();
+    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
+    assert_eq!(state_prop.kind, PropertyKind::Dynamic { source: "states".into(), plugin: String::new() });
+    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes".into(), plugin: String::new() });
+
+    cond.set_property("entity_id", DataValue::from("light.kitchen"));
+    let def = cond.definition();
+    let state_prop = def.properties.iter().find(|p| p.name == "state").unwrap();
+    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
+    assert_eq!(state_prop.kind, PropertyKind::Dynamic { source: "states:light.kitchen".into(), plugin: String::new() });
+    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes:light.kitchen".into(), plugin: String::new() });
 }

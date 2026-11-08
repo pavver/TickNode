@@ -24,6 +24,9 @@ cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
 cargo test -p ticknode-core --test plugins delay_queue -- --nocapture   # a single test
 cargo test -p ha-plugin                                                   # the HA plugin's own logic on the host target (no wasm needed)
 
+# Engine benchmarks (Criterion; optionally uses target/wasm32-wasip2/debug/math_plugin.wasm).
+cargo bench -p ticknode-core --bench engine
+
 # Plugins are wasm32-wasip2 components. The integration tests (ticknode-core/tests/plugins.rs) load
 # target/wasm32-wasip2/debug/*.wasm and are SKIPPED when the files are missing (TICKNODE_REQUIRE_PLUGINS=1 makes them fail)
 cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin

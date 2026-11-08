@@ -36,3 +36,30 @@ fn attribute_options_list_attributes_with_values() {
     assert!(options.iter().any(|o| o.value == "brightness" && o.detail.contains("255")));
     assert!(options.iter().any(|o| o.value == "friendly_name"));
 }
+
+#[test]
+fn picker_sources_trim_ids_and_keep_global_sources_for_blank_ids() {
+    for (entity, state, attr) in [
+        ("", "states", "attributes"),
+        (" \n", "states", "attributes"),
+        (" light.hall ", "states:light.hall", "attributes:light.hall"),
+    ] {
+        assert_eq!(state_source(entity), state);
+        assert_eq!(attribute_source(entity), attr);
+    }
+    assert_eq!(
+        crate::actions::action_source(" light.hall "),
+        "actions:light.hall"
+    );
+    assert_eq!(crate::actions::action_source(" \n"), "actions");
+}
+
+#[test]
+fn attribute_details_keep_strings_and_json_scalars_and_containers() {
+    let state = crate::entities::test_state("sensor.demo","1",json!({"word":"hello","flag":true,"list":["a",2],"object":{"n":1}}));
+    let options = attribute_options("sensor.demo",Some(&state));
+    for (key,detail) in [("word","Value: hello"),("flag","Value: true"),("list","Value: [\"a\",2]"),("object","Value: {\"n\":1}")] {
+        assert_eq!(options.iter().find(|option|option.value==key).unwrap().detail,detail);
+    }
+    assert_eq!(attribute_options("",None).len(),1);
+}

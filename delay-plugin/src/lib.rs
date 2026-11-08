@@ -25,9 +25,24 @@ impl DelayNode {
     /// (type, title, description, base pin ID: +0 In, +1 Out, +2 Delay).
     fn info(&self) -> (&'static str, &'static str, &'static str, u32) {
         match self.mode {
-            Mode::Queue => ("delay/queue", "Queue Delay", "Each pulse starts an independent delay", 0),
-            Mode::Ignore => ("delay/ignore", "Ignore Delay", "Ignores new pulses while the delay is running", 10),
-            Mode::Reset => ("delay/reset", "Reset Delay", "A new pulse cancels the delay and restarts the countdown", 20),
+            Mode::Queue => (
+                "delay/queue",
+                "Queue Delay",
+                "Each pulse starts an independent delay",
+                0,
+            ),
+            Mode::Ignore => (
+                "delay/ignore",
+                "Ignore Delay",
+                "Ignores new pulses while the delay is running",
+                10,
+            ),
+            Mode::Reset => (
+                "delay/reset",
+                "Reset Delay",
+                "A new pulse cancels the delay and restarts the countdown",
+                20,
+            ),
         }
     }
 }
@@ -55,36 +70,14 @@ impl PluginNode for DelayNode {
     }
 
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output> {
-        let (_, _, _, base) = self.info();
-        match trigger {
-            Trigger::Pin(pin) if pin == PinId(base) => {
-                if self.mode == Mode::Ignore && self.active.is_some() {
-                    return Vec::new();
-                }
-                if let (Mode::Reset, Some(task)) = (self.mode, self.active.take()) {
-                    host::cancel(task);
-                }
-                let ms = inputs.number(PinId(base + 2), 0.0).max(0.0) as u64;
-                match host::delay_ms(ms) {
-                    Ok(task) => self.active = Some(task),
-                    Err(e) => host::error(&e),
-                }
-                Vec::new()
-            }
-            Trigger::Task { id, .. } => {
-                if self.active == Some(id) {
-                    self.active = None;
-                }
-                vec![Output::Exec(PinId(base + 1))]
-            }
-            _ => Vec::new(),
-        }
+        self.execute_with(trigger, inputs, &mut HostScheduler)
     }
 }
 
 impl Plugin for DelayPlugin {
     const NODE_TYPES: &'static [&'static str] = &["delay/queue", "delay/ignore", "delay/reset"];
-    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
+        &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {
@@ -108,3 +101,61 @@ impl Plugin for DelayPlugin {
 }
 
 export_plugin!(DelayPlugin);
+
+#[cfg(test)]
+mod tests;
+
+impl DelayNode {
+    fn execute_with(
+        &mut self,
+        trigger: Trigger,
+        inputs: &Inputs,
+        scheduler: &mut impl Scheduler,
+    ) -> Vec<Output> {
+        let (_, _, _, base) = self.info();
+        match trigger {
+            Trigger::Pin(pin) if pin == PinId(base) => {
+                self.start_delay(inputs, base, scheduler);
+                Vec::new()
+            }
+            Trigger::Task { id, .. } => {
+                if self.active == Some(id) {
+                    self.active = None;
+                }
+                vec![Output::Exec(PinId(base + 1))]
+            }
+            _ => Vec::new(),
+        }
+    }
+    fn start_delay(&mut self, inputs: &Inputs, base: u32, scheduler: &mut impl Scheduler) {
+        if self.mode == Mode::Ignore && self.active.is_some() {
+            return;
+        }
+        if let (Mode::Reset, Some(task)) = (self.mode, self.active.take()) {
+            scheduler.cancel(task);
+        }
+        let ms = inputs.number(PinId(base + 2), 0.0).max(0.0) as u64;
+        match scheduler.delay_ms(ms) {
+            Ok(task) => self.active = Some(task),
+            Err(e) => scheduler.error(&e),
+        }
+    }
+}
+
+trait Scheduler {
+    fn delay_ms(&mut self, ms: u64) -> Result<TaskId, String>;
+    fn cancel(&mut self, task: TaskId);
+    fn error(&mut self, error: &str);
+}
+struct HostScheduler;
+impl Scheduler for HostScheduler {
+    fn delay_ms(&mut self, ms: u64) -> Result<TaskId, String> {
+        host::delay_ms(ms)
+    }
+    fn cancel(&mut self, task: TaskId) {
+        host::cancel(task);
+    }
+    fn error(&mut self, error: &str) {
+        host::error(error);
+    }
+}

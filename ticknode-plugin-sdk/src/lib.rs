@@ -101,3 +101,6 @@ pub use plugin::*;
 pub use pins::*;
 #[doc(hidden)]
 pub use export::{Exporter, NodeHandle};
+
+#[cfg(test)]
+mod tests;

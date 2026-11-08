@@ -1,11 +1,9 @@
 //! Session configuration, transport driving and per-tick emission collection.
 
-use std::time::Instant;
+use super::{Env, Hub, Link, Sub};
 use ha_core_client::{Action, ClientConfig, ConnectionState, Session};
+use std::time::Instant;
 use ticknode_plugin_sdk::{Emission, WsEvent};
-use crate::triggers::outputs as trigger_outputs;
-use super::{Call, Env, Hub, Link, Sub, change_outputs, get_state_outputs, service_outputs};
-use super::requests::action_result;
 
 impl Hub {
     // --- Configuration ---
@@ -43,15 +41,25 @@ impl Hub {
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &[]);
         env.set_options(crate::states::STATES_SOURCE, &[]);
         env.set_options(crate::states::ATTRIBUTES_SOURCE, &[]);
-        for source in std::mem::take(&mut self.domain_sources) { env.set_options(&source, &[]); }
-        for source in std::mem::take(&mut self.state_sources) { env.set_options(&source, &[]); }
-        for reply in self.entities.values_mut() { *reply = None; }
+        for source in std::mem::take(&mut self.domain_sources) {
+            env.set_options(&source, &[]);
+        }
+        for source in std::mem::take(&mut self.state_sources) {
+            env.set_options(&source, &[]);
+        }
+        for reply in self.entities.values_mut() {
+            *reply = None;
+        }
     }
 
     /// (Re)creates the session for new settings; the old socket is closed.
     pub fn configure(&mut self, url: &str, token: &str, now: Instant, env: &mut impl Env) {
         self.reset(now, env);
-        self.link = Some(Link { url: url.to_string(), session: Session::new(ClientConfig::for_session(token)), ws: None });
+        self.link = Some(Link {
+            url: url.to_string(),
+            session: Session::new(ClientConfig::for_session(token)),
+            ws: None,
+        });
         env.info(&format!("Home Assistant connection configured for {url}"));
         self.ensure_subscriptions(now);
     }
@@ -60,12 +68,19 @@ impl Hub {
 
     /// One plugin tick: feeds the connection events to the session, runs the transport, collects
     /// subscription updates and request results and turns them into emissions (at most one per node).
-    pub fn tick(&mut self, now: Instant, events: Vec<WsEvent>, env: &mut impl Env) -> Vec<Emission> {
+    pub fn tick(
+        &mut self,
+        now: Instant,
+        events: Vec<WsEvent>,
+        env: &mut impl Env,
+    ) -> Vec<Emission> {
         if let Some(link) = &mut self.link {
             for event in events {
                 match event {
                     WsEvent::Opened(id) if link.ws == Some(id) => link.session.on_connected(now),
-                    WsEvent::Message(id, text) if link.ws == Some(id) => link.session.on_frame(now, &text),
+                    WsEvent::Message(id, text) if link.ws == Some(id) => {
+                        link.session.on_frame(now, &text)
+                    }
                     WsEvent::Closed(id, reason) if link.ws == Some(id) => {
                         link.ws = None;
                         link.session.on_disconnected(now, &reason);
@@ -79,7 +94,9 @@ impl Hub {
             Self::pump_actions(link, now, env);
         }
         self.ensure_subscriptions(now);
-        if let Some(link) = &mut self.link && self.live.tick(now, &mut link.session, env) {
+        if let Some(link) = &mut self.link
+            && self.live.tick(now, &mut link.session, env)
+        {
             self.entities_reply = None;
             self.entities_due = None;
         }
@@ -123,59 +140,13 @@ impl Hub {
         while let Some(frame) = link.session.poll_transmit() {
             let Some(id) = link.ws else { continue };
             if let Err(e) = env.ws_send(id, &frame) {
-                env.warn(&format!("Writing to the Home Assistant WebSocket failed: {e}"));
+                env.warn(&format!(
+                    "Writing to the Home Assistant WebSocket failed: {e}"
+                ));
                 link.session.on_disconnected(now, &e);
                 break;
             }
         }
-    }
-
-    fn collect(&mut self, now: Instant, env: &mut impl Env) -> Vec<Emission> {
-        let mut emissions = Vec::new();
-        for (node, watch) in &mut self.watches {
-            let change = watch.collect(now, &watch.config.clone(), false, env);
-            if let Some(reply) = self.entities.get_mut(node) {
-                if let Some(change) = change {
-                    // A newer event wins over an outstanding baseline request.
-                    *reply = None;
-                    watch.snapshot_due = false;
-                    emissions.push(Emission::new(*node, crate::entity::outputs(change.new_state.as_ref())));
-                } else {
-                    if watch.snapshot_due {
-                        watch.snapshot_due = false;
-                        if let Some(link) = &mut self.link { *reply = Some(link.session.get_state(now, &watch.config)); }
-                    }
-                    if let Some(pending) = reply && let Some(result) = pending.poll() {
-                        match result {
-                            Ok(state) => emissions.push(Emission::new(*node, crate::entity::outputs(Some(&state)))),
-                            Err(e) => env.warn(&format!("Could not read entity {}: {e}", watch.config)),
-                        }
-                        *reply = None;
-                    }
-                }
-            } else if let Some(change) = change {
-                emissions.push(Emission::new(*node, change_outputs(&change)));
-            }
-        }
-        for (node, watch) in &mut self.triggers {
-            let Some(config) = watch.config.clone() else { continue };
-            if let Some(fired) = watch.collect(now, config.platform.type_name(), true, env) {
-                emissions.push(Emission::new(*node, trigger_outputs(&config, &fired)));
-            }
-        }
-        let requests = std::mem::take(&mut self.requests);
-        for mut request in requests {
-            let outputs = match &mut request.call {
-                Call::Get { reply } => reply.poll().map(|r| get_state_outputs(r.map_err(|e| e.to_string()))),
-                Call::Service { reply } => reply.poll().map(|r| service_outputs(r.map_err(|e| e.to_string()))),
-                Call::Action { reply } => reply.poll().map(action_result),
-            };
-            match outputs {
-                Some(outputs) => emissions.push(Emission::new(request.node, outputs)),
-                None => self.requests.push(request),
-            }
-        }
-        emissions
     }
 
     fn log_connection_state(&mut self, env: &mut impl Env) {
@@ -186,8 +157,12 @@ impl Hub {
         }
         match &state {
             ConnectionState::Connected => env.info("Connected to Home Assistant"),
-            ConnectionState::Reconnecting { attempt } => env.warn(&format!("Not connected to Home Assistant, reconnecting (attempt {attempt})")),
-            ConnectionState::AuthFailed(message) => env.error(&format!("Home Assistant rejected the access token: {message}")),
+            ConnectionState::Reconnecting { attempt } => env.warn(&format!(
+                "Not connected to Home Assistant, reconnecting (attempt {attempt})"
+            )),
+            ConnectionState::AuthFailed(message) => env.error(&format!(
+                "Home Assistant rejected the access token: {message}"
+            )),
             ConnectionState::Stopped => env.info("Home Assistant connection stopped"),
             _ => {}
         }

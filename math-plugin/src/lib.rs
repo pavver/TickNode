@@ -116,3 +116,6 @@ impl Plugin for MathPlugin {
 }
 
 export_plugin!(MathPlugin);
+
+#[cfg(test)]
+mod tests;

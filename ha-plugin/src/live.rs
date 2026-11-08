@@ -10,6 +10,7 @@ use ha_core_client::{
 use serde_json::Value;
 
 use crate::hub::Env;
+mod timezone;
 
 enum Stream<T> {
     Idle,
@@ -134,6 +135,53 @@ impl Live {
             self.config_due = None;
             return true;
         }
+        let refresh = match self.subscribe_changes(now, session, env) {
+            Ok(refresh) => refresh,
+            Err(()) => return true,
+        };
+        let invalid = self.collect_changes(now, env);
+        let refresh = refresh || invalid;
+        self.tick_offset(now, session, env);
+        self.tick_config(now, session);
+
+        refresh
+    }
+    fn collect_changes(&mut self, now: Instant, env: &mut impl Env) -> bool {
+        let mut updates = StateUpdates {
+            changes: Vec::new(),
+            subscribed: self.subscribed,
+            invalid: false,
+        };
+        if let Stream::Active(stream) = &mut self.changes {
+            for update in stream.drain() {
+                updates.collect(update, env);
+            }
+            if stream.is_finished() {
+                self.changes = Stream::Idle;
+                updates.subscribed = false;
+                self.retry = Some(now + Duration::from_secs(30));
+                updates.invalid = true;
+            }
+        }
+        self.subscribed = updates.subscribed;
+        if updates.invalid {
+            self.invalidate();
+        }
+        for change in updates.changes {
+            if self.snapshot_pending {
+                self.overlay
+                    .insert(change.entity_id.clone(), change.clone());
+            }
+            self.apply(change);
+        }
+        updates.invalid
+    }
+    fn subscribe_changes(
+        &mut self,
+        now: Instant,
+        session: &mut Session,
+        env: &mut impl Env,
+    ) -> Result<bool, ()> {
         if matches!(self.changes, Stream::Idle) && self.retry.is_none_or(|due| now >= due) {
             self.changes = Stream::Pending(session.subscribe(now, Source::state_changes()));
         }
@@ -152,131 +200,45 @@ impl Live {
                     self.changes = Stream::Idle;
                     self.retry = Some(now + Duration::from_secs(30));
                     self.invalidate();
-                    return true;
+                    return Err(());
                 }
             }
         }
-        let mut invalid = false;
-        let mut changes = Vec::new();
-        if let Stream::Active(stream) = &mut self.changes {
-            for update in stream.drain() {
-                match update {
-                    Update::Event(change) => {
-                        changes.push(change);
-                    }
-                    Update::Status {
-                        status: SubscriptionStatus::Restored,
-                        ..
-                    } => {
-                        self.subscribed = true;
-                        invalid = true;
-                    }
-                    Update::Status {
-                        status: SubscriptionStatus::Interrupted,
-                        ..
-                    } => {
-                        self.subscribed = false;
-                        invalid = true;
-                    }
-                    Update::Status {
-                        status: SubscriptionStatus::Lagged { .. },
-                        ..
-                    } => {
-                        env.warn("Live state cache fell behind; requesting a fresh snapshot");
-                        invalid = true;
-                    }
-                    _ => {}
-                }
+        Ok(refresh)
+    }
+}
+
+struct StateUpdates {
+    changes: Vec<StateChange>,
+    subscribed: bool,
+    invalid: bool,
+}
+impl StateUpdates {
+    fn collect(&mut self, update: Update<StateChange>, env: &mut impl Env) {
+        match update {
+            Update::Event(change) => self.changes.push(change),
+            Update::Status {
+                status: SubscriptionStatus::Restored,
+                ..
+            } => {
+                self.subscribed = true;
+                self.invalid = true;
             }
-            if stream.is_finished() {
-                self.changes = Stream::Idle;
+            Update::Status {
+                status: SubscriptionStatus::Interrupted,
+                ..
+            } => {
                 self.subscribed = false;
-                self.retry = Some(now + Duration::from_secs(30));
-                invalid = true;
+                self.invalid = true;
             }
-        }
-        if invalid {
-            self.invalidate();
-            refresh = true;
-        }
-        for change in changes {
-            if self.snapshot_pending {
-                self.overlay
-                    .insert(change.entity_id.clone(), change.clone());
+            Update::Status {
+                status: SubscriptionStatus::Lagged { .. },
+                ..
+            } => {
+                env.warn("Live state cache fell behind; requesting a fresh snapshot");
+                self.invalid = true;
             }
-            self.apply(change);
+            _ => {}
         }
-        // HA's render_template tracks now() and refreshes on each minute, including DST changes.
-        if matches!(self.offset_stream, Stream::Idle)
-            && self.offset_retry.is_none_or(|due| now >= due)
-        {
-            self.offset_stream = Stream::Pending(session.subscribe(
-                now,
-                Source::template("{{ now().utcoffset().total_seconds() | int }}"),
-            ));
-        }
-        if let Stream::Pending(p) = &mut self.offset_stream
-            && let Some(result) = p.poll()
-        {
-            match result {
-                Ok(stream) => self.offset_stream = Stream::Active(stream),
-                Err(e) => {
-                    env.warn(&format!(
-                        "Home Assistant UTC offset subscription failed: {e}"
-                    ));
-                    self.offset_stream = Stream::Idle;
-                    self.offset_retry = Some(now + Duration::from_secs(30));
-                }
-            }
-        }
-        if let Stream::Active(stream) = &mut self.offset_stream {
-            for update in stream.drain() {
-                match update {
-                    Update::Event(TemplateUpdate::Rendered(value)) => {
-                        self.offset = value
-                            .as_i64()
-                            .or_else(|| value.as_str()?.parse().ok())
-                            .and_then(|n| i32::try_from(n).ok())
-                            .and_then(FixedOffset::east_opt);
-                    }
-                    Update::Event(_)
-                    | Update::Status {
-                        status:
-                            SubscriptionStatus::Interrupted
-                            | SubscriptionStatus::Restored
-                            | SubscriptionStatus::Lagged { .. },
-                        ..
-                    } => self.offset = None,
-                    _ => {}
-                }
-            }
-            if stream.is_finished() {
-                self.offset_stream = Stream::Idle;
-                self.offset = None;
-                self.offset_retry = Some(now + Duration::from_secs(30));
-            }
-        }
-        if let Some(reply) = &mut self.config
-            && let Some(result) = reply.poll()
-        {
-            self.zone = result
-                .ok()
-                .and_then(|raw| serde_json::from_str::<Value>(raw.get()).ok())
-                .and_then(|v| {
-                    v["time_zone"]
-                        .as_str()
-                        .filter(|s| !s.is_empty())
-                        .map(str::to_owned)
-                });
-            self.config = None;
-            self.config_due =
-                Some(now + Duration::from_secs(if self.zone.is_some() { 300 } else { 30 }));
-        }
-        if self.config.is_none() && self.config_due.is_none_or(|due| now >= due) {
-            self.config = session
-                .command(now, serde_json::json!({"type":"get_config"}))
-                .ok();
-        }
-        refresh
     }
 }

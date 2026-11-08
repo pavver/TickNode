@@ -1,5 +1,5 @@
-use crate::*;
 use crate::bindings::ticknode::plugin::types as wit;
+use crate::*;
 
 pub(crate) fn encode(value: &DataValue) -> Vec<u8> {
     postcard::to_allocvec(value).expect("DataValue always serializes")
@@ -56,15 +56,26 @@ pub(crate) fn to_wit_type_definition(t: TypeDefinition) -> wit::TypeDefinition {
         description: t.description,
         color: t.color,
         kind: match t.kind {
-            TypeKind::Struct { fields } => wit::TypeKind::Structure(fields.into_iter().map(|f| wit::FieldDefinition {
-                name: f.name,
-                title: f.title,
-                description: f.description,
-                data_type: to_wit_data_type(&f.data_type),
-                optional: f.optional,
-            }).collect()),
+            TypeKind::Struct { fields } => wit::TypeKind::Structure(
+                fields
+                    .into_iter()
+                    .map(|f| wit::FieldDefinition {
+                        name: f.name,
+                        title: f.title,
+                        description: f.description,
+                        data_type: to_wit_data_type(&f.data_type),
+                        optional: f.optional,
+                    })
+                    .collect(),
+            ),
             TypeKind::Enum { values } => wit::TypeKind::Enumeration(
-                values.into_iter().map(|v| wit::EnumValue { value: v.value, title: v.title }).collect(),
+                values
+                    .into_iter()
+                    .map(|v| wit::EnumValue {
+                        value: v.value,
+                        title: v.title,
+                    })
+                    .collect(),
             ),
         },
     }
@@ -77,29 +88,45 @@ pub(crate) fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefi
         category: d.category,
         description: d.description,
         help: d.help,
-        pins: d.pins.into_iter().map(|p| wit::Pin {
-            id: p.id.0,
-            required: p.required,
-            name: p.name,
-            pin_type: match &p.pin_type {
-                PinType::Exec => wit::PinType::Exec,
-                PinType::Data(t) => wit::PinType::Data(to_wit_data_type(t)),
-            },
-            direction: match p.direction {
-                PinDirection::Input => wit::PinDirection::Input,
-                PinDirection::Output => wit::PinDirection::Output,
-            },
-        }).collect(),
+        pins: d
+            .pins
+            .into_iter()
+            .map(|p| wit::Pin {
+                id: p.id.0,
+                required: p.required,
+                name: p.name,
+                pin_type: match &p.pin_type {
+                    PinType::Exec => wit::PinType::Exec,
+                    PinType::Data(t) => wit::PinType::Data(to_wit_data_type(t)),
+                },
+                direction: match p.direction {
+                    PinDirection::Input => wit::PinDirection::Input,
+                    PinDirection::Output => wit::PinDirection::Output,
+                },
+            })
+            .collect(),
         polls,
-        properties: d.properties.into_iter().map(|p| wit::PropertyDefinition {
-            name: p.name,
-            title: p.title,
-            description: p.description,
-            kind: match p.kind {
-                PropertyKind::Text => wit::PropertyKind::Text,
-                PropertyKind::Select(options) => wit::PropertyKind::Select(options),
-                PropertyKind::Dynamic { source, .. } => wit::PropertyKind::Dynamic(source),
-            },
-        }).collect(),
+        properties: d
+            .properties
+            .into_iter()
+            .map(|p| wit::PropertyDefinition {
+                name: p.name,
+                title: p.title,
+                description: p.description,
+                kind: match p.kind {
+                    PropertyKind::Text => wit::PropertyKind::Text,
+                    PropertyKind::Select(options) => wit::PropertyKind::Select(options),
+                    PropertyKind::Dynamic { source, .. } => wit::PropertyKind::Dynamic(source),
+                },
+            })
+            .collect(),
+    }
+}
+
+pub(crate) fn to_wit_output(output: Output) -> wit::Output {
+    match output {
+        Output::Exec(pin) => wit::Output::Exec(pin.0),
+        Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
+        Output::Clear(pin) => wit::Output::Clear(pin.0),
     }
 }

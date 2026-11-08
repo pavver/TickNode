@@ -1,11 +1,11 @@
 //! Entity/service catalog refresh and dynamic option publishing.
 
+use super::{ENTITIES_REFRESH, ENTITIES_RETRY, Env, Hub};
+use crate::entities::option_sources;
+use ha_core_client::ConnectionState;
 use std::collections::BTreeSet;
 use std::time::Instant;
-use ha_core_client::ConnectionState;
 use ticknode_plugin_sdk::NodeId;
-use crate::entities::option_sources;
-use super::{ENTITIES_REFRESH, ENTITIES_RETRY, Env, Hub};
 
 impl Hub {
     /// Keeps the entity picker's options fresh: asks for all states once the connection is up (also after
@@ -22,14 +22,7 @@ impl Hub {
             match reply.poll() {
                 None => return,
                 Some(Ok(states)) => {
-                    self.live.snapshot(&states);
-                    for (source, options) in option_sources(&states) {
-                        env.set_options(source, &options);
-                        if source == "entities" { self.entity_options = options; }
-                    }
-                    self.publish_action_targets(env);
-                    self.publish_action_sources(env);
-                    self.publish_state_sources(env);
+                    self.publish_entities(&states, env);
                     self.entities_due = Some(now + ENTITIES_REFRESH);
                 }
                 Some(Err(e)) => {
@@ -41,8 +34,27 @@ impl Hub {
         }
         if self.entities_due.is_none_or(|due| now >= due) {
             self.live.begin_snapshot();
-            self.entities_reply = Some(self.link.as_mut().expect("connected").session.get_states(now));
+            self.entities_reply = Some(
+                self.link
+                    .as_mut()
+                    .expect("connected")
+                    .session
+                    .get_states(now),
+            );
         }
+    }
+
+    fn publish_entities(&mut self, states: &[ha_core_client::State], env: &mut impl Env) {
+        self.live.snapshot(states);
+        for (source, options) in option_sources(states) {
+            env.set_options(source, &options);
+            if source == "entities" {
+                self.entity_options = options;
+            }
+        }
+        self.publish_action_targets(env);
+        self.publish_action_sources(env);
+        self.publish_state_sources(env);
     }
 
     pub(super) fn refresh_services(&mut self, now: Instant, env: &mut impl Env) {
@@ -69,7 +81,13 @@ impl Hub {
             self.services_reply = None;
         }
         if self.services_due.is_none_or(|due| now >= due) {
-            self.services_reply = Some(self.link.as_mut().expect("connected").session.get_services(now));
+            self.services_reply = Some(
+                self.link
+                    .as_mut()
+                    .expect("connected")
+                    .session
+                    .get_services(now),
+            );
         }
     }
 
@@ -88,7 +106,10 @@ impl Hub {
         if self.services.is_empty() {
             return;
         }
-        env.set_options("actions", &crate::actions::options_for(&self.services, None));
+        env.set_options(
+            "actions",
+            &crate::actions::options_for(&self.services, None),
+        );
         let mut targets: BTreeSet<String> = self
             .action_targets
             .values()
@@ -135,7 +156,11 @@ impl Hub {
         if let Some(target) = self.action_targets.remove(&node) {
             let source = crate::actions::action_source(&target);
             if !self.action_targets.values().any(|t| t == &target)
-                && !self.entity_options.iter().take(192).any(|o| o.value == target)
+                && !self
+                    .entity_options
+                    .iter()
+                    .take(192)
+                    .any(|o| o.value == target)
             {
                 self.domain_sources.remove(&source);
                 env.set_options(&source, &[]);
@@ -158,7 +183,10 @@ impl Hub {
             let state_src = crate::states::state_source(entity);
             let attr_src = crate::states::attribute_source(entity);
             let state = self.live.get(entity);
-            env.set_options(&state_src, &crate::states::state_options(entity, state, true));
+            env.set_options(
+                &state_src,
+                &crate::states::state_options(entity, state, true),
+            );
             env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
             sources.insert(state_src);
             sources.insert(attr_src);
@@ -173,7 +201,10 @@ impl Hub {
         let entity = entity.trim();
         let old = self.state_nodes.insert(node, entity.to_string());
         if let Some(old_entity) = old {
-            if !old_entity.is_empty() && old_entity != entity && !self.state_nodes.values().any(|e| e == &old_entity) {
+            if !old_entity.is_empty()
+                && old_entity != entity
+                && !self.state_nodes.values().any(|e| e == &old_entity)
+            {
                 let old_state_src = crate::states::state_source(&old_entity);
                 let old_attr_src = crate::states::attribute_source(&old_entity);
                 self.state_sources.remove(&old_state_src);
@@ -199,7 +230,10 @@ impl Hub {
         let state = self.live.get(entity);
         self.state_sources.insert(state_src.clone());
         self.state_sources.insert(attr_src.clone());
-        env.set_options(&state_src, &crate::states::state_options(entity, state, true));
+        env.set_options(
+            &state_src,
+            &crate::states::state_options(entity, state, true),
+        );
         env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
     }
 

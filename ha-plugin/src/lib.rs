@@ -14,6 +14,7 @@ mod entity;
 mod hub;
 mod icons;
 mod live;
+mod options;
 mod queue;
 mod requests;
 mod runtime;
@@ -21,12 +22,12 @@ mod state_changed;
 mod states;
 mod triggers;
 
-use std::time::Instant;
-use ticknode_plugin_sdk::*;
 use convert::STATE_TYPE;
 use requests::{CallService, GetState};
 use runtime::{install_core_logger, try_with_hub, with_hub};
 use state_changed::StateChanged;
+use std::time::Instant;
+use ticknode_plugin_sdk::*;
 
 /// The endpoint of the Home Assistant add-on environment (the supervisor proxies the core).
 const DEFAULT_URL: &str = "ws://homeassistant.local:8123/api/websocket";
@@ -45,15 +46,34 @@ struct HomeAssistant;
 
 impl Plugin for HomeAssistant {
     const NODE_TYPES: &'static [&'static str] = &[
-        "ha/action", "ha/entity", "ha/call_service", "ha/get_state", "ha/state_changed",
-        "ha/trigger_state", "ha/trigger_numeric_state", "ha/trigger_time", "ha/trigger_time_pattern",
-        "ha/trigger_sun", "ha/trigger_zone", "ha/trigger_event", "ha/trigger_homeassistant",
-        "ha/trigger_mqtt", "ha/trigger_webhook", "ha/trigger_calendar", "ha/trigger_tag",
-        "ha/trigger_conversation", "ha/trigger_template",
-        "ha/condition_state", "ha/condition_numeric_state", "ha/condition_time",
-        "ha/condition_sun", "ha/condition_zone", "ha/condition_template",
+        "ha/action",
+        "ha/entity",
+        "ha/call_service",
+        "ha/get_state",
+        "ha/state_changed",
+        "ha/trigger_state",
+        "ha/trigger_numeric_state",
+        "ha/trigger_time",
+        "ha/trigger_time_pattern",
+        "ha/trigger_sun",
+        "ha/trigger_zone",
+        "ha/trigger_event",
+        "ha/trigger_homeassistant",
+        "ha/trigger_mqtt",
+        "ha/trigger_webhook",
+        "ha/trigger_calendar",
+        "ha/trigger_tag",
+        "ha/trigger_conversation",
+        "ha/trigger_template",
+        "ha/condition_state",
+        "ha/condition_numeric_state",
+        "ha/condition_time",
+        "ha/condition_sun",
+        "ha/condition_zone",
+        "ha/condition_template",
     ];
-    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
+        &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("home_assistant", "0.1.0", "TickNode")
@@ -72,13 +92,18 @@ impl Plugin for HomeAssistant {
 
     fn types() -> Vec<TypeDefinition> {
         vec![
-            TypeDefinition::new_struct(STATE_TYPE, "HA State", vec![
-                FieldDefinition::new("entity_id", "Entity ID", DataType::String),
-                FieldDefinition::new("state", "State", DataType::String).described("The state text reported by Home Assistant"),
-                FieldDefinition::new("attributes", "Attributes", DataType::Object),
-                FieldDefinition::new("last_changed", "Last changed", DataType::DateTime),
-                FieldDefinition::new("last_updated", "Last updated", DataType::DateTime),
-            ])
+            TypeDefinition::new_struct(
+                STATE_TYPE,
+                "HA State",
+                vec![
+                    FieldDefinition::new("entity_id", "Entity ID", DataType::String),
+                    FieldDefinition::new("state", "State", DataType::String)
+                        .described("The state text reported by Home Assistant"),
+                    FieldDefinition::new("attributes", "Attributes", DataType::Object),
+                    FieldDefinition::new("last_changed", "Last changed", DataType::DateTime),
+                    FieldDefinition::new("last_updated", "Last updated", DataType::DateTime),
+                ],
+            )
             .described("The state of a Home Assistant entity")
             .colored("#18bcf2"),
         ]
@@ -92,10 +117,15 @@ impl Plugin for HomeAssistant {
             "ha/get_state" => Box::new(GetState { node }),
             "ha/call_service" => Box::new(CallService { node }),
             _ => {
-                if let Some(kind) = conditions::KINDS.iter().find(|k| k.type_name() == type_name) {
+                if let Some(kind) = conditions::KINDS
+                    .iter()
+                    .find(|k| k.type_name() == type_name)
+                {
                     Box::new(conditions::ConditionNode::new(*kind, node))
                 } else {
-                    let platform = triggers::PLATFORMS.iter().find(|p| p.type_name() == type_name)?;
+                    let platform = triggers::PLATFORMS
+                        .iter()
+                        .find(|p| p.type_name() == type_name)?;
                     Box::new(triggers::TriggerNode::new(*platform, node))
                 }
             }
@@ -104,17 +134,18 @@ impl Plugin for HomeAssistant {
 
     fn configure(settings: &[(String, DataValue)]) -> Result<(), UiError> {
         install_core_logger();
-        let url = setting_str(settings, "url").unwrap_or(DEFAULT_URL).trim().to_string();
-        let token = setting_str(settings, "token").map(str::trim).unwrap_or_default().to_string();
+        let url = setting_str(settings, "url")
+            .unwrap_or(DEFAULT_URL)
+            .trim()
+            .to_string();
+        let token = setting_str(settings, "token")
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_string();
         let now = Instant::now();
         // The old connection is closed in any case; a valid configuration opens a new one on the next tick.
         with_hub(|hub, env| hub.reset(now, env));
-        if token.is_empty() {
-            return Err(UiError::new("home-assistant-error-no-token", "The access token is not set"));
-        }
-        if !(url.starts_with("ws://") || url.starts_with("wss://")) {
-            return Err(UiError::new("home-assistant-error-bad-url", format!("The URL must start with ws:// or wss://, got \"{url}\"")).arg("url", url));
-        }
+        validate_connection(&url, &token)?;
         with_hub(|hub, env| hub.configure(&url, &token, now, env));
         Ok(())
     }
@@ -122,6 +153,23 @@ impl Plugin for HomeAssistant {
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
         with_hub(|hub, env| hub.tick(Instant::now(), events, env))
     }
+}
+
+fn validate_connection(url: &str, token: &str) -> Result<(), UiError> {
+    if token.is_empty() {
+        return Err(UiError::new(
+            "home-assistant-error-no-token",
+            "The access token is not set",
+        ));
+    }
+    if !(url.starts_with("ws://") || url.starts_with("wss://")) {
+        return Err(UiError::new(
+            "home-assistant-error-bad-url",
+            format!("The URL must start with ws:// or wss://, got \"{url}\""),
+        )
+        .arg("url", url));
+    }
+    Ok(())
 }
 
 export_plugin!(HomeAssistant);

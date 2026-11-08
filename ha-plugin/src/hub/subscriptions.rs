@@ -1,14 +1,19 @@
 //! Subscription registration, cancellation, retry and ordered event queues.
 
-use std::time::Instant;
-use ha_core_client::{Session, Source, SubscriptionStatus, Update};
-use ticknode_plugin_sdk::NodeId;
+use super::{Env, Hub, RESUBSCRIBE_DELAY, Sub, Watch};
 use crate::queue::{ChangeQueue, Mode};
 use crate::triggers::TriggerConfig;
-use super::{Env, Hub, RESUBSCRIBE_DELAY, Sub, Watch};
+use ha_core_client::{Session, Source, SubscriptionStatus, Update};
+use std::time::Instant;
+use ticknode_plugin_sdk::NodeId;
 
 impl<T, C> Watch<T, C> {
-    pub(super) fn ensure(&mut self, now: Instant, session: &mut Session, source: impl FnOnce(&C) -> Source<T>) {
+    pub(super) fn ensure(
+        &mut self,
+        now: Instant,
+        session: &mut Session,
+        source: impl FnOnce(&C) -> Source<T>,
+    ) {
         let due = match self.sub {
             Sub::Idle => true,
             Sub::Failed { retry_at } => now >= retry_at,
@@ -20,11 +25,58 @@ impl<T, C> Watch<T, C> {
     }
 
     /// Common pending/active/retry lifecycle and bounded, ordered delivery for all sources.
-    pub(super) fn collect(&mut self, now: Instant, label: &str, node_errors: bool, env: &mut impl Env) -> Option<T> {
+    pub(super) fn collect(
+        &mut self,
+        now: Instant,
+        label: &str,
+        node_errors: bool,
+        env: &mut impl Env,
+    ) -> Option<T> {
+        self.collect_pending(now, label, node_errors, env);
+        if let Sub::Active(events) = &mut self.sub {
+            for update in events.drain() {
+                match update {
+                    Update::Event(change) => {
+                        let dropped = self.queue.push(change);
+                        if dropped > 0 && self.queue.mode() == Mode::Every {
+                            env.warn(&format!(
+                                "{label}: too many unprocessed changes, the oldest was dropped"
+                            ));
+                        }
+                    }
+                    Update::Status { status, .. } => collect_status(
+                        status,
+                        &mut self.snapshot_due,
+                        &mut self.errors,
+                        label,
+                        node_errors,
+                        env,
+                    ),
+                    _ => {}
+                }
+            }
+            if events.is_finished() {
+                self.sub = Sub::Failed {
+                    retry_at: now + RESUBSCRIBE_DELAY,
+                };
+            }
+        }
+        self.queue.pop()
+    }
+    fn collect_pending(
+        &mut self,
+        now: Instant,
+        label: &str,
+        node_errors: bool,
+        env: &mut impl Env,
+    ) {
         if let Sub::Pending(pending) = &mut self.sub {
             match pending.poll() {
                 None => {}
-                Some(Ok(events)) => { self.sub = Sub::Active(events); self.snapshot_due = true; },
+                Some(Ok(events)) => {
+                    self.sub = Sub::Active(events);
+                    self.snapshot_due = true;
+                }
                 Some(Err(e)) => {
                     let message = format!("Subscribing to {label} failed: {e}");
                     if node_errors {
@@ -32,46 +84,12 @@ impl<T, C> Watch<T, C> {
                     } else {
                         env.warn(&message);
                     }
-                    self.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
+                    self.sub = Sub::Failed {
+                        retry_at: now + RESUBSCRIBE_DELAY,
+                    };
                 }
             }
         }
-        if let Sub::Active(events) = &mut self.sub {
-            for update in events.drain() {
-                match update {
-                    Update::Event(change) => {
-                        let dropped = self.queue.push(change);
-                        if dropped > 0 && self.queue.mode() == Mode::Every {
-                            env.warn(&format!("{label}: too many unprocessed changes, the oldest was dropped"));
-                        }
-                    }
-                    Update::Status { status, .. } => match status {
-                        SubscriptionStatus::Interrupted => {
-                            env.warn(&format!("Subscription to {label} interrupted: the connection was lost"))
-                        }
-                        SubscriptionStatus::Restored => { self.snapshot_due = true; env.info(&format!("Subscription to {label} restored")); },
-                        SubscriptionStatus::Lagged { dropped } => env.warn(&format!(
-                            "{label}: {dropped} change(s) were {} because the plugin fell behind",
-                            if node_errors { "dropped" } else { "merged" }
-                        )),
-                        SubscriptionStatus::Rejected { code, message } => {
-                            let message = format!("Home Assistant rejected the subscription to {label}: {code}: {message}");
-                            if node_errors {
-                                self.errors.push(message);
-                            } else {
-                                env.error(&message);
-                            }
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                }
-            }
-            if events.is_finished() {
-                self.sub = Sub::Failed { retry_at: now + RESUBSCRIBE_DELAY };
-            }
-        }
-        self.queue.pop()
     }
 }
 
@@ -82,7 +100,17 @@ impl Hub {
     pub fn add_watch(&mut self, node: NodeId, mode: Mode) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
-        self.watches.insert(node, Watch { serial, config: String::new(), queue: ChangeQueue::new(mode), sub: Sub::Idle, errors: Vec::new(), snapshot_due: false });
+        self.watches.insert(
+            node,
+            Watch {
+                serial,
+                config: String::new(),
+                queue: ChangeQueue::new(mode),
+                sub: Sub::Idle,
+                errors: Vec::new(),
+                snapshot_due: false,
+            },
+        );
         serial
     }
 
@@ -103,15 +131,26 @@ impl Hub {
         }
     }
 
-    pub fn set_entity(&mut self, node: NodeId, serial: u64, entity: &str, now: Instant, env: &mut impl Env) {
-        let Some(watch) = self.watches.get_mut(&node).filter(|w| w.serial == serial) else { return };
+    pub fn set_entity(
+        &mut self,
+        node: NodeId,
+        serial: u64,
+        entity: &str,
+        now: Instant,
+        env: &mut impl Env,
+    ) {
+        let Some(watch) = self.watches.get_mut(&node).filter(|w| w.serial == serial) else {
+            return;
+        };
         if watch.config == entity {
             return;
         }
         watch.config = entity.to_string();
         watch.queue.clear();
         watch.snapshot_due = false;
-        if let Some(reply) = self.entities.get_mut(&node) { *reply = None; }
+        if let Some(reply) = self.entities.get_mut(&node) {
+            *reply = None;
+        }
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
         self.ensure_subscriptions(now);
@@ -143,15 +182,36 @@ impl Hub {
     pub fn add_trigger(&mut self, node: NodeId, now: Instant) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
-        if let Some(old) = self.triggers.insert(node, Watch { serial, config: None, queue: ChangeQueue::new(Mode::Every), sub: Sub::Idle, errors: Vec::new(), snapshot_due: false }) {
+        if let Some(old) = self.triggers.insert(
+            node,
+            Watch {
+                serial,
+                config: None,
+                queue: ChangeQueue::new(Mode::Every),
+                sub: Sub::Idle,
+                errors: Vec::new(),
+                snapshot_due: false,
+            },
+        ) {
             self.cancel(old.sub, now);
         }
         serial
     }
 
-    pub fn set_trigger(&mut self, node: NodeId, serial: u64, config: Option<TriggerConfig>, now: Instant, env: &mut impl Env) {
-        let Some(watch) = self.triggers.get_mut(&node).filter(|w| w.serial == serial) else { return };
-        if watch.config == config { return; }
+    pub fn set_trigger(
+        &mut self,
+        node: NodeId,
+        serial: u64,
+        config: Option<TriggerConfig>,
+        now: Instant,
+        env: &mut impl Env,
+    ) {
+        let Some(watch) = self.triggers.get_mut(&node).filter(|w| w.serial == serial) else {
+            return;
+        };
+        if watch.config == config {
+            return;
+        }
         watch.config = config;
         watch.queue.clear();
         watch.errors.clear();
@@ -163,29 +223,69 @@ impl Hub {
 
     pub fn remove_trigger(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
         if self.triggers.get(&node).is_some_and(|w| w.serial == serial) {
-            if let Some(watch) = self.triggers.remove(&node) { self.cancel(watch.sub, now); }
+            if let Some(watch) = self.triggers.remove(&node) {
+                self.cancel(watch.sub, now);
+            }
             self.flush(now, env);
         }
     }
 
     pub fn take_trigger_errors(&mut self, node: NodeId, serial: u64) -> Vec<String> {
-        self.triggers.get_mut(&node).filter(|w| w.serial == serial)
-            .map(|w| std::mem::take(&mut w.errors)).unwrap_or_default()
+        self.triggers
+            .get_mut(&node)
+            .filter(|w| w.serial == serial)
+            .map(|w| std::mem::take(&mut w.errors))
+            .unwrap_or_default()
     }
-
 
     pub(super) fn ensure_subscriptions(&mut self, now: Instant) {
         let Some(link) = &mut self.link else { return };
         for watch in self.watches.values_mut() {
             if !watch.config.is_empty() {
-                watch.ensure(now, &mut link.session, |entity| Source::entity(entity.as_str()).without_merging());
+                watch.ensure(now, &mut link.session, |entity| {
+                    Source::entity(entity.as_str()).without_merging()
+                });
             }
         }
         for watch in self.triggers.values_mut() {
             if watch.config.is_some() {
-                watch.ensure(now, &mut link.session, |config| Source::trigger(config.as_ref().expect("checked above").trigger.clone()));
+                watch.ensure(now, &mut link.session, |config| {
+                    Source::trigger(config.as_ref().expect("checked above").trigger.clone())
+                });
             }
         }
     }
+}
 
+fn collect_status(
+    status: SubscriptionStatus,
+    snapshot_due: &mut bool,
+    errors: &mut Vec<String>,
+    label: &str,
+    node_errors: bool,
+    env: &mut impl Env,
+) {
+    match status {
+        SubscriptionStatus::Interrupted => env.warn(&format!(
+            "Subscription to {label} interrupted: the connection was lost"
+        )),
+        SubscriptionStatus::Restored => {
+            *snapshot_due = true;
+            env.info(&format!("Subscription to {label} restored"));
+        }
+        SubscriptionStatus::Lagged { dropped } => env.warn(&format!(
+            "{label}: {dropped} change(s) were {} because the plugin fell behind",
+            if node_errors { "dropped" } else { "merged" }
+        )),
+        SubscriptionStatus::Rejected { code, message } => {
+            let message =
+                format!("Home Assistant rejected the subscription to {label}: {code}: {message}");
+            if node_errors {
+                errors.push(message);
+            } else {
+                env.error(&message);
+            }
+        }
+        _ => {}
+    }
 }

@@ -1,7 +1,7 @@
 //! Service schema discovery and Home Assistant selector/target conversion.
 
-use std::collections::{BTreeMap, BTreeSet};
 use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
 use ticknode_plugin_sdk::DataType;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -36,7 +36,10 @@ impl EntityFilter {
         if !self.supported_features.is_empty()
             && let Some(state) = state
             && let Some(features) = state.attributes.get_as::<u64>("supported_features")
-            && !self.supported_features.iter().any(|&mask| (features & mask) != 0)
+            && !self
+                .supported_features
+                .iter()
+                .any(|&mask| (features & mask) != 0)
         {
             return false;
         }
@@ -113,15 +116,7 @@ pub fn entity_filters(domain: &str, service: &Value) -> Vec<EntityFilter> {
     };
     let mut result = Vec::new();
     for filter in items {
-        let mut domains = value_strings(&filter["domain"]);
-        if domains.is_empty() && !domain.is_empty() {
-            domains.push(domain.to_string());
-        }
-        result.push(EntityFilter {
-            domains,
-            device_classes: value_strings(&filter["device_class"]),
-            supported_features: value_u64s(&filter["supported_features"]),
-        });
+        result.push(entity_filter(domain, filter));
     }
     if result.is_empty() && !domain.is_empty() {
         result.push(EntityFilter {
@@ -190,4 +185,16 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
         }
     }
     result
+}
+
+fn entity_filter(domain: &str, filter: &Value) -> EntityFilter {
+    let mut domains = value_strings(&filter["domain"]);
+    if domains.is_empty() && !domain.is_empty() {
+        domains.push(domain.to_string());
+    }
+    EntityFilter {
+        domains,
+        device_classes: value_strings(&filter["device_class"]),
+        supported_features: value_u64s(&filter["supported_features"]),
+    }
 }

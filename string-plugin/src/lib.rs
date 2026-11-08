@@ -6,7 +6,15 @@ use ticknode_plugin_sdk::*;
 struct StringPlugin;
 
 #[derive(Clone, Copy)]
-enum Op { Concat, Length, Substring, Contains, Split, Regex, Aggregate }
+enum Op {
+    Concat,
+    Length,
+    Substring,
+    Contains,
+    Split,
+    Regex,
+    Aggregate,
+}
 
 fn string_list() -> DataType {
     DataType::List(Box::new(DataType::String))
@@ -38,42 +46,77 @@ impl PluginNode for StringNode {
     fn definition(&self) -> NodeDefinition {
         let b = self.0.base();
         let (type_name, title, description, data) = match self.0 {
-            Op::Concat => ("string/concat", "Concat Strings", "Joins two strings", vec![
-                data_in(b + 2, "A", DataType::String),
-                data_in(b + 3, "B", DataType::String),
-                data_out(b + 4, "Res", DataType::String),
-            ]),
-            Op::Length => ("string/length", "String Length", "Returns the length of a string", vec![
-                data_in(b + 2, "Val", DataType::String),
-                data_out(b + 3, "Res", DataType::Number),
-            ]),
-            Op::Substring => ("string/substring", "Substring", "Extracts a substring from a string", vec![
-                data_in(b + 2, "Val", DataType::String),
-                data_in(b + 3, "Start", DataType::Number),
-                data_in(b + 4, "Len", DataType::Number),
-                data_out(b + 5, "Res", DataType::String),
-            ]),
-            Op::Contains => ("string/contains", "String Contains", "Checks whether a string contains another substring", vec![
-                data_in(b + 2, "Val", DataType::String),
-                data_in(b + 3, "Sub", DataType::String),
-                data_out(b + 4, "Res", DataType::Bool),
-            ]),
-            Op::Split => ("string/split", "Split String", "Splits a string by a separator", vec![
-                data_in(b + 2, "Val", DataType::String),
-                data_in(b + 3, "Pat", DataType::String),
-                data_out(b + 4, "Res", string_list()),
-            ]),
-            Op::Regex => ("string/regex", "Regex Match", "Matches a regular expression and returns the match", vec![
-                data_in(b + 2, "Val", DataType::String),
-                data_in(b + 3, "Pat", DataType::String),
-                data_out(b + 4, "Matched", DataType::Bool),
-                data_out(b + 5, "Capture", DataType::String),
-            ]),
-            Op::Aggregate => ("string/aggregate", "Aggregate Strings", "Joins a list of strings with a separator", vec![
-                data_in(b + 2, "List", string_list()),
-                data_in(b + 3, "Sep", DataType::String),
-                data_out(b + 4, "Res", DataType::String),
-            ]),
+            Op::Concat => (
+                "string/concat",
+                "Concat Strings",
+                "Joins two strings",
+                vec![
+                    data_in(b + 2, "A", DataType::String),
+                    data_in(b + 3, "B", DataType::String),
+                    data_out(b + 4, "Res", DataType::String),
+                ],
+            ),
+            Op::Length => (
+                "string/length",
+                "String Length",
+                "Returns the length of a string",
+                vec![
+                    data_in(b + 2, "Val", DataType::String),
+                    data_out(b + 3, "Res", DataType::Number),
+                ],
+            ),
+            Op::Substring => (
+                "string/substring",
+                "Substring",
+                "Extracts a substring from a string",
+                vec![
+                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 3, "Start", DataType::Number),
+                    data_in(b + 4, "Len", DataType::Number),
+                    data_out(b + 5, "Res", DataType::String),
+                ],
+            ),
+            Op::Contains => (
+                "string/contains",
+                "String Contains",
+                "Checks whether a string contains another substring",
+                vec![
+                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 3, "Sub", DataType::String),
+                    data_out(b + 4, "Res", DataType::Bool),
+                ],
+            ),
+            Op::Split => (
+                "string/split",
+                "Split String",
+                "Splits a string by a separator",
+                vec![
+                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 3, "Pat", DataType::String),
+                    data_out(b + 4, "Res", string_list()),
+                ],
+            ),
+            Op::Regex => (
+                "string/regex",
+                "Regex Match",
+                "Matches a regular expression and returns the match",
+                vec![
+                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 3, "Pat", DataType::String),
+                    data_out(b + 4, "Matched", DataType::Bool),
+                    data_out(b + 5, "Capture", DataType::String),
+                ],
+            ),
+            Op::Aggregate => (
+                "string/aggregate",
+                "Aggregate Strings",
+                "Joins a list of strings with a separator",
+                vec![
+                    data_in(b + 2, "List", string_list()),
+                    data_in(b + 3, "Sep", DataType::String),
+                    data_out(b + 4, "Res", DataType::String),
+                ],
+            ),
         };
         let mut pins = vec![exec_in(b, "In"), exec_out(b + 1, "Out")];
         pins.extend(data);
@@ -83,15 +126,7 @@ impl PluginNode for StringNode {
             title: title.into(),
             category: "String".into(),
             description: description.into(),
-            help: match self.0 {
-                Op::Concat => "Res is string A immediately followed by B.",
-                Op::Length => "Res is the number of characters (not bytes) in string Val.",
-                Op::Substring => "Res is Len characters of string Val starting at position Start (counting from 0). Anything beyond the end of the string is discarded.",
-                Op::Contains => "Res = true if Val contains the substring Sub. An empty Sub is contained in any string.",
-                Op::Split => "Res is a list of the parts of string Val split by the separator Pat. An empty Pat splits the string into single characters.",
-                Op::Regex => "Searches Val for the regular expression Pat (Rust regex syntax):\n• Matched — whether a match was found;\n• Capture — the first parenthesized group, or the whole match if there are no groups.\n\nAn invalid expression gives Matched = false.",
-                Op::Aggregate => "Res is the elements of List joined into one string with Sep. Non-string elements are skipped.",
-            }.to_string() + "\n\nAn unconnected string input is treated as an empty string.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes.",
+            help: self.0.help(),
             pins,
         }
     }
@@ -105,44 +140,32 @@ impl PluginNode for StringNode {
         let out = |offset: u32, value: DataValue| Output::Data(PinId(b + offset), value);
         let mut outputs = match self.0 {
             Op::Concat => vec![out(4, DataValue::String(s(2) + &s(3)))],
-            Op::Length => vec![out(3, DataValue::Number(NumberValue::Int(s(2).chars().count() as i64)))],
+            Op::Length => vec![out(
+                3,
+                DataValue::Number(NumberValue::Int(s(2).chars().count() as i64)),
+            )],
             Op::Substring => {
                 let start = inputs.number(PinId(b + 3), 0.0).max(0.0) as usize;
                 let len = inputs.number(PinId(b + 4), 0.0).max(0.0) as usize;
-                vec![out(5, DataValue::String(s(2).chars().skip(start).take(len).collect()))]
+                vec![out(
+                    5,
+                    DataValue::String(s(2).chars().skip(start).take(len).collect()),
+                )]
             }
             Op::Contains => vec![out(4, DataValue::Bool(s(2).contains(&s(3))))],
-            Op::Split => {
-                let (val, pat) = (s(2), s(3));
-                let elements = if pat.is_empty() {
-                    val.chars().map(|c| DataValue::String(c.to_string())).collect()
-                } else {
-                    val.split(&pat).map(|p| DataValue::String(p.to_string())).collect()
-                };
-                vec![out(4, DataValue::List { element_type: DataType::String, elements })]
-            }
+            Op::Split => vec![out(4, split(&s(2), &s(3)))],
             Op::Regex => {
-                let val = s(2);
-                let capture = Regex::new(&s(3)).ok().and_then(|re| {
-                    let caps = re.captures(&val)?;
-                    Some(caps.get(1).or_else(|| caps.get(0)).map(|m| m.as_str().to_string()).unwrap_or_default())
-                });
+                let capture = capture(&s(2), &s(3));
                 vec![
                     out(4, DataValue::Bool(capture.is_some())),
                     out(5, DataValue::String(capture.unwrap_or_default())),
                 ]
             }
             Op::Aggregate => {
-                let parts: Vec<String> = match inputs.get(PinId(b + 2)) {
-                    Some(DataValue::List { elements, .. }) => elements.iter()
-                        .filter_map(|e| match e {
-                            DataValue::String(s) => Some(s.clone()),
-                            _ => None,
-                        })
-                        .collect(),
-                    _ => Vec::new(),
-                };
-                vec![out(4, DataValue::String(parts.join(&s(3))))]
+                vec![out(
+                    4,
+                    DataValue::String(aggregate(inputs.get(PinId(b + 2)), &s(3))),
+                )]
             }
         };
         outputs.push(Output::Exec(PinId(b + 1)));
@@ -152,10 +175,16 @@ impl PluginNode for StringNode {
 
 impl Plugin for StringPlugin {
     const NODE_TYPES: &'static [&'static str] = &[
-        "string/concat", "string/length", "string/substring", "string/contains",
-        "string/split", "string/regex", "string/aggregate",
+        "string/concat",
+        "string/length",
+        "string/substring",
+        "string/contains",
+        "string/split",
+        "string/regex",
+        "string/aggregate",
     ];
-    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
+        &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {
@@ -173,3 +202,62 @@ impl Plugin for StringPlugin {
 }
 
 export_plugin!(StringPlugin);
+
+#[cfg(test)]
+mod tests;
+
+fn split(value: &str, separator: &str) -> DataValue {
+    let elements = if separator.is_empty() {
+        value
+            .chars()
+            .map(|c| DataValue::String(c.to_string()))
+            .collect()
+    } else {
+        value
+            .split(separator)
+            .map(|part| DataValue::String(part.into()))
+            .collect()
+    };
+    DataValue::List {
+        element_type: DataType::String,
+        elements,
+    }
+}
+fn capture(value: &str, pattern: &str) -> Option<String> {
+    let regex = Regex::new(pattern).ok()?;
+    let captures = regex.captures(value)?;
+    Some(
+        captures
+            .get(1)
+            .or_else(|| captures.get(0))
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default(),
+    )
+}
+fn aggregate(value: Option<&DataValue>, separator: &str) -> String {
+    let parts: Vec<&str> = match value {
+        Some(DataValue::List { elements, .. }) => elements
+            .iter()
+            .filter_map(|value| match value {
+                DataValue::String(s) => Some(s.as_str()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    parts.join(separator)
+}
+
+impl Op {
+    fn help(self) -> String {
+        match self {
+                Op::Concat => "Res is string A immediately followed by B.",
+                Op::Length => "Res is the number of characters (not bytes) in string Val.",
+                Op::Substring => "Res is Len characters of string Val starting at position Start (counting from 0). Anything beyond the end of the string is discarded.",
+                Op::Contains => "Res = true if Val contains the substring Sub. An empty Sub is contained in any string.",
+                Op::Split => "Res is a list of the parts of string Val split by the separator Pat. An empty Pat splits the string into single characters.",
+                Op::Regex => "Searches Val for the regular expression Pat (Rust regex syntax):\n• Matched — whether a match was found;\n• Capture — the first parenthesized group, or the whole match if there are no groups.\n\nAn invalid expression gives Matched = false.",
+                Op::Aggregate => "Res is the elements of List joined into one string with Sep. Non-string elements are skipped.",
+            }.to_string() + "\n\nAn unconnected string input is treated as an empty string.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes."
+    }
+}

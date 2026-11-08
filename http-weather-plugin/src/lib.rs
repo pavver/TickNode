@@ -58,48 +58,9 @@ impl PluginNode for WeatherNode {
 
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output> {
         match trigger {
-            Trigger::Pin(TRIGGER) => {
-                let city = match inputs.string(CITY) {
-                    c if c.is_empty() => "Kyiv".to_string(),
-                    c => c,
-                };
-                // A new request supersedes any in-flight one.
-                if let Some(task) = self.pending.take() {
-                    host::cancel(task);
-                }
-                match host::http(HttpRequest::get(self.url.replace("{city}", &encode_component(&city)))) {
-                    Ok(task) => {
-                        self.pending = Some(task);
-                        Vec::new()
-                    }
-                    Err(e) => {
-                        host::error(&e);
-                        vec![Output::Exec(FAILURE)]
-                    }
-                }
-            }
+            Trigger::Pin(TRIGGER) => self.request(inputs, &mut HostClient),
             Trigger::Task { id, result } if self.pending == Some(id) => {
-                self.pending = None;
-                let parsed = match result {
-                    Ok(TaskOutput::Http(response)) if response.is_success() => parse(&response.text()),
-                    Ok(TaskOutput::Http(response)) => {
-                        host::error(&format!("HTTP {}", response.status));
-                        None
-                    }
-                    Ok(_) => None,
-                    Err(e) => {
-                        host::error(&e);
-                        None
-                    }
-                };
-                match parsed {
-                    Some((temp, description)) => vec![
-                        Output::Data(TEMP, DataValue::Number(NumberValue::Float(temp).normalize())),
-                        Output::Data(DESCRIPTION, DataValue::String(description)),
-                        Output::Exec(SUCCESS),
-                    ],
-                    None => vec![Output::Exec(FAILURE)],
-                }
+                self.complete(result, &mut HostClient)
             }
             _ => Vec::new(),
         }
@@ -108,7 +69,8 @@ impl PluginNode for WeatherNode {
 
 impl Plugin for WeatherPlugin {
     const NODE_TYPES: &'static [&'static str] = &["http/weather"];
-    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[("uk", include_str!("../locales/uk.ftl"))];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
+        &[("uk", include_str!("../locales/uk.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest {
@@ -123,8 +85,12 @@ impl Plugin for WeatherPlugin {
     }
 
     fn create(type_name: &str, _node: NodeId) -> Option<Box<dyn PluginNode>> {
-        (type_name == "http/weather")
-            .then(|| Box::new(WeatherNode { url: DEFAULT_URL.into(), pending: None }) as Box<dyn PluginNode>)
+        (type_name == "http/weather").then(|| {
+            Box::new(WeatherNode {
+                url: DEFAULT_URL.into(),
+                pending: None,
+            }) as Box<dyn PluginNode>
+        })
     }
 }
 
@@ -135,9 +101,87 @@ fn encode_component(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for byte in text.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => out.push(byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(byte as char)
+            }
             _ => out.push_str(&format!("%{byte:02X}")),
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests;
+
+impl WeatherNode {
+    fn request(&mut self, inputs: &Inputs, client: &mut impl Client) -> Vec<Output> {
+        let city = match inputs.string(CITY) {
+            c if c.is_empty() => "Kyiv".to_string(),
+            c => c,
+        };
+        // A new request supersedes any in-flight one.
+        if let Some(task) = self.pending.take() {
+            client.cancel(task);
+        }
+        match client.http(HttpRequest::get(
+            self.url.replace("{city}", &encode_component(&city)),
+        )) {
+            Ok(task) => {
+                self.pending = Some(task);
+                Vec::new()
+            }
+            Err(e) => {
+                client.error(&e);
+                vec![Output::Exec(FAILURE)]
+            }
+        }
+    }
+    fn complete(
+        &mut self,
+        result: Result<TaskOutput, String>,
+        client: &mut impl Client,
+    ) -> Vec<Output> {
+        self.pending = None;
+        let parsed = match result {
+            Ok(TaskOutput::Http(response)) if response.is_success() => parse(&response.text()),
+            Ok(TaskOutput::Http(response)) => {
+                client.error(&format!("HTTP {}", response.status));
+                None
+            }
+            Ok(_) => None,
+            Err(e) => {
+                client.error(&e);
+                None
+            }
+        };
+        match parsed {
+            Some((temp, description)) => vec![
+                Output::Data(
+                    TEMP,
+                    DataValue::Number(NumberValue::Float(temp).normalize()),
+                ),
+                Output::Data(DESCRIPTION, DataValue::String(description)),
+                Output::Exec(SUCCESS),
+            ],
+            None => vec![Output::Exec(FAILURE)],
+        }
+    }
+}
+
+trait Client {
+    fn http(&mut self, request: HttpRequest) -> Result<TaskId, String>;
+    fn cancel(&mut self, task: TaskId);
+    fn error(&mut self, error: &str);
+}
+struct HostClient;
+impl Client for HostClient {
+    fn http(&mut self, request: HttpRequest) -> Result<TaskId, String> {
+        host::http(request)
+    }
+    fn cancel(&mut self, task: TaskId) {
+        host::cancel(task);
+    }
+    fn error(&mut self, error: &str) {
+        host::error(error);
+    }
 }

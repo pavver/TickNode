@@ -1,11 +1,10 @@
 //! Typed Home Assistant trigger configuration and duration parsing.
 
+use super::Platform;
+use chrono::TimeDelta;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use chrono::TimeDelta;
-use ha_core_client::triggers::*;
-use serde_json::Value;
-use super::Platform;
 
 /// Parses TickNode duration text plus Home Assistant's HH:MM:SS notation.
 pub fn duration(text: &str) -> Option<Duration> {
@@ -13,23 +12,33 @@ pub fn duration(text: &str) -> Option<Duration> {
     if !text.contains(':') {
         return ticknode_shared::text::parse_duration(text);
     }
+    clock_duration(text)
+}
+
+fn clock_duration(text: &str) -> Option<Duration> {
     let parts: Vec<_> = text.split(':').collect();
-    if parts.len() != 3 || !parts[0].bytes().all(|b| b.is_ascii_digit()) || parts[0].is_empty() {
+    if parts.len() != 3 {
         return None;
     }
-    let hours = parts[0].parse::<u64>().ok()?;
-    let minutes = parts[1].parse::<u32>().ok()?;
+    let hours = clock_hours(parts[0])?;
+    let minutes = clock_minutes(parts[1])?;
     let seconds = parts[2].parse::<f64>().ok()?;
-    if minutes >= 60 || !(0.0..60.0).contains(&seconds) {
+    if !(0.0..60.0).contains(&seconds) {
         return None;
     }
-    Duration::from_secs(hours.checked_mul(3600)?.checked_add(u64::from(minutes) * 60)?)
-        .checked_add(Duration::try_from_secs_f64(seconds).ok()?)
+    Duration::from_secs(
+        hours
+            .checked_mul(3600)?
+            .checked_add(u64::from(minutes) * 60)?,
+    )
+    .checked_add(Duration::try_from_secs_f64(seconds).ok()?)
 }
 
 pub(super) fn signed_duration(text: &str) -> Option<TimeDelta> {
     let text = text.trim();
-    let (sign, text) = text.strip_prefix('-').map_or((1, text.strip_prefix('+').unwrap_or(text)), |s| (-1, s));
+    let (sign, text) = text
+        .strip_prefix('-')
+        .map_or((1, text.strip_prefix('+').unwrap_or(text)), |s| (-1, s));
     Some(TimeDelta::from_std(duration(text)?).ok()? * sign)
 }
 
@@ -48,188 +57,83 @@ impl PartialEq for TriggerConfig {
     }
 }
 
-/// Incomplete or locally invalid settings are quiet. Malformed event JSON gets one actionable log.
-pub fn build(platform: Platform, properties: &BTreeMap<String, String>) -> Result<Option<TriggerConfig>, String> {
-    let p = |name: &str| properties.get(name).map(String::as_str).unwrap_or("");
-    let event_data = if platform == Platform::Event && !p("event_data").is_empty() {
-        let data: Value = serde_json::from_str(p("event_data")).map_err(|e| format!("Invalid event data JSON: {e}"))?;
-        if !data.is_object() {
-            return Err("Event data must be a JSON object".into());
+mod platforms;
+
+pub(super) struct Properties<'a>(&'a BTreeMap<String, String>);
+impl Properties<'_> {
+    fn get(&self, key: &str) -> &str {
+        self.0.get(key).map(String::as_str).unwrap_or("")
+    }
+    fn required(&self, key: &str) -> Option<&str> {
+        let value = self.get(key);
+        (!value.is_empty()).then_some(value)
+    }
+    fn hold(&self) -> Option<Option<Duration>> {
+        if self.get("for").is_empty() {
+            Some(None)
+        } else {
+            duration(self.get("for")).map(Some)
         }
-        Some(data)
-    } else {
-        None
+    }
+    fn offset(&self) -> Option<Option<TimeDelta>> {
+        if self.get("offset").is_empty() {
+            Some(None)
+        } else {
+            signed_duration(self.get("offset")).map(Some)
+        }
+    }
+}
+
+fn event_data(platform: Platform, p: &Properties<'_>) -> Result<Option<Value>, String> {
+    if platform != Platform::Event || p.get("event_data").is_empty() {
+        return Ok(None);
+    }
+    let data: Value = serde_json::from_str(p.get("event_data"))
+        .map_err(|e| format!("Invalid event data JSON: {e}"))?;
+    if !data.is_object() {
+        return Err("Event data must be a JSON object".into());
+    }
+    Ok(Some(data))
+}
+
+/// Incomplete or locally invalid settings are quiet. Malformed event JSON gets one actionable log.
+pub fn build(
+    platform: Platform,
+    properties: &BTreeMap<String, String>,
+) -> Result<Option<TriggerConfig>, String> {
+    let p = Properties(properties);
+    let event_data = event_data(platform, &p)?;
+    let trigger = match platform {
+        Platform::State => platforms::state(&p),
+        Platform::NumericState => platforms::numeric_state(&p),
+        Platform::Time => platforms::time(&p),
+        Platform::TimePattern => platforms::time_pattern(&p),
+        Platform::Sun => platforms::sun(&p),
+        Platform::Zone => platforms::zone(&p),
+        Platform::Event => platforms::event(&p, &event_data),
+        Platform::HomeAssistant => platforms::home_assistant(&p),
+        Platform::Mqtt => platforms::mqtt(&p),
+        Platform::Webhook => platforms::webhook(&p),
+        Platform::Calendar => platforms::calendar(&p),
+        Platform::Tag => platforms::tag(&p),
+        Platform::Conversation => platforms::conversation(&p),
+        Platform::Template => platforms::template(&p),
     };
-    let valid = || -> Option<ha_core_client::triggers::Trigger> {
-        let required = |key| (!p(key).is_empty()).then(|| p(key));
-        let hold = || if p("for").is_empty() { Some(None) } else { duration(p("for")).map(Some) };
-        let offset = || if p("offset").is_empty() { Some(None) } else { signed_duration(p("offset")).map(Some) };
-        Some(match platform {
-            Platform::State => {
-                let mut t = StateTrigger::new(required("entity_id")?);
-                if !p("attribute").is_empty() {
-                    t = t.attribute(p("attribute"));
-                }
-                if !p("from").is_empty() {
-                    t = t.from(p("from"));
-                }
-                if !p("to").is_empty() {
-                    t = t.to(p("to"));
-                }
-                if let Some(d) = hold()? {
-                    t = t.for_duration(d);
-                }
-                t.into()
-            }
-            Platform::NumericState => {
-                let mut t = NumericStateTrigger::new(required("entity_id")?);
-                if p("above").is_empty() && p("below").is_empty() {
-                    return None;
-                }
-                if !p("above").is_empty() {
-                    t = match p("above").parse::<f64>() {
-                        Ok(n) if n.is_finite() => t.above(n),
-                        Ok(_) => return None,
-                        Err(_) => t.above_entity(p("above")),
-                    };
-                }
-                if !p("below").is_empty() {
-                    t = match p("below").parse::<f64>() {
-                        Ok(n) if n.is_finite() => t.below(n),
-                        Ok(_) => return None,
-                        Err(_) => t.below_entity(p("below")),
-                    };
-                }
-                if !p("attribute").is_empty() {
-                    t = t.attribute(p("attribute"));
-                }
-                if !p("value_template").is_empty() {
-                    t = t.value_template(p("value_template"));
-                }
-                if let Some(d) = hold()? {
-                    t = t.for_duration(d);
-                }
-                t.into()
-            }
-            Platform::Time => {
-                let at = required("at")?;
-                if ticknode_shared::text::parse_time(at).is_none()
-                    && !((at.starts_with("input_datetime.") || at.starts_with("sensor.")) && !at.ends_with('.'))
-                {
-                    return None;
-                }
-                TimeTrigger::new(at).into()
-            }
-            Platform::TimePattern => {
-                if ["hours", "minutes", "seconds"].iter().all(|k| p(k).is_empty()) {
-                    return None;
-                }
-                let mut t = TimePatternTrigger::new();
-                for (key, max) in [("hours", 23), ("minutes", 59), ("seconds", 59)] {
-                    let v = p(key);
-                    if v.is_empty() {
-                        continue;
-                    }
-                    let pattern_ok = v == "*"
-                        || v.strip_prefix('/').map_or_else(
-                            || v.parse::<u32>().is_ok_and(|n| n <= max),
-                            |s| s.parse::<u32>().is_ok_and(|n| n > 0 && n <= max + 1),
-                        );
-                    if !pattern_ok {
-                        return None;
-                    }
-                    t = match key {
-                        "hours" => t.hours(v),
-                        "minutes" => t.minutes(v),
-                        _ => t.seconds(v),
-                    };
-                }
-                t.into()
-            }
-            Platform::Sun => {
-                let mut t = SunTrigger::new(match p("event") {
-                    "sunrise" => SunEvent::Sunrise,
-                    "sunset" => SunEvent::Sunset,
-                    _ => return None,
-                });
-                if let Some(d) = offset()? {
-                    t = t.offset(d);
-                }
-                t.into()
-            }
-            Platform::Zone => ZoneTrigger::new(
-                required("entity_id")?,
-                required("zone")?,
-                match p("event") {
-                    "enter" => ZoneEvent::Enter,
-                    "leave" => ZoneEvent::Leave,
-                    _ => return None,
-                },
-            )
-            .into(),
-            Platform::Event => {
-                let mut t = EventTrigger::new(required("event_type")?);
-                if let Some(data) = &event_data {
-                    t = t.event_data(data).ok()?;
-                }
-                t.into()
-            }
-            Platform::HomeAssistant => HomeAssistantTrigger::new(match p("event") {
-                "start" => HomeAssistantEvent::Start,
-                "shutdown" => HomeAssistantEvent::Shutdown,
-                _ => return None,
-            })
-            .into(),
-            Platform::Mqtt => {
-                let mut t = MqttTrigger::new(required("topic")?).qos(match p("qos") {
-                    "0" => 0,
-                    "1" => 1,
-                    "2" => 2,
-                    _ => return None,
-                });
-                if !p("payload").is_empty() {
-                    t = t.payload(p("payload"));
-                }
-                t.into()
-            }
-            Platform::Webhook => WebhookTrigger::new(required("webhook_id")?)
-                .local_only(match p("local_only") {
-                    "yes" => true,
-                    "no" => false,
-                    _ => return None,
-                })
-                .into(),
-            Platform::Calendar => {
-                let mut t = CalendarTrigger::new(
-                    required("entity_id")?,
-                    match p("event") {
-                        "start" => CalendarEvent::Start,
-                        "end" => CalendarEvent::End,
-                        _ => return None,
-                    },
-                );
-                if let Some(d) = offset()? {
-                    t = t.offset(d);
-                }
-                t.into()
-            }
-            Platform::Tag => TagTrigger::new(required("tag_id")?).into(),
-            Platform::Conversation => {
-                let mut commands = p("command").split([';', '\n']).map(str::trim).filter(|s| !s.is_empty());
-                let mut t = ConversationTrigger::new(commands.next()?);
-                for command in commands {
-                    t = t.and_command(command);
-                }
-                t.into()
-            }
-            Platform::Template => {
-                let mut t = TemplateTrigger::new(required("value_template")?);
-                if let Some(d) = hold()? {
-                    t = t.for_duration(d);
-                }
-                t.into()
-            }
-        })
-    };
-    Ok(valid().map(|trigger| TriggerConfig { platform, trigger, attribute: p("attribute").into() }))
+    Ok(trigger.map(|trigger| TriggerConfig {
+        platform,
+        trigger,
+        attribute: p.get("attribute").into(),
+    }))
+}
+
+fn clock_hours(text: &str) -> Option<u64> {
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
+fn clock_minutes(text: &str) -> Option<u32> {
+    let minutes = text.parse::<u32>().ok()?;
+    (minutes < 60).then_some(minutes)
 }

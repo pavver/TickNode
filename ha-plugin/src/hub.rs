@@ -2,6 +2,7 @@
 //! subscriptions and the in-flight requests. It talks to the outside world only through [`Env`], and the
 //! clock is passed in, so the whole logic runs in tests on the host target.
 
+mod collection;
 mod connection;
 mod env;
 mod options;
@@ -13,13 +14,15 @@ mod templates;
 pub use env::Env;
 pub use outputs::*;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::time::{Duration, Instant};
-use ha_core_client::{ConnectionState, PendingSubscription, Reply, Session, State, StateChange,
-    TemplateUpdate, TriggerFired};
-use ticknode_plugin_sdk::{NodeId, PropertyOption, WsId};
 use crate::queue::ChangeQueue;
 use crate::triggers::TriggerConfig;
+use ha_core_client::{
+    ConnectionState, PendingSubscription, Reply, Session, State, StateChange, TemplateUpdate,
+    TriggerFired,
+};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::time::{Duration, Instant};
+use ticknode_plugin_sdk::{NodeId, PropertyOption, WsId};
 
 /// How long to wait before subscribing again after a subscription failed (for example, the entity does not exist).
 const RESUBSCRIBE_DELAY: Duration = Duration::from_secs(30);
@@ -40,7 +43,9 @@ enum Sub<T> {
     Pending(PendingSubscription<T>),
     Active(ha_core_client::SessionEvents<T>),
     /// The subscription failed or ended; try again at `retry_at`.
-    Failed { retry_at: Instant },
+    Failed {
+        retry_at: Instant,
+    },
 }
 
 struct Watch<T, C> {
@@ -56,9 +61,15 @@ struct Watch<T, C> {
 }
 
 enum Call {
-    Get { reply: Reply<State> },
-    Service { reply: Reply<()> },
-    Action { reply: Reply<Box<serde_json::value::RawValue>> },
+    Get {
+        reply: Reply<State>,
+    },
+    Service {
+        reply: Reply<()>,
+    },
+    Action {
+        reply: Reply<Box<serde_json::value::RawValue>>,
+    },
 }
 
 struct InFlight {
@@ -101,7 +112,8 @@ pub struct Hub {
     entities: HashMap<NodeId, Option<Reply<State>>>,
 }
 
-const NOT_CONFIGURED: &str = "Home Assistant is not configured (set the URL and the access token in the plugin settings)";
+const NOT_CONFIGURED: &str =
+    "Home Assistant is not configured (set the URL and the access token in the plugin settings)";
 
 #[cfg(test)]
 mod tests;

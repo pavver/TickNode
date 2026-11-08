@@ -16,7 +16,19 @@ pub const STATE_TYPE: &str = "ha.state";
 
 fn object(fields: BTreeMap<String, DataValue>) -> DataValue {
     DataValue::Object {
-        fields: fields.into_iter().map(|(name, value)| (name.clone(), ObjectField { name, description: String::new(), value })).collect(),
+        fields: fields
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    name.clone(),
+                    ObjectField {
+                        name,
+                        description: String::new(),
+                        value,
+                    },
+                )
+            })
+            .collect(),
         type_name: None,
     }
 }
@@ -31,17 +43,26 @@ pub fn json_to_value(json: &Value) -> Option<DataValue> {
             None => DataValue::from(n.as_f64()?),
         },
         Value::String(s) => DataValue::String(s.clone()),
-        Value::Array(items) => {
-            let elements: Vec<DataValue> = items.iter().filter_map(json_to_value).collect();
-            let mut types = elements.iter().map(DataValue::get_type);
-            let element_type = match types.next() {
-                Some(first) if types.all(|t| t == first) => first,
-                _ => DataType::Any,
-            };
-            DataValue::List { element_type, elements }
-        }
-        Value::Object(map) => object(map.iter().filter_map(|(k, v)| Some((k.clone(), json_to_value(v)?))).collect()),
+        Value::Array(items) => list_value(items),
+        Value::Object(map) => object(
+            map.iter()
+                .filter_map(|(k, v)| Some((k.clone(), json_to_value(v)?)))
+                .collect(),
+        ),
     })
+}
+
+fn list_value(items: &[Value]) -> DataValue {
+    let elements: Vec<DataValue> = items.iter().filter_map(json_to_value).collect();
+    let mut types = elements.iter().map(DataValue::get_type);
+    let element_type = match types.next() {
+        Some(first) if types.all(|t| t == first) => first,
+        _ => DataType::Any,
+    };
+    DataValue::List {
+        element_type,
+        elements,
+    }
 }
 
 /// A value to JSON for a service call. Times and colors become their text form, durations seconds.
@@ -49,26 +70,43 @@ pub fn value_to_json(value: &DataValue) -> Value {
     match value {
         DataValue::Bool(b) => Value::Bool(*b),
         DataValue::Number(NumberValue::Int(i)) => Value::from(*i),
-        DataValue::Number(NumberValue::Float(f)) => Number::from_f64(*f).map_or(Value::Null, Value::Number),
+        DataValue::Number(NumberValue::Float(f)) => {
+            Number::from_f64(*f).map_or(Value::Null, Value::Number)
+        }
         DataValue::String(s) => Value::String(s.clone()),
         DataValue::Time(t) => Value::String(t.format("%H:%M:%S").to_string()),
         DataValue::DateTime(dt) => Value::String(dt.to_rfc3339()),
-        DataValue::Duration(d) => Number::from_f64(d.as_secs_f64()).map_or(Value::Null, Value::Number),
+        DataValue::Duration(d) => {
+            Number::from_f64(d.as_secs_f64()).map_or(Value::Null, Value::Number)
+        }
         DataValue::Color(_) => Value::String(text::format_value(value)),
-        DataValue::List { elements, .. } => Value::Array(elements.iter().map(value_to_json).collect()),
-        DataValue::Object { fields, .. } => Value::Object(fields.iter().map(|(k, f)| (k.clone(), value_to_json(&f.value))).collect::<Map<_, _>>()),
+        DataValue::List { elements, .. } => {
+            Value::Array(elements.iter().map(value_to_json).collect())
+        }
+        DataValue::Object { fields, .. } => Value::Object(
+            fields
+                .iter()
+                .map(|(k, f)| (k.clone(), value_to_json(&f.value)))
+                .collect::<Map<_, _>>(),
+        ),
+    }
+}
+
+/// Removes AttributeSet's external domain tag for consumers of raw attributes.
+pub fn attributes_json(state: &State) -> Value {
+    let json = serde_json::to_value(&state.attributes).unwrap_or(Value::Null);
+    match json {
+        Value::Object(map) if map.len() == 1 => {
+            map.into_iter().next().map_or(Value::Null, |(_, v)| v)
+        }
+        other => other,
     }
 }
 
 /// Attributes of a state as an untyped object. `AttributeSet` serializes externally tagged
 /// (`{"Sensor": {...}}`), so the tag is peeled off; absent (`null`) attributes are left out.
 fn attributes_value(state: &State) -> DataValue {
-    let json = serde_json::to_value(&state.attributes).unwrap_or(Value::Null);
-    let inner = match json {
-        Value::Object(map) if map.len() == 1 => map.into_iter().next().map_or(Value::Null, |(_, v)| v),
-        other => other,
-    };
-    match json_to_value(&inner) {
+    match json_to_value(&attributes_json(state)) {
         Some(value @ DataValue::Object { .. }) => value,
         _ => object(BTreeMap::new()),
     }

@@ -1,11 +1,11 @@
 //! Subscription-driven state-change event node.
 
-use std::time::Instant;
-use ticknode_plugin_sdk::*;
 use crate::convert::STATE_TYPE;
 use crate::hub::{CHANGED, NEW, OLD};
 use crate::queue::Mode;
-use crate::{CATEGORY, entities, text_property, try_with_hub, with_hub};
+use crate::{CATEGORY, entities, text_property, with_hub};
+use std::time::Instant;
+use ticknode_plugin_sdk::*;
 
 // --- ha/state_changed ---
 
@@ -21,15 +21,18 @@ impl StateChanged {
     pub(super) fn new(node: NodeId) -> Self {
         let mode = Mode::default();
         let serial = (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_watch(node, mode)));
-        Self { node, serial, entity: String::new(), mode }
+        Self {
+            node,
+            serial,
+            entity: String::new(),
+            mode,
+        }
     }
 }
 
 impl Drop for StateChanged {
     fn drop(&mut self) {
-        if let Some(serial) = self.serial {
-            try_with_hub(|hub, env| hub.remove_watch(self.node, serial, Instant::now(), env));
-        }
+        crate::runtime::remove_watch(self.node, self.serial);
     }
 }
 
@@ -67,28 +70,41 @@ A nonexistent entity is retried every 30 seconds.".into(),
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        let Some(text) = text_property(value) else { return };
+        let Some(text) = text_property(value) else {
+            return;
+        };
         match name {
             "entity_id" => {
                 if let Some(serial) = self.serial {
-                    with_hub(|hub, env| hub.set_entity(self.node, serial, &text, Instant::now(), env));
+                    with_hub(|hub, env| {
+                        hub.set_entity(self.node, serial, &text, Instant::now(), env)
+                    });
                 }
                 self.entity = text;
             }
-            "mode" => match Mode::parse(&text) {
-                Some(mode) => {
-                    self.mode = mode;
-                    if let Some(serial) = self.serial {
-                        with_hub(|hub, _| hub.set_mode(self.node, serial, mode));
-                    }
-                }
-                None => host::warn(&format!("Unknown mode \"{text}\" for ha/state_changed (expected \"every\" or \"latest\"): keeping \"{}\"", self.mode.as_str())),
-            },
+            "mode" => self.set_mode(&text),
             _ => {}
         }
     }
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
         Vec::new()
+    }
+}
+
+impl StateChanged {
+    fn set_mode(&mut self, text: &str) {
+        match Mode::parse(text) {
+            Some(mode) => {
+                self.mode = mode;
+                if let Some(serial) = self.serial {
+                    with_hub(|hub, _| hub.set_mode(self.node, serial, mode));
+                }
+            }
+            None => host::warn(&format!(
+                "Unknown mode \"{text}\" for ha/state_changed (expected \"every\" or \"latest\"): keeping \"{}\"",
+                self.mode.as_str()
+            )),
+        }
     }
 }

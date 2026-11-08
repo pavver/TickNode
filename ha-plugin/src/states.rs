@@ -6,28 +6,18 @@ use ticknode_plugin_sdk::PropertyOption;
 
 mod canonical;
 
-use canonical::domain_canonical_states;
 use crate::icons::domain_of;
+use canonical::domain_canonical_states;
 
 pub const STATES_SOURCE: &str = "states";
 pub const ATTRIBUTES_SOURCE: &str = "attributes";
 
 pub fn state_source(entity_id: &str) -> String {
-    let entity_id = entity_id.trim();
-    if entity_id.is_empty() {
-        STATES_SOURCE.into()
-    } else {
-        format!("{STATES_SOURCE}:{entity_id}")
-    }
+    crate::options::entity_source(STATES_SOURCE, entity_id)
 }
 
 pub fn attribute_source(entity_id: &str) -> String {
-    let entity_id = entity_id.trim();
-    if entity_id.is_empty() {
-        ATTRIBUTES_SOURCE.into()
-    } else {
-        format!("{ATTRIBUTES_SOURCE}:{entity_id}")
-    }
+    crate::options::entity_source(ATTRIBUTES_SOURCE, entity_id)
 }
 
 pub fn state_options(
@@ -101,19 +91,13 @@ pub fn attribute_options(_entity_id: &str, state: Option<&State>) -> Vec<Propert
     }];
 
     if let Some(state) = state {
-        let json = serde_json::to_value(&state.attributes).unwrap_or(Value::Null);
-        let inner = match json {
-            Value::Object(map) if map.len() == 1 => map.into_iter().next().map_or(Value::Null, |(_, v)| v),
-            other => other,
-        };
+        let inner = crate::convert::attributes_json(state);
         if let Some(attrs) = inner.as_object() {
             let mut keys: Vec<_> = attrs.keys().collect();
             keys.sort();
             for key in keys {
                 let val_str = match &attrs[key] {
                     Value::String(s) => s.clone(),
-                    Value::Number(n) => n.to_string(),
-                    Value::Bool(b) => b.to_string(),
                     other => other.to_string(),
                 };
                 options.push(PropertyOption {

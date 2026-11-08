@@ -841,3 +841,76 @@ fn state_and_attribute_options_publish_for_tracked_nodes() {
     assert!(rig.env.options["states:light.hall"].is_empty());
     assert!(rig.env.options["attributes:light.hall"].is_empty());
 }
+
+#[test]
+fn action_picker_sources_remain_until_the_last_target_user_is_removed() {
+    let mut hub = Hub::default();
+    let mut env = Fake::default();
+    hub.set_action_target(node(1), "light.hall", &mut env);
+    assert!(env.options.is_empty(), "no catalog yet");
+    hub.services = crate::actions::services(
+        &json!({"light":{"turn_on":{"name":"Turn on","target":{"entity":{"domain":"light"}}}}}),
+    );
+    hub.set_action_target(node(1), " light.hall ", &mut env);
+    assert_eq!(
+        env.options["actions:light.hall"]
+            .iter()
+            .map(|o| o.value.as_str())
+            .collect::<Vec<_>>(),
+        ["light.turn_on"]
+    );
+    hub.set_action_target(node(2), "light.hall", &mut env);
+    hub.remove_action_target(node(1), &mut env);
+    assert_eq!(env.options["actions:light.hall"].len(), 1);
+    hub.remove_action_target(node(2), &mut env);
+    assert!(env.options["actions:light.hall"].is_empty());
+    hub.remove_action_target(node(2), &mut env);
+    hub.set_action_target(node(3), "light.hall", &mut env);
+    hub.entity_options.push(crate::entities::entity_option(
+        &crate::entities::test_state("light.hall", "on", json!({})),
+    ));
+    hub.remove_action_target(node(3), &mut env);
+    assert_eq!(
+        env.options["actions:light.hall"].len(),
+        1,
+        "catalog still uses the source"
+    );
+    hub.set_action_target(node(4), "light.hall", &mut env);
+    hub.set_action_target(node(4), " ", &mut env);
+    assert!(!hub.action_targets.contains_key(&node(4)));
+}
+
+#[test]
+fn state_picker_sources_follow_shared_references_and_clear_on_switch() {
+    let mut hub = Hub::default();
+    let mut env = Fake::default();
+    hub.live.snapshot(&[crate::entities::test_state(
+        "light.a",
+        "on",
+        json!({"brightness":42}),
+    )]);
+    hub.set_state_node_entity(node(1), " light.a ", &mut env);
+    hub.set_state_node_entity(node(2), "light.a", &mut env);
+    assert!(
+        env.options["states:light.a"]
+            .iter()
+            .any(|o| o.value == "on")
+    );
+    assert!(
+        env.options["attributes:light.a"]
+            .iter()
+            .any(|o| o.value == "brightness")
+    );
+    hub.set_state_node_entity(node(1), "light.b", &mut env);
+    assert!(!env.options["states:light.a"].is_empty());
+    hub.set_state_node_entity(node(2), "light.b", &mut env);
+    assert!(env.options["states:light.a"].is_empty());
+    assert!(env.options["attributes:light.a"].is_empty());
+    hub.set_state_node_entity(node(1), "light.b", &mut env);
+    hub.set_state_node_entity(node(1), "", &mut env);
+    assert!(!env.options["states:light.b"].is_empty());
+    hub.set_state_node_entity(node(2), "", &mut env);
+    assert!(env.options["states:light.b"].is_empty());
+    assert!(env.options["states"].iter().any(|o| o.value == "unknown"));
+    assert_eq!(env.options["attributes"][0].value, "");
+}

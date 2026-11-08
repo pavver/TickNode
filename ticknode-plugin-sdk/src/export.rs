@@ -1,9 +1,9 @@
-use std::cell::RefCell;
-use std::marker::PhantomData;
-use crate::*;
 use crate::bindings::exports::ticknode::plugin::nodes as wit_nodes;
 use crate::bindings::ticknode::plugin::types as wit;
 use crate::convert::*;
+use crate::*;
+use std::cell::RefCell;
+use std::marker::PhantomData;
 
 fn node_id_from_wit((hi, lo): (u64, u64)) -> NodeId {
     NodeId(uuid_from_halves(hi, lo))
@@ -43,26 +43,46 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
             name: m.name,
             version: m.version,
             author: m.author,
-            capabilities: m.requested_capabilities.into_iter().map(|c| match c {
-                Capability::Http { allowed_domains } => wit::Capability::Http(allowed_domains),
-                Capability::Storage => wit::Capability::Storage,
-                Capability::WebSocket { allowed_hosts } => wit::Capability::Websocket(allowed_hosts),
-            }).collect(),
+            capabilities: m
+                .requested_capabilities
+                .into_iter()
+                .map(|c| match c {
+                    Capability::Http { allowed_domains } => wit::Capability::Http(allowed_domains),
+                    Capability::Storage => wit::Capability::Storage,
+                    Capability::WebSocket { allowed_hosts } => {
+                        wit::Capability::Websocket(allowed_hosts)
+                    }
+                })
+                .collect(),
             settings: m.settings.into_iter().map(to_wit_setting).collect(),
         }
     }
 
     fn configure(settings: Vec<wit::Property>) -> Result<(), wit::UiError> {
-        let settings: Vec<(String, DataValue)> = settings.into_iter().filter_map(|p| Some((p.name, decode(&p.value)?))).collect();
-        P::configure(&settings).map_err(|e| wit::UiError { key: e.key, args: e.args, fallback: e.fallback })
+        let settings: Vec<(String, DataValue)> = settings
+            .into_iter()
+            .filter_map(|p| Some((p.name, decode(&p.value)?)))
+            .collect();
+        P::configure(&settings).map_err(|e| wit::UiError {
+            key: e.key,
+            args: e.args,
+            fallback: e.fallback,
+        })
     }
 
     fn translations() -> Vec<(String, String)> {
-        P::TRANSLATIONS.iter().map(|(locale, ftl)| ((*locale).to_string(), (*ftl).to_string())).collect()
+        P::TRANSLATIONS
+            .iter()
+            .map(|(locale, ftl)| ((*locale).to_string(), (*ftl).to_string()))
+            .collect()
     }
 
     fn definitions() -> Vec<wit::NodeDefinition> {
-        P::NODE_TYPES.iter().filter_map(|t| P::create(t, NodeId(ticknode_shared::Uuid::nil()))).map(|n| to_wit_definition(n.definition(), n.polls())).collect()
+        P::NODE_TYPES
+            .iter()
+            .filter_map(|t| P::create(t, NodeId(ticknode_shared::Uuid::nil())))
+            .map(|n| to_wit_definition(n.definition(), n.polls()))
+            .collect()
     }
 
     fn types() -> Vec<wit::TypeDefinition> {
@@ -76,19 +96,21 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
     }
 
     fn plugin_tick(events: Vec<wit::WsEvent>) -> Vec<wit::Emission> {
-        let events = events.into_iter().map(|e| match e {
-            wit::WsEvent::Opened(id) => WsEvent::Opened(id),
-            wit::WsEvent::Message((id, text)) => WsEvent::Message(id, text),
-            wit::WsEvent::Closed((id, reason)) => WsEvent::Closed(id, reason),
-        }).collect();
-        P::tick(events).into_iter().map(|e| wit::Emission {
-            node: node_id_to_wit(e.node),
-            outputs: e.outputs.into_iter().map(|o| match o {
-                Output::Exec(pin) => wit::Output::Exec(pin.0),
-                Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
-                Output::Clear(pin) => wit::Output::Clear(pin.0),
-            }).collect(),
-        }).collect()
+        let events = events
+            .into_iter()
+            .map(|e| match e {
+                wit::WsEvent::Opened(id) => WsEvent::Opened(id),
+                wit::WsEvent::Message((id, text)) => WsEvent::Message(id, text),
+                wit::WsEvent::Closed((id, reason)) => WsEvent::Closed(id, reason),
+            })
+            .collect();
+        P::tick(events)
+            .into_iter()
+            .map(|e| wit::Emission {
+                node: node_id_to_wit(e.node),
+                outputs: e.outputs.into_iter().map(to_wit_output).collect(),
+            })
+            .collect()
     }
 }
 
@@ -99,8 +121,14 @@ impl wit_nodes::GuestNode for NodeHandle {
     }
 
     fn properties(&self) -> Vec<wit::Property> {
-        self.0.borrow().properties().into_iter()
-            .map(|(name, value)| wit::Property { name, value: encode(&value) })
+        self.0
+            .borrow()
+            .properties()
+            .into_iter()
+            .map(|(name, value)| wit::Property {
+                name,
+                value: encode(&value),
+            })
             .collect()
     }
 
@@ -111,25 +139,37 @@ impl wit_nodes::GuestNode for NodeHandle {
     }
 
     fn execute(&self, trigger: wit::Trigger, inputs: Vec<(u32, wit::Value)>) -> Vec<wit::Output> {
-        let trigger = match trigger {
-            wit::Trigger::Pin(pin) => Trigger::Pin(PinId(pin)),
-            wit::Trigger::Task(done) => Trigger::Task {
-                id: done.id,
-                result: done.result.map(|output| match output {
-                    wit::TaskOutput::Delay => TaskOutput::Delay,
-                    wit::TaskOutput::Http(r) => TaskOutput::Http(HttpResponse { status: r.status, headers: r.headers, body: r.body }),
-                }),
-            },
-        };
-        let inputs = Inputs(inputs.into_iter().filter_map(|(pin, v)| Some((PinId(pin), decode(&v)?))).collect());
-        self.0.borrow_mut().execute(trigger, &inputs).into_iter().map(|o| match o {
-            Output::Exec(pin) => wit::Output::Exec(pin.0),
-            Output::Data(pin, value) => wit::Output::Data((pin.0, encode(&value))),
-            Output::Clear(pin) => wit::Output::Clear(pin.0),
-        }).collect()
+        let trigger = from_wit_trigger(trigger);
+        let inputs = inputs
+            .into_iter()
+            .filter_map(|(pin, v)| Some((PinId(pin), decode(&v)?)))
+            .collect();
+        self.0
+            .borrow_mut()
+            .execute(trigger, &inputs)
+            .into_iter()
+            .map(to_wit_output)
+            .collect()
     }
 
     fn poll(&self, tick: u64) -> Option<u32> {
         self.0.borrow_mut().poll(tick).map(|p| p.0)
+    }
+}
+
+fn from_wit_trigger(trigger: wit::Trigger) -> Trigger {
+    match trigger {
+        wit::Trigger::Pin(pin) => Trigger::Pin(PinId(pin)),
+        wit::Trigger::Task(done) => Trigger::Task {
+            id: done.id,
+            result: done.result.map(|output| match output {
+                wit::TaskOutput::Delay => TaskOutput::Delay,
+                wit::TaskOutput::Http(r) => TaskOutput::Http(HttpResponse {
+                    status: r.status,
+                    headers: r.headers,
+                    body: r.body,
+                }),
+            }),
+        },
     }
 }

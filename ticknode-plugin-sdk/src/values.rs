@@ -5,6 +5,13 @@ use crate::{DataValue, PinId, ObjectField};
 #[derive(Debug, Default, Clone)]
 pub struct Inputs(pub(crate) HashMap<PinId, DataValue>);
 
+
+impl FromIterator<(PinId, DataValue)> for Inputs {
+    fn from_iter<T: IntoIterator<Item = (PinId, DataValue)>>(values: T) -> Self {
+        Self(values.into_iter().collect())
+    }
+}
+
 impl Inputs {
     pub fn get(&self, pin: PinId) -> Option<&DataValue> {
         self.0.get(&pin)

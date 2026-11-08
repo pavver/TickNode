@@ -46,22 +46,26 @@ fn is_diagnostic(
         }
     }
     let lower = name.to_lowercase();
-    lower.ends_with("_battery")
-        || lower.ends_with("_battery_level")
-        || lower.ends_with("_linkquality")
-        || lower.ends_with("_lqi")
-        || lower.ends_with("_rssi")
-        || lower.ends_with("_signal")
-        || lower.ends_with("_uptime")
-        || lower.ends_with("_ip_address")
-        || lower.ends_with("_ip")
-        || lower.ends_with("_mac")
-        || lower.ends_with("_cpu")
-        || lower.ends_with("_memory")
-        || lower.ends_with("_ram")
-        || lower.ends_with("_disk")
-        || lower.ends_with("_ping")
-        || lower.ends_with("_latency")
+    [
+        "_battery",
+        "_battery_level",
+        "_linkquality",
+        "_lqi",
+        "_rssi",
+        "_signal",
+        "_uptime",
+        "_ip_address",
+        "_ip",
+        "_mac",
+        "_cpu",
+        "_memory",
+        "_ram",
+        "_disk",
+        "_ping",
+        "_latency",
+    ]
+    .iter()
+    .any(|suffix| lower.ends_with(suffix))
 }
 
 /// Checks if a sensor represents a real physical measurement.
@@ -90,14 +94,11 @@ fn is_physical_sensor(device_class: Option<&str>, name: &str) -> bool {
         )
     } else {
         let lower = name.to_lowercase();
-        lower.contains("temp")
-            || lower.contains("humid")
-            || lower.contains("power")
-            || lower.contains("energy")
-            || lower.contains("light")
-            || lower.contains("lux")
-            || lower.contains("press")
-            || lower.contains("co2")
+        [
+            "temp", "humid", "power", "energy", "light", "lux", "press", "co2",
+        ]
+        .iter()
+        .any(|term| lower.contains(term))
     }
 }
 
@@ -119,9 +120,23 @@ pub fn entity_rank(state: &State) -> u8 {
 
     match domain {
         // Rank 0: Primary controllable actuators & automations
-        "light" | "switch" | "climate" | "cover" | "lock" | "media_player" | "fan"
-        | "vacuum" | "valve" | "humidifier" | "siren" | "alarm_control_panel"
-        | "scene" | "script" | "automation" | "camera" | "remote" => 0,
+        "light"
+        | "switch"
+        | "climate"
+        | "cover"
+        | "lock"
+        | "media_player"
+        | "fan"
+        | "vacuum"
+        | "valve"
+        | "humidifier"
+        | "siren"
+        | "alarm_control_panel"
+        | "scene"
+        | "script"
+        | "automation"
+        | "camera"
+        | "remote" => 0,
 
         // Rank 1: Primary input helpers & controls
         _ if domain.starts_with("input_") || matches!(domain, "timer" | "counter") => 1,
@@ -139,10 +154,25 @@ pub fn entity_rank(state: &State) -> u8 {
 /// (the entity id when there is none), the icon is the `icon` attribute or the frontend's default.
 pub fn entity_option(state: &State) -> PropertyOption {
     let id = &state.entity_id;
-    let label = state.attributes.friendly_name().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(id);
+    let label = state
+        .attributes
+        .friendly_name()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or(id);
     let device_class: Option<String> = state.attributes.get_as("device_class");
-    let icon = entity_icon(id, &state.state, device_class.as_deref(), state.attributes.icon());
-    PropertyOption { value: id.clone(), label: label.to_string(), detail: id.clone(), icon: Some(icon) }
+    let icon = entity_icon(
+        id,
+        &state.state,
+        device_class.as_deref(),
+        state.attributes.icon(),
+    );
+    PropertyOption {
+        value: id.clone(),
+        label: label.to_string(),
+        detail: id.clone(),
+        icon: Some(icon),
+    }
 }
 
 /// Options of all entities, sorted by priority rank, then by label (case-insensitive), then by entity id.
@@ -191,7 +221,12 @@ pub fn action_target_options(
 /// Publishes the complete catalog and domain-specific pickers with identical labels and icons.
 pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption>)> {
     let all = entity_options(states);
-    let subset = |domains: &[&str]| all.iter().filter(|o| domains.iter().any(|d| o.value.starts_with(d))).cloned().collect();
+    let subset = |domains: &[&str]| {
+        all.iter()
+            .filter(|o| domains.iter().any(|d| o.value.starts_with(d)))
+            .cloned()
+            .collect()
+    };
     vec![
         ("persons", subset(&["person.", "device_tracker."])),
         ("zones", subset(&["zone."])),
@@ -208,7 +243,8 @@ pub fn test_state(entity: &str, state: &str, attributes: serde_json::Value) -> S
         "last_reported": "2026-10-28T14:45:09.185007+00:00",
         "last_updated": "2026-10-28T14:45:09.185007+00:00",
         "context": {"id": "01X", "parent_id": null, "user_id": null}
-    })).expect("a valid state")
+    }))
+    .expect("a valid state")
 }
 
 #[cfg(test)]

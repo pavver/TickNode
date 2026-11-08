@@ -1,9 +1,9 @@
 //! Shared hub access, host environment adapter and core-client logging.
 
+use crate::hub::{Env, Hub};
 use std::cell::RefCell;
 use std::sync::Once;
 use ticknode_plugin_sdk::*;
-use crate::hub::{Env, Hub};
 
 thread_local! {
     /// There is one plugin instance, so the connection and the subscriptions live in static state.
@@ -21,6 +21,13 @@ pub(super) fn try_with_hub(f: impl FnOnce(&mut Hub, &mut HostEnv)) {
             f(&mut hub, &mut HostEnv);
         }
     });
+}
+
+/// Both entity data nodes and state-change event nodes own the same watch registration.
+pub(super) fn remove_watch(node: NodeId, serial: Option<u64>) {
+    if let Some(serial) = serial {
+        try_with_hub(|hub, env| hub.remove_watch(node, serial, std::time::Instant::now(), env));
+    }
 }
 
 pub(super) struct HostEnv;

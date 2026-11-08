@@ -1,12 +1,14 @@
 //! Property-backed action form, snapshots and service execution.
 
-use std::time::Instant;
+use super::{
+    DONE, ERROR, FAILED, Field, RESPONSE, Service, action_source, field_json, outputs,
+    service_matches,
+};
+use crate::{CATEGORY, text_property, with_hub};
 use serde_json::Value;
+use std::time::Instant;
 use ticknode_plugin_sdk::*;
 use ticknode_shared::{data_type_name, parse_data_type};
-use crate::{CATEGORY, text_property, with_hub};
-use super::{DONE, ERROR, FAILED, Field, RESPONSE, Service, action_source,
-    field_json, outputs, service_matches};
 
 pub(super) fn strings(values: impl IntoIterator<Item = String>) -> DataValue {
     DataValue::List {
@@ -120,76 +122,13 @@ impl PluginNode for ActionNode {
 
     fn set_property(&mut self, name: &str, value: DataValue) {
         match name {
-            "action" => {
-                if let Some(action) = text_property(value) {
-                    if action != self.action {
-                        self.service = Service::default();
-                    }
-                    self.action = action;
-                    if let Some(service) =
-                        with_hub(|hub, _| hub.services.get(&self.action).cloned())
-                    {
-                        self.service = service;
-                    }
-                }
-            }
-            "target" => {
-                if let Some(target) = text_property(value) {
-                    let changed = target != self.target;
-                    self.target = target;
-                    let clear = with_hub(|hub, env| {
-                        if !self.node.0.is_nil() {
-                            hub.set_action_target(self.node, &self.target, env);
-                        }
-                        let target_ctx = (!self.target.is_empty())
-                            .then(|| (self.target.as_str(), hub.live.get(&self.target)));
-                        changed
-                            && !self.action.is_empty()
-                            && hub
-                                .services
-                                .get(&self.action)
-                                .is_some_and(|s| !service_matches(s, target_ctx))
-                    });
-                    if clear {
-                        self.action.clear();
-                        self.service = Service::default();
-                    }
-                }
-            }
-            "fields" => {
-                self.service.fields = read_strings(value)
-                    .into_iter()
-                    .filter_map(|s| {
-                        let (name, kind) = s.split_once(':')?;
-                        if name.is_empty() {
-                            return None;
-                        }
-                        Some(Field {
-                            name: name.into(),
-                            label: name.into(),
-                            data_type: parse_data_type(kind)?,
-                            required: false,
-                        })
-                    })
-                    .collect();
-            }
-            "field_labels" => {
-                for (field, label) in self.service.fields.iter_mut().zip(read_strings(value)) {
-                    field.label = label;
-                }
-            }
-            "required_fields" => {
-                let required = read_strings(value);
-                for field in &mut self.service.fields {
-                    field.required = required.contains(&field.name);
-                }
-            }
+            "action" => self.set_action(value),
+            "target" => self.set_target(value),
+            "fields" => self.set_fields(value),
+            "field_labels" => self.set_field_labels(value),
+            "required_fields" => self.set_required_fields(value),
             "target_domains" => self.service.domains = read_strings(value),
-            "supports_response" => {
-                if let DataValue::Bool(response) = value {
-                    self.service.response = response;
-                }
-            }
+            "supports_response" => self.set_supports_response(value),
             _ => {}
         }
     }
@@ -228,5 +167,80 @@ impl PluginNode for ActionNode {
             )
         })
         .unwrap_or_default()
+    }
+}
+
+impl ActionNode {
+    fn set_action(&mut self, value: DataValue) {
+        if let Some(action) = text_property(value) {
+            if action != self.action {
+                self.service = Service::default();
+            }
+            self.action = action;
+            if let Some(service) = with_hub(|hub, _| hub.services.get(&self.action).cloned()) {
+                self.service = service;
+            }
+        }
+    }
+
+    fn set_target(&mut self, value: DataValue) {
+        if let Some(target) = text_property(value) {
+            let changed = target != self.target;
+            self.target = target;
+            let clear = with_hub(|hub, env| {
+                if !self.node.0.is_nil() {
+                    hub.set_action_target(self.node, &self.target, env);
+                }
+                let target_ctx = (!self.target.is_empty())
+                    .then(|| (self.target.as_str(), hub.live.get(&self.target)));
+                changed
+                    && !self.action.is_empty()
+                    && hub
+                        .services
+                        .get(&self.action)
+                        .is_some_and(|s| !service_matches(s, target_ctx))
+            });
+            if clear {
+                self.action.clear();
+                self.service = Service::default();
+            }
+        }
+    }
+
+    fn set_fields(&mut self, value: DataValue) {
+        self.service.fields = read_strings(value)
+            .into_iter()
+            .filter_map(|s| {
+                let (name, kind) = s.split_once(':')?;
+                if name.is_empty() {
+                    return None;
+                }
+                Some(Field {
+                    name: name.into(),
+                    label: name.into(),
+                    data_type: parse_data_type(kind)?,
+                    required: false,
+                })
+            })
+            .collect();
+    }
+
+    fn set_field_labels(&mut self, value: DataValue) {
+        for (field, label) in self.service.fields.iter_mut().zip(read_strings(value)) {
+            field.label = label;
+        }
+    }
+
+    fn set_required_fields(&mut self, value: DataValue) {
+        let required = read_strings(value);
+        for field in &mut self.service.fields {
+            field.required = required.contains(&field.name);
+        }
+    }
+
+    fn set_supports_response(&mut self, value: DataValue) {
+        if let DataValue::Bool(response) = value {
+            self.service.response = response;
+        }
     }
 }

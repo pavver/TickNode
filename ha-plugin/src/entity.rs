@@ -5,7 +5,7 @@ use std::time::Instant;
 use ticknode_plugin_sdk::*;
 
 use crate::convert::{STATE_TYPE, state_value};
-use crate::{CATEGORY, text_property, try_with_hub, with_hub};
+use crate::{CATEGORY, text_property, with_hub};
 
 pub fn outputs(state: Option<&State>) -> Vec<Output> {
     let Some(state) = state else {
@@ -64,9 +64,7 @@ impl Entity {
 
 impl Drop for Entity {
     fn drop(&mut self) {
-        if let Some(serial) = self.serial {
-            try_with_hub(|hub, env| hub.remove_watch(self.node, serial, Instant::now(), env));
-        }
+        crate::runtime::remove_watch(self.node, self.serial);
     }
 }
 

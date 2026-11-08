@@ -4,12 +4,14 @@ use crate::{HostState, Node, NodeRegistry, plugin};
 
 mod nodes;
 mod connections;
+mod connections_index;
 mod persistence;
 mod execution;
 mod reconcile;
 
 pub use reconcile::GraphReconcile;
 
+pub(crate) use connections_index::ConnectionIndex;
 pub(crate) use nodes::input_pin_type;
 
 /// Connections removed automatically by the engine (e.g., after a node's pins changed).
@@ -25,8 +27,7 @@ pub struct TickEngine {
     /// Work accounting for the most recent tick, including tasks, emissions, polls and pure pulls.
     pub last_tick: crate::TickStats,
     pub(crate) nodes: HashMap<NodeId, Box<dyn Node>>,
-    pub(crate) exec_connections: Vec<ConnectionModel>,
-    pub(crate) data_connections: Vec<ConnectionModel>,
+    pub(crate) connections: ConnectionIndex,
     pub registry: NodeRegistry,
     /// Custom data types declared by plugins.
     pub types: TypeRegistry,
@@ -60,8 +61,7 @@ impl TickEngine {
             budget: Default::default(),
             last_tick: Default::default(),
             nodes: HashMap::new(),
-            exec_connections: Vec::new(),
-            data_connections: Vec::new(),
+            connections: ConnectionIndex::default(),
             registry: NodeRegistry::new(),
             types: TypeRegistry::new(),
             type_owners: HashMap::new(),

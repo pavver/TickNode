@@ -64,10 +64,8 @@ impl TickEngine {
         }
     }
     fn queue_exec_output(&self, node_id: NodeId, out_exec_pin: PinId, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
-        for c in &self.exec_connections {
-            if c.src_node == node_id && c.src_pin == out_exec_pin {
-                next_tick_queue.push_back((c.dst_node, c.dst_pin));
-            }
+        for c in self.connections.exec_successors(node_id, out_exec_pin) {
+            next_tick_queue.push_back((c.dst_node, c.dst_pin));
         }
     }
 

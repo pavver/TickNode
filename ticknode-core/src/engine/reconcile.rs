@@ -69,8 +69,8 @@ impl TickEngine {
         }
         result.warnings = self.insert_graph(&plan.insert, |id| id);
         result.added_nodes = plan.insert.nodes.iter().filter(|n| self.has_node(n.id)).map(|n| n.id).collect();
-        result.connected_exec = plan.insert.exec_connections.into_iter().filter(|c| self.exec_connections.contains(c)).collect();
-        result.connected_data = plan.insert.data_connections.into_iter().filter(|c| self.data_connections.contains(c)).collect();
+        result.connected_exec = plan.insert.exec_connections.into_iter().filter(|c| self.connections.contains_exec(c)).collect();
+        result.connected_data = plan.insert.data_connections.into_iter().filter(|c| self.connections.contains_data(c)).collect();
         result
     }
 }

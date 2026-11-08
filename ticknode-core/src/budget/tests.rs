@@ -42,7 +42,7 @@ fn budget_limits_burst_and_preserves_fifo_ahead_of_new_hops() {
     let child = probe(&mut engine, 1, false, false);
     // A real exec source creates next-tick work while the original burst is draining.
     engine.nodes.insert(ids[0], Box::new(ClickButtonNode { id: ids[0], label: String::new(), clicked: false }));
-    engine.exec_connections.push(ConnectionModel { src_node: ids[0], src_pin: PinId(0), dst_node: child, dst_pin: PinId(0) });
+    engine.connections.add_exec(ConnectionModel { src_node: ids[0], src_pin: PinId(0), dst_node: child, dst_pin: PinId(0) });
     engine.tick();
     assert_eq!(ran(&engine), ids[..2]);
     assert_eq!(engine.last_tick, TickStats { spent: 2, deferred: 3 });

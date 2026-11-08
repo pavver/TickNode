@@ -13,11 +13,11 @@ impl TickEngine {
     pub fn export_snippet(&self, node_ids: &[NodeId]) -> GraphModel {
         let nodes = node_ids.iter().filter_map(|id| self.node_model(*id)).collect();
         let sort_key = |c: &ConnectionModel| (c.src_node.0, c.src_pin.0, c.dst_node.0, c.dst_pin.0);
-        let mut exec_connections: Vec<_> = self.exec_connections.iter()
+        let mut exec_connections: Vec<_> = self.connections.exec().iter()
             .filter(|c| node_ids.contains(&c.src_node) && node_ids.contains(&c.dst_node))
             .copied().collect();
         exec_connections.sort_by_key(sort_key);
-        let mut data_connections: Vec<_> = self.data_connections.iter()
+        let mut data_connections: Vec<_> = self.connections.data().iter()
             .filter(|c| node_ids.contains(&c.src_node) && node_ids.contains(&c.dst_node))
             .copied().collect();
         data_connections.sort_by_key(sort_key);

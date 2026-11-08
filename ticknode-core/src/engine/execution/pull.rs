@@ -10,9 +10,7 @@ impl TickEngine {
 
         // Check whether this is an input pin connected to another node's output.
         // If so, recursively pull data from the source.
-        let incoming = self.data_connections.iter()
-            .find(|c| c.dst_node == node_id && c.dst_pin == pin_id)
-            .copied();
+        let incoming = self.connections.data_source(node_id, pin_id);
         if let Some(c) = incoming {
             stack.push(node_id);
             let val = self.pull_data(c.src_node, c.src_pin, stack);
@@ -35,7 +33,7 @@ impl TickEngine {
     }
 
     pub(crate) fn pull_inputs(&mut self, node_id: NodeId, stack: &mut Vec<NodeId>) -> HashMap<PinId, Option<DataValue>> {
-        let connections: Vec<_> = self.data_connections.iter().filter(|c| c.dst_node == node_id).copied().collect();
+        let connections = self.connections.data_into(node_id).to_vec();
         let mut inputs: HashMap<PinId, Option<DataValue>> = connections.into_iter()
             .map(|c| {
                 let mut value = self.pull_data(c.src_node, c.src_pin, stack);

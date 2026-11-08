@@ -85,18 +85,10 @@ impl TickEngine {
 
         self.host_state.cancel_node_tasks(node_id);
 
-        let mut removed = RemovedConnections::default();
-        self.exec_connections.retain(|c| {
-            let keep = c.src_node != node_id && c.dst_node != node_id;
-            if !keep { removed.exec.push(*c); }
-            keep
-        });
-        self.data_connections.retain(|c| {
-            let keep = c.src_node != node_id && c.dst_node != node_id;
-            if !keep { removed.data.push(*c); }
-            keep
-        });
-        removed
+        self.connections.retain(
+            |c| c.src_node != node_id && c.dst_node != node_id,
+            |c| c.src_node != node_id && c.dst_node != node_id,
+        )
     }
 
     /// Sets a node property. If pins changed as a result, invalid connections are pruned.
@@ -128,15 +120,16 @@ impl TickEngine {
 
     /// Prunes connections touching selected nodes that have become invalid (pins changed).
     pub(crate) fn prune_connections(&mut self, touching: impl Fn(&ConnectionModel) -> bool) -> RemovedConnections {
-        let invalid_exec: Vec<_> = self.exec_connections.iter()
+        let invalid_exec: Vec<_> = self.connections.exec().iter()
             .filter(|c| touching(c) && self.validate_exec(c).is_err())
             .copied().collect();
-        let invalid_data: Vec<_> = self.data_connections.iter()
+        let invalid_data: Vec<_> = self.connections.data().iter()
             .filter(|c| touching(c) && self.validate_data_types(c).is_err())
             .copied().collect();
-        self.exec_connections.retain(|c| !invalid_exec.contains(c));
-        self.data_connections.retain(|c| !invalid_data.contains(c));
-        RemovedConnections { exec: invalid_exec, data: invalid_data }
+        self.connections.retain(
+            |c| !invalid_exec.contains(c),
+            |c| !invalid_data.contains(c),
+        )
     }
 
     /// Value of an unconnected data input (`None` clears it). Effective while nothing is connected to the pin.

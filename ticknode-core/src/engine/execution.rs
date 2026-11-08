@@ -39,6 +39,7 @@ impl TickEngine {
         self.last_tick = Default::default();
         self.pure_cache.clear();
         self.executed.clear();
+        self.executed_index.clear();
         self.host_state.current_tick += 1;
         let mut next_tick_queue = VecDeque::new();
 

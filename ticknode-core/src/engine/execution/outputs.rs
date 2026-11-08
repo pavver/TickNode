@@ -50,7 +50,9 @@ impl TickEngine {
         outputs.sort_by_key(|(p, _)| p.0);
         outputs.dedup_by_key(|(p, _)| *p);
         let tick = self.host_state.current_tick;
-        match self.executed.iter_mut().find(|t| t.node_id == node_id) {
+        let slot = self.executed_index.get(&node_id).copied()
+            .filter(|&i| self.executed.get(i).is_some_and(|t| t.node_id == node_id));
+        match slot.map(|i| &mut self.executed[i]) {
             Some(trace) => {
                 trace.inputs = inputs;
                 trace.outputs = outputs;
@@ -60,7 +62,10 @@ impl TickEngine {
                     }
                 }
             }
-            None => self.executed.push(NodeTrace { node_id, tick, inputs, outputs, fired }),
+            None => {
+                self.executed_index.insert(node_id, self.executed.len());
+                self.executed.push(NodeTrace { node_id, tick, inputs, outputs, fired });
+            }
         }
     }
     fn queue_exec_output(&self, node_id: NodeId, out_exec_pin: PinId, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {

@@ -51,6 +51,8 @@ pub struct TickEngine {
     /// Nodes executed during the last tick, with their inputs and outputs (telemetry for the editor).
     /// Pure nodes appear here when evaluated on demand.
     pub executed: Vec<NodeTrace>,
+    /// Position of each node's trace in `executed`; verified on use because `executed` is public.
+    executed_index: HashMap<NodeId, usize>,
 }
 
 impl Default for TickEngine {
@@ -78,6 +80,7 @@ impl TickEngine {
             execution_queue: VecDeque::new(),
             host_state: HostState::default(),
             executed: Vec::new(),
+            executed_index: HashMap::new(),
         }
     }
 }

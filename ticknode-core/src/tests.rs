@@ -129,6 +129,27 @@
     }
 
     #[test]
+    fn repeated_executions_in_one_tick_share_one_trace() {
+        let mut engine = TickEngine::new();
+        let first = add_sink(&mut engine);
+        let second = add_sink(&mut engine);
+        let decision = NodeId::generate();
+        engine.create_node(decision, "match", &[cases(&["1: t > 0"])]).unwrap();
+        engine.set_input_value(decision, PinId(1), Some(num(5))).unwrap();
+        for id in [first, second, first, decision, decision] {
+            engine.trigger_node(id, PinId(0));
+        }
+        engine.tick();
+        let ids: Vec<_> = engine.executed.iter().map(|t| t.node_id).collect();
+        assert_eq!(ids, [first, second, decision]);
+        assert_eq!(engine.executed[2].fired, vec![PinId(1)]);
+        // The next tick starts a fresh trace list.
+        engine.trigger_node(second, PinId(0));
+        engine.tick();
+        assert_eq!(engine.executed.iter().map(|t| t.node_id).collect::<Vec<_>>(), [second]);
+    }
+
+    #[test]
     fn test_match_cases_and_else() {
         let mut engine = TickEngine::new();
         let id = NodeId::generate();

@@ -108,7 +108,7 @@ pub fn duplicate(ed: Editor) {
 pub fn delete_selection(ed: Editor) {
     use crate::state::Selection;
     match ed.selection.get_untracked() {
-        Some(Selection::Nodes(ids)) => ids.into_iter().for_each(|id| ed.send(ClientMessage::RemoveNode(id))),
+        Some(Selection::Nodes(ids)) => ed.send_batch(ids.into_iter().map(ClientMessage::RemoveNode).collect()),
         Some(Selection::Exec(c)) => ed.send(ClientMessage::DisconnectExec(c)),
         Some(Selection::Data(c)) => ed.send(ClientMessage::DisconnectData { dst_node: c.dst_node, dst_pin: c.dst_pin }),
         None => {}

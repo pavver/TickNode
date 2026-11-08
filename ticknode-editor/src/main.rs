@@ -14,6 +14,7 @@ mod picker;
 mod plugins_panel;
 mod state;
 mod ui;
+mod toolbar;
 
 use std::time::Duration;
 
@@ -22,12 +23,12 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::canvas::{Canvas, fit_view};
-use crate::i18n::t;
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
 use crate::picker::PickerLayer;
 use crate::plugins_panel::PluginsPanel;
-use crate::state::{ConnStatus, Editor, LogKind, Theme, now_ms, use_editor};
-use crate::ui::{IconButton, StatusDot, icons};
+use crate::state::{Editor, LogKind, Theme, now_ms};
+use crate::toolbar::Header;
+use ticknode_shared::ClientMessage;
 
 /// Viewport width below which panels become slide-over overlays (see `@media` in `style.css`).
 const NARROW_WIDTH: f64 = 900.0;
@@ -54,7 +55,10 @@ fn load_theme() -> Theme {
 fn typing_in_field(ev: &web_sys::Event) -> bool {
     ev.target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-        .is_some_and(|el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT"))
+        .is_some_and(|el| {
+            el.closest("input, textarea, select").ok().flatten().is_some()
+                || el.dyn_ref::<web_sys::HtmlElement>().is_some_and(|el| el.is_content_editable())
+        })
 }
 
 fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
@@ -124,6 +128,11 @@ fn App() -> impl IntoView {
                 }
             }
             (false, "f" | "а") => fit_view(editor),
+            (true, "z" | "я" | "y" | "н") if editor.pending_paste.with_untracked(|p| p.is_none()) => {
+                ev.prevent_default();
+                let redo = ev.shift_key() || matches!(ev.key().to_lowercase().as_str(), "y" | "н");
+                editor.send(if redo { ClientMessage::Redo } else { ClientMessage::Undo });
+            }
             (true, "a" | "ф") => {
                 ev.prevent_default();
                 editor.select_nodes(editor.nodes.with_untracked(|n| n.keys().copied().collect::<Vec<_>>()));
@@ -211,65 +220,6 @@ fn App() -> impl IntoView {
             <TooltipLayer />
             <PickerLayer />
         </div>
-    }
-}
-
-#[component]
-fn Header() -> impl IntoView {
-    let ed = use_editor();
-    let status = move || match ed.status.get() {
-        ConnStatus::Online => ("online", t!("status-online", count = ed.nodes.with(|n| n.len()))),
-        ConnStatus::Connecting => ("connecting", t!("status-connecting")),
-        ConnStatus::Offline => ("offline", t!("status-offline")),
-    };
-    view! {
-        <header class="header">
-            <div class="titles">
-                <span class="t-app-title ellipsis">"TickNode"</span>
-                <span class="subtitle t-caption">
-                    <StatusDot class=Signal::derive(move || status().0) />
-                    <span class="ellipsis">{move || status().1}</span>
-                </span>
-            </div>
-            <div class="actions">
-                <IconButton
-                    icon=icons::ADD
-                    title=Signal::derive(move || t!("toolbar-palette"))
-                    selected=Signal::derive(move || ed.show_palette.get())
-                    on_click=Callback::new(move |_| ed.show_palette.update(|v| *v = !*v))
-                />
-                <IconButton
-                    icon=icons::EXTENSION
-                    title=Signal::derive(move || t!("toolbar-plugins"))
-                    selected=Signal::derive(move || ed.show_plugins.get())
-                    on_click=Callback::new(move |_| ed.show_plugins.update(|v| *v = !*v))
-                />
-                <IconButton
-                    icon=icons::FIT
-                    title=Signal::derive(move || t!("toolbar-fit"))
-                    on_click=Callback::new(move |_| fit_view(ed))
-                />
-                <IconButton
-                    icon=icons::TERMINAL
-                    title=Signal::derive(move || t!("toolbar-console"))
-                    selected=Signal::derive(move || ed.show_console.get())
-                    on_click=Callback::new(move |_| ed.show_console.update(|v| *v = !*v))
-                />
-                <IconButton
-                    icon=icons::THEME
-                    title=Signal::derive(move || t!("toolbar-theme"))
-                    on_click=Callback::new(move |_| ed.theme.update(|t| *t = if *t == Theme::Dark { Theme::Light } else { Theme::Dark }))
-                />
-                <button
-                    class="icon-btn ctl lang-btn"
-                    title=move || t!("toolbar-language")
-                    aria-label=move || t!("toolbar-language")
-                    on:click=move |_| ed.locale.update(|l| *l = l.toggle())
-                >
-                    {move || ed.locale.get().badge()}
-                </button>
-            </div>
-        </header>
     }
 }
 

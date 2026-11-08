@@ -113,13 +113,13 @@ mod tests {
         ws.send(Message::Binary(postcard::to_allocvec(&msg).unwrap().into())).await.unwrap();
     }
 
-    /// Next non-telemetry message.
+    /// Next graph/command message, skipping telemetry and history availability.
     async fn recv(ws: &mut Socket) -> ServerMessage {
         loop {
             let msg = tokio::time::timeout(Duration::from_secs(5), ws.next()).await.unwrap().unwrap().unwrap();
             if let Message::Binary(b) = msg {
                 let msg: ServerMessage = postcard::from_bytes(&b).unwrap();
-                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. } | ServerMessage::PropertyOptions { .. }) {
+                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. } | ServerMessage::PropertyOptions { .. } | ServerMessage::History(_)) {
                     return msg;
                 }
             }
@@ -238,7 +238,7 @@ mod tests {
             if let Message::Binary(b) = msg {
                 seen.extend_from_slice(&b);
                 let msg: ServerMessage = postcard::from_bytes(&b).unwrap();
-                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. } | ServerMessage::PropertyOptions { .. }) {
+                if !matches!(msg, ServerMessage::Executed(_) | ServerMessage::Log { .. } | ServerMessage::PropertyOptions { .. } | ServerMessage::History(_)) {
                     return msg;
                 }
             }

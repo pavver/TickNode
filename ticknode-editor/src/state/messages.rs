@@ -25,7 +25,8 @@ impl Editor {
 
     pub fn apply(&self, msg: ServerMessage) {
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history } => {
+                self.history.set(history);
                 // Update existing nodes in place (keeping open inspector and inline fields alive
                 // across reconnects) and remove any that disappeared
                 let fresh: BTreeSet<NodeId> = nodes.iter().map(|i| i.model.id).collect();
@@ -137,6 +138,7 @@ impl Editor {
                     .unwrap_or_else(|| "?".to_string());
                 self.log(LogKind::Node, format!("[{title}] {message}"));
             }
+            ServerMessage::History(history) => self.history.set(history),
             ServerMessage::Error(message) => {
                 self.error_seq.update(|n| *n += 1);
                 // The answer to the user's action: translated, unlike technical log lines

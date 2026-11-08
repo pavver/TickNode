@@ -25,6 +25,17 @@ pub enum ClientMessage {
     ConfigurePlugin { name: String, values: Vec<(String, SettingUpdate)> },
     /// Replace a named struct pin with its fields, or restore the original pin.
     SetPinSplit { node: NodeId, pin: PinId, split: bool },
+    Undo,
+    Redo,
+    /// Applies graph edits as one shared history entry. History, runtime and plugin commands are rejected.
+    Batch(Vec<ClientMessage>),
+}
+
+/// Shared server history availability for every editor.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct HistoryState {
+    pub can_undo: bool,
+    pub can_redo: bool,
 }
 
 /// What a node received and emitted during its last execution (for the editor inspector).
@@ -59,6 +70,7 @@ pub enum ServerMessage {
         /// Runtime options of dynamic properties published by enabled plugins.
         #[serde(default)]
         property_options: Vec<PropertyOptionSet>,
+        history: HistoryState,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -84,4 +96,5 @@ pub enum ServerMessage {
     PropertyOptions { plugin: String, source: String, options: Vec<PropertyOption> },
     /// Error for the client that caused it; translatable.
     Error(UiMessage),
+    History(HistoryState),
 }

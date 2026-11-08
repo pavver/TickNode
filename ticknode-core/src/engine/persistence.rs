@@ -50,7 +50,7 @@ impl TickEngine {
         (created, warnings)
     }
 
-    fn insert_graph(&mut self, graph: &GraphModel, map_id: impl Fn(NodeId) -> NodeId) -> Vec<String> {
+    pub(super) fn insert_graph(&mut self, graph: &GraphModel, map_id: impl Fn(NodeId) -> NodeId) -> Vec<String> {
         let mut warnings = Vec::new();
         let mut unknown = Vec::new();
         for n in &graph.nodes {

@@ -95,14 +95,16 @@ impl Interaction {
     // interrupted drag (pointercancel, second finger) is also sent to keep editor and server in sync.
     fn send_moves(self, origins: Vec<(NodeId, Position)>) {
         let ed = self.ed;
+        let mut commands = Vec::new();
         for (id, origin) in origins {
             if let Some(node) = ed.node(id) {
                 let position = node.pos.get_untracked();
                 if position != origin {
-                    ed.send(ClientMessage::MoveNode { id, position });
+                    commands.push(ClientMessage::MoveNode { id, position });
                 }
             }
         }
+        ed.send_batch(commands);
     }
 
     pub(super) fn pointer_down(self, ev: PointerEvent) {

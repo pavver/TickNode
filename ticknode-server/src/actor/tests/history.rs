@@ -1,0 +1,214 @@
+use super::*;
+
+fn actor(dir: &std::path::Path) -> Actor {
+    let (events, _) = broadcast::channel(256);
+    Actor {
+        engine: TickEngine::new(), positions: HashMap::new(),
+        storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
+        events, dirty_since: None, traces: HashMap::new(), history: Default::default(),
+    }
+}
+
+fn apply(actor: &mut Actor, msg: ClientMessage) -> Vec<ServerMessage> {
+    let (reply, _) = mpsc::unbounded_channel();
+    actor.apply(msg, &reply).unwrap().0
+}
+
+fn add(actor: &mut Actor, x: f32) -> NodeId {
+    apply(actor, ClientMessage::AddNode { type_name: "for_loop".into(), position: Position { x, y: 20.0 } })
+        .into_iter().find_map(|e| match e { ServerMessage::NodeAdded(n) => Some(n.model.id), _ => None }).unwrap()
+}
+
+fn state(actor: &Actor, undo: bool, redo: bool) {
+    let ServerMessage::Init { history, .. } = actor.snapshot() else { panic!("missing Init") };
+    assert_eq!(history, HistoryState { can_undo: undo, can_redo: redo });
+}
+
+#[test]
+fn history_add_undo_redo_same_id_and_protocol_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    state(&actor, false, false);
+    let id = add(&mut actor, 12.0);
+    state(&actor, true, false);
+    let events = apply(&mut actor, ClientMessage::Undo);
+    assert!(matches!(events.first(), Some(ServerMessage::NodeRemoved(n)) if *n == id));
+    assert!(matches!(events.last(), Some(ServerMessage::History(HistoryState { can_undo: false, can_redo: true }))));
+    state(&actor, false, true);
+    assert!(!actor.engine.has_node(id));
+    let events = apply(&mut actor, ClientMessage::Redo);
+    assert!(matches!(events.first(), Some(ServerMessage::NodeAdded(n)) if n.model.id == id && n.model.position.x == 12.0));
+    state(&actor, true, false);
+    for event in events.into_iter().chain([actor.snapshot()]) {
+        assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&event)).unwrap(), event);
+    }
+}
+
+#[test]
+fn history_batch_restores_nodes_positions_and_connections_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 10.0);
+    let b = add(&mut actor, 80.0);
+    let c = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
+    apply(&mut actor, ClientMessage::ConnectExec(c));
+    let d = ConnectionModel { src_pin: PinId(5), dst_pin: PinId(1), ..c };
+    apply(&mut actor, ClientMessage::ConnectData(d));
+    let before = actor.graph_snapshot();
+    let msg = ClientMessage::Batch(vec![ClientMessage::RemoveNode(a), ClientMessage::RemoveNode(b)]);
+    assert_eq!(postcard::from_bytes::<ClientMessage>(&postcard::to_allocvec(&msg).unwrap()).unwrap(), msg);
+    apply(&mut actor, msg);
+    assert!(actor.engine.node_ids().is_empty());
+    let events = apply(&mut actor, ClientMessage::Undo);
+    assert_eq!(actor.graph_snapshot(), before);
+    assert_eq!(events.iter().filter(|e| matches!(e, ServerMessage::NodeAdded(_))).count(), 2);
+    assert!(events.iter().any(|e| matches!(e, ServerMessage::ExecConnected(v) if *v == c)));
+    assert!(events.iter().any(|e| matches!(e, ServerMessage::DataConnected(v) if *v == d)));
+    apply(&mut actor, ClientMessage::Redo);
+    assert!(actor.engine.node_ids().is_empty());
+}
+
+#[test]
+fn history_new_edit_clears_redo_but_failures_and_noops_do_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let id = add(&mut actor, 10.0);
+    apply(&mut actor, ClientMessage::Undo);
+    let (reply, _) = mpsc::unbounded_channel();
+    assert!(actor.apply(ClientMessage::RemoveNode(id), &reply).is_err());
+    apply(&mut actor, ClientMessage::DisconnectData { dst_node: id, dst_pin: PinId(1) });
+    state(&actor, false, true);
+    let id = add(&mut actor, 40.0);
+    state(&actor, true, false);
+    apply(&mut actor, ClientMessage::MoveNode { id, position: actor_position(40.0) });
+    apply(&mut actor, ClientMessage::Undo);
+    assert!(!actor.engine.has_node(id), "an unchanged move must not add history");
+}
+
+fn actor_position(x: f32) -> Position { Position { x, y: 20.0 } }
+
+#[test]
+fn history_batch_keeps_successes_skips_forbidden_and_reports_first_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let b = add(&mut actor, 2.0);
+    let (reply, mut errors) = mpsc::unbounded_channel();
+    let (events, _) = actor.apply(ClientMessage::Batch(vec![
+        ClientMessage::Undo, ClientMessage::Redo, ClientMessage::Batch(vec![ClientMessage::RemoveNode(a)]),
+        ClientMessage::TriggerNode { id: a, pin: PinId(0) },
+        ClientMessage::SetPluginEnabled { name: "missing".into(), enabled: false },
+        ClientMessage::ConfigurePlugin { name: "missing".into(), values: vec![] },
+        ClientMessage::RemoveNode(a), ClientMessage::RemoveNode(a), ClientMessage::RemoveNode(b),
+    ]), &reply).unwrap();
+    assert_eq!(events.iter().filter(|e| matches!(e, ServerMessage::NodeRemoved(_))).count(), 2);
+    assert!(matches!(errors.try_recv(), Ok(ServerMessage::Error(e)) if e.key == "error-batch-command"));
+    assert!(errors.try_recv().is_err());
+    assert!(actor.engine.execution_queue.is_empty());
+    apply(&mut actor, ClientMessage::Undo);
+    assert!(actor.engine.has_node(a) && actor.engine.has_node(b));
+}
+
+#[test]
+fn history_plugin_toggle_clears_both_stacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let wasm = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug/test_plugin.wasm");
+    std::fs::create_dir_all(dir.path().join("plugins")).unwrap();
+    std::fs::copy(wasm, dir.path().join("plugins/test.wasm")).unwrap();
+    actor.plugins.load_all(&mut actor.engine);
+    let name = actor.plugins.infos(&actor.engine)[0].name.clone();
+    add(&mut actor, 1.0);
+    add(&mut actor, 2.0);
+    apply(&mut actor, ClientMessage::Undo);
+    state(&actor, true, true);
+    let events = apply(&mut actor, ClientMessage::SetPluginEnabled { name, enabled: false });
+    state(&actor, false, false);
+    assert!(matches!(events.last(), Some(ServerMessage::History(HistoryState { can_undo: false, can_redo: false }))));
+}
+
+#[test]
+fn history_bounds_entries_and_empty_undo_redo_do_not_emit_events() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    assert!(apply(&mut actor, ClientMessage::Undo).is_empty());
+    assert!(apply(&mut actor, ClientMessage::Redo).is_empty());
+    let first = add(&mut actor, 0.0);
+    for x in 1..=100 { add(&mut actor, x as f32); }
+    for _ in 0..100 { apply(&mut actor, ClientMessage::Undo); }
+    state(&actor, false, true);
+    assert_eq!(actor.engine.node_ids(), vec![first]);
+    assert!(apply(&mut actor, ClientMessage::Undo).is_empty());
+    for _ in 0..100 { apply(&mut actor, ClientMessage::Redo); }
+    state(&actor, true, false);
+    assert_eq!(actor.engine.node_ids().len(), 101);
+}
+
+#[test]
+fn history_batch_collects_created_ids_and_keeps_first_command_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let (reply, mut errors) = mpsc::unbounded_channel();
+    let missing = NodeId::generate();
+    let (_, ids) = actor.apply(ClientMessage::Batch(vec![
+        ClientMessage::RemoveNode(missing), ClientMessage::Undo,
+        ClientMessage::AddNode { type_name: "const".into(), position: Position::default() },
+        ClientMessage::AddNode { type_name: "for_loop".into(), position: Position::default() },
+    ]), &reply).unwrap();
+    let ids = ids.unwrap();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().all(|id| actor.engine.has_node(*id)));
+    assert!(matches!(errors.try_recv(), Ok(ServerMessage::Error(e)) if e == EngineError::NodeNotFound(missing).ui_message()));
+    assert!(errors.try_recv().is_err());
+    apply(&mut actor, ClientMessage::Undo);
+    assert!(actor.engine.node_ids().is_empty());
+}
+
+#[test]
+fn history_moves_kept_nodes_and_recreates_changed_nodes_in_event_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let b = add(&mut actor, 2.0);
+    let exec = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
+    let data = ConnectionModel { src_pin: PinId(5), dst_pin: PinId(1), ..exec };
+    apply(&mut actor, ClientMessage::ConnectExec(exec));
+    apply(&mut actor, ClientMessage::ConnectData(data));
+    let task = actor.engine.host_state.start_delay(a, 100);
+    let trace = NodeTrace { node_id: b, tick: 0, inputs: vec![], outputs: vec![], fired: vec![] };
+    actor.traces.insert(b, (trace, Instant::now()));
+    apply(&mut actor, ClientMessage::Batch(vec![
+        ClientMessage::SetInputValue { id: b, pin: PinId(1), value: Some(DataValue::from(8.0)) },
+        ClientMessage::MoveNode { id: a, position: actor_position(50.0) },
+    ]));
+    let events = apply(&mut actor, ClientMessage::Undo);
+    assert_eq!(actor.positions[&a], actor_position(1.0));
+    assert!(actor.engine.host_state.active_tasks.contains_key(&task));
+    assert!(!actor.traces.contains_key(&b));
+    assert!(matches!(events.as_slice(), [
+        ServerMessage::NodeRemoved(id), ServerMessage::ExecDisconnected(e),
+        ServerMessage::DataDisconnected { .. }, ServerMessage::NodeAdded(n),
+        ServerMessage::NodeMoved { id: moved, .. }, ServerMessage::ExecConnected(_),
+        ServerMessage::DataConnected(_), ServerMessage::History(_),
+    ] if *id == b && *e == exec && n.model.id == b && *moved == a));
+}
+
+#[tokio::test]
+async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = spawn(TickEngine::new(), HashMap::new(), Storage::new(dir.path().join("graph.json")),
+        Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
+    let mut first = handle.subscribe();
+    let mut second = handle.subscribe();
+    let (reply, mut replies) = mpsc::unbounded_channel();
+    handle.send(ClientMessage::AddNode { type_name: "const".into(), position: Position::default() }, reply);
+    for receiver in [&mut first, &mut second] {
+        let node = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
+        assert!(matches!(postcard::from_bytes::<ServerMessage>(&node).unwrap(), ServerMessage::NodeAdded(_)));
+        let history = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
+        assert_eq!(postcard::from_bytes::<ServerMessage>(&history).unwrap(), ServerMessage::History(HistoryState { can_undo: true, can_redo: false }));
+    }
+    assert!(matches!(replies.recv().await, Some(ServerMessage::Created(_))));
+    assert!(matches!(handle.snapshot().await, Some(ServerMessage::Init { history: HistoryState { can_undo: true, can_redo: false }, .. })));
+    handle.shutdown().await;
+}

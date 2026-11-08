@@ -6,6 +6,9 @@ mod nodes;
 mod connections;
 mod persistence;
 mod execution;
+mod reconcile;
+
+pub use reconcile::GraphReconcile;
 
 pub(crate) use nodes::input_pin_type;
 

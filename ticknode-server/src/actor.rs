@@ -73,7 +73,7 @@ pub fn spawn(
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new() };
+    let actor = Actor { engine, positions, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default() };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
@@ -82,6 +82,7 @@ pub fn spawn(
 
 struct Actor {
     engine: TickEngine,
+    history: history::History,
     positions: HashMap<NodeId, Position>,
     storage: Storage,
     plugins: Plugins,
@@ -199,6 +200,7 @@ impl Actor {
             plugins: self.plugins.infos(&self.engine),
             translations: self.engine.translations(),
             property_options: self.engine.property_options(),
+            history: self.history.state(),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,
@@ -223,6 +225,7 @@ impl Actor {
 }
 
 mod commands;
+mod history;
 
 #[cfg(test)]
 mod tests;

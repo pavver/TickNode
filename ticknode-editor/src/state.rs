@@ -142,6 +142,7 @@ impl ClientNode {
 #[derive(Clone, Copy)]
 pub struct Editor {
     pub status: RwSignal<ConnStatus>,
+    pub history: RwSignal<HistoryState>,
     pub definitions: RwSignal<Vec<NodeDefinition>>,
     /// Custom data types declared by plugins (for colors, labels, and dropdowns).
     pub types: RwSignal<TypeRegistry>,
@@ -200,6 +201,7 @@ impl Editor {
     pub fn new(theme: Theme, locale: RwSignal<Locale>, wide_screen: bool) -> Self {
         Self {
             status: RwSignal::new(ConnStatus::Connecting),
+            history: RwSignal::new(HistoryState::default()),
             definitions: RwSignal::new(Vec::new()),
             types: RwSignal::new(TypeRegistry::new()),
             nodes: RwSignal::new(BTreeMap::new()),
@@ -241,6 +243,15 @@ impl Editor {
                 logs.drain(..excess);
             }
         });
+    }
+
+    /// Groups a single user action into one server history entry.
+    pub fn send_batch(&self, mut commands: Vec<ClientMessage>) {
+        match commands.len() {
+            0 => {}
+            1 => self.send(commands.remove(0)),
+            _ => self.send(ClientMessage::Batch(commands)),
+        }
     }
 
     pub fn send(&self, msg: ClientMessage) {

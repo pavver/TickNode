@@ -3,6 +3,8 @@ status-online = підключено · { $count } нод
 status-connecting = підключення…
 status-offline = немає з'єднання з сервером
 
+toolbar-undo = Скасувати (Ctrl/Cmd+Z)
+toolbar-redo = Повторити (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)
 toolbar-palette = Палітра нод
 toolbar-plugins = Плагіни
 toolbar-fit = Показати весь граф (F)
@@ -246,7 +248,7 @@ overview-hint-1 = Палітра: клік — нода в центр, пере�
 overview-hint-2 = Тягніть від піна до піна, щоб з'єднати; підключений вхід даних — щоб перенести дріт
 overview-hint-3 = Рамка ЛКМ: зліва направо — ноди повністю всередині, справа наліво — всі, яких торкнулась
 overview-hint-4 = Shift/Ctrl — додати до виділення; виділені ноди тягнуться разом
-overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — буфер, Ctrl+D — дублювати, Ctrl+A — усе
+overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — буфер, Ctrl+D — дублювати, Ctrl+A — усе; Ctrl/Cmd+Z — скасувати, Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y — повторити
 overview-hint-6 = Вставка їде за курсором: ЛКМ — поставити, ПКМ або Esc — скасувати, середня кнопка — зсув
 overview-hint-7 = Delete — видалити виділене, Esc — зняти виділення
 overview-hint-8 = Середня кнопка — зсув, колесо — масштаб, F — весь граф; на сенсорі — палець і два пальці
@@ -340,3 +342,5 @@ pin-split = Розділити пін структури
 pin-collapse = Згорнути пін структури
 pin-technical-type = Технічний тип: { $name }
 type-unavailable = Недоступний тип
+
+error-batch-command = Ця команда не дозволена всередині групи

@@ -3,7 +3,7 @@ use super::*;
 impl Actor {
     /// Applies an editor command; returns events to broadcast to all editors and the IDs of nodes
     /// created for the initiator (`ServerMessage::Created`).
-    pub(super) fn apply(
+    pub(super) fn apply_command(
         &mut self,
         msg: ClientMessage,
         reply: &mpsc::UnboundedSender<ServerMessage>,
@@ -27,26 +27,34 @@ impl Actor {
             }
             ClientMessage::MoveNode { id, position } => {
                 self.require_node(id)?;
+                if self.positions.get(&id).copied().unwrap_or_default() == position { return Ok((vec![], None)); }
                 self.positions.insert(id, position);
                 vec![ServerMessage::NodeMoved { id, position }]
             }
             ClientMessage::SetProperty { id, name, value } => {
+                let before = self.engine.node_model(id);
                 let removed = self.engine.set_node_property(id, &name, value).map_err(|e| e.ui_message())?;
+                if self.engine.node_model(id) == before { return Ok((vec![], None)); }
                 let mut events = removed_events(removed);
                 events.push(ServerMessage::NodeUpdated(self.instance(id).expect("the node exists")));
                 events
             }
             ClientMessage::SetPinSplit { node, pin, split } => {
+                let before = self.engine.node_model(node);
                 let removed = self.engine.set_pin_split(node, pin, split).map_err(|e| e.ui_message())?;
+                if self.engine.node_model(node) == before { return Ok((vec![], None)); }
                 let mut events = removed_events(removed);
                 events.push(ServerMessage::NodeUpdated(self.instance(node).expect("the node exists")));
                 events
             }
             ClientMessage::SetInputValue { id, pin, value } => {
+                let before = self.engine.node_model(id);
                 self.engine.set_input_value(id, pin, value).map_err(|e| e.ui_message())?;
+                if self.engine.node_model(id) == before { return Ok((vec![], None)); }
                 vec![ServerMessage::NodeUpdated(self.instance(id).expect("the node exists"))]
             }
             ClientMessage::ConnectExec(c) => {
+                if self.engine.exec_connections().contains(&c) { return Ok((vec![], None)); }
                 self.engine.connect_exec(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
                 vec![ServerMessage::ExecConnected(c)]
             }
@@ -58,6 +66,7 @@ impl Actor {
                 }
             }
             ClientMessage::ConnectData(c) => {
+                if self.engine.data_connections().contains(&c) { return Ok((vec![], None)); }
                 self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
                 vec![ServerMessage::DataConnected(c)]
             }
@@ -101,6 +110,7 @@ impl Actor {
             }
             ClientMessage::SetPluginEnabled { name, enabled } => {
                 let outcome = self.plugins.set_enabled(&mut self.engine, &name, enabled)?;
+                self.history = Default::default();
                 if let Some(warning) = outcome.warning {
                     let _ = reply.send(ServerMessage::Error(warning));
                 }
@@ -118,6 +128,7 @@ impl Actor {
                 self.plugins.configure(&mut self.engine, &name, values)?;
                 self.plugins.info(&self.engine, &name).map(ServerMessage::PluginUpdated).into_iter().collect()
             }
+            ClientMessage::Undo | ClientMessage::Redo | ClientMessage::Batch(_) => return Err(super::history::batch_error()),
         };
         if mutates && !events.is_empty() {
             self.dirty_since.get_or_insert_with(Instant::now);
@@ -126,7 +137,7 @@ impl Actor {
     }
 }
 
-fn removed_events(removed: RemovedConnections) -> Vec<ServerMessage> {
+pub(super) fn removed_events(removed: RemovedConnections) -> Vec<ServerMessage> {
     let exec = removed.exec.into_iter().map(ServerMessage::ExecDisconnected);
     let data = removed.data.into_iter().map(|c| ServerMessage::DataDisconnected { dst_node: c.dst_node, dst_pin: c.dst_pin });
     exec.chain(data).collect()

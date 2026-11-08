@@ -169,13 +169,15 @@ pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
         let (Some(before), Some(types)) = (state.try_get_untracked(), types.try_get_untracked()) else { return };
         let mut after = before.clone();
         f.0(&mut after, &Env { types, reg: ed.types.get_untracked() });
+        let mut commands = Vec::new();
         // Send inputs first: conditions may reference a newly added input
         if after.inputs != before.inputs {
-            ed.send(ClientMessage::SetProperty { id, name: "inputs".into(), value: string_list(after.inputs.iter().map(MatchInput::to_text)) });
+            commands.push(ClientMessage::SetProperty { id, name: "inputs".into(), value: string_list(after.inputs.iter().map(MatchInput::to_text)) });
         }
         if after.cases != before.cases {
-            ed.send(ClientMessage::SetProperty { id, name: "cases".into(), value: string_list(after.cases.iter().map(MatchCase::to_text)) });
+            commands.push(ClientMessage::SetProperty { id, name: "cases".into(), value: string_list(after.cases.iter().map(MatchCase::to_text)) });
         }
+        ed.send_batch(commands);
     });
     let in_pin = Memo::new(move |_| pin_def(id, PinId(0), PinDirection::Input));
     let else_pin = Memo::new(move |_| pin_def(id, ELSE_PIN, PinDirection::Output));

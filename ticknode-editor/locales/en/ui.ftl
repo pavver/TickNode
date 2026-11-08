@@ -7,6 +7,8 @@ status-online =
 status-connecting = connecting…
 status-offline = disconnected from server
 
+toolbar-undo = Undo (Ctrl/Cmd+Z)
+toolbar-redo = Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)
 toolbar-palette = Node palette
 toolbar-plugins = Plugins
 toolbar-fit = Fit graph to view (F)
@@ -249,7 +251,7 @@ overview-hint-1 = Palette: click to add a node at center, drag to place it anywh
 overview-hint-2 = Drag from pin to pin to connect; drag a connected data input to move the wire
 overview-hint-3 = Left-drag box: left-to-right selects nodes fully inside, right-to-left selects any touched
 overview-hint-4 = Shift/Ctrl adds to selection; selected nodes move together
-overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — clipboard, Ctrl+D — duplicate, Ctrl+A — select all
+overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — clipboard, Ctrl+D — duplicate, Ctrl+A — select all; Ctrl/Cmd+Z — undo, Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y — redo
 overview-hint-6 = Paste follows the cursor: left-click places, right-click or Esc cancels, middle-drag pans
 overview-hint-7 = Delete removes selection, Esc clears selection
 overview-hint-8 = Middle-drag to pan, wheel to zoom, F to fit graph; touch: one finger pans, two fingers zoom
@@ -343,3 +345,5 @@ pin-split = Split struct pin
 pin-collapse = Recombine struct pin
 pin-technical-type = Technical type: { $name }
 type-unavailable = Unavailable type
+
+error-batch-command = This command is not allowed inside a batch

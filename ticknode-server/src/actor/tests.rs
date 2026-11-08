@@ -2,6 +2,7 @@ use super::*;
 use ticknode_shared::*;
 
 mod history;
+mod settings;
 
 #[test]
 fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {

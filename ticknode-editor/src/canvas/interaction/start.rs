@@ -1,8 +1,40 @@
 //! Start a wire or node drag after resolving the pointer hit.
 
 use super::*;
+use super::decisions::{NodeClick, node_click_action};
+use crate::i18n::{self, t};
+use crate::state::CopiedSettings;
 
 impl Interaction {
+    pub(super) fn start_node_click(self, id: NodeId, ev: &PointerEvent, start: (f64, f64), world: (f64, f64)) {
+        let ed = self.ed;
+        let Some(node) = ed.node(id) else { return };
+        let instance = node.instance.get_untracked();
+        let copied = ed.copied_settings.get_untracked();
+        let action = node_click_action(
+            ev.button(), ev.shift_key(), ev.ctrl_key() || ev.meta_key(),
+            copied.as_ref().map(|s| s.type_name.as_str()), &instance.model.type_name,
+        );
+        match action {
+            NodeClick::CopySettings => {
+                ev.prevent_default();
+                let title = i18n::node_title(&instance.definition);
+                ed.log(LogKind::System, t!("settings-copied", title = title.clone()));
+                ed.copied_settings.set(Some(CopiedSettings {
+                    type_name: instance.model.type_name, title, properties: instance.model.properties,
+                }));
+            }
+            NodeClick::PasteSettings => {
+                if let Some(settings) = copied {
+                    ed.send(ClientMessage::PasteSettings { id, type_name: settings.type_name, properties: settings.properties });
+                }
+            }
+            NodeClick::ToggleSelect => self.toggle_node(id),
+            NodeClick::Select => self.start_nodes(id, start, world),
+            NodeClick::Ignore => {}
+        }
+    }
+
     pub(super) fn start_wire(self, end: WireEnd, world: (f64, f64)) {
         let mut from = end;
         // A connected data input relocates the existing wire.

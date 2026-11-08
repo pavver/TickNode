@@ -146,7 +146,7 @@ impl Interaction {
         let node = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
         let view = ed.view.get_untracked();
         let world = view.to_world(p.0, p.1);
-        match gesture(ev.button(), &ev.pointer_type(), additive(&ev), pin, wire, node) {
+        match gesture(ev.button(), &ev.pointer_type(), pin, wire, node) {
             Gesture::Pan { moved } => {
                 if moved { ev.prevent_default(); }
                 drag.set_value(Drag::Pan { start: p, origin: view, moved });
@@ -154,9 +154,9 @@ impl Interaction {
             }
             Gesture::Wire(from) => self.start_wire(from, world),
             Gesture::Select(selection) => ed.selection.set(Some(selection)),
-            Gesture::Toggle(id) => self.toggle_node(id),
-            Gesture::Nodes(id) => self.start_nodes(id, p, world),
+            Gesture::Node(id) => self.start_node_click(id, &ev, p, world),
             Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),
+            Gesture::Ignore => {}
         }
     }
 }

@@ -93,6 +93,14 @@ pub struct PendingPaste {
     pub at: (f64, f64),
 }
 
+/// Local settings clipboard, including inline input values and split pins.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CopiedSettings {
+    pub type_name: String,
+    pub title: String,
+    pub properties: Vec<(String, DataValue)>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
     Dark,
@@ -171,6 +179,7 @@ pub struct Editor {
     pub pointer_world: StoredValue<Option<(f64, f64)>>,
     pub palette_drag: RwSignal<Option<PaletteDrag>>,
     pub pending_paste: RwSignal<Option<PendingPaste>>,
+    pub copied_settings: RwSignal<Option<CopiedSettings>>,
     pub tooltip: RwSignal<Option<Tooltip>>,
     /// Options of dynamic properties; the server is the source (`Init` replaces all, `PropertyOptions` one source).
     pub property_options: RwSignal<PropertyOptions>,
@@ -223,6 +232,7 @@ impl Editor {
             pointer_world: StoredValue::new(None),
             palette_drag: RwSignal::new(None),
             pending_paste: RwSignal::new(None),
+            copied_settings: RwSignal::new(None),
             tooltip: RwSignal::new(None),
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),

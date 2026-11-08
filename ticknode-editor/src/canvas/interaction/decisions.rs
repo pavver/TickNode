@@ -2,6 +2,20 @@
 
 use super::{PinDirection, WireEnd, Selection, NodeId, PinId, ConnectionModel, ClientMessage, parse_node_id};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum NodeClick { CopySettings, PasteSettings, ToggleSelect, Select, Ignore }
+
+pub(super) fn node_click_action(button: i16, shift: bool, ctrl: bool, copied_type: Option<&str>, node_type: &str) -> NodeClick {
+    match (button, shift, ctrl) {
+        (2, true, _) => NodeClick::CopySettings,
+        (0, _, true) => NodeClick::ToggleSelect,
+        (0, true, false) if copied_type == Some(node_type) => NodeClick::PasteSettings,
+        (0, true, false) => NodeClick::ToggleSelect,
+        (0, false, false) => NodeClick::Select,
+        _ => NodeClick::Ignore,
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub(super) enum Press { Place, Cancel, Ignore, Continue }
 
@@ -9,7 +23,7 @@ pub(super) fn press(paste: bool, pointer_type: &str, button: i16) -> Press {
     if paste && button != 1 {
         return match button { 0 => Press::Place, 2 => Press::Cancel, _ => Press::Ignore };
     }
-    if pointer_type == "mouse" && button != 0 && button != 1 { Press::Ignore } else { Press::Continue }
+    if pointer_type == "mouse" && !(0..=2).contains(&button) { Press::Ignore } else { Press::Continue }
 }
 
 #[derive(Debug, PartialEq)]
@@ -17,19 +31,20 @@ pub(super) enum Gesture {
     Pan { moved: bool },
     Wire(WireEnd),
     Select(Selection),
-    Toggle(NodeId),
-    Nodes(NodeId),
+    Node(NodeId),
     Box,
+    Ignore,
 }
 
-pub(super) fn gesture(button: i16, pointer_type: &str, additive: bool, pin: Option<WireEnd>, wire: Option<Selection>, node: Option<NodeId>) -> Gesture {
-    match (button, pin, wire, node, pointer_type, additive) {
+pub(super) fn gesture(button: i16, pointer_type: &str, pin: Option<WireEnd>, wire: Option<Selection>, node: Option<NodeId>) -> Gesture {
+    match (button, pin, wire, node, pointer_type) {
         (1, ..) => Gesture::Pan { moved: true },
+        (2, _, _, Some(id), _) => Gesture::Node(id),
+        (2, ..) => Gesture::Ignore,
         (_, Some(pin), ..) => Gesture::Wire(pin),
         (_, _, Some(wire), ..) => Gesture::Select(wire),
-        (_, _, _, Some(id), _, true) => Gesture::Toggle(id),
-        (_, _, _, Some(id), _, false) => Gesture::Nodes(id),
-        (_, _, _, _, "touch", _) => Gesture::Pan { moved: false },
+        (_, _, _, Some(id), _) => Gesture::Node(id),
+        (_, _, _, _, "touch") => Gesture::Pan { moved: false },
         _ => Gesture::Box,
     }
 }

@@ -90,6 +90,7 @@ fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
     match action {
         Shortcut::Delete => clipboard::delete_selection(editor),
         Shortcut::Escape => {
+            editor.copied_settings.set(None);
             if !clipboard::cancel_paste(editor) { editor.selection.set(None); }
         }
         Shortcut::Fit => fit_view(editor),

@@ -18,6 +18,7 @@ impl Actor {
             ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
             ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
+            ClientMessage::PasteSettings { id, type_name, properties } => only(self.paste_settings(id, &type_name, properties)?),
             ClientMessage::SetProperty { id, name, value } => only(self.set_property(id, &name, value)?),
             ClientMessage::SetPinSplit { node, pin, split } => only(self.set_pin_split(node, pin, split)?),
             ClientMessage::SetInputValue { id, pin, value } => only(self.set_input_value(id, pin, value)?),

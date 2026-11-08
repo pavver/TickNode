@@ -275,11 +275,10 @@ fn history_moves_kept_nodes_and_recreates_changed_nodes_in_event_order() {
     assert!(actor.engine.host_state.active_tasks.contains_key(&task));
     assert!(!actor.traces.contains_key(&b));
     assert!(matches!(events.as_slice(), [
-        ServerMessage::NodeRemoved(id), ServerMessage::ExecDisconnected(e),
-        ServerMessage::DataDisconnected { .. }, ServerMessage::NodeAdded(n),
-        ServerMessage::NodeMoved { id: moved, .. }, ServerMessage::ExecConnected(_),
-        ServerMessage::DataConnected(_), ServerMessage::History(_),
-    ] if *id == b && *e == exec && n.model.id == b && *moved == a));
+        ServerMessage::NodeUpdated(n), ServerMessage::NodeMoved { id: moved, .. }, ServerMessage::History(_),
+    ] if n.model.id == b && *moved == a));
+    assert_eq!(actor.engine.exec_connections(), &[exec]);
+    assert_eq!(actor.engine.data_connections(), &[data]);
 }
 
 #[tokio::test]

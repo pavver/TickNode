@@ -29,6 +29,8 @@ pub enum ClientMessage {
     Redo,
     /// Applies graph edits as one shared history entry. History, runtime and plugin commands are rejected.
     Batch(Vec<ClientMessage>),
+    /// Replaces all stored settings of an existing node of the same type.
+    PasteSettings { id: NodeId, type_name: String, properties: Vec<(String, DataValue)> },
 }
 
 /// Shared server history availability for every editor.

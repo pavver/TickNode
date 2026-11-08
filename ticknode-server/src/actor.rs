@@ -232,6 +232,7 @@ impl Actor {
 
 mod commands;
 mod history;
+mod settings;
 
 #[cfg(test)]
 mod tests;

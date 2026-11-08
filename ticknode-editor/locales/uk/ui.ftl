@@ -252,6 +252,9 @@ overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — буфер, Ctrl+D — дублю
 overview-hint-6 = Вставка їде за курсором: ЛКМ — поставити, ПКМ або Esc — скасувати, середня кнопка — зсув
 overview-hint-7 = Delete — видалити виділене, Esc — зняти виділення
 overview-hint-8 = Середня кнопка — зсув, колесо — масштаб, F — весь граф; на сенсорі — палець і два пальці
+overview-hint-9 = Shift + ПКМ — копіювати налаштування ноди; Shift + ЛКМ — вставити в ноду того самого типу; Esc — очистити скопійовані налаштування
+settings-copied = Налаштування скопійовано з ноди «{ $title }»
+error-settings-type-mismatch = Неможливо вставити налаштування з { $from } у { $to }
 
 inspector-node-not-found = Ноду не знайдено
 inspector-section-actions = Дії

@@ -255,6 +255,9 @@ overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — clipboard, Ctrl+D — duplicate, 
 overview-hint-6 = Paste follows the cursor: left-click places, right-click or Esc cancels, middle-drag pans
 overview-hint-7 = Delete removes selection, Esc clears selection
 overview-hint-8 = Middle-drag to pan, wheel to zoom, F to fit graph; touch: one finger pans, two fingers zoom
+overview-hint-9 = Shift + right-click copies node settings; Shift + left-click pastes onto the same node type; Esc clears copied settings
+settings-copied = Settings copied from { $title }
+error-settings-type-mismatch = Cannot paste settings from { $from } to { $to }
 
 inspector-node-not-found = Node not found
 inspector-section-actions = Actions

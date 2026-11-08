@@ -97,26 +97,39 @@ impl Actor {
         let Some(target) = target else { return vec![] };
         let current = self.graph_snapshot();
         History::push(if redo { &mut self.history.undo } else { &mut self.history.redo }, current);
-        let result = self.engine.reconcile(&target);
+        self.reconcile_graph(&target)
+    }
+
+    /// Reconciles a snapshot and reports the same graph changes for history and settings paste.
+    pub(super) fn reconcile_graph(&mut self, target: &GraphModel) -> Vec<ServerMessage> {
+        let exec_before = self.engine.exec_connections().to_vec();
+        let data_before = self.engine.data_connections().to_vec();
+        let result = self.engine.reconcile(target);
         for warning in result.warnings { tracing::warn!("Graph reconcile: {warning}"); }
 
         let mut events = Vec::new();
         for id in &result.removed_nodes {
-            self.positions.remove(id);
             self.traces.remove(id);
-            events.push(ServerMessage::NodeRemoved(*id));
+            if !self.engine.has_node(*id) {
+                self.positions.remove(id);
+                events.push(ServerMessage::NodeRemoved(*id));
+            }
         }
         let exists = |c: &ticknode_shared::ConnectionModel| self.engine.has_node(c.src_node) && self.engine.has_node(c.dst_node);
         let disconnected = RemovedConnections {
-            exec: result.disconnected.exec.into_iter().filter(exists).collect(),
-            data: result.disconnected.data.into_iter().filter(exists).collect(),
+            exec: result.disconnected.exec.into_iter().filter(|c| exists(c) && !self.engine.exec_connections().contains(c)).collect(),
+            data: result.disconnected.data.into_iter().filter(|c| exists(c) && !self.engine.data_connections().contains(c)).collect(),
         };
         events.extend(super::commands::removed_events(disconnected));
-        let moved = self.restore_positions(&target, &result.added_nodes);
-        events.extend(result.added_nodes.into_iter().filter_map(|id| self.instance(id)).map(ServerMessage::NodeAdded));
+        let moved = self.restore_positions(target, &result.added_nodes);
+        // A recreated node keeps its editor identity and selection, as do unchanged wires.
+        events.extend(result.added_nodes.into_iter().filter_map(|id| self.instance(id)).map(|instance| {
+            if result.removed_nodes.contains(&instance.model.id) { ServerMessage::NodeUpdated(instance) }
+            else { ServerMessage::NodeAdded(instance) }
+        }));
         events.extend(moved);
-        events.extend(result.connected_exec.into_iter().map(ServerMessage::ExecConnected));
-        events.extend(result.connected_data.into_iter().map(ServerMessage::DataConnected));
+        events.extend(result.connected_exec.into_iter().filter(|c| !exec_before.contains(c)).map(ServerMessage::ExecConnected));
+        events.extend(result.connected_data.into_iter().filter(|c| !data_before.contains(c)).map(ServerMessage::DataConnected));
         self.dirty_since.get_or_insert_with(Instant::now);
         events
     }

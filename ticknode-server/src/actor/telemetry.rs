@@ -47,12 +47,16 @@ impl Telemetry {
     }
 
     /// The messages to send now: empty until the interval has passed or when nothing happened.
-    pub(super) fn flush(&mut self, now: Instant, engine: &ticknode_core::TickEngine) -> Vec<ServerMessage> {
+    pub(super) fn flush(&mut self, now: Instant, engine: &mut ticknode_core::TickEngine) -> Vec<ServerMessage> {
         if now < self.next_flush {
             return Vec::new();
         }
         self.next_flush = now + INTERVAL;
         let mut messages = Vec::new();
+        let (set, cleared) = engine.take_node_error_changes();
+        if !set.is_empty() || !cleared.is_empty() {
+            messages.push(ServerMessage::NodeErrors { set, cleared });
+        }
         let timers = engine.host_state.delay_timers_with_tasks();
         let keys: Vec<_> = timers.iter().map(|(id, timer)| (timer.node, *id, timer.count)).collect();
         if keys != self.timers {

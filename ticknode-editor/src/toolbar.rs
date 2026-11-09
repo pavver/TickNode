@@ -57,6 +57,12 @@ pub fn Header() -> impl IntoView {
                     selected=Signal::derive(move || ed.show_plugins.get())
                     on_click=Callback::new(move |_| ed.show_plugins.update(|v| *v = !*v))
                 />
+                <button class="icon-btn ctl" class:st-selected=move || ed.show_values.get()
+                    title=move || t!("toolbar-show-values") aria-label=move || t!("toolbar-show-values")
+                    aria-pressed=move || ed.show_values.get().to_string()
+                    on:click=move |_| crate::node_status::toggle_show_values(ed)>
+                    <span class=move || if ed.show_values.get() { "mdi mdi-eye-outline" } else { "mdi mdi-eye-off-outline" } aria-hidden="true"></span>
+                </button>
                 <IconButton
                     icon=icons::FIT
                     title=Signal::derive(move || t!("toolbar-fit"))

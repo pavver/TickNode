@@ -12,6 +12,7 @@ impl TickEngine {
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
         let id = node.id();
+        self.clear_node_error(id);
         self.invalidate_definition(id);
         self.confirmed_pins.entry(id).or_insert_with(|| pin_signature(&node.definition()));
         self.nodes.insert(id, node);
@@ -125,6 +126,7 @@ impl TickEngine {
     }
 
     pub fn remove_node(&mut self, node_id: NodeId) -> RemovedConnections {
+        self.clear_node_error(node_id);
         self.invalidate_definition(node_id);
         self.nodes.remove(&node_id);
         self.confirmed_pins.remove(&node_id);
@@ -226,6 +228,7 @@ impl TickEngine {
             }
         }
         self.pure_cache.clear();
+        self.clear_node_error(node_id);
         Ok(())
     }
 }

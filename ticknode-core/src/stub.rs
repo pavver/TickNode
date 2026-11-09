@@ -55,7 +55,7 @@ impl Node for StubNode {
     fn definition(&self) -> NodeDefinition { self.definition.clone() }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        ctx.host_state.log(self.id, format!("[ERROR] Node is not executed: {}", self.message()));
+        ctx.host_state.error(self.id, self.message(), format!("[ERROR] Node is not executed: {}", self.message()));
         Vec::new()
     }
 

@@ -183,10 +183,10 @@ fn init_contains_current_delay_timers_and_completed_delays_disappear() {
     assert_eq!(timers, vec![NodeTimer { node, total_ms: 200, remaining_ms: 200, count: 1 }]);
     let now = Instant::now();
     let mut telemetry = super::telemetry::Telemetry::new(now);
-    assert_eq!(telemetry.flush(now, &actor.engine), vec![ServerMessage::Timers(timers)]);
+    assert_eq!(telemetry.flush(now, &mut actor.engine), vec![ServerMessage::Timers(timers)]);
     actor.engine.tick();
-    assert!(telemetry.flush(now + super::telemetry::INTERVAL, &actor.engine).is_empty());
+    assert!(telemetry.flush(now + super::telemetry::INTERVAL, &mut actor.engine).is_empty());
     actor.engine.tick();
-    assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &actor.engine), vec![ServerMessage::Timers(vec![])]);
+    assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &mut actor.engine), vec![ServerMessage::Timers(vec![])]);
     assert!(matches!(actor.snapshot(), ServerMessage::Init { timers, .. } if timers.is_empty()));
 }

@@ -9,6 +9,7 @@ mod detached;
 
 impl Editor {
     pub fn apply(&self, msg: ServerMessage) {
+        if errors::applies(&msg) { self.node_errors.update(|all| errors::apply(all, &msg, now_ms())); }
         if timers::applies(&msg) { self.timers.update(|all| timers::apply(all, &msg, now_ms())); }
         if routes::applies(&msg) { self.wire_routes.update(|all| routes::apply(all, &msg)); }
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
@@ -47,7 +48,7 @@ impl Editor {
                 let key = (route.exec, route.connection);
                 if self.selected_point.get_untracked().is_some_and(|(k, i)| k == key && i >= route.points.len()) { self.selected_point.set(None); }
             }
-            ServerMessage::Detached(_) | ServerMessage::Timers(_) => {},
+            ServerMessage::Detached(_) | ServerMessage::Timers(_) | ServerMessage::NodeErrors { .. } => {},
             ServerMessage::DetachedRemoved(_) => self.prune_selection(),
             ServerMessage::Executed(traces) => self.apply_traces(traces),
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),

@@ -55,6 +55,7 @@ impl TickEngine {
 
     /// Settings pasted by the user accept their new contract and prune invalid wires.
     pub fn reconcile_settings(&mut self, target: &GraphModel, edited: NodeId) -> GraphReconcile {
+        self.clear_node_error(edited);
         self.reconcile_edit(target, Some(edited))
     }
 

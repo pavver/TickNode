@@ -77,6 +77,15 @@ pub struct NodeTimer {
     pub count: u32,
 }
 
+/// Latest runtime error of a node; ages are measured when the message is sent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NodeError {
+    pub node: NodeId,
+    pub message: UiMessage,
+    pub age_ms: u64,
+    pub count: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ServerMessage {
     /// Full state snapshot — sent immediately after connecting.
@@ -103,6 +112,8 @@ pub enum ServerMessage {
         detached_connections: Vec<DetachedConnection>,
         #[serde(default)]
         timers: Vec<NodeTimer>,
+        #[serde(default)]
+        node_errors: Vec<NodeError>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -135,4 +146,6 @@ pub enum ServerMessage {
     /// Full current list, emitted only when the first delay or count changes.
     Timers(Vec<NodeTimer>),
     NodeResized { id: NodeId, size: Option<NodeSize> },
+    /// Runtime error changes accumulated since the previous telemetry interval.
+    NodeErrors { set: Vec<NodeError>, cleared: Vec<NodeId> },
 }

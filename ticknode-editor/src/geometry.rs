@@ -11,7 +11,7 @@ use ticknode_shared::{
 mod routes;
 mod layout;
 pub use layout::{NodeLayout, resize_size};
-pub use routes::{route_path, route_insert_index};
+pub use routes::{route_path, route_insert_index, route_midpoint};
 
 /// Connection presentation: solid for compatible pins, dashed for conversion, absent if invalid.
 pub fn wire_conversion(types: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<bool> {

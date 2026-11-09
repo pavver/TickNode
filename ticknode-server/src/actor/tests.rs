@@ -41,3 +41,5 @@ fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {
 mod frozen;
 
 mod resize;
+
+mod node_errors;

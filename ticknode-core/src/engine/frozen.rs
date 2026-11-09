@@ -19,6 +19,7 @@ impl TickEngine {
         if !self.frozen.contains_key(&id) { return Ok(false); }
         if let Some(reason) = node.unavailable() { return Err(EngineError::PluginUnavailable(reason)); }
         self.accept_current_pins(id);
+        self.clear_node_error(id);
         Ok(true)
     }
 
@@ -35,6 +36,7 @@ impl TickEngine {
     /// After a user edit changes pins: an unfrozen node accepts them, a frozen node stays frozen
     /// and its changes are recomputed against the contract the user has not confirmed yet.
     pub(crate) fn pins_edited(&mut self, id: NodeId) {
+        self.clear_node_error(id);
         match self.frozen.contains_key(&id).then(|| self.confirmed_pins.get(&id).cloned()).flatten() {
             Some(confirmed) => self.restore_pins(id, Some(&confirmed)),
             None => self.accept_current_pins(id),
@@ -65,7 +67,7 @@ impl TickEngine {
     pub(crate) fn skip_frozen(&mut self, id: NodeId) -> bool {
         if !self.frozen.contains_key(&id) { return false; }
         if self.frozen_reported.insert(id) {
-            self.host_state.log(id, "Node is frozen: its pins changed; confirm it in the editor");
+            self.host_state.error(id, UiMessage::new("error-node-frozen", "Node is frozen: its pins changed; confirm it in the editor"), "Node is frozen: its pins changed; confirm it in the editor".into());
         }
         true
     }

@@ -40,6 +40,15 @@ fn trap_error(e: wasmtime::Error) -> CallError {
     CallError::Trap(short_error(&e))
 }
 
+impl CallError {
+    fn ui_message(&self) -> UiMessage {
+        match self {
+            Self::Trap(reason) => UiMessage::new("error-plugin-node-crashed", self.to_string()).arg("reason", reason),
+            Self::Rejected(_) => UiMessage::plain(self.to_string()),
+        }
+    }
+}
+
 impl std::fmt::Display for CallError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -113,12 +122,12 @@ impl WasmNode {
             Ok(outputs) => {
                 let (valid, errors) = validate_emission_outputs(&self.definition, outputs);
                 for error in errors {
-                    ctx.host_state.log(self.id, format!("[ERROR] {error}"));
+                    ctx.host_state.error(self.id, UiMessage::plain(error.clone()), format!("[ERROR] {error}"));
                 }
                 valid
             }
             Err(e) => {
-                ctx.host_state.log(self.id, format!("[ERROR] {e}"));
+                ctx.host_state.error(self.id, e.ui_message(), format!("[ERROR] {e}"));
                 Vec::new()
             }
         }
@@ -183,7 +192,7 @@ impl Node for WasmNode {
             Ok(pin) => pin.map(PinId),
             Err(CallError::Rejected(_)) => None,
             Err(e) => {
-                host.log(id, format!("[ERROR] {e}"));
+                host.error(id, e.ui_message(), format!("[ERROR] {e}"));
                 None
             }
         }

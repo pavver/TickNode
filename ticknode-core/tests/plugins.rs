@@ -283,6 +283,7 @@ fn assert_recovers(trigger_pin: u32, reason: &str) {
     engine.trigger_node(crash, PinId(trigger_pin));
     engine.tick();
     assert!(engine.host_state.logs.iter().any(|(n, m)| *n == crash && m.contains("Plugin crashed") && m.contains(reason)), "{:?}", engine.host_state.logs);
+    assert!(engine.node_errors().iter().any(|error| error.node == crash && error.message.key == "error-plugin-node-crashed"));
 
     // Instance recreated: counter is reconstructed from properties (step 5) with fresh state.
     engine.trigger_node(counter, PinId(0));
@@ -1800,6 +1801,8 @@ fn ha_plugin_invalid_trigger_json_logs_once_in_node_context_without_a_connection
     engine.create_node(node, "ha/trigger_event", &[("event_type".into(), "test".into()), ("event_data".into(), "{".into())]).unwrap();
     engine.tick();
     assert!(engine.host_state.logs.iter().any(|(owner, message)| *owner == node && message.contains("Invalid event data JSON")));
+    let errors = engine.node_errors();
+    assert!(errors.iter().any(|error| error.node == node && error.message.key.is_empty() && error.message.fallback.contains("Invalid event data JSON")));
     engine.host_state.logs.clear();
     for _ in 0..3 {
         engine.tick();

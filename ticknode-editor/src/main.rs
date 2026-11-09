@@ -20,6 +20,7 @@ mod shortcuts;
 mod state;
 mod ui;
 mod toolbar;
+mod node_status;
 mod wire_suggest;
 mod wire_menu;
 mod wire_context;

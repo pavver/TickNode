@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ticknode_shared::{DataValue, NodeId, NodeTimer};
+use ticknode_shared::{DataValue, NodeId, NodeTimer, UiMessage};
 
 pub type TaskId = u64;
 
@@ -56,6 +56,7 @@ pub struct HostState {
     pub runtime: Option<tokio::runtime::Handle>,
     /// Node log messages (Console, Debug, plugins) for the current tick; collected by the server after the tick.
     pub logs: Vec<(NodeId, String)>,
+    pub(crate) errors: Vec<(NodeId, UiMessage, std::time::Instant)>,
 }
 
 impl Default for HostState {
@@ -67,6 +68,7 @@ impl Default for HostState {
             tick_duration: Duration::from_millis(100),
             runtime: None,
             logs: Vec::new(),
+            errors: Vec::new(),
         }
     }
 }
@@ -74,6 +76,14 @@ impl Default for HostState {
 impl HostState {
     pub fn log(&mut self, node_id: NodeId, message: impl Into<String>) {
         self.logs.push((node_id, message.into()));
+    }
+
+    /// Keeps the existing English log while also reporting a structured node error.
+    pub fn error(&mut self, node: NodeId, message: UiMessage, log: String) {
+        self.log(node, log);
+        if !node.0.is_nil() {
+            self.errors.push((node, message, std::time::Instant::now()));
+        }
     }
 
     /// Number of ticks needed to cover `duration` (rounded up).

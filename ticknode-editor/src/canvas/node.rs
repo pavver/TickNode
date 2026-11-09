@@ -51,14 +51,18 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
     let trigger = Memo::new(move |_| if frozen.get() || unavailable.with(Option::is_some) { None } else { def.with(super::trigger_pin) });
     view! {
         <div
-            class="node"
-            class:frozen=move || frozen.get()
-            class:unavailable=move || unavailable.with(Option::is_some)
+            class=move || {
+                let mut class = "node ctl".to_string();
+                if frozen.get() { class.push_str(" frozen"); }
+                if unavailable.with(Option::is_some) { class.push_str(" unavailable"); }
+                if def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p))) { class.push_str(" missing"); }
+                if ed.is_selected(id) { class.push_str(" selected"); }
+                if ed.now.get() - node.last_exec.get() < EXEC_HIGHLIGHT_MS { class.push_str(" active"); }
+                if !frozen.get() && ed.node_errors.with(|errors| errors.contains_key(&id)) { class.push_str(" st-error"); }
+                class
+            }
             title=move || unavailable.get().map(|m| i18n::ui_text(&m)).unwrap_or_default()
             data-node=id.0.to_string()
-            class:missing=move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))
-            class:selected=move || ed.is_selected(id)
-            class:active=move || ed.now.get() - node.last_exec.get() < EXEC_HIGHLIGHT_MS
             style=style
         >
             <div class="node-header" on:pointerdown=crate::match_editor::stop_on_controls>
@@ -66,9 +70,17 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                 <span class="node-cat ellipsis" class:node-unavailable=move || unavailable.with(Option::is_some)>
                     {move || if unavailable.with(Option::is_some) { t!("node-plugin-unavailable") } else { def.with(|d| category_label(&d.category)) }}
                 </span>
-                {move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p))).then(|| view! {
+                {move || (!frozen.get() && !ed.node_errors.with(|errors| errors.contains_key(&id)) && def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))).then(|| view! {
                     <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}
+                <Show when=move || !frozen.get() && ed.node_errors.with(|errors| errors.contains_key(&id))>
+                    <button class="node-error" title=move || crate::node_status::error_text(ed, id)
+                        aria-label=move || crate::node_status::error_text(ed, id)
+                        on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
+                        on:click=|ev| ev.stop_propagation()>
+                        <span class="mdi mdi-alert-circle" aria-hidden="true"></span>
+                    </button>
+                </Show>
                 <Show when=move || frozen.get()>
                     <span class="mdi mdi-alert-outline node-frozen-warning" title=move || node.instance.with(|i| {
                         i.frozen.iter().map(|change| crate::frozen::change_text(ed, &i.definition, change)).collect::<Vec<_>>().join("\n")

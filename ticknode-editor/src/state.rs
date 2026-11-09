@@ -14,6 +14,7 @@ mod graph;
 mod messages;
 mod wires;
 pub mod timers;
+pub mod errors;
 pub use wires::{WireContext, WireKey, WireRoutes};
 
 const MAX_LOG_LINES: usize = 500;
@@ -168,6 +169,8 @@ pub struct Editor {
     pub status: RwSignal<ConnStatus>,
     pub history: RwSignal<HistoryState>,
     pub timers: RwSignal<timers::NodeTimers>,
+    pub node_errors: RwSignal<errors::NodeErrors>,
+    pub show_values: RwSignal<bool>,
     pub definitions: RwSignal<Vec<NodeDefinition>>,
     /// Custom data types declared by plugins (for colors, labels, and dropdowns).
     pub types: RwSignal<TypeRegistry>,
@@ -237,6 +240,8 @@ impl Editor {
             status: RwSignal::new(ConnStatus::Connecting),
             history: RwSignal::new(HistoryState::default()),
             timers: RwSignal::new(BTreeMap::new()),
+            node_errors: RwSignal::new(BTreeMap::new()),
+            show_values: RwSignal::new(crate::node_status::load_show_values()),
             definitions: RwSignal::new(Vec::new()),
             types: RwSignal::new(TypeRegistry::new()),
             nodes: RwSignal::new(BTreeMap::new()),

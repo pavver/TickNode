@@ -52,7 +52,7 @@ impl TickEngine {
                         && let Some(pin) = dst_pin.filter(|p| p.required)
                         && self.required_reported.insert(node_id)
                     {
-                        self.host_state.log(node_id, format!("[ERROR] Required input \"{}\" could not be converted", pin.name));
+                        self.host_state.error(node_id, UiMessage::new("error-node-required-conversion", format!(r#"Required input "{}" could not be converted"#, pin.name)).arg("pin", &pin.name), format!("[ERROR] Required input \"{}\" could not be converted", pin.name));
                     }
                 }
                 (c.dst_pin, value)

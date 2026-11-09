@@ -17,7 +17,10 @@ impl Actor {
                 format!("Cannot paste settings from {type_name} to {}", node.type_name),
             ).arg("from", type_name).arg("to", &node.type_name));
         }
-        if node.properties == properties { return Ok(vec![]); }
+        if node.properties == properties {
+            self.engine.reconcile_settings(&target, id);
+            return Ok(vec![]);
+        }
         node.properties = properties;
         Ok(self.reconcile_graph_edit(&target, Some(id)))
     }

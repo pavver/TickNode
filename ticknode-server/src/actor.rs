@@ -170,11 +170,12 @@ impl Actor {
         if self.events.receiver_count() == 0 {
             self.engine.host_state.logs.clear();
             self.telemetry.discard();
+            self.engine.take_node_error_changes();
             return;
         }
         self.telemetry.add_traces(&self.engine.executed);
         self.telemetry.add_logs(std::mem::take(&mut self.engine.host_state.logs));
-        for message in self.telemetry.flush(now, &self.engine) {
+        for message in self.telemetry.flush(now, &mut self.engine) {
             self.broadcast(&message);
         }
     }
@@ -217,6 +218,7 @@ impl Actor {
             wire_routes: routes::sorted(&self.routes),
             detached_connections: graph.detached_connections,
             timers: self.engine.delay_timers(),
+            node_errors: self.engine.node_errors(),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,

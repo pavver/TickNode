@@ -398,3 +398,12 @@ wire-detached-remove = Видалити дріт
 node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
 overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір вузла; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
 error-node-size = Розміри вузла мають бути скінченними числами
+
+# Runtime node errors and trace values on the canvas
+error-node-required-missing = Обов'язковий вхід «{ $pin }» не задано
+error-node-required-conversion = Не вдалося перетворити значення для входу «{ $pin }»
+error-node-frozen = Вузол заморожено: його піни змінились — підтвердіть зміни
+error-plugin-node-crashed = Плагін аварійно завершився: { $reason }
+toolbar-show-values = Показувати значення
+pin-no-value = Значення ще немає
+pin-fired-ago = Спрацював { $time }

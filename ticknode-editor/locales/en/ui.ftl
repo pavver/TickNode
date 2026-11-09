@@ -398,3 +398,12 @@ wire-detached-remove = Remove wire
 node-resize-title = Drag to resize, double-click to reset
 overview-hint-resize = Drag the bottom-right corner to resize a node; double-click it to reset. Esc cancels. In multiline fields, Ctrl/Cmd+Enter saves.
 error-node-size = Node dimensions must be finite
+
+# Runtime node errors and trace values on the canvas
+error-node-required-missing = Required input “{ $pin }” is not set
+error-node-required-conversion = Could not convert the value for input “{ $pin }”
+error-node-frozen = Node is frozen: its pins changed — confirm the changes
+error-plugin-node-crashed = Plugin crashed: { $reason }
+toolbar-show-values = Show values
+pin-no-value = No value yet
+pin-fired-ago = Fired { $time }

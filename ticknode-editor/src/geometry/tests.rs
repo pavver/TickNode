@@ -196,3 +196,16 @@ fn detached_anchor_uses_pin_then_clamped_directional_rows_and_outward_offset() {
     assert_eq!(empty.detached_anchor(pos, PinId(9), PinDirection::Input, 99, true), (68.0, 260.0));
     assert_eq!(empty.detached_anchor(pos, PinId(9), PinDirection::Output, 99, false), (340.0, 260.0));
 }
+
+#[test]
+fn wire_label_midpoint_follows_routed_curves_and_handles_overlapping_pins() {
+    let a = (0.0, 0.0);
+    let b = (400.0, 100.0);
+    let middle = route_midpoint(a, &[], b);
+    assert!((middle.0 - 200.0).abs() < 0.01 && (middle.1 - 50.0).abs() < 0.01);
+    let route = [Position { x: 200.0, y: 300.0 }];
+    let middle = route_midpoint(a, &route, (400.0, 0.0));
+    assert!((middle.0 - 200.0).abs() < 0.01 && (middle.1 - 300.0).abs() < 0.01);
+    let same = route_midpoint(a, &[], a);
+    assert!(same.0.is_finite() && same.1.is_finite());
+}

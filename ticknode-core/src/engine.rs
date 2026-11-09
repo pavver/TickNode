@@ -10,6 +10,7 @@ mod persistence;
 mod execution;
 mod reconcile;
 mod frozen;
+mod errors;
 
 pub use reconcile::GraphReconcile;
 
@@ -26,6 +27,8 @@ pub struct RemovedConnections {
 pub struct TickEngine {
     /// Scheduling policy consulted before queued activations; unlimited by default.
     pub budget: crate::TickBudget,
+    node_errors: errors::NodeErrors,
+    successful: std::collections::HashSet<NodeId>,
     /// Work accounting for the most recent tick, including tasks, emissions, polls and pure pulls.
     pub last_tick: crate::TickStats,
     pub(crate) confirmed_pins: HashMap<NodeId, Vec<PinSignature>>,
@@ -72,6 +75,8 @@ impl TickEngine {
     pub fn new() -> Self {
         Self {
             budget: Default::default(),
+            node_errors: Default::default(),
+            successful: Default::default(),
             last_tick: Default::default(),
             confirmed_pins: HashMap::new(),
             frozen: HashMap::new(),

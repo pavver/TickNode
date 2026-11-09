@@ -37,6 +37,11 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
         let b = anchor(ed, conn.dst_node, conn.dst_pin, PinDirection::Input)?;
         Some(route_path(a, &route.get(), b))
     });
+    let midpoint = Memo::new(move |_| {
+        let a = anchor(ed, conn.src_node, conn.src_pin, PinDirection::Output)?;
+        let b = anchor(ed, conn.dst_node, conn.dst_pin, PinDirection::Input)?;
+        Some(route_midpoint(a, &route.get(), b))
+    });
     let color = Memo::new(move |_| {
         ed.node_tracked(conn.src_node)
             .and_then(|n| n.instance.with(|i| pin_type(&i.definition, conn.src_pin, PinDirection::Output).map(|t| ed.types.with(|types| pin_color(types, t)))))
@@ -58,7 +63,10 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
             view! {
                 <g class=move || if selected.get() { "wire-group selected" } else { "wire-group" }
                     style=move || format!("--wire-color:{}", if exec { "var(--text-secondary)".to_string() } else { color.get() })>
-                    <title>{move || conversion.get().unwrap_or_default()}</title>
+                    <title>{move || {
+                        let value = crate::node_status::pin_status(ed, conn.src_node, conn.src_pin, PinDirection::Output, exec);
+                        match conversion.get() { Some(conversion) => format!("{conversion}\n{value}"), None => value }
+                    }}</title>
                     <path
                         class="wire"
                         class:converting=move || conversion.get().is_some()
@@ -76,6 +84,20 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
                         data-dst=conn.dst_node.0.to_string()
                         data-dst-pin=conn.dst_pin.0.to_string()
                     />
+                    {move || {
+                        if exec || !ed.show_values.get() { return None; }
+                        let value = crate::node_status::wire_value(ed, conn)?;
+                        let (x, y) = midpoint.get()?;
+                        let width = value.chars().count() as f64 * 7.0 + 16.0;
+                        Some(view! {
+                            <g class="wire-value" transform=format!("translate({x},{y})")
+                                on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()>
+                                <title>{move || crate::node_status::pin_status(ed, conn.src_node, conn.src_pin, PinDirection::Output, false)}</title>
+                                <rect x=-width / 2.0 y=-10 width=width height=20 />
+                                <text text-anchor="middle" dominant-baseline="central">{value}</text>
+                            </g>
+                        })
+                    }}
                     {move || route.get().into_iter().enumerate().map(|(index, point)| view! {
                         <rect class=move || if ed.selected_point.get() == Some(((exec, conn), index)) { "wire-point current" } else { "wire-point" }
                             x=point.x as f64 - DU y=point.y as f64 - DU width=2.0 * DU height=2.0 * DU

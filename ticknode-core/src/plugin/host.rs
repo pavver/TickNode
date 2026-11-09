@@ -52,13 +52,17 @@ impl wit::Host for PluginState {}
 
 impl bindings::ticknode::plugin::host::Host for PluginState {
     fn log(&mut self, level: wit::LogLevel, message: String) {
+        let error = matches!(level, wit::LogLevel::Error).then(|| UiMessage::plain(message.clone()));
         let message = match level {
             wit::LogLevel::Debug | wit::LogLevel::Info => message,
             wit::LogLevel::Warn => format!("[WARN] {message}"),
             wit::LogLevel::Error => format!("[ERROR] {message}"),
         };
         match &mut self.call {
-            Some(c) => c.host.log(c.node_id, message),
+            Some(c) => match error {
+                Some(error) => c.host.error(c.node_id, error, message),
+                None => c.host.log(c.node_id, message),
+            },
             None => warn!(plugin = %self.grants.name, "{}", message),
         }
     }

@@ -60,7 +60,8 @@ pub fn Pin(
     let pin_title = move || {
         let translated_pin = translated_pin_name(ed, node, &pin_name_title);
         let type_name = pin_type_title_label(ed, &pin_type_title);
-        pin_tooltip(&translated_pin, &type_name, &pin_type_title, is_required)
+        let status = crate::node_status::pin_status(ed, node, pin_id, dir, exec);
+        format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &pin_type_title, is_required))
     };
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();

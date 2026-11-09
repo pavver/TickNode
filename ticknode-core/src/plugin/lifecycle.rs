@@ -124,6 +124,8 @@ impl TickEngine {
         if !slot.active {
             return Ok(());
         }
+        let ids: Vec<_> = self.node_ids().into_iter().filter(|id| self.node_definition(*id).is_some_and(|d| self.registry.owner_of(&d.type_name) == Some(name))).collect();
+        for id in ids { self.clear_node_error(id); }
         let error = self.apply_settings(name, settings);
         let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.settings_error = error.clone();

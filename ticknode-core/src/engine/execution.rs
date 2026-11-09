@@ -23,7 +23,7 @@ impl TickEngine {
                 Some(None) => pending = true,
                 None => {
                     if self.required_reported.insert(node_id) {
-                        self.host_state.log(node_id, format!("[ERROR] Required input \"{}\" is not set", pin.name));
+                        self.host_state.error(node_id, UiMessage::new("error-node-required-missing", format!(r#"Required input "{}" is not set"#, pin.name)).arg("pin", &pin.name), format!("[ERROR] Required input \"{}\" is not set", pin.name));
                     }
                     return true;
                 }
@@ -56,6 +56,7 @@ impl TickEngine {
         self.poll_sources();
 
         self.run_queue(&mut next_tick_queue);
+        self.collect_node_errors();
     }
 
     pub(crate) fn run_queue(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
@@ -112,6 +113,7 @@ impl TickEngine {
             self.last_tick.charge(def.cost);
             let Some(node) = self.nodes.get_mut(&id) else { continue };
             if let Some(pin) = node.poll(&mut self.host_state) {
+                self.successful.insert(id);
                 fired.push((id, pin));
             }
         }

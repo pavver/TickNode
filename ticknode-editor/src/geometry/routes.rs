@@ -53,3 +53,24 @@ pub fn route_insert_index(a: Point, points: &[Position], b: Point, p: Point) -> 
     }
     nearest.1
 }
+
+/// Halfway along the sampled route, including intermediate points and backwards curves.
+pub fn route_midpoint(a: Point, points: &[Position], b: Point) -> Point {
+    let mut samples = vec![a];
+    let mut start = a;
+    for end in points.iter().map(|p| (p.x as f64, p.y as f64)).chain([b]) {
+        for n in 1..=24 { samples.push(cubic(start, end, n as f64 / 24.0)); }
+        start = end;
+    }
+    let distance = |a: Point, b: Point| (b.0 - a.0).hypot(b.1 - a.1);
+    let mut remaining = samples.windows(2).map(|p| distance(p[0], p[1])).sum::<f64>() / 2.0;
+    for pair in samples.windows(2) {
+        let length = distance(pair[0], pair[1]);
+        if remaining <= length && length > 0.0 {
+            let t = remaining / length;
+            return (pair[0].0 + t * (pair[1].0 - pair[0].0), pair[0].1 + t * (pair[1].1 - pair[0].1));
+        }
+        remaining -= length;
+    }
+    a
+}

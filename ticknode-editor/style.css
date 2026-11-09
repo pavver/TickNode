@@ -1180,3 +1180,11 @@ body:has(.palette-ghost) { cursor: copy; }
 .inline-value.multiline { height: calc(100% - var(--du) * 1.5); margin-top: calc(var(--du) * .75); resize: none; overflow: auto; line-height: 16px; white-space: pre-wrap; text-overflow: clip; }
 .prop-row > .prop-label { min-width: 0; }
 .prop-row > .inline-value.select { min-width: 0; }
+
+/* Runtime status overlays keep the node and wire geometry unchanged. */
+.node.ctl.st-error::after { --sb-color: var(--error); }
+.node-error { border: 0; padding: 0; background: transparent; color: var(--error); cursor: help; flex: none; }
+.node-error .mdi { font-size: calc(var(--du) * 4); }
+.wire-value { pointer-events: none; font-family: var(--font); font-size: 11px; }
+.wire-value rect { fill: var(--surface); stroke: var(--border); stroke-width: var(--border-w); }
+.wire-value text { fill: var(--text-primary); pointer-events: all; cursor: help; }

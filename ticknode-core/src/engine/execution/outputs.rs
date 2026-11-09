@@ -42,6 +42,7 @@ impl TickEngine {
 
     /// If a node executed multiple times in a tick, the last execution's data is kept while fired exec pins accumulate.
     pub(super) fn record_trace(&mut self, node_id: NodeId, inputs: Vec<(PinId, Option<DataValue>)>, fired: Vec<PinId>) {
+        self.successful.insert(node_id);
         let mut outputs: Vec<(PinId, DataValue)> = self.data_cache.get(&node_id).into_iter().flatten()
             .chain(self.pure_cache.get(&node_id).into_iter().flatten())
             .map(|(p, v)| (*p, v.clone()))

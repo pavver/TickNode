@@ -7,6 +7,7 @@ fn timer(node: NodeId, remaining_ms: u64, count: u32) -> NodeTimer {
 
 fn init(timers: Vec<NodeTimer>) -> ServerMessage {
     ServerMessage::Init {
+        node_errors: vec![],
         definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![],
         traces: vec![], types: vec![], plugins: vec![], translations: vec![], property_options: vec![],
         history: HistoryState::default(), wire_routes: vec![], detached_connections: vec![], timers,

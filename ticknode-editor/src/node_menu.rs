@@ -15,7 +15,8 @@ pub struct MenuRow {
     pub title: String,
     pub detail: String,
     pub category: Option<String>,
-    pub recent: bool,
+    /// Section heading; a divider is drawn wherever it changes between consecutive rows.
+    pub section: Option<String>,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -95,12 +96,10 @@ pub fn NodeMenuPopup(
             <div class="picker-list">
                 {move || {
                     let result = found.get();
-                    let recent_count = result.shown.iter().take_while(|c| c.recent).count();
+                    let mut previous: Option<String> = None;
                     result.shown.into_iter().enumerate().map(|(row, choice)| {
-                        let divider = if recent_count == 0 { None }
-                            else if row == 0 { Some(t!("quick-add-recent")) }
-                            else if row == recent_count { Some(t!("quick-add-all-nodes")) }
-                            else { None };
+                        let divider = choice.section.clone().filter(|s| previous.as_ref() != Some(s));
+                        previous = choice.section.clone();
                         view! {
                             {divider.map(|label| view! { <div class="picker-note node-menu-divider">{label}</div> })}
                             <div id=format!("{id_prefix}-{row}")

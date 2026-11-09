@@ -93,3 +93,29 @@ fn adaptive_definitions_match_any_data_type_in_the_opposite_direction_only() {
         assert!(find(direction, PinType::Exec, &[adaptive], &TypeRegistry::new()).is_empty());
     }
 }
+
+fn suggestion(name: &str, title: &str, group: &str) -> Suggestion {
+    Suggestion { type_name: name.into(), title: title.into(), category: group.into(), group: group.into(), pin: PinId(0), rank: 0 }
+}
+
+#[test]
+fn arrange_groups_by_category_then_title_after_popular_types() {
+    let list = vec![suggestion("b", "Beta", "Math"), suggestion("z", "Zeta", "Events"),
+        suggestion("a", "Alpha", "Math"), suggestion("c", "Gamma", "Events"),
+        suggestion("h", "Home", "Home Assistant"), suggestion("d", "Delta", "Math")];
+    let usage = HashMap::from([("d".to_string(), 3), ("a".to_string(), 1)]);
+    let recent = vec!["h".to_string(), "a".to_string()];
+    let rank = |g: &str| match g { "Events" => 0, "Math" => 1, _ => 9 };
+    let order: Vec<_> = arrange(list, &usage, &recent, rank).into_iter().map(|(p, s)| (p, s.type_name)).collect();
+    let expect = [(true, "d"), (true, "a"), (true, "h"), (false, "c"), (false, "z"), (false, "b")];
+    assert_eq!(order, expect.map(|(p, n)| (p, n.to_string())));
+}
+
+#[test]
+fn arrange_limits_popular_section() {
+    let list: Vec<_> = (0..8).map(|i| suggestion(&format!("n{i}"), &format!("T{i}"), "Math")).collect();
+    let usage: HashMap<_, _> = (0..8).map(|i| (format!("n{i}"), 1)).collect();
+    let result = arrange(list, &usage, &[], |_| 0);
+    assert_eq!(result.iter().filter(|(p, _)| *p).count(), MAX_POPULAR);
+    assert_eq!(result.len(), 8);
+}

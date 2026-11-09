@@ -68,7 +68,7 @@ fn ResourceMenuPopup(state: ResourceMenu) -> impl IntoView {
                     title: c.title.clone(),
                     detail: c.type_name.clone(),
                     category: c.category.clone(),
-                    recent: false,
+                    section: None,
                 })
                 .collect(),
         }

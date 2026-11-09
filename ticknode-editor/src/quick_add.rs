@@ -39,8 +39,10 @@ fn QuickAddPopup(state: QuickAdd) -> impl IntoView {
             ))
         }));
         let total = choices.len();
+        let has_recent = choices.first().is_some_and(|c| c.recent);
         MenuRows { total, shown: choices.into_iter().take(MAX_ROWS).map(|c| MenuRow {
-            index: c.index, title: c.title, detail: c.category, recent: c.recent,
+            section: has_recent.then(|| if c.recent { t!("quick-add-recent") } else { t!("quick-add-all-nodes") }),
+            index: c.index, title: c.title, detail: c.category,
             category: ed.definitions.with(|defs| Some(defs[c.index].category.clone())),
         }).collect() }
     });

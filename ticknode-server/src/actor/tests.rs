@@ -42,6 +42,7 @@ mod resize;
 mod node_errors;
 mod frames;
 mod sheets;
+mod variables;
 
 #[test]
 fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {

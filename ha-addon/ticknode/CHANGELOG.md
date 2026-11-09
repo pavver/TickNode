@@ -9,6 +9,7 @@
 - Plugins carry a plugin API fingerprint; an incompatible plugin is reported in the Plugins panel.
 - After an update that changes node pins, the node is frozen until confirmed and wires that no
   longer fit are kept as detached wires.
+- Typed runtime variables with Sheet, Global, and Persistent scopes; built-in nodes for creating, getting, setting, deleting, and reacting to variable changes. Setting a variable (`variable/set`) no longer creates variables implicitly (use `variable/create`).
 - Rebuilding the add-on always fetches the latest commit (no stale Docker cache).
 
 ## 0.1.0

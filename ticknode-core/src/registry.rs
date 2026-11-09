@@ -91,8 +91,11 @@ impl NodeRegistry {
         for op in [LogOp::And, LogOp::Or, LogOp::Not] {
             self.register(Box::new(move |id| Box::new(LogicalNode { id, op })));
         }
-        self.register(Box::new(|id| Box::new(VariableGetNode { id, var_name: "my_var".to_string() })));
-        self.register(Box::new(|id| Box::new(VariableSetNode { id, var_name: "my_var".to_string() })));
+        self.register(Box::new(|id| Box::new(VariableGetNode::new(id))));
+        self.register(Box::new(|id| Box::new(VariableSetNode::new(id))));
+        self.register(Box::new(|id| Box::new(VariableCreateNode::new(id))));
+        self.register(Box::new(|id| Box::new(VariableDeleteNode::new(id))));
+        self.register(Box::new(|id| Box::new(VariableChangedNode::new(id))));
         self.register(Box::new(|id| Box::new(MatchNode::new(id))));
         self.register(Box::new(|id| Box::new(CompareNode { id })));
         self.register(Box::new(|id| Box::new(ForLoopNode { id, active: false, current_index: 0, count: 0 })));

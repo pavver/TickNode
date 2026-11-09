@@ -39,6 +39,9 @@ pub(super) fn undoable(msg: &ClientMessage) -> bool {
             | ClientMessage::DeleteSheet(_)
             | ClientMessage::MoveSheet { .. }
             | ClientMessage::DuplicateSheet(_)
+            | ClientMessage::CreateVariable(_)
+            | ClientMessage::SetVariable { .. }
+            | ClientMessage::DeleteVariable(_)
     )
 }
 
@@ -194,6 +197,7 @@ impl Actor {
 
         for id in &result.added_nodes {
             self.node_sheet.insert(*id, s);
+            self.engine.set_node_sheet(*id, Some(s));
         }
         let sheet_enabled = self.sheets.iter().find(|sh| sh.id == s).map_or(true, |sh| sh.enabled);
         if !sheet_enabled {

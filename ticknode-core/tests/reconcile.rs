@@ -31,7 +31,7 @@ fn reconcile_add_remove_and_preserve_runtime() {
     let kept = node(&mut engine, "for_loop");
     let task = engine.host_state.start_delay(kept, 100);
     engine.trigger_node(kept, PinId(0));
-    engine.variables.insert("survives".into(), DataValue::Bool(true));
+    engine.variables.create(VariableKey::global("survives"), DataType::Bool, DataValue::Bool(true));
     let target = engine.export_graph();
     let added = node(&mut engine, "const");
     let result = restore(&mut engine, &target);
@@ -40,7 +40,7 @@ fn reconcile_add_remove_and_preserve_runtime() {
     assert!(!result.removed_nodes.contains(&kept));
     assert!(engine.host_state.active_tasks.contains_key(&task));
     assert_eq!(engine.execution_queue.front(), Some(&(kept, PinId(0))));
-    assert_eq!(engine.variables["survives"], DataValue::Bool(true));
+    assert_eq!(engine.variables.get(&VariableKey::global("survives")).unwrap().value, DataValue::Bool(true));
 
     let other = node(&mut engine, "for_loop");
     engine.connect_exec(kept, PinId(4), other, PinId(0)).unwrap();

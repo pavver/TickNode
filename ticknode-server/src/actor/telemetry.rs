@@ -7,7 +7,9 @@
 use std::collections::{BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
-use ticknode_shared::{NodeError, NodeId, NodeTimer, NodeTrace, ServerMessage, SheetId};
+use ticknode_shared::{
+    NodeError, NodeId, NodeTimer, NodeTrace, ServerMessage, SheetId, Variable, VariableKey, VariableScope,
+};
 
 /// How often accumulated telemetry is sent to editors.
 pub(super) const INTERVAL: Duration = Duration::from_millis(100);
@@ -124,6 +126,29 @@ impl Telemetry {
             }
             for (sheet, list) in sheet_traces {
                 messages.push((sheet, ServerMessage::Executed(list)));
+            }
+        }
+
+        // Variable changes split per sheet
+        let changes = engine.variables.take_changes();
+        if !changes.set.is_empty() || !changes.removed.is_empty() {
+            let mut sheet_changes: HashMap<Option<SheetId>, (Vec<Variable>, Vec<VariableKey>)> = HashMap::new();
+            for var in changes.set {
+                let sheet = match var.key.scope {
+                    VariableScope::Sheet => var.key.sheet,
+                    VariableScope::Global | VariableScope::Persistent => None,
+                };
+                sheet_changes.entry(sheet).or_default().0.push(var);
+            }
+            for key in changes.removed {
+                let sheet = match key.scope {
+                    VariableScope::Sheet => key.sheet,
+                    VariableScope::Global | VariableScope::Persistent => None,
+                };
+                sheet_changes.entry(sheet).or_default().1.push(key);
+            }
+            for (sheet, (set, removed)) in sheet_changes {
+                messages.push((sheet, ServerMessage::VariablesChanged { set, removed }));
             }
         }
 

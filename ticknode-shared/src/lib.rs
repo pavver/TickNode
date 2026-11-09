@@ -19,6 +19,9 @@ pub use types::*;
 pub use ui_message::*;
 pub use sheets::*;
 
+pub mod variables;
+pub use variables::*;
+
 mod values;
 mod definitions;
 mod graph;
@@ -43,7 +46,7 @@ pub enum LogOp { And, Or, Not }
 pub enum NodeOutput {
     Execution(PinId),
     Data(PinId, DataValue),
-    Variable(String, DataValue),
+    Variable(VariableCommand),
     /// Remove the current value from a data output.
     Clear(PinId),
 }

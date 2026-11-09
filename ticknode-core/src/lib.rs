@@ -5,6 +5,8 @@ mod split;
 mod stub;
 mod ws;
 pub mod translations;
+pub mod variables;
+pub use variables::*;
 
 pub use host::*;
 pub use plugin::*;

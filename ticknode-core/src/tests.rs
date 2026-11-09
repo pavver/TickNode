@@ -2,6 +2,7 @@
     mod mutation_contracts;
     mod definitions;
     mod builtin_contracts;
+    mod variables;
     use super::*;
     use std::collections::VecDeque;
     use ticknode_shared::*;

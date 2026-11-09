@@ -11,7 +11,7 @@ use ticknode_core::{PluginChange, TickEngine, effective_settings};
 use ticknode_shared::*;
 use tracing::{info, warn};
 
-mod config;
+pub(crate) mod config;
 mod discovery;
 pub use config::PluginConfig;
 use config::stored;

@@ -41,6 +41,8 @@ impl TickEngine {
         self.executed.clear();
         self.executed_index.clear();
         self.host_state.current_tick += 1;
+        self.host_state.changed_variables = std::mem::take(&mut self.current_tick_changed_variables);
+        self.host_state.active_sheet_variables = self.variables.active_sheet_variables();
         let mut next_tick_queue = VecDeque::new();
 
         self.deliver_finished(&mut next_tick_queue);
@@ -77,7 +79,8 @@ impl TickEngine {
             }
             let traced = trace_inputs(&inputs);
             let inputs = self.native_inputs(node_id, inputs);
-            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
+            let sheet = self.node_sheets.get(&node_id).copied();
+            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.execute(Some(trigger_pin), &mut ctx);
             self.last_tick.charge(def.cost);
@@ -96,7 +99,8 @@ impl TickEngine {
             let inputs = self.pull_inputs(node_id, &mut stack);
             let traced = trace_inputs(&inputs);
             let inputs = self.native_inputs(node_id, inputs);
-            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
+            let sheet = self.node_sheets.get(&node_id).copied();
+            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.on_task(task, result, &mut ctx);
             self.apply_outputs(node_id, traced, outputs, next_tick_queue);

@@ -224,6 +224,7 @@ pub struct Editor {
     pub timers: RwSignal<timers::NodeTimers>,
     pub node_errors: RwSignal<errors::NodeErrors>,
     pub show_values: RwSignal<bool>,
+    pub variables: RwSignal<BTreeMap<VariableKey, Variable>>,
     pub definitions: RwSignal<Vec<NodeDefinition>>,
     /// Custom data types declared by plugins (for colors, labels, and dropdowns).
     pub types: RwSignal<TypeRegistry>,
@@ -302,6 +303,7 @@ impl Editor {
             timers: RwSignal::new(BTreeMap::new()),
             node_errors: RwSignal::new(BTreeMap::new()),
             show_values: RwSignal::new(crate::node_status::load_show_values()),
+            variables: RwSignal::new(BTreeMap::new()),
             definitions: RwSignal::new(Vec::new()),
             types: RwSignal::new(TypeRegistry::new()),
             nodes: RwSignal::new(BTreeMap::new()),

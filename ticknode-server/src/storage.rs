@@ -4,9 +4,14 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use ticknode_core::TickEngine;
-use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, SheetId, SheetInfo};
+use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, SheetId, SheetInfo, Variable, VariableScope};
 use tracing::{info, warn};
 use crate::actor::routes::{self, Routes};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VariablesFile {
+    pub variables: Vec<Variable>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SheetsFile {
@@ -71,6 +76,30 @@ impl Storage {
         self.sheets_dir().join(format!("{}.json", id.0))
     }
 
+    pub fn variables_json_path(&self) -> PathBuf {
+        self.data_dir.join("variables.json")
+    }
+
+    pub fn load_variables(&self) -> anyhow::Result<Vec<Variable>> {
+        let path = self.variables_json_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let file: VariablesFile = serde_json::from_str(&text)
+            .with_context(|| format!("invalid variables JSON in {}", path.display()))?;
+        Ok(file.variables)
+    }
+
+    pub fn save_variables(&self, variables: &[Variable]) -> anyhow::Result<()> {
+        let mut sorted: Vec<_> = variables.iter().filter(|v| v.key.scope == VariableScope::Persistent).cloned().collect();
+        sorted.sort_by(|a, b| a.key.name.cmp(&b.key.name));
+        let file = VariablesFile { variables: sorted };
+        let path = self.variables_json_path();
+        crate::plugins::config::write_private(&self.data_dir, &path, &(serde_json::to_string_pretty(&file)? + "\n"))
+    }
+
     pub fn trash_dir(&self) -> PathBuf {
         self.sheets_dir().join("trash")
     }
@@ -100,6 +129,7 @@ impl Storage {
 
             for node in &graph.nodes {
                 node_sheet.insert(node.id, sheet.id);
+                engine.set_node_sheet(node.id, Some(sheet.id));
             }
             for frame in &graph.frames {
                 frame_sheet.insert(frame.id, sheet.id);
@@ -116,6 +146,13 @@ impl Storage {
         for warning in engine.load_graph(&merged_graph) {
             warn!("{}", warning);
         }
+
+        let persistent_vars = self.load_variables()?;
+        for var in persistent_vars {
+            engine.variables.create(var.key, var.data_type, var.value);
+        }
+        engine.variables.clear_persistent_dirty();
+        engine.variables.take_changes();
 
         for sheet in &sheets_file.sheets {
             if !sheet.enabled {

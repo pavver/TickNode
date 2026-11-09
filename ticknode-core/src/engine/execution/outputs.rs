@@ -1,4 +1,5 @@
 use super::*;
+use crate::VariableError;
 
 impl TickEngine {
     /// Exec outputs are queued for the next tick; data and variables are applied immediately.
@@ -27,9 +28,10 @@ impl TickEngine {
                     }
                     state_changed = true;
                 }
-                NodeOutput::Variable(name, value) => {
-                    self.variables.insert(name, value);
-                    state_changed = true;
+                NodeOutput::Variable(cmd) => {
+                    if self.apply_variable_command(node_id, cmd, &mut fired, next_tick_queue) {
+                        state_changed = true;
+                    }
                 }
             }
         }
@@ -86,6 +88,111 @@ impl TickEngine {
                 }).collect();
             outputs.retain(|(id, _)| def.pins.iter().any(|p| p.id == *id && p.direction == PinDirection::Output));
             outputs.extend(projected);
+        }
+    }
+
+    fn apply_variable_command(
+        &mut self,
+        node_id: NodeId,
+        cmd: VariableCommand,
+        fired: &mut Vec<PinId>,
+        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+    ) -> bool {
+        let sheet = self.node_sheets.get(&node_id).copied();
+        match cmd {
+            VariableCommand::Create { name, scope, data_type, value } => {
+                if !valid_variable_name(&name) {
+                    let err = VariableError::InvalidName(name);
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    return false;
+                }
+                let key = match scope {
+                    VariableScope::Sheet => {
+                        let Some(s) = sheet else {
+                            let err = VariableError::InvalidName(name);
+                            self.host_state.error(node_id, err.ui_message(), err.log_message());
+                            return false;
+                        };
+                        VariableKey::sheet(s, &name)
+                    }
+                    VariableScope::Global => VariableKey::global(&name),
+                    VariableScope::Persistent => VariableKey::persistent(&name),
+                };
+                if self.variables.exists_in_scope_namespace(&name, scope, sheet) {
+                    fired.push(PinId(2));
+                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+                    return false;
+                }
+                if self.variables.len() >= MAX_VARIABLES {
+                    let err = VariableError::LimitReached;
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    return false;
+                }
+                let Some(converted) = fit_variable_value(&self.types, value, &data_type) else {
+                    let err = VariableError::TypeMismatch(name);
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    return false;
+                };
+                if !valid_variable_value(&converted) {
+                    let err = VariableError::LimitReached;
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    return false;
+                }
+                self.variables.create(key.clone(), data_type, converted);
+                self.current_tick_changed_variables.insert(key);
+                fired.push(PinId(1));
+                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+                true
+            }
+            VariableCommand::Set { name, lookup, value } => {
+                if !valid_variable_name(&name) {
+                    let err = VariableError::InvalidName(name);
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    fired.push(PinId(2));
+                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+                    return false;
+                }
+                let Some(key) = self.variables.resolve(&name, lookup, sheet) else {
+                    let err = VariableError::Missing(name);
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    fired.push(PinId(2));
+                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+                    return false;
+                };
+                let var_type = self.variables.get(&key).unwrap().data_type.clone();
+                let Some(converted) = fit_variable_value(&self.types, value, &var_type) else {
+                    let err = VariableError::TypeMismatch(name);
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    fired.push(PinId(2));
+                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+                    return false;
+                };
+                if !valid_variable_value(&converted) {
+                    let err = VariableError::LimitReached;
+                    self.host_state.error(node_id, err.ui_message(), err.log_message());
+                    fired.push(PinId(2));
+                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+                    return false;
+                }
+                let changed = self.variables.set(&key, converted);
+                if changed {
+                    self.current_tick_changed_variables.insert(key);
+                }
+                fired.push(PinId(1));
+                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+                true
+            }
+            VariableCommand::Delete { name, lookup } => {
+                let mut changed = false;
+                if valid_variable_name(&name) {
+                    if let Some(key) = self.variables.resolve(&name, lookup, sheet) {
+                        changed = self.variables.delete(&key);
+                    }
+                }
+                fired.push(PinId(1));
+                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+                changed
+            }
         }
     }
 }

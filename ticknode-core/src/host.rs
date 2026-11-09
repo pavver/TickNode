@@ -1,10 +1,10 @@
 //! Engine services for nodes: asynchronous tasks (delays, HTTP), logs, and current tick number.
 //! Used by both built-in nodes and WASM plugins (via `plugin.rs`).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use ticknode_shared::{DataValue, NodeId, NodeTimer, UiMessage};
+use ticknode_shared::{DataValue, NodeId, NodeTimer, SheetId, UiMessage, VariableKey};
 
 pub type TaskId = u64;
 
@@ -57,6 +57,10 @@ pub struct HostState {
     /// Node log messages (Console, Debug, plugins) for the current tick; collected by the server after the tick.
     pub logs: Vec<(NodeId, String)>,
     pub(crate) errors: Vec<(NodeId, UiMessage, std::time::Instant)>,
+    /// Keys of variables created or set to a different value during the previous tick.
+    pub changed_variables: HashSet<VariableKey>,
+    /// Live sheet variables currently in the store, for shadowed `Auto` lookups.
+    pub active_sheet_variables: HashSet<(SheetId, String)>,
 }
 
 impl Default for HostState {
@@ -69,6 +73,8 @@ impl Default for HostState {
             runtime: None,
             logs: Vec::new(),
             errors: Vec::new(),
+            changed_variables: HashSet::new(),
+            active_sheet_variables: HashSet::new(),
         }
     }
 }

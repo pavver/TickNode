@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use ticknode_shared::*;
-use crate::{HostState, Node, NodeRegistry, plugin};
+use crate::{HostState, Node, NodeRegistry, plugin, VariableStore};
 
 mod nodes;
 mod connections;
@@ -54,7 +54,9 @@ pub struct TickEngine {
     pub(crate) plugins: std::collections::BTreeMap<String, plugin::PluginSlot>,
     pub data_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
     pub pure_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
-    pub variables: HashMap<String, DataValue>,
+    pub variables: VariableStore,
+    pub node_sheets: HashMap<NodeId, SheetId>,
+    pub current_tick_changed_variables: std::collections::HashSet<VariableKey>,
     /// Values of unconnected inputs set in the editor (`in:<pin>` properties).
     pub(crate) input_values: HashMap<NodeId, BTreeMap<u32, DataValue>>,
     pub(crate) split_pins: HashMap<NodeId, std::collections::BTreeSet<u32>>,
@@ -97,7 +99,9 @@ impl TickEngine {
             plugins: Default::default(),
             data_cache: HashMap::new(),
             pure_cache: HashMap::new(),
-            variables: HashMap::new(),
+            variables: VariableStore::new(),
+            node_sheets: HashMap::new(),
+            current_tick_changed_variables: std::collections::HashSet::new(),
             input_values: HashMap::new(),
             split_pins: HashMap::new(),
             required_reported: Default::default(),
@@ -105,6 +109,17 @@ impl TickEngine {
             host_state: HostState::default(),
             executed: Vec::new(),
             executed_index: HashMap::new(),
+        }
+    }
+
+    pub fn set_node_sheet(&mut self, node: NodeId, sheet: Option<SheetId>) {
+        if let Some(s) = sheet {
+            self.node_sheets.insert(node, s);
+        } else {
+            self.node_sheets.remove(&node);
+        }
+        if let Some(n) = self.nodes.get_mut(&node) {
+            n.set_sheet(sheet);
         }
     }
 }

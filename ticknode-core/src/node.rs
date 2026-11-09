@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use ticknode_shared::*;
-use crate::{HostState, TaskId, TaskResult};
+use crate::{HostState, TaskId, TaskResult, variables::VariableStore};
 
 pub struct NodeContext<'a> {
     pub node_id: NodeId,
     pub inputs: HashMap<PinId, Option<DataValue>>,
-    pub variables: &'a HashMap<String, DataValue>,
+    pub variables: &'a VariableStore,
+    pub types: &'a TypeRegistry,
+    pub sheet: Option<SheetId>,
     pub host_state: &'a mut HostState,
 }
 
@@ -25,8 +27,8 @@ impl<'a> NodeContext<'a> {
     pub fn get_value(&self, pin: PinId) -> Option<DataValue> {
         self.inputs.get(&pin).cloned().flatten()
     }
-    pub fn get_var(&self, name: &str) -> Option<DataValue> {
-        self.variables.get(name).cloned()
+    pub fn variable(&self, name: &str, lookup: VariableLookup) -> Option<&Variable> {
+        self.variables.resolve(name, lookup, self.sheet).and_then(|k| self.variables.get(&k))
     }
 }
 
@@ -45,6 +47,8 @@ pub trait Node: Send + Sync {
     /// The node has been restored: properties from `create_node` have been applied. Subsequent
     /// `set_property` calls are live edits rather than saved state restoration.
     fn restored(&mut self) {}
+    /// Scenario sheet this node belongs to, if known.
+    fn set_sheet(&mut self, _sheet: Option<SheetId>) {}
     /// Whether the node is an event source polled (and charged) at the start of every tick.
     fn polls(&self) -> bool { false }
     /// Poll an event source. A returned pin queues its activation for the current tick's budget.

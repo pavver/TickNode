@@ -27,12 +27,6 @@ fn translated_custom_node(type_name: &str) -> Option<(&'static str, &str, String
 }
 
 pub fn node_title(def: &NodeDefinition) -> String {
-    // On the canvas, variable nodes include the dynamic variable name in their title (`Get counter`, `Set x`)
-    if (def.type_name == "variable/get" && def.title != "Get my_var")
-        || (def.type_name == "variable/set" && def.title != "Set my_var")
-    {
-        return def.title.clone();
-    }
     if let Some((kind, _, title)) = translated_custom_node(&def.type_name)
     {
         return t!(if kind == "make" { "custom-make-title" } else { "custom-break-title" }, type = title);

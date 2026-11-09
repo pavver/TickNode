@@ -160,6 +160,7 @@ impl TickEngine {
         self.execution_queue.retain(|(n, _)| *n != node_id);
 
         self.host_state.cancel_node_tasks(node_id);
+        self.set_node_sheet(node_id, None);
 
         self.connections.retain(
             |c| c.src_node != node_id && c.dst_node != node_id,

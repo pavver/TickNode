@@ -76,7 +76,8 @@ impl TickEngine {
         let traced = trace_inputs(&inputs);
         let inputs = self.native_inputs(node_id, inputs);
         let mut node = self.nodes.remove(&node_id)?;
-        let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, host_state: &mut self.host_state };
+        let sheet = self.node_sheets.get(&node_id).copied();
+        let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
         let outputs = node.execute(None, &mut ctx);
         self.last_tick.charge(definition.cost);
         self.nodes.insert(node_id, node);

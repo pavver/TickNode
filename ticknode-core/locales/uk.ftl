@@ -111,24 +111,85 @@ node-logical-not-pin-A = A
 node-logical-not-pin-Res = Res
 
 # variable/get
-node-variable-get-title = Get my_var
+node-variable-get-title = Змінна: отримати
 node-variable-get-description = Повертає значення змінної за її назвою
 node-variable-get-help =
-    Читає глобальну змінну з назвою з властивості «Змінна» і видає її на Val. Змінні спільні для всього графа, записує їх нода Set. Поки змінну не записано — видає 0.
+    Читає змінну з назвою з властивості «Назва» і видає її значення на Value, а на Exists позначає, чи її знайдено.
+
+    Пошук визначає, де шукати змінну: на поточному аркуші, глобально (включно з постійними) чи автоматично (спершу аркуш, далі глобально).
 
     Чиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.
-node-variable-get-pin-Val = Val
+node-variable-get-pin-Value = Значення
+node-variable-get-pin-Exists = Існує
+node-variable-get-prop-name-title = Назва
+node-variable-get-prop-lookup-title = Пошук
+node-variable-get-prop-lookup-option-auto = Авто
+node-variable-get-prop-lookup-option-sheet = Аркуш
+node-variable-get-prop-lookup-option-global = Глобально
 
 # variable/set
-node-variable-set-title = Set my_var
+node-variable-set-title = Змінна: записати
 node-variable-set-description = Записує значення у змінну
 node-variable-set-help =
-    За сигналом на In записує значення з Val у глобальну змінну (назва — у властивості «Змінна») і передає виконання на Out.
+    За сигналом на In записує значення з Value у знайдену змінну і передає виконання на Out. Якщо змінна відсутня або значення не відповідає її типу, виконання передається на Failed і фіксується помилка.
 
-    Змінну бачать усі ноди Get з тією ж назвою в усьому графі.
+    Пошук визначає, де шукати змінну: на поточному аркуші, глобально (включно з постійними) чи автоматично (спершу аркуш, далі глобально).
 node-variable-set-pin-In = In
 node-variable-set-pin-Out = Out
-node-variable-set-pin-Val = Val
+node-variable-set-pin-Failed = Помилка
+node-variable-set-pin-Value = Значення
+node-variable-set-prop-name-title = Назва
+node-variable-set-prop-lookup-title = Пошук
+node-variable-set-prop-lookup-option-auto = Авто
+node-variable-set-prop-lookup-option-sheet = Аркуш
+node-variable-set-prop-lookup-option-global = Глобально
+
+# variable/create
+node-variable-create-title = Змінна: створити
+node-variable-create-description = Створює нову змінну, якщо вона ще не існує
+node-variable-create-help =
+    За сигналом на In створює нову змінну в обраній області з початковим значенням з Initial (якщо вхід не під'єднано, береться типове значення типу).
+
+    Якщо змінна вже існувала в цій області, виконання передається на Exists без зміни її значення; інакше виконання йде на Created.
+node-variable-create-pin-In = In
+node-variable-create-pin-Created = Створено
+node-variable-create-pin-Exists = Існує
+node-variable-create-pin-Initial = Початкове
+node-variable-create-prop-name-title = Назва
+node-variable-create-prop-scope-title = Область
+node-variable-create-prop-scope-option-sheet = Аркуш
+node-variable-create-prop-scope-option-global = Глобально
+node-variable-create-prop-scope-option-persistent = Постійна
+
+# variable/delete
+node-variable-delete-title = Змінна: видалити
+node-variable-delete-description = Видаляє змінну за назвою
+node-variable-delete-help =
+    За сигналом на In видаляє знайдену змінну і передає виконання на Out. Видалення змінної, якої не існує, не є помилкою.
+
+    Пошук визначає, де шукати змінну: на поточному аркуші, глобально (включно з постійними) чи автоматично (спершу аркуш, далі глобально).
+node-variable-delete-pin-In = In
+node-variable-delete-pin-Out = Out
+node-variable-delete-prop-name-title = Назва
+node-variable-delete-prop-lookup-title = Пошук
+node-variable-delete-prop-lookup-option-auto = Авто
+node-variable-delete-prop-lookup-option-sheet = Аркуш
+node-variable-delete-prop-lookup-option-global = Глобально
+
+# variable/changed
+node-variable-changed-title = Змінна змінилась
+node-variable-changed-description = Спрацьовує при створенні або зміні значення змінної
+node-variable-changed-help =
+    Запускає виконання на Changed щоразу, коли знайдена змінна створюється або отримує нове значення. При видаленні сигнал не подається. На Value видає нове значення.
+
+    Пошук визначає, за якою змінною стежити: на поточному аркуші, глобально (включно з постійними) чи автоматично (спершу аркуш, далі глобально).
+node-variable-changed-pin-Changed = Змінилась
+node-variable-changed-pin-Value = Значення
+node-variable-changed-prop-name-title = Назва
+node-variable-changed-prop-lookup-title = Пошук
+node-variable-changed-prop-lookup-option-auto = Авто
+node-variable-changed-prop-lookup-option-sheet = Аркуш
+node-variable-changed-prop-lookup-option-global = Глобально
 
 # match
 node-match-title = Match

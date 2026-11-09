@@ -42,11 +42,13 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 28);
+    assert_eq!(definitions.len(), 31);
     for definition in &definitions {
         assert!(!definition.pins.is_empty(), "{}", definition.type_name);
         for pin in &definition.pins {
-            assert!(!pin.required, "catalog: {} / {}", definition.type_name, pin.name);
+            if !(definition.type_name == "variable/set" && pin.id == PinId(3)) {
+                assert!(!pin.required, "catalog: {} / {}", definition.type_name, pin.name);
+            }
         }
         let properties = if definition.type_name == "object/unpack" {
             vec![property("fields_list", "answer:number,other:string")]
@@ -61,7 +63,9 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
         assert!(!definition.pins.is_empty());
         if node.type_name == "object/unpack" { assert_eq!(definition.pins.len(), 3); }
         for pin in &definition.pins {
-            assert!(!pin.required, "restored: {} / {}", node.type_name, pin.name);
+            if !(node.type_name == "variable/set" && pin.id == PinId(3)) {
+                assert!(!pin.required, "restored: {} / {}", node.type_name, pin.name);
+            }
         }
     }
 }
@@ -89,7 +93,12 @@ fn pure_nodes_charge_one_work_unit_for_their_results() {
         ("object/unpack", 1, number(42)),
     ] {
         let mut engine = TickEngine::new();
-        let properties = if name == "object/unpack" { vec![property("fields_list", "answer:number")] } else { vec![] };
+        let properties = if name == "object/unpack" {
+            vec![property("fields_list", "answer:number")]
+        } else if name == "variable/get" {
+            engine.variables.create(VariableKey::global("answer"), DataType::Number, number(0));
+            vec![property("name", "answer"), property("value_type", "number")]
+        } else { vec![] };
         let id = add(&mut engine, name, &properties);
         let mut expected_work = 2; // The pure node and its console consumer.
         if name == "math/div" {
@@ -125,7 +134,16 @@ fn pure_nodes_charge_one_work_unit_for_their_results() {
 fn active_nodes_charge_one_work_unit_and_produce_effects() {
     for name in ["console", "test/debug", "test/click_button", "for_loop", "match", "sleep", "variable/set"] {
         let mut engine = TickEngine::new();
-        let id = add(&mut engine, name, &[]);
+        let properties = if name == "variable/set" {
+            vec![property("name", "my_var"), property("value_type", "number")]
+        } else {
+            vec![]
+        };
+        let id = add(&mut engine, name, &properties);
+        if name == "variable/set" {
+            engine.variables.create(VariableKey::global("my_var"), DataType::Number, 0.into());
+            engine.set_input_value(id, PinId(3), Some(number(0))).unwrap();
+        }
         let trace = activate(&mut engine, id, 0);
         match name {
             "console" => assert_eq!(engine.host_state.logs, vec![(id, "None".into())]),
@@ -141,8 +159,8 @@ fn active_nodes_charge_one_work_unit_and_produce_effects() {
                 assert_eq!(engine.executed.iter().find(|trace| trace.node_id == id).unwrap().fired, vec![PinId(4)]);
             }
             "variable/set" => {
-                assert_eq!(engine.variables.get("my_var"), Some(&number(0)));
-                assert_eq!(trace.fired, vec![PinId(0)]);
+                assert_eq!(engine.variables.get(&VariableKey::global("my_var")).map(|v| &v.value), Some(&number(0)));
+                assert_eq!(trace.fired, vec![PinId(1)]);
             }
             _ => panic!("missing expectation for {name}"),
         }
@@ -290,20 +308,21 @@ fn sleep_duration_and_tick_values_deliver_on_the_expected_tick() {
 #[test]
 fn variable_defaults_write_and_read_zero_and_forward_execution() {
     let mut engine = TickEngine::new();
+    engine.variables.create(VariableKey::global("answer"), DataType::Number, number(0));
     let get = add(&mut engine, "variable/get", &[property("var_name", "answer")]);
     let set = add(&mut engine, "variable/set", &[property("var_name", "answer")]);
     let sink = add(&mut engine, "console", &[]);
-    engine.connect_exec(set, PinId(0), sink, PinId(0)).unwrap();
+    engine.connect_exec(set, PinId(1), sink, PinId(0)).unwrap();
     assert_eq!(pull(&mut engine, get, 0), Some(number(0)));
-    engine.set_input_value(set, PinId(1), Some(number(42))).unwrap();
-    assert_eq!(activate(&mut engine, set, 0).fired, vec![PinId(0)]);
-    assert_eq!(engine.variables.get("answer"), Some(&number(42)));
+    engine.set_input_value(set, PinId(3), Some(number(42))).unwrap();
+    assert_eq!(activate(&mut engine, set, 0).fired, vec![PinId(1)]);
+    assert_eq!(engine.variables.get(&VariableKey::global("answer")).map(|v| &v.value), Some(&number(42)));
     assert_eq!(pull(&mut engine, get, 0), Some(number(42)));
     engine.tick();
     assert_eq!(engine.host_state.logs, vec![(sink, "None".into())]);
-    engine.set_input_value(set, PinId(1), None).unwrap();
-    assert_eq!(activate(&mut engine, set, 0).fired, vec![PinId(0)]);
-    assert_eq!(engine.variables.get("answer"), Some(&number(0)));
+    engine.set_input_value(set, PinId(3), Some(number(0))).unwrap();
+    assert_eq!(activate(&mut engine, set, 0).fired, vec![PinId(1)]);
+    assert_eq!(engine.variables.get(&VariableKey::global("answer")).map(|v| &v.value), Some(&number(0)));
     assert_eq!(pull(&mut engine, get, 0), Some(number(0)));
 }
 

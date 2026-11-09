@@ -1,5 +1,8 @@
 use super::*;
-use ticknode_shared::{ConnectionEnd, ConnectionModel, DataValue, PinDirection, PinType, PinId, SheetId};
+use ticknode_shared::{
+    fit_variable_value, valid_variable_name, valid_variable_value, ConnectionEnd, ConnectionModel,
+    DataValue, PinDirection, PinId, PinType, SheetId, Variable, VariableKey, VariableScope, MAX_VARIABLES,
+};
 
 type Applied = (Vec<(Option<SheetId>, ServerMessage)>, Option<Vec<NodeId>>);
 
@@ -73,6 +76,18 @@ impl Actor {
                 let _new_id = self.duplicate_sheet(id, reply)?;
                 return Ok((vec![], None));
             }
+            ClientMessage::CreateVariable(var) => {
+                self.create_variable(var)?;
+                return Ok((vec![], None));
+            }
+            ClientMessage::SetVariable { key, value } => {
+                self.set_variable(key, value)?;
+                return Ok((vec![], None));
+            }
+            ClientMessage::DeleteVariable(key) => {
+                self.delete_variable(key)?;
+                return Ok((vec![], None));
+            }
             ClientMessage::OpenSheet(target) => {
                 if let Some(id) = target {
                     if !self.sheets.iter().any(|s| s.id == id) {
@@ -139,6 +154,7 @@ impl Actor {
         let id = NodeId::generate();
         self.engine.create_node(id, type_name, &[]).map_err(|e| e.ui_message())?;
         self.node_sheet.insert(id, sheet);
+        self.engine.set_node_sheet(id, Some(sheet));
         if !self.sheet_is_enabled(sheet) {
             self.engine.set_disabled(std::iter::once(id), true);
         }
@@ -155,6 +171,7 @@ impl Actor {
         let id = NodeId::generate();
         self.engine.create_node(id, type_name, &properties).map_err(|e| e.ui_message())?;
         self.node_sheet.insert(id, sheet);
+        self.engine.set_node_sheet(id, Some(sheet));
         if !self.sheet_is_enabled(sheet) {
             self.engine.set_disabled(std::iter::once(id), true);
         }
@@ -248,6 +265,7 @@ impl Actor {
         let ids: Vec<NodeId> = imported.iter().map(|(_, new)| *new).collect();
         for (old, new) in &imported {
             self.node_sheet.insert(*new, sheet);
+            self.engine.set_node_sheet(*new, Some(sheet));
             self.positions.insert(*new, positions.get(old).copied().unwrap_or_default());
             if let Some(size) = snippet.nodes.iter().find(|n| n.id == *old).and_then(|n| n.size).and_then(NodeSize::validated) {
                 self.sizes.insert(*new, size);
@@ -382,6 +400,68 @@ impl Actor {
             events.push((Some(sheet.id), ServerMessage::History(ticknode_shared::HistoryState::default())));
         }
         Ok(events)
+    }
+
+    fn create_variable(&mut self, var: Variable) -> Result<(), UiMessage> {
+        if !valid_variable_name(&var.key.name) {
+            return Err(UiMessage::new("error-variable-name", "Invalid variable name").arg("name", &var.key.name));
+        }
+        match var.key.scope {
+            VariableScope::Sheet => {
+                let Some(sheet_id) = var.key.sheet else {
+                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
+                };
+                if !self.sheets.iter().any(|s| s.id == sheet_id) {
+                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
+                }
+            }
+            VariableScope::Global | VariableScope::Persistent => {
+                if var.key.sheet.is_some() {
+                    return Err(UiMessage::new("error-variable-scope", "Global and persistent variables cannot have a sheet"));
+                }
+            }
+        }
+        if self.engine.variables.len() >= MAX_VARIABLES && !self.engine.variables.contains_key(&var.key) {
+            return Err(UiMessage::new("error-variable-limit", "Variable limit reached (maximum 10,000)"));
+        }
+        if !valid_variable_value(&var.value) {
+            return Err(UiMessage::new("error-variable-limit", "Variable value exceeds maximum size (64 KiB)"));
+        }
+        let Some(fitted_value) = fit_variable_value(&self.engine.types, var.value, &var.data_type) else {
+            return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
+        };
+        if !self.engine.variables.create(var.key, var.data_type, fitted_value) {
+            return Err(UiMessage::new("error-variable-exists", "Variable already exists in this scope"));
+        }
+        if self.engine.variables.is_persistent_dirty() {
+            self.dirty_since.get_or_insert_with(Instant::now);
+        }
+        Ok(())
+    }
+
+    fn set_variable(&mut self, key: VariableKey, value: DataValue) -> Result<(), UiMessage> {
+        if !valid_variable_value(&value) {
+            return Err(UiMessage::new("error-variable-limit", "Variable value exceeds maximum size (64 KiB)"));
+        }
+        let Some(existing) = self.engine.variables.get(&key) else {
+            return Err(UiMessage::new("error-variable-missing", "Variable not found").arg("name", &key.name));
+        };
+        let Some(fitted) = fit_variable_value(&self.engine.types, value, &existing.data_type) else {
+            return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
+        };
+        self.engine.variables.set(&key, fitted);
+        if self.engine.variables.is_persistent_dirty() {
+            self.dirty_since.get_or_insert_with(Instant::now);
+        }
+        Ok(())
+    }
+
+    fn delete_variable(&mut self, key: VariableKey) -> Result<(), UiMessage> {
+        self.engine.variables.delete(&key);
+        if self.engine.variables.is_persistent_dirty() {
+            self.dirty_since.get_or_insert_with(Instant::now);
+        }
+        Ok(())
     }
 }
 

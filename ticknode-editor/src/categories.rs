@@ -16,7 +16,7 @@ const fn cat(name: &'static str, key: &'static str, color: &'static str, icon: &
     Category { name, key, color, icon }
 }
 
-const CATEGORIES: [Category; 13] = [
+const CATEGORIES: [Category; 14] = [
     cat("Events", "category-events", "#E6A700", icons::BOLT),
     cat("Control Flow", "category-control-flow", "#F08A24", icons::CALL_SPLIT),
     cat("Time", "category-time", "#5C7CFA", icons::SCHEDULE),
@@ -27,6 +27,7 @@ const CATEGORIES: [Category; 13] = [
     cat("String", "category-string", "#C25FC2", icons::TEXT_FIELDS),
     cat("Lists", "category-lists", "#D9534F", icons::LIST),
     cat("Objects", "category-objects", "#E8642C", icons::DATA_OBJECT),
+    cat("Variables", "category-variables", "#FF6680", icons::TERMINAL),
     cat("Network", "category-network", "#3FA7D6", icons::CLOUD),
     cat("Debug", "category-debug", "#A0785A", icons::BUG),
     cat("Test", "category-test", "#8A96A6", icons::SCIENCE),

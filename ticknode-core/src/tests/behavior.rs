@@ -117,16 +117,17 @@ fn object_get_reports_found_and_leaves_missing_value_empty() {
 #[test]
 fn variable_properties_restore_the_key_used_by_both_nodes() {
     let mut engine = TickEngine::new();
+    engine.variables.create(VariableKey::global("answer"), DataType::Number, 0i64.into());
     let get = add(&mut engine, "variable/get", &[property("var_name", "answer")]);
     let set = add(&mut engine, "variable/set", &[property("var_name", "answer")]);
-    engine.set_input_value(set, PinId(1), Some(DataValue::from(42i64))).unwrap();
+    engine.set_input_value(set, PinId(3), Some(DataValue::from(42i64))).unwrap();
     engine.trigger_node(set, PinId(0));
     engine.tick();
     assert_eq!(pull(&mut engine, get, 0), Some(DataValue::from(42i64)));
     for id in [get, set] {
         engine.set_node_property(id, "other", DataValue::from("ignored")).unwrap();
         engine.set_node_property(id, "var_name", DataValue::Bool(false)).unwrap();
-        assert!(engine.node_model(id).unwrap().properties.contains(&property("var_name", "answer")));
+        assert!(engine.node_model(id).unwrap().properties.contains(&property("name", "answer")));
     }
 }
 

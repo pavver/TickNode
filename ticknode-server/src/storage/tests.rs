@@ -1,5 +1,5 @@
 use super::*;
-use ticknode_shared::DataValue;
+use ticknode_shared::{DataType, DataValue, Variable, VariableKey};
 
 #[test]
 fn fresh_storage_creates_main_sheet() {
@@ -112,6 +112,59 @@ fn corrupt_sheet_file_fails_load() {
     storage.save_sheets_meta(&[info]).unwrap();
     std::fs::create_dir_all(storage.sheets_dir()).unwrap();
     std::fs::write(storage.sheet_path(id), "{ broken json").unwrap();
+
+    let mut engine = TickEngine::new();
+    assert!(storage.load(&mut engine).is_err());
+}
+
+#[test]
+fn save_and_load_variables_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().to_path_buf());
+
+    let v1 = Variable {
+        key: VariableKey::persistent("theme"),
+        data_type: DataType::String,
+        value: DataValue::from("dark"),
+    };
+    let v2 = Variable {
+        key: VariableKey::persistent("brightness"),
+        data_type: DataType::Number,
+        value: DataValue::from(80),
+    };
+
+    storage.save_variables(&[v1.clone(), v2.clone()]).unwrap();
+    assert!(storage.variables_json_path().exists());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::metadata(storage.variables_json_path()).unwrap().permissions();
+        assert_eq!(perms.mode() & 0o777, 0o600);
+    }
+
+    let loaded = storage.load_variables().unwrap();
+    assert_eq!(loaded.len(), 2);
+    assert_eq!(loaded[0].key.name, "brightness"); // sorted by name
+    assert_eq!(loaded[1].key.name, "theme");
+
+    let mut engine = TickEngine::new();
+    storage.load(&mut engine).unwrap();
+    assert_eq!(
+        engine.variables.get(&VariableKey::persistent("theme")).map(|v| &v.value),
+        Some(&DataValue::from("dark"))
+    );
+    assert_eq!(
+        engine.variables.get(&VariableKey::persistent("brightness")).map(|v| &v.value),
+        Some(&DataValue::from(80))
+    );
+}
+
+#[test]
+fn corrupt_variables_file_fails_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().to_path_buf());
+    std::fs::write(storage.variables_json_path(), "{ not valid json").unwrap();
 
     let mut engine = TickEngine::new();
     assert!(storage.load(&mut engine).is_err());

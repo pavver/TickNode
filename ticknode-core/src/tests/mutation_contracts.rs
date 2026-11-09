@@ -111,13 +111,20 @@ fn exec_only_outputs_preserve_pure_work_for_the_tick_budget() {
 fn variable_only_outputs_refresh_pure_reads_in_the_same_tick() {
     let mut e = TickEngine::new();
     let read = add(&mut e, "variable/get");
+    e.set_node_property(read, "name", "my_var".into()).unwrap();
+    e.set_node_property(read, "value_type", "number".into()).unwrap();
+    e.variables.create(VariableKey::global("my_var"), DataType::Number, 0i64.into());
     let console = add(&mut e, "console");
     // Deliberately emit no data: a variable write alone must invalidate a prior read.
-    let write = fixed(&mut e, vec![], vec![NodeOutput::Variable("my_var".into(), 23i64.into())]);
+    let write = fixed(&mut e, vec![], vec![NodeOutput::Variable(VariableCommand::Set {
+        name: "my_var".into(),
+        lookup: VariableLookup::Auto,
+        value: 23i64.into(),
+    })]);
     e.connect_data(read, PinId(0), console, PinId(1)).unwrap();
     for id in [console, write, console] { e.trigger_node(id, PinId(0)); }
     e.tick();
-    assert_eq!(e.variables["my_var"], 23i64.into());
+    assert_eq!(e.variables.get(&VariableKey::global("my_var")).unwrap().value, 23i64.into());
     assert_eq!(e.host_state.logs, [(console, "0".into()), (console, "23".into())]);
 }
 
@@ -165,40 +172,50 @@ fn conversions_use_the_output_type_when_input_and_output_ids_overlap() {
         pin(0, PinDirection::Input, DataType::Number),
         pin(0, PinDirection::Output, DataType::String),
     ], vec![NodeOutput::Data(PinId(0), "31".into())]);
+    e.variables.create(VariableKey::global("my_var"), DataType::Number, 0i64.into());
     let write = add(&mut e, "variable/set");
-    e.connect_data(source, PinId(0), write, PinId(1)).unwrap();
+    e.set_node_property(write, "name", "my_var".into()).unwrap();
+    e.set_node_property(write, "value_type", "number".into()).unwrap();
+    e.connect_data(source, PinId(0), write, PinId(3)).unwrap();
     e.trigger_node(source, PinId(0));
     e.trigger_node(write, PinId(0));
     e.tick();
-    assert_eq!(e.variables["my_var"], 31i64.into());
-    assert_eq!(e.executed.iter().find(|t| t.node_id == write).unwrap().inputs, [(PinId(1), Some(31i64.into()))]);
+    assert_eq!(e.variables.get(&VariableKey::global("my_var")).unwrap().value, 31i64.into());
+    assert_eq!(e.executed.iter().find(|t| t.node_id == write).unwrap().inputs, [(PinId(3), Some(31i64.into()))]);
 }
 
 #[test]
 fn remove_node_removes_only_incident_exec_and_data_connections() {
     let mut e = TickEngine::new();
-    let ids: Vec<_> = (0..4).map(|_| add(&mut e, "variable/set")).collect();
+    e.variables.create(VariableKey::global("my_var"), DataType::Number, 0i64.into());
+    let ids: Vec<_> = (0..4).map(|_| {
+        let id = add(&mut e, "variable/set");
+        e.set_node_property(id, "name", "my_var".into()).unwrap();
+        e.set_node_property(id, "value_type", "number".into()).unwrap();
+        id
+    }).collect();
     let values: Vec<_> = (0..3).map(|_| add(&mut e, "const")).collect();
     for (src, dst) in [(ids[0], ids[1]), (ids[1], ids[2]), (ids[2], ids[3])] {
-        e.connect_exec(src, PinId(0), dst, PinId(0)).unwrap();
+        e.connect_exec(src, PinId(1), dst, PinId(0)).unwrap();
     }
     for (src, dst) in [(values[0], ids[0]), (values[1], ids[1]), (values[2], ids[2])] {
-        e.connect_data(src, PinId(0), dst, PinId(1)).unwrap();
+        e.connect_data(src, PinId(0), dst, PinId(3)).unwrap();
     }
+    e.set_input_value(ids[3], PinId(3), Some(0i64.into())).unwrap();
     // Remove a middle exec node/data destination, then a data source.
     let removed = e.remove_node(ids[1]);
     assert_eq!(removed.exec.len(), 2);
     assert_eq!(removed.data.len(), 1);
-    assert_eq!(e.exec_connections(), [ConnectionModel { src_node: ids[2], src_pin: PinId(0), dst_node: ids[3], dst_pin: PinId(0) }]);
+    assert_eq!(e.exec_connections(), [ConnectionModel { src_node: ids[2], src_pin: PinId(1), dst_node: ids[3], dst_pin: PinId(0) }]);
     assert_eq!(e.data_connections().len(), 2);
     let removed = e.remove_node(values[0]);
-    assert_eq!(removed.data, [ConnectionModel { src_node: values[0], src_pin: PinId(0), dst_node: ids[0], dst_pin: PinId(1) }]);
-    assert_eq!(e.data_connections(), [ConnectionModel { src_node: values[2], src_pin: PinId(0), dst_node: ids[2], dst_pin: PinId(1) }]);
+    assert_eq!(removed.data, [ConnectionModel { src_node: values[0], src_pin: PinId(0), dst_node: ids[0], dst_pin: PinId(3) }]);
+    assert_eq!(e.data_connections(), [ConnectionModel { src_node: values[2], src_pin: PinId(0), dst_node: ids[2], dst_pin: PinId(3) }]);
     e.trigger_node(ids[2], PinId(0));
     e.tick();
     e.tick();
     assert_eq!(e.executed.iter().map(|t| t.node_id).collect::<Vec<_>>(), [ids[3]]);
-    assert_eq!(e.variables["my_var"], 0i64.into());
+    assert_eq!(e.variables.get(&VariableKey::global("my_var")).unwrap().value, 0i64.into());
 }
 
 #[test]
@@ -252,10 +269,15 @@ fn splitting_one_input_preserves_another_unsplit_struct_input() {
     point_type(&mut e);
     let source = add(&mut e, "type/make/test.point");
     e.set_input_value(source, PinId(1), Some(41i64.into())).unwrap();
+    e.variables.create(VariableKey::global("seen"), DataType::Bool, false.into());
     let sink = fixed(&mut e, vec![
         pin(0, PinDirection::Input, DataType::Named("test.point".into())),
         pin(1, PinDirection::Input, DataType::Named("test.point".into())),
-    ], vec![NodeOutput::Variable("seen".into(), true.into())]);
+    ], vec![NodeOutput::Variable(VariableCommand::Set {
+        name: "seen".into(),
+        lookup: VariableLookup::Auto,
+        value: true.into(),
+    })]);
     e.connect_data(source, PinId(0), sink, PinId(0)).unwrap();
     e.set_pin_split(sink, PinId(1), true).unwrap();
     let field = split_field_pin(PinId(1), 0).unwrap();
@@ -264,7 +286,7 @@ fn splitting_one_input_preserves_another_unsplit_struct_input() {
     e.tick();
     let trace = e.executed.iter().find(|t| t.node_id == sink).unwrap();
     assert_eq!(trace.inputs, [(PinId(0), Some(point(41))), (PinId(1), Some(point(43))), (field, Some(43i64.into()))]);
-    assert_eq!(e.variables["seen"], true.into());
+    assert_eq!(e.variables.get(&VariableKey::global("seen")).unwrap().value, true.into());
 }
 
 #[test]

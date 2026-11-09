@@ -145,6 +145,7 @@ impl Actor {
 
         self.routes.retain(|(_, c), _| !nodes_to_remove.contains(&c.src_node) && !nodes_to_remove.contains(&c.dst_node));
         self.histories.remove(&id);
+        self.engine.variables.remove_sheet(id);
         let _ = self.storage.delete_sheet(id);
         self.dirty_sheets.remove(&id);
         self.dirty_sheets_meta = true;
@@ -192,6 +193,7 @@ impl Actor {
 
         for (old_id, new_node_id) in &imported {
             self.node_sheet.insert(*new_node_id, new_id);
+            self.engine.set_node_sheet(*new_node_id, Some(new_id));
             if let Some(pos) = snippet.nodes.iter().find(|n| n.id == *old_id).map(|n| n.position) {
                 self.positions.insert(*new_node_id, pos);
             }

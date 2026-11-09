@@ -16,10 +16,11 @@ impl Editor {
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
         if frames::applies(&msg) { self.frames.update(|all| frames::apply(all, &msg)); }
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, .. } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, variables, .. } => {
                 self.sheets.set(sheets.clone());
                 self.sheets_received_at.set(now_ms());
                 self.open_sheet.set(open_sheet);
+                self.variables.set(variables.into_iter().map(|v| (v.key.clone(), v)).collect());
                 self.history.set(history);
                 let gone = self.remove_absent_nodes(&nodes);
                 self.apply_catalog(definitions, types, translations);
@@ -102,6 +103,16 @@ impl Editor {
                 if should_navigate {
                     crate::route::navigate(&crate::route::Route::Sheet(id));
                 }
+            }
+            ServerMessage::VariablesChanged { set, removed } => {
+                self.variables.update(|vars| {
+                    for key in removed {
+                        vars.remove(&key);
+                    }
+                    for var in set {
+                        vars.insert(var.key.clone(), var);
+                    }
+                });
             }
             ServerMessage::Error(message) => {
                 self.pending_create_tracker.update(|t| t.clear());

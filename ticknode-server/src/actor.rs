@@ -223,10 +223,14 @@ impl Actor {
         for trace in &self.engine.executed {
             self.traces.insert(trace.node_id, (trace.clone(), now));
         }
+        if self.engine.variables.is_persistent_dirty() {
+            self.dirty_since.get_or_insert_with(Instant::now);
+        }
         if self.events.receiver_count() == 0 {
             self.engine.host_state.logs.clear();
             self.telemetry.discard();
             self.engine.take_node_error_changes();
+            self.engine.variables.take_changes();
             return;
         }
         self.telemetry.add_traces(&self.engine.executed);
@@ -242,10 +246,19 @@ impl Actor {
     }
 
     fn save(&mut self) {
-        if self.dirty_since.is_none() {
+        if self.dirty_since.is_none() && !self.engine.variables.is_persistent_dirty() {
             return;
         }
         let mut ok = true;
+        if self.engine.variables.is_persistent_dirty() {
+            let persistent = self.engine.variables.persistent_variables();
+            if let Err(e) = self.storage.save_variables(&persistent) {
+                error!("Failed to save variables.json: {:#}", e);
+                ok = false;
+            } else {
+                self.engine.variables.clear_persistent_dirty();
+            }
+        }
         if self.dirty_sheets_meta || !self.storage.sheets_json_path().exists() {
             if let Err(e) = self.storage.save_sheets_meta(&self.sheets) {
                 error!("Failed to save sheets.json: {:#}", e);
@@ -314,6 +327,8 @@ impl Actor {
             ),
         };
 
+        let variables = self.engine.variables.for_sheet_and_global(active_sheet);
+
         ServerMessage::Init {
             definitions: self.engine.registry.get_definitions(),
             types: self.engine.types.definitions(),
@@ -332,6 +347,7 @@ impl Actor {
             frames: graph.frames,
             sheets: summaries,
             open_sheet: active_sheet,
+            variables,
         }
     }
 

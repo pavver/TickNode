@@ -213,10 +213,7 @@ mod tests {
         let texts = bundle(en);
         for def in engine.registry.get_definitions() {
             let slug = fluent_slug(&def.type_name);
-            // The variable nodes put the variable name into their title
-            if !def.type_name.starts_with("variable/") {
-                assert_eq!(texts[&format!("node-{slug}-title")], def.title, "{}", def.type_name);
-            }
+            assert_eq!(texts[&format!("node-{slug}-title")], def.title, "{}", def.type_name);
             assert_eq!(texts[&format!("node-{slug}-description")], def.description, "{}", def.type_name);
             assert_eq!(texts[&format!("node-{slug}-help")], def.help.trim(), "{}", def.type_name);
             for pin in def.pins.iter().filter(|p| p.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')) {

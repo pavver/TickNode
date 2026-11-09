@@ -85,7 +85,7 @@ pub(super) fn stored_with_env(manifest: &PluginManifest, config: &PluginConfig, 
 }
 
 /// Atomic write (tmp + rename) with mode 0600: the file may contain tokens.
-pub(super) fn write_private(dir: &Path, path: &Path, contents: &str) -> anyhow::Result<()> {
+pub(crate) fn write_private(dir: &Path, path: &Path, contents: &str) -> anyhow::Result<()> {
     use std::io::Write;
     std::fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
     #[cfg(unix)]

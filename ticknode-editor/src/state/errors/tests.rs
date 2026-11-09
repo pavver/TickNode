@@ -32,7 +32,7 @@ fn reconnect_snapshots_replace_all_errors() {
     let init = |node_errors| ServerMessage::Init {
         definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![], traces: vec![],
         types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(),
-        wire_routes: vec![], detached_connections: vec![], timers: vec![], node_errors, frames: vec![], sheets: vec![], open_sheet: None,
+        wire_routes: vec![], detached_connections: vec![], timers: vec![], node_errors, frames: vec![], sheets: vec![], open_sheet: None, variables: vec![],
     };
     apply(&mut all, &init(vec![error(a, 2)]), 100.0);
     apply(&mut all, &init(vec![error(b, 3)]), 300.0);

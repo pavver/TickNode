@@ -111,24 +111,85 @@ node-logical-not-pin-A = A
 node-logical-not-pin-Res = Res
 
 # variable/get
-node-variable-get-title = Get my_var
+node-variable-get-title = Get Variable
 node-variable-get-description = Returns the value of a variable by name
 node-variable-get-help =
-    Reads the global variable named in the "Variable" property and outputs it on Val. Variables are shared across the entire graph and written by the Set node. Until the variable is written, outputs 0.
+    Reads the variable named in the "Name" property and outputs its value on Value, indicating on Exists whether it was found.
+
+    Lookup chooses whether to search the current sheet, globally (including persistent), or automatically (sheet first, then global).
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
-node-variable-get-pin-Val = Val
+node-variable-get-pin-Value = Value
+node-variable-get-pin-Exists = Exists
+node-variable-get-prop-name-title = Name
+node-variable-get-prop-lookup-title = Lookup
+node-variable-get-prop-lookup-option-auto = Auto
+node-variable-get-prop-lookup-option-sheet = Sheet
+node-variable-get-prop-lookup-option-global = Global
 
 # variable/set
-node-variable-set-title = Set my_var
+node-variable-set-title = Set Variable
 node-variable-set-description = Writes a value to a variable
 node-variable-set-help =
-    On a signal at In, writes the value from Val to the global variable (named in the "Variable" property) and passes execution to Out.
+    On a signal at In, writes the value from Value to the resolved variable and passes execution to Out. If the variable is missing or the value does not fit its type, execution passes to Failed and an error is recorded.
 
-    The variable is visible to all Get nodes with the same name across the entire graph.
+    Lookup chooses whether to search the current sheet, globally (including persistent), or automatically (sheet first, then global).
 node-variable-set-pin-In = In
 node-variable-set-pin-Out = Out
-node-variable-set-pin-Val = Val
+node-variable-set-pin-Failed = Failed
+node-variable-set-pin-Value = Value
+node-variable-set-prop-name-title = Name
+node-variable-set-prop-lookup-title = Lookup
+node-variable-set-prop-lookup-option-auto = Auto
+node-variable-set-prop-lookup-option-sheet = Sheet
+node-variable-set-prop-lookup-option-global = Global
+
+# variable/create
+node-variable-create-title = Create Variable
+node-variable-create-description = Creates a new variable if it does not already exist
+node-variable-create-help =
+    On a signal at In, creates a new variable in the chosen scope with the initial value from Initial (defaulting to the type's default value if unconnected).
+
+    If the variable already existed in that scope, execution passes to Exists without modifying its value; otherwise execution passes to Created.
+node-variable-create-pin-In = In
+node-variable-create-pin-Created = Created
+node-variable-create-pin-Exists = Exists
+node-variable-create-pin-Initial = Initial
+node-variable-create-prop-name-title = Name
+node-variable-create-prop-scope-title = Scope
+node-variable-create-prop-scope-option-sheet = Sheet
+node-variable-create-prop-scope-option-global = Global
+node-variable-create-prop-scope-option-persistent = Persistent
+
+# variable/delete
+node-variable-delete-title = Delete Variable
+node-variable-delete-description = Deletes a variable by name
+node-variable-delete-help =
+    On a signal at In, deletes the resolved variable and passes execution to Out. Deleting a variable that does not exist is not an error.
+
+    Lookup chooses whether to search the current sheet, globally (including persistent), or automatically (sheet first, then global).
+node-variable-delete-pin-In = In
+node-variable-delete-pin-Out = Out
+node-variable-delete-prop-name-title = Name
+node-variable-delete-prop-lookup-title = Lookup
+node-variable-delete-prop-lookup-option-auto = Auto
+node-variable-delete-prop-lookup-option-sheet = Sheet
+node-variable-delete-prop-lookup-option-global = Global
+
+# variable/changed
+node-variable-changed-title = Variable Changed
+node-variable-changed-description = Fires when a variable is created or updated with a new value
+node-variable-changed-help =
+    Triggers execution on Changed whenever the resolved variable is created or set to a different value. Deletion does not fire. Value outputs the new value.
+
+    Lookup chooses whether to watch the current sheet, globally (including persistent), or automatically (sheet first, then global).
+node-variable-changed-pin-Changed = Changed
+node-variable-changed-pin-Value = Value
+node-variable-changed-prop-name-title = Name
+node-variable-changed-prop-lookup-title = Lookup
+node-variable-changed-prop-lookup-option-auto = Auto
+node-variable-changed-prop-lookup-option-sheet = Sheet
+node-variable-changed-prop-lookup-option-global = Global
 
 # match
 node-match-title = Match

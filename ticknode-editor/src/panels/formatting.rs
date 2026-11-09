@@ -35,7 +35,7 @@ pub fn display_value(value: &DataValue) -> String {
         DataValue::Time(t) => t.format("%H:%M:%S").to_string(),
         DataValue::DateTime(dt) => dt.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
         DataValue::Duration(d) => text::format_duration(*d),
-        DataValue::Ticks(_) => text::format_value(value),
+        DataValue::Ticks(n) => i18n::ticks_text(*n),
         DataValue::Color(c) => format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),
         DataValue::List { elements, .. } => {
             format!("[{}]", elements.iter().map(display_value).collect::<Vec<_>>().join(", "))

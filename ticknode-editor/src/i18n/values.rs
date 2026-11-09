@@ -29,6 +29,10 @@ pub fn ui_text(message: &UiMessage) -> String {
 
 // --- Data types, field hints, and value parsing ---
 
+pub fn ticks_text(count: u64) -> String {
+    t!("duration-ticks", count = count)
+}
+
 pub fn type_name_label(name: &str) -> String {
     const LABELS: &[(&str, &str)] = &[
         ("exec", "type-exec"),
@@ -136,7 +140,13 @@ pub fn format_match_case(case: &MatchCase) -> String {
         .enumerate()
         .map(|(i, c)| {
             let cond = match &c.right {
-                Some(r) => format!("{} {} {}", c.left.to_text(), op_symbol(c.op), Operand::to_text(r)),
+                Some(r) => {
+                    let right = match r {
+                        Operand::Value(DataValue::Ticks(n)) => ticks_text(*n),
+                        other => other.to_text(),
+                    };
+                    format!("{} {} {}", c.left.to_text(), op_symbol(c.op), right)
+                }
                 None => format!("{} {}", c.left.to_text(), op_symbol(c.op)),
             };
             if i == 0 {

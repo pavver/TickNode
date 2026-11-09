@@ -12,6 +12,8 @@ use crate::state::{EXEC_HIGHLIGHT_MS, use_editor};
 use crate::ui::{Icon, icons};
 use super::pins::Pin;
 
+mod timer;
+
 /// Pin used to trigger a node manually: first exec input; for event sources (Clock, button),
 /// their exec output.
 pub fn trigger_pin(def: &NodeDefinition) -> Option<PinId> {
@@ -95,6 +97,7 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                     <div class="pins out" style=pins_style>{move || pin_list(PinDirection::Output)}</div>
                 }.into_any()
             }}
+            <timer::TimerBar id=id />
         </div>
     }
     .into_any()

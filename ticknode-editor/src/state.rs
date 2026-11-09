@@ -13,6 +13,7 @@ use crate::i18n::{self, Locale};
 mod graph;
 mod messages;
 mod wires;
+pub mod timers;
 pub use wires::{WireContext, WireKey, WireRoutes};
 
 const MAX_LOG_LINES: usize = 500;
@@ -162,6 +163,7 @@ impl ClientNode {
 pub struct Editor {
     pub status: RwSignal<ConnStatus>,
     pub history: RwSignal<HistoryState>,
+    pub timers: RwSignal<timers::NodeTimers>,
     pub definitions: RwSignal<Vec<NodeDefinition>>,
     /// Custom data types declared by plugins (for colors, labels, and dropdowns).
     pub types: RwSignal<TypeRegistry>,
@@ -228,6 +230,7 @@ impl Editor {
         Self {
             status: RwSignal::new(ConnStatus::Connecting),
             history: RwSignal::new(HistoryState::default()),
+            timers: RwSignal::new(BTreeMap::new()),
             definitions: RwSignal::new(Vec::new()),
             types: RwSignal::new(TypeRegistry::new()),
             nodes: RwSignal::new(BTreeMap::new()),

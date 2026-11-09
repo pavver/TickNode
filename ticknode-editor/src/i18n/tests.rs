@@ -2,6 +2,21 @@ use super::*;
 use ticknode_shared::condition::CompareOp;
 
 #[test]
+fn ticks_use_locale_plural_rules() {
+    with_locale(Locale::En, || {
+        assert_eq!(ticks_text(1), "1 tick");
+        for count in [0, 2, 10, 21] { assert_eq!(ticks_text(count), format!("{count} ticks")); }
+    });
+    with_locale(Locale::Uk, || {
+        for (count, expected) in [(0, "0 тактів"), (1, "1 такт"), (2, "2 такти"), (5, "5 тактів"),
+            (10, "10 тактів"), (11, "11 тактів"), (21, "21 такт"), (22, "22 такти"), (112, "112 тактів")] {
+            assert_eq!(ticks_text(count), expected);
+            assert_eq!(crate::panels::display_value(&DataValue::Ticks(count)), expected);
+        }
+    });
+}
+
+#[test]
 fn locale_codes_badges_and_tags_agree() {
     for (locale, code, badge) in [(Locale::Uk, "uk", "UK"), (Locale::En, "en", "EN")] {
         assert_eq!(locale.code(), code);

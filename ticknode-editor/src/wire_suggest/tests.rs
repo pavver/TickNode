@@ -77,3 +77,19 @@ fn best_rank_then_lowest_id_and_unavailable_are_respected() {
     assert_eq!(result.len(), 1);
     assert_eq!((result[0].pin, result[0].rank), (PinId(4), 0));
 }
+
+#[test]
+fn adaptive_definitions_match_any_data_type_in_the_opposite_direction_only() {
+    for direction in [PinDirection::Input, PinDirection::Output] {
+        let opposite = if direction == PinDirection::Input { PinDirection::Output } else { PinDirection::Input };
+        let mut adaptive = node("adaptive", vec![(7, opposite, PinType::Data(DataType::Number)),
+            (3, opposite, PinType::Data(DataType::Any)), (0, direction, PinType::Data(DataType::Duration))]);
+        adaptive.adaptive = true;
+        for data_type in [DataType::Duration, DataType::Named("test.point".into()), DataType::List(Box::new(DataType::Bool)), DataType::Any] {
+            let result = find(direction, PinType::Data(data_type), &[adaptive.clone()], &TypeRegistry::new());
+            assert_eq!(result.len(), 1);
+            assert_eq!((result[0].rank, result[0].pin), (0, PinId(3)));
+        }
+        assert!(find(direction, PinType::Exec, &[adaptive], &TypeRegistry::new()).is_empty());
+    }
+}

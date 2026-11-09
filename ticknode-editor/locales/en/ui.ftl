@@ -110,7 +110,7 @@ type-list-of = List: { $inner }
 
 hint-time = HH:MM
 hint-datetime = YYYY-MM-DD HH:MM
-hint-duration = 1h 30m / 45s
+hint-duration = 10t / 1h 30m / 45s
 hint-color = #rrggbb
 hint-default = —
 
@@ -118,7 +118,23 @@ parse-error-number = "{ $value }" is not a number
 parse-error-bool = "{ $value }" is not true/false
 parse-error-time = "{ $value }" is not a time (HH:MM or HH:MM:SS)
 parse-error-datetime = "{ $value }" is not a date-time (YYYY-MM-DD HH:MM)
-parse-error-duration = "{ $value }" is not a duration (90, 1h 30m, 500ms)
+parse-error-duration = "{ $value }" is not a duration (10t, 1h 30m, 500ms)
+duration-input-hint = Enter a number in the selected unit, or text such as 1h 30m or 10t
+duration-unit-title = Duration unit
+duration-unit-ticks = tick
+duration-unit-ms = ms
+duration-unit-s = s
+duration-unit-min = min
+duration-unit-h = h
+duration-ticks = { $count ->
+    [one] { $count } tick
+   *[other] { $count } ticks
+    }
+node-timer-active = { $count ->
+    [one] One active delay
+   *[other] { $count } active delays
+    }
+node-timer-count = ×{ $count }
 parse-error-color = "{ $value }" is not a color (#rrggbb)
 parse-error-not-text = value of type { $type } cannot be entered as text
 

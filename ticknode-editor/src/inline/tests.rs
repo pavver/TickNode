@@ -16,3 +16,13 @@ fn typed_parsing() {
     assert!(parse_text("7:99", &DataType::Time).is_err());
     assert_eq!(default_value("duration").get_type(), DataType::Duration);
 }
+
+#[test]
+fn tick_text_in_any_fields_is_localized_and_can_be_parsed_back_as_duration() {
+    i18n::with_locale(i18n::Locale::Uk, || {
+        let value = DataValue::Ticks(10);
+        let shown = value_text(&value, &DataType::Any);
+        assert_eq!(shown, "10 тактів");
+        assert_eq!(parse_text(&shown, &DataType::Duration), Ok(Some(value)));
+    });
+}

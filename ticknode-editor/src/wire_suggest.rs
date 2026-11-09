@@ -42,7 +42,9 @@ pub fn suggestions(
     for definition in catalog {
         if definition.category == "Unavailable" { continue; }
         let best = definition.pins.iter().filter(|p| p.direction != direction).filter_map(|p| {
-            let rank = if direction == PinDirection::Output {
+            let rank = if definition.adaptive && matches!((pin_type, &p.pin_type), (PinType::Data(_), PinType::Data(_))) {
+                Some(0)
+            } else if direction == PinDirection::Output {
                 rank(registry, pin_type, &p.pin_type)
             } else {
                 rank(registry, &p.pin_type, pin_type)

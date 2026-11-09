@@ -9,6 +9,7 @@ use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, flash};
 
 mod properties;
+mod duration;
 
 pub use properties::*;
 
@@ -16,6 +17,7 @@ pub use properties::*;
 fn value_text(value: &DataValue, value_type: &DataType) -> String {
     match value {
         DataValue::String(s) if *value_type == DataType::Any && !matches!(text::parse_any(s), DataValue::String(_)) => format!("\"{s}\""),
+        DataValue::Ticks(n) => i18n::ticks_text(*n),
         other => text::format_value(other),
     }
 }
@@ -42,6 +44,10 @@ pub fn InlineValue(
     let state = RwSignal::new(ControlState::Idle);
     // Pressing on the field does not start node dragging or rubber-band selection
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
+
+    if value_type == DataType::Duration {
+        return view! { <duration::DurationValue value=value on_commit=on_commit optional=optional title=title /> }.into_any();
+    }
 
     if value_type == DataType::Bool {
         let toggle = move |_| {

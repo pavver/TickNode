@@ -9,6 +9,7 @@ mod detached;
 
 impl Editor {
     pub fn apply(&self, msg: ServerMessage) {
+        if timers::applies(&msg) { self.timers.update(|all| timers::apply(all, &msg, now_ms())); }
         if routes::applies(&msg) { self.wire_routes.update(|all| routes::apply(all, &msg)); }
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
         match msg {

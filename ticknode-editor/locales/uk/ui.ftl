@@ -106,7 +106,7 @@ type-list-of = Список: { $inner }
 
 hint-time = ГГ:ХХ
 hint-datetime = РРРР-ММ-ДД ГГ:ХХ
-hint-duration = 1h 30m / 45s
+hint-duration = 10t / 1h 30m / 45s
 hint-color = #rrggbb
 hint-default = —
 
@@ -114,7 +114,26 @@ parse-error-number = «{ $value }» — не число
 parse-error-bool = «{ $value }» — не true/false
 parse-error-time = «{ $value }» — не час (ГГ:ХХ або ГГ:ХХ:СС)
 parse-error-datetime = «{ $value }» — не дата-час (РРРР-ММ-ДД ГГ:ХХ)
-parse-error-duration = «{ $value }» — не тривалість (90, 1h 30m, 500ms)
+parse-error-duration = «{ $value }» — не тривалість (10t, 1h 30m, 500ms)
+duration-input-hint = Введіть число у вибраній одиниці або текст, наприклад 1h 30m чи 10t
+duration-unit-title = Одиниця тривалості
+duration-unit-ticks = такт
+duration-unit-ms = мс
+duration-unit-s = с
+duration-unit-min = хв
+duration-unit-h = год
+duration-ticks = { $count ->
+    [one] { $count } такт
+    [few] { $count } такти
+    [many] { $count } тактів
+   *[other] { $count } такту
+    }
+node-timer-active = { $count ->
+    [one] { $count } активна затримка
+    [few] { $count } активні затримки
+   *[other] { $count } активних затримок
+    }
+node-timer-count = ×{ $count }
 parse-error-color = «{ $value }» — не колір (#rrggbb)
 parse-error-not-text = значення типу { $type } не набирається текстом
 

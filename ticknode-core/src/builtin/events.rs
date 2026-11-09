@@ -4,7 +4,6 @@ use crate::{Node, NodeContext};
 pub struct ClickButtonNode {
     pub id: NodeId,
     pub label: String,
-    pub clicked: bool,
 }
 
 impl Node for ClickButtonNode {
@@ -28,17 +27,12 @@ impl Node for ClickButtonNode {
         }
     }
     fn execute(&mut self, _: Option<PinId>, _: &mut NodeContext) -> Vec<NodeOutput> {
-        self.clicked = false;
         vec![NodeOutput::Execution(PinId(0))]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
         if name == "label" {
             if let DataValue::String(s) = value {
                 self.label = s;
-            }
-        } else if name == "clicked" {
-            if let DataValue::Bool(b) = value {
-                self.clicked = b;
             }
         }
     }

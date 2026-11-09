@@ -1,5 +1,6 @@
     mod behavior;
     mod definitions;
+    mod builtin_contracts;
     use super::*;
     use std::collections::VecDeque;
     use ticknode_shared::*;
@@ -533,7 +534,6 @@
         engine.connect_data(const_id, PinId(0), debug_id, PinId(1)).unwrap(); // Any connection must succeed!
 
         // Simulate user click
-        engine.set_node_property(button_id, "clicked", DataValue::Bool(true)).unwrap();
         engine.trigger_node(button_id, PinId(0));
 
         // First tick: Button executes, debug node is queued for the next tick

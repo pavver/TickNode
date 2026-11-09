@@ -106,7 +106,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(ObjectSetFieldNode { id, field_type: DataType::Number })));
         self.register(Box::new(|id| Box::new(ObjectGetFieldNode { id, field_type: DataType::Number })));
         self.register(Box::new(|id| Box::new(ObjectUnpackNode { id, fields_list: String::new(), parsed_fields: Vec::new() })));
-        self.register(Box::new(|id| Box::new(ClickButtonNode { id, label: "Button".to_string(), clicked: false })));
+        self.register(Box::new(|id| Box::new(ClickButtonNode { id, label: "Button".to_string() })));
         self.register(Box::new(|id| Box::new(DebugNode { id, prefix: String::new() })));
     }
 }

@@ -24,6 +24,7 @@ mod node_status;
 mod wire_suggest;
 mod wire_menu;
 mod wire_context;
+mod resource_menu;
 
 use std::time::Duration;
 
@@ -192,6 +193,7 @@ fn App() -> impl IntoView {
             <wire_menu::WireMenuLayer />
             <quick_add::QuickAddLayer />
             <wire_context::WireContextLayer />
+            <resource_menu::ResourceMenuLayer />
         </div>
     }
 }

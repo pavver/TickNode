@@ -408,3 +408,20 @@ error-plugin-node-crashed = Плагін аварійно завершився: 
 toolbar-show-values = Показувати значення
 pin-no-value = Значення ще немає
 pin-fired-ago = Спрацював { $time }
+
+# Вкладки лівої панелі та ресурси
+left-tab-nodes = Ноди
+left-tab-resources = Ресурси
+left-tab-variables = Змінні
+
+variables-coming-soon = Змінні графа з'являться згодом: оголошені типізовані значення, які можна буде переглядати й змінювати тут.
+
+resources-more =
+    { $count ->
+        [one] і ще { $count } — уточніть пошук
+        [few] і ще { $count } — уточніть пошук
+       *[other] і ще { $count } — уточніть пошук
+    }
+resources-empty = Увімкнені плагіни не пропонують ресурсів
+resources-loading = Поки що порожньо
+

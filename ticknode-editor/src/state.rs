@@ -53,17 +53,65 @@ pub enum Selection {
     Detached(DetachedConnection),
 }
 
-/// Dragging a node from the palette onto the canvas.
+/// Dragging a node or resource onto the canvas.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PaletteDrag {
-    pub type_name: String,
-    pub title: String,
-    pub color: &'static str,
-    pub start: (f64, f64),
-    /// Current cursor position (client coordinates).
-    pub at: (f64, f64),
-    /// Cursor moved past the threshold — this is now a drag rather than a click.
-    pub active: bool,
+pub enum PaletteDrag {
+    Node {
+        type_name: String,
+        title: String,
+        color: &'static str,
+        start: (f64, f64),
+        at: (f64, f64),
+        active: bool,
+    },
+    Resource {
+        plugin: String,
+        collection_id: String,
+        item: PropertyOption,
+        actions: Vec<ResourceAction>,
+        title: String,
+        color: &'static str,
+        start: (f64, f64),
+        at: (f64, f64),
+        active: bool,
+    },
+}
+
+impl PaletteDrag {
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Node { title, .. } | Self::Resource { title, .. } => title,
+        }
+    }
+
+    pub fn color(&self) -> &'static str {
+        match self {
+            Self::Node { color, .. } | Self::Resource { color, .. } => color,
+        }
+    }
+
+    pub fn at(&self) -> (f64, f64) {
+        match self {
+            Self::Node { at, .. } | Self::Resource { at, .. } => *at,
+        }
+    }
+
+    pub fn active(&self) -> bool {
+        match self {
+            Self::Node { active, .. } | Self::Resource { active, .. } => *active,
+        }
+    }
+
+    pub fn update_motion(&mut self, at: (f64, f64), threshold: f64) {
+        let (start, active) = match self {
+            Self::Node { start, active, at: cur_at, .. } | Self::Resource { start, active, at: cur_at, .. } => {
+                *cur_at = at;
+                (*start, active)
+            }
+        };
+        let (dx, dy) = (at.0 - start.0, at.1 - start.1);
+        *active |= (dx * dx + dy * dy).sqrt() > threshold;
+    }
 }
 
 /// Node "info" tooltip: text and bounding rect of the button (client coordinates) to anchor next to.
@@ -212,6 +260,7 @@ pub struct Editor {
     pub picker: RwSignal<Option<PickerState>>,
     pub wire_menu: RwSignal<Option<WireMenu>>,
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
+    pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
     pub recent_nodes: RwSignal<Vec<String>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
@@ -273,6 +322,7 @@ impl Editor {
             picker: RwSignal::new(None),
             wire_menu: RwSignal::new(None),
             quick_add: RwSignal::new(None),
+            resource_menu: RwSignal::new(None),
             recent_nodes: RwSignal::new(Vec::new()),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
             fitted: StoredValue::new(false),

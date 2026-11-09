@@ -166,3 +166,15 @@ pub fn setting_description(plugin: &str, def: &SettingDefinition) -> String {
 pub fn setting_option_label(plugin: &str, def: &SettingDefinition, value: &str, label: &str) -> String {
     lookup(&format!("setting-{}-{}-option-{}", slug(plugin), slug(&def.key), slug(value))).unwrap_or_else(|| label.to_string())
 }
+
+/// Title of a plugin resource collection (`<plugin slug>-resource-<collection id slug>-title`).
+pub fn resource_collection_title(plugin: &str, collection: &ResourceCollection) -> String {
+    lookup(&format!("{}-resource-{}-title", slug(plugin), slug(&collection.id)))
+        .unwrap_or_else(|| collection.title.clone())
+}
+
+/// Title of a resource action (`<plugin slug>-resource-<collection id slug>-action-<type_name slug>`).
+pub fn resource_action_title(plugin: &str, collection_id: &str, action: &ResourceAction) -> String {
+    lookup(&format!("{}-resource-{}-action-{}", slug(plugin), slug(collection_id), slug(&action.type_name)))
+        .unwrap_or_else(|| action.title.clone())
+}

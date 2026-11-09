@@ -408,3 +408,15 @@ error-plugin-node-crashed = Plugin crashed: { $reason }
 toolbar-show-values = Show values
 pin-no-value = No value yet
 pin-fired-ago = Fired { $time }
+
+# Left panel tabs and resources
+left-tab-nodes = Nodes
+left-tab-resources = Resources
+left-tab-variables = Variables
+
+variables-coming-soon = Graph variables are coming soon: declared, typed values you can watch and change here.
+
+resources-more = and { $count } more — refine the search
+resources-empty = Enabled plugins offer no resources
+resources-loading = No items yet
+

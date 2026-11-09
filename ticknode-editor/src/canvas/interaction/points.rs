@@ -79,7 +79,13 @@ impl Interaction {
         let target = document().element_from_point(ev.client_x() as f32, ev.client_y() as f32).map(Into::into);
         if closest(target.clone(), "[data-node]").is_some() { return; }
         let point = closest(target.clone(), "[data-wire-point]");
-        let Some(el) = point.clone().or_else(|| closest(target, "[data-wire]")) else { return };
+        let Some(el) = point.clone().or_else(|| closest(target.clone(), "[data-wire]")) else {
+            let background = closest(target.clone(), ".canvas").is_some()
+                && closest(target, "[data-detached], button, input, select, textarea").is_none();
+            if background && ev.button() == 0
+                && self.open_quick_add((ev.client_x() as f64, ev.client_y() as f64)) { ev.prevent_default(); }
+            return;
+        };
         let Some(key) = parse_wire(&el).as_ref().and_then(selection_key) else { return };
         let Some(canvas) = self.canvas.get_untracked() else { return };
         let rect = canvas.get_bounding_client_rect();

@@ -371,6 +371,9 @@ inspector-cost = вартість { $cost }
 inspector-cost-help = Відносний обсяг роботи за виклик; базова логіка коштує 1. Бюджет тіку розподіляє роботу з черги між тіками.
 
 wire-menu-empty = Немає сумісних вузлів
+quick-add-recent = Нещодавні
+quick-add-all-nodes = Усі ноди
+overview-hint-quick-add = Подвійний клік, Space або Tab на канві — швидко додати ноду
 
 wire-point-add = Додати точку
 wire-point-remove = Видалити точку

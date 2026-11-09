@@ -13,6 +13,8 @@ mod inline;
 mod match_editor;
 mod panels;
 mod picker;
+mod node_menu;
+mod quick_add;
 mod plugins_panel;
 mod shortcuts;
 mod state;
@@ -94,6 +96,7 @@ fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
     match action {
         Shortcut::Delete => clipboard::delete_selection(editor),
         Shortcut::Escape => {
+            editor.quick_add.set(None);
             editor.wire_menu.set(None);
             editor.wire_context.set(None);
             editor.selected_point.set(None);
@@ -112,6 +115,7 @@ fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
 fn App() -> impl IntoView {
     let locale = i18n::provide_locale(i18n::detect_locale());
     let editor = Editor::new(load_theme(), locale, window_width() > NARROW_WIDTH);
+    editor.recent_nodes.set(quick_add::recent::load());
     provide_context(editor);
 
     Effect::new(move |_| {
@@ -185,6 +189,7 @@ fn App() -> impl IntoView {
             <TooltipLayer />
             <PickerLayer />
             <wire_menu::WireMenuLayer />
+            <quick_add::QuickAddLayer />
             <wire_context::WireContextLayer />
         </div>
     }

@@ -1022,6 +1022,8 @@ body:has(.palette-ghost) { cursor: copy; }
 .picker-row-label, .picker-row-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-row-detail { font-size: 11px; line-height: 14px; color: var(--text-secondary); }
 .picker-note { padding: calc(var(--du) * 2) calc(var(--du) * 3); font-size: 12px; color: var(--text-secondary); }
+.node-menu-divider { border-bottom: var(--border-w) solid var(--divider); }
+.node-menu-icon { flex: none; display: flex; }
 .node.unavailable .picker-field { pointer-events: none; }
 
 /* --- Stub nodes (plugin unavailable) --- */

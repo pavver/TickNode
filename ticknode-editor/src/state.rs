@@ -208,6 +208,8 @@ pub struct Editor {
     /// The open property picker popup.
     pub picker: RwSignal<Option<PickerState>>,
     pub wire_menu: RwSignal<Option<WireMenu>>,
+    pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
+    pub recent_nodes: RwSignal<Vec<String>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
@@ -265,6 +267,8 @@ impl Editor {
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),
             wire_menu: RwSignal::new(None),
+            quick_add: RwSignal::new(None),
+            recent_nodes: RwSignal::new(Vec::new()),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),
@@ -300,6 +304,8 @@ impl Editor {
         });
         if !sent {
             self.log(LogKind::Error, "[ERROR] Disconnected from server - change was not sent");
+        } else if let ClientMessage::AddNode { type_name, .. } | ClientMessage::AddNodeConnected { type_name, .. } = &msg {
+            crate::quick_add::recent::record(*self, type_name);
         }
     }
 

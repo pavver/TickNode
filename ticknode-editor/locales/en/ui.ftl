@@ -371,6 +371,9 @@ inspector-cost = cost { $cost }
 inspector-cost-help = Relative work per call; native logic costs 1. The tick budget spreads queued work over ticks.
 
 wire-menu-empty = No compatible nodes
+quick-add-recent = Recent
+quick-add-all-nodes = All nodes
+overview-hint-quick-add = Double-click, Space or Tab on the canvas — quickly add a node
 
 wire-point-add = Add point
 wire-point-remove = Remove point

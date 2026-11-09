@@ -88,6 +88,26 @@ impl Plugin for HomeAssistant {
                     .described("A long-lived access token (Profile > Security in Home Assistant), or the supervisor token in the add-on")
                     .required(),
             )
+            .resource(
+                ResourceCollection::new("entities", "Entities", entities::ENTITIES_SOURCE)
+                    .icon("mdi:home-assistant")
+                    .action(ResourceAction::new("State trigger", "ha/trigger_state", "entity_id"))
+                    .action(ResourceAction::new("Value", "ha/entity", "entity_id"))
+                    .action(ResourceAction::new("State changed", "ha/state_changed", "entity_id"))
+                    .action(ResourceAction::new("State condition", "ha/condition_state", "entity_id"))
+                    .action(ResourceAction::new("Action", "ha/action", "target").requires_source(entities::ACTION_TARGETS_SOURCE)),
+            )
+            .resource(
+                ResourceCollection::new("zones", "Zones", "zones")
+                    .icon("mdi:map-marker-radius")
+                    .action(ResourceAction::new("Zone trigger", "ha/trigger_zone", "zone"))
+                    .action(ResourceAction::new("Zone condition", "ha/condition_zone", "zone")),
+            )
+            .resource(
+                ResourceCollection::new("persons", "People", "persons")
+                    .icon("mdi:account")
+                    .action(ResourceAction::new("Zone condition", "ha/condition_zone", "entity_id")),
+            )
     }
 
     fn types() -> Vec<TypeDefinition> {

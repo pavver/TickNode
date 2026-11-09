@@ -1413,6 +1413,13 @@ fn ha_plugin_declares_its_nodes_and_type() {
     let mut engine = TickEngine::new();
     let manifest = engine.add_plugin(&bytes, None, |_| vec![]).unwrap();
     assert_eq!(manifest.name, "home_assistant");
+    assert_eq!(manifest.resources.len(), 3);
+    assert_eq!(manifest.resources[0].id, "entities");
+    assert_eq!(manifest.resources[0].actions.len(), 5);
+    assert_eq!(manifest.resources[1].id, "zones");
+    assert_eq!(manifest.resources[1].actions.len(), 2);
+    assert_eq!(manifest.resources[2].id, "persons");
+    assert_eq!(manifest.resources[2].actions.len(), 1);
     assert!(manifest.settings.iter().any(|s| s.key == "token" && s.is_secret() && s.required));
     assert!(manifest.settings.iter().any(|s| s.key == "url" && s.default == Some(DataValue::String("ws://homeassistant.local:8123/api/websocket".into()))));
     engine.enable_plugin("home_assistant", &[("token".into(), DataValue::String("t".into()))]).unwrap();

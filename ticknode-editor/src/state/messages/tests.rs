@@ -2,7 +2,7 @@ use super::*;
 
 fn plugin(name: &str, state: PluginState) -> PluginInfo {
     PluginInfo { name: name.into(), state, version: "1".into(), author: String::new(), file: format!("{name}.wasm"),
-        error: None, settings_error: None, capabilities: vec![], settings: vec![], values: vec![] }
+        error: None, settings_error: None, capabilities: vec![], settings: vec![], values: vec![], resources: vec![] }
 }
 
 #[test]

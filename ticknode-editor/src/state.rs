@@ -309,7 +309,7 @@ impl Editor {
         });
         if !sent {
             self.log(LogKind::Error, "[ERROR] Disconnected from server - change was not sent");
-        } else if let ClientMessage::AddNode { type_name, .. } | ClientMessage::AddNodeConnected { type_name, .. } = &msg {
+        } else if let ClientMessage::AddNode { type_name, .. } | ClientMessage::AddNodeConnected { type_name, .. } | ClientMessage::AddNodeWith { type_name, .. } = &msg {
             crate::quick_add::recent::record(*self, type_name);
         }
     }

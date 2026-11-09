@@ -154,12 +154,28 @@ interface types {
         default: option<value>,
     }
 
+    record resource-action {
+        title: string,
+        type-name: string,
+        property: string,
+        requires-source: option<string>,
+    }
+
+    record resource-collection {
+        id: string,
+        title: string,
+        icon: string,
+        source: string,
+        actions: list<resource-action>,
+    }
+
     record plugin-manifest {
         name: string,
         version: string,
         author: string,
         capabilities: list<capability>,
         settings: list<setting-definition>,
+        resources: list<resource-collection>,
     }
 
     record http-request {

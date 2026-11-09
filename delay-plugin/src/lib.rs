@@ -87,6 +87,7 @@ impl Plugin for DelayPlugin {
             author: "TickNode".into(),
             requested_capabilities: vec![],
             settings: vec![],
+            resources: vec![],
         }
     }
 

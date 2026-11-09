@@ -24,6 +24,22 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
         }
     }
 
+    // Check resources
+    for r in HomeAssistant::manifest().resources {
+        let r_slug = fluent_slug(&r.id);
+        let key = format!("home-assistant-resource-{r_slug}-title");
+        if !ftl.contains(&format!("{key} =")) {
+            missing.push(key);
+        }
+        for a in r.actions {
+            let t_slug = fluent_slug(&a.type_name);
+            let key = format!("home-assistant-resource-{r_slug}-action-{t_slug}");
+            if !ftl.contains(&format!("{key} =")) {
+                missing.push(key);
+            }
+        }
+    }
+
     // Check types
     for ty in HomeAssistant::types() {
         let ty_slug = fluent_slug(&ty.name);
@@ -173,4 +189,36 @@ fn a_valid_action_fails_promptly_while_unconfigured() {
         let outputs = node.execute(Trigger::Pin(PinId(0)), &inputs);
         assert_eq!(outputs,vec![Output::Data(actions::ERROR,"Home Assistant is not configured (set the URL and the access token in the plugin settings)".into()),Output::Exec(actions::FAILED)]);
     }
+}
+
+#[test]
+fn ha_manifest_exposes_collections_and_actions() {
+    let manifest = HomeAssistant::manifest();
+    assert_eq!(manifest.resources.len(), 3);
+
+    let entities = manifest.resources.iter().find(|r| r.id == "entities").expect("entities collection");
+    assert_eq!(entities.title, "Entities");
+    assert_eq!(entities.icon, "mdi:home-assistant");
+    assert_eq!(entities.source, entities::ENTITIES_SOURCE);
+    assert_eq!(entities.actions.len(), 5);
+    assert_eq!(entities.actions[0].type_name, "ha/trigger_state");
+    assert_eq!(entities.actions[0].property, "entity_id");
+    assert_eq!(entities.actions[0].requires_source, None);
+    assert_eq!(entities.actions[4].type_name, "ha/action");
+    assert_eq!(entities.actions[4].property, "target");
+    assert_eq!(entities.actions[4].requires_source.as_deref(), Some(entities::ACTION_TARGETS_SOURCE));
+
+    let zones = manifest.resources.iter().find(|r| r.id == "zones").expect("zones collection");
+    assert_eq!(zones.title, "Zones");
+    assert_eq!(zones.icon, "mdi:map-marker-radius");
+    assert_eq!(zones.source, "zones");
+    assert_eq!(zones.actions.len(), 2);
+
+    let persons = manifest.resources.iter().find(|r| r.id == "persons").expect("persons collection");
+    assert_eq!(persons.title, "People");
+    assert_eq!(persons.icon, "mdi:account");
+    assert_eq!(persons.source, "persons");
+    assert_eq!(persons.actions.len(), 1);
+    assert_eq!(persons.actions[0].type_name, "ha/condition_zone");
+    assert_eq!(persons.actions[0].property, "entity_id");
 }

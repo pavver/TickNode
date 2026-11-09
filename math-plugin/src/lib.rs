@@ -109,6 +109,7 @@ impl Plugin for MathPlugin {
             author: "TickNode".into(),
             requested_capabilities: vec![],
             settings: vec![],
+            resources: vec![],
         }
     }
 

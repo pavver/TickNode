@@ -59,6 +59,7 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
                 })
                 .collect(),
             settings: m.settings.into_iter().map(to_wit_setting).collect(),
+            resources: m.resources.into_iter().map(to_wit_resource_collection).collect(),
         }
     }
 

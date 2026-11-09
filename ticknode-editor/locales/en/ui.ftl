@@ -22,6 +22,7 @@ error-type-mismatch = Incompatible data types: cannot connect { $src } to { $dst
 error-invalid-pin-connection = Invalid pin connection: one or both pins do not exist or have the wrong direction/type
 error-node-not-found = Node { $node } not found
 error-unknown-node-type = Unknown node type: { $type }
+error-invalid-property = Invalid property: { $property }
 error-node-plugin-unavailable = plugin { $plugin } unavailable
 error-node-type-unknown = node type { $type } is unknown: the required plugin is missing or disabled
 error-paste-too-many = Too many nodes to paste: { $count } (maximum { $max })

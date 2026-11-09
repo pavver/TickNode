@@ -131,3 +131,22 @@ pub(crate) fn to_wit_output(output: Output) -> wit::Output {
         Output::Clear(pin) => wit::Output::Clear(pin.0),
     }
 }
+
+pub(crate) fn to_wit_resource_action(a: ResourceAction) -> wit::ResourceAction {
+    wit::ResourceAction {
+        title: a.title,
+        type_name: a.type_name,
+        property: a.property,
+        requires_source: a.requires_source,
+    }
+}
+
+pub(crate) fn to_wit_resource_collection(c: ResourceCollection) -> wit::ResourceCollection {
+    wit::ResourceCollection {
+        id: c.id,
+        title: c.title,
+        icon: c.icon,
+        source: c.source,
+        actions: c.actions.into_iter().map(to_wit_resource_action).collect(),
+    }
+}

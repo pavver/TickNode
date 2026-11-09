@@ -112,6 +112,7 @@ impl Plugins {
             capabilities: manifest.map(|m| m.requested_capabilities.clone()).unwrap_or_default(),
             settings,
             values,
+            resources: manifest.map(|m| m.resources.clone()).unwrap_or_default(),
         })
     }
 

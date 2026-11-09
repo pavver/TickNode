@@ -83,6 +83,7 @@ impl Plugin for WeatherPlugin {
                 allowed_domains: vec!["api.openweathermap.org".into(), "localhost".into()],
             }],
             settings: vec![],
+            resources: vec![],
         }
     }
 

@@ -15,6 +15,7 @@ impl Actor {
         let only = |events: Vec<ServerMessage>| (events, None);
         let result = match msg {
             ClientMessage::AddNode { type_name, position } => self.add_node(&type_name, position)?,
+            ClientMessage::AddNodeWith { type_name, position, properties } => self.add_node_with(&type_name, position, properties)?,
             ClientMessage::AddNodeConnected { type_name, position, from, pin } => self.add_node_connected(&type_name, position, from, pin)?,
             ClientMessage::ConfirmPins(id) => only(if self.engine.confirm_pins(id).map_err(|e| e.ui_message())? {
                 vec![ServerMessage::NodeUpdated(self.instance(id).expect("the node exists"))]
@@ -51,6 +52,18 @@ impl Actor {
     fn add_node(&mut self, type_name: &str, position: Position) -> Result<Applied, UiMessage> {
         let id = NodeId::generate();
         self.engine.create_node(id, type_name, &[]).map_err(|e| e.ui_message())?;
+        self.positions.insert(id, position);
+        Ok((vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))], Some(vec![id])))
+    }
+
+    fn add_node_with(&mut self, type_name: &str, position: Position, properties: Vec<(String, DataValue)>) -> Result<Applied, UiMessage> {
+        for (k, _) in &properties {
+            if k.starts_with("in:") || k.starts_with("split:") {
+                return Err(UiMessage::new("error-invalid-property", format!("Invalid property: {k}")).arg("property", k));
+            }
+        }
+        let id = NodeId::generate();
+        self.engine.create_node(id, type_name, &properties).map_err(|e| e.ui_message())?;
         self.positions.insert(id, position);
         Ok((vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))], Some(vec![id])))
     }

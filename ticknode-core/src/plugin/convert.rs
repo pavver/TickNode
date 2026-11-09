@@ -104,6 +104,26 @@ pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
             wit::Capability::Websocket(allowed_hosts) => Capability::WebSocket { allowed_hosts },
         }).collect(),
         settings: m.settings.into_iter().map(from_wit_setting).collect(),
+        resources: m.resources.into_iter().map(from_wit_resource_collection).collect(),
+    }
+}
+
+fn from_wit_resource_collection(c: wit::ResourceCollection) -> ResourceCollection {
+    ResourceCollection {
+        id: c.id,
+        title: c.title,
+        icon: c.icon,
+        source: c.source,
+        actions: c.actions.into_iter().map(from_wit_resource_action).collect(),
+    }
+}
+
+fn from_wit_resource_action(a: wit::ResourceAction) -> ResourceAction {
+    ResourceAction {
+        title: a.title,
+        type_name: a.type_name,
+        property: a.property,
+        requires_source: a.requires_source,
     }
 }
 

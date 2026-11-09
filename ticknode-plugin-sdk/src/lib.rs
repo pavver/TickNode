@@ -65,7 +65,7 @@
 
 pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
-    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind, PropertyOption, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
+    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind, PropertyOption, ResourceAction, ResourceCollection, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
     UiMessage, fluent_slug as slug,
 };
 

@@ -195,6 +195,7 @@ impl Plugin for StringPlugin {
             author: "TickNode".into(),
             requested_capabilities: vec![],
             settings: vec![],
+            resources: vec![],
         }
     }
 

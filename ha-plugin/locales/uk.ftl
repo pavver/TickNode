@@ -446,3 +446,18 @@ node-ha-condition-template-pin-No = Ні
 node-ha-condition-template-pin-Result = Результат
 node-ha-condition-template-prop-value_template-title = Шаблон значення
 node-ha-condition-template-prop-value_template-description = Шаблон Jinja Home Assistant з логічним результатом
+
+# Resource collections and actions
+home-assistant-resource-entities-title = Сутності
+home-assistant-resource-entities-action-ha-trigger-state = Тригер стану
+home-assistant-resource-entities-action-ha-entity = Значення
+home-assistant-resource-entities-action-ha-state-changed = Зміна стану
+home-assistant-resource-entities-action-ha-condition-state = Умова стану
+home-assistant-resource-entities-action-ha-action = Дія
+
+home-assistant-resource-zones-title = Зони
+home-assistant-resource-zones-action-ha-trigger-zone = Тригер зони
+home-assistant-resource-zones-action-ha-condition-zone = Умова зони
+
+home-assistant-resource-persons-title = Люди
+home-assistant-resource-persons-action-ha-condition-zone = Умова зони

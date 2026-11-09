@@ -26,7 +26,7 @@ fn plugin_states_and_missing_manifest_have_distinct_labels() {
     });
     let mut info = PluginInfo {
         name: "p".into(), version: String::new(), author: String::new(), file: "p.wasm".into(),
-        state: PluginState::Error, error: None, settings_error: None, capabilities: vec![], settings: vec![], values: vec![],
+        state: PluginState::Error, error: None, settings_error: None, capabilities: vec![], settings: vec![], values: vec![], resources: vec![],
     };
     assert_eq!(plugin_caption(&info), "p.wasm");
     info.version = "1.2".into();

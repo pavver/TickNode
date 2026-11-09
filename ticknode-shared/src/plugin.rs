@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Capability, DataValue, UiMessage};
+use crate::{Capability, DataValue, ResourceCollection, UiMessage};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SettingKind {
@@ -130,6 +130,8 @@ pub struct PluginInfo {
     pub capabilities: Vec<Capability>,
     pub settings: Vec<SettingDefinition>,
     pub values: Vec<(String, SettingValueView)>,
+    #[serde(default)]
+    pub resources: Vec<ResourceCollection>,
 }
 
 #[cfg(test)]
@@ -157,6 +159,7 @@ mod tests {
             capabilities: vec![Capability::Storage],
             settings: vec![SettingDefinition::secret("token", "Token").required()],
             values: vec![("token".into(), SettingValueView::Secret { is_set: true })],
+            resources: vec![ResourceCollection::new("entities", "Entities", "entities").icon("mdi:home-assistant")],
         };
         let back: PluginInfo = postcard::from_bytes(&postcard::to_allocvec(&info).unwrap()).unwrap();
         assert_eq!(back, info);

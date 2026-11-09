@@ -39,6 +39,7 @@ pub enum ClientMessage {
     RemoveDetached(DetachedConnection),
     /// Sets layout dimensions; None restores automatic sizing.
     ResizeNode { id: NodeId, size: Option<NodeSize> },
+    AddNodeWith { type_name: String, position: Position, properties: Vec<(String, DataValue)> },
 }
 
 /// An existing endpoint from which a connection is dragged.

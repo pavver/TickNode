@@ -18,6 +18,7 @@ error-type-mismatch = Несумісні типи даних: не можна з
 error-invalid-pin-connection = Некоректне з'єднання пінів: один або обидва піни не існують або мають невірний напрямок чи тип
 error-node-not-found = Ноду { $node } не знайдено
 error-unknown-node-type = Невідомий тип ноди: { $type }
+error-invalid-property = Неприпустима властивість: { $property }
 error-node-plugin-unavailable = плагін { $plugin } недоступний
 error-node-type-unknown = тип ноди { $type } невідомий: потрібного плагіна немає або його вимкнено
 error-paste-too-many = Забагато нод для вставки: { $count } (максимум { $max })

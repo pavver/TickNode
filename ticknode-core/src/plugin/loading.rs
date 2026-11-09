@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use ticknode_shared::*;
@@ -61,7 +62,7 @@ impl TickEngine {
         let (manifest, definitions, types, translations) = read_metadata(&mut runtime)?;
         runtime.instance = None;
 
-        let manifest = from_wit_manifest(manifest);
+        let mut manifest = from_wit_manifest(manifest);
         self.validate_plugin_name(&manifest)?;
         let definitions: Vec<(NodeDefinition, bool)> = definitions.into_iter().map(|d| from_wit_definition(d, &manifest.name)).collect();
         let types: Vec<TypeDefinition> = types.into_iter().map(from_wit_type_definition).collect();
@@ -70,6 +71,7 @@ impl TickEngine {
         runtime.grants = Arc::new(plugin_grants(&manifest.name, grant(&manifest), storage_root)?);
 
         let node_types: Vec<String> = definitions.iter().map(|(d, _)| d.type_name.clone()).collect();
+        manifest.resources = validate_resources(&manifest.name, manifest.resources, &node_types);
         let type_names: Vec<String> = types.iter().map(|t| t.name.clone()).collect();
         let allowed = AllowedIds::new(&manifest.name, &node_types, &type_names);
         runtime.allowed = allowed.clone();
@@ -152,6 +154,42 @@ fn read_metadata(runtime: &mut Runtime) -> Result<PluginMetadata, UiMessage> {
             api.call_translations(&mut *store)?,
         )))
         .map_err(|e| UiMessage::plain(format!("Plugin initialization failed: {e:#}")))
+}
+
+fn validate_resources(plugin: &str, resources: Vec<ResourceCollection>, node_types: &[String]) -> Vec<ResourceCollection> {
+    let mut valid = Vec::new();
+    let mut seen_ids = HashSet::new();
+    for mut collection in resources {
+        if collection.id.is_empty() {
+            warn!(plugin, "Dropping resource collection: empty id");
+            continue;
+        }
+        if !seen_ids.insert(collection.id.clone()) {
+            warn!(plugin, id = %collection.id, "Dropping resource collection: duplicate id");
+            continue;
+        }
+        if collection.source.is_empty() {
+            warn!(plugin, id = %collection.id, "Dropping resource collection: empty source");
+            continue;
+        }
+        collection.actions.retain(|action| {
+            if action.property.is_empty() {
+                warn!(plugin, collection = %collection.id, type_name = %action.type_name, "Dropping resource action: empty property");
+                return false;
+            }
+            if !node_types.iter().any(|t| t == &action.type_name) {
+                warn!(plugin, collection = %collection.id, type_name = %action.type_name, "Dropping resource action: unknown node type");
+                return false;
+            }
+            true
+        });
+        if collection.actions.is_empty() {
+            warn!(plugin, id = %collection.id, "Dropping resource collection: no valid actions");
+            continue;
+        }
+        valid.push(collection);
+    }
+    valid
 }
 
 #[cfg(test)]

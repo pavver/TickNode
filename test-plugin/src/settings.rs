@@ -86,6 +86,10 @@ impl PluginNode for Picker {
 /// Publishes dynamic options derived from the greeting setting (checks `set-options` from `configure`,
 /// the host limits and clearing on disable). `flood` exceeds the limits on purpose.
 pub(super) fn publish_options(greeting: &str) {
+    if greeting == "clock" {
+        host::set_options("clock", &[PropertyOption { value: format!("{}:{}", host::current_tick(), host::tick_duration_ms()),
+            label: "Clock outside execution".into(), detail: String::new(), icon: None }]);
+    }
     let option = |value: &str| PropertyOption { value: value.into(), label: value.to_uppercase(), detail: format!("detail {value}"), icon: Some("mdi:hand-wave".into()) };
     host::set_options("greetings", &if greeting.is_empty() { Vec::new() } else { vec![option(greeting)] });
     if greeting == "flood" {

@@ -7,6 +7,7 @@ mod websocket;
 mod execution;
 mod typed;
 mod cost;
+mod clock;
 
 use settings::{CONFIG, Greeter, Picker, publish_options};
 use websocket::{WS, WsProbe, ws_emit};
@@ -17,7 +18,7 @@ struct TestPlugin;
 
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] =
-        &["test/cost", "test/clear", "test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
+        &["test/clock", "test/cost", "test/clear", "test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
     /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
     const TRANSLATIONS: &'static [(&'static str, &'static str)] =
         &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
@@ -55,6 +56,14 @@ impl Plugin for TestPlugin {
     }
 
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
+        CONFIG.with(|c| match c.borrow().greeting.as_str() {
+            "tick-clock" => host::log(&format!("Plugin tick {}", host::current_tick())),
+            "trap-tick" => {
+                host::log(&format!("Plugin tick {}", host::current_tick()));
+                panic!("deliberate plugin-tick panic");
+            }
+            _ => {}
+        });
         WS.with(|w| w.borrow_mut().events += events.len() as i64);
         let mut emissions = Vec::new();
         for event in events {
@@ -98,6 +107,7 @@ impl Plugin for TestPlugin {
 
     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> {
         Some(match type_name {
+            "test/clock" => Box::new(clock::Clock),
             "test/cost" => Box::new(cost::CostProbe::default()),
             "test/clear" => Box::new(ClearProbe),
             "test/counter" => Box::new(Counter { step: 1, count: 0 }),

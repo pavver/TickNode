@@ -306,3 +306,7 @@ category-weather = Weather
         assert!(translations.iter().any(|(l, t)| l == "uk" && t.contains("node-const-title")));
     }
 }
+
+#[cfg(test)]
+#[path = "translations/tests.rs"]
+mod contract_tests;

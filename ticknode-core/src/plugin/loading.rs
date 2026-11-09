@@ -152,3 +152,6 @@ fn read_metadata(runtime: &mut Runtime) -> Result<PluginMetadata, UiMessage> {
         )))
         .map_err(|e| UiMessage::plain(format!("Plugin initialization failed: {e:#}")))
 }
+
+#[cfg(test)]
+mod tests;

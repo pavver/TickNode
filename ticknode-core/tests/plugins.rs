@@ -2122,3 +2122,45 @@ fn plugin_cost_tracks_properties_and_controls_budget() {
     assert!(engine.load_graph(&graph).is_empty());
     assert_eq!(engine.node_definition(id).unwrap().cost, 2);
 }
+
+#[test]
+fn core_c_host_clock_and_reserved_pins_are_visible_through_the_catalog_and_execution() {
+    let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
+    engine.enable_plugin("test_plugin", &test_settings("clock", "t")).unwrap();
+    let sets = engine.property_options();
+    assert_eq!(option_set(&sets, "clock").unwrap().options[0].value, "0:0");
+    let definition = engine.registry.get_definition("test/clock").unwrap().clone();
+    assert_eq!(definition.pins.iter().map(|p| p.id).collect::<Vec<_>>(), [PinId(0), PinId(1), PinId(2)]);
+    let node = NodeId::generate();
+    engine.create_node(node, "test/clock", &[]).unwrap();
+    assert_eq!(engine.node_definition(node).unwrap().pins, definition.pins);
+    engine.host_state.tick_duration = std::time::Duration::from_millis(37);
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    assert_eq!(output(&engine, node, 1), Some(number(1)));
+    assert_eq!(output(&engine, node, 2), Some(number(37)));
+    let trace = engine.executed.iter().find(|t| t.node_id == node).unwrap();
+    assert_eq!(trace.outputs, [(PinId(1), number(1)), (PinId(2), number(37))]);
+}
+
+#[test]
+fn core_c_editing_existing_plugin_properties_survives_instance_recreation() {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else { return };
+    let node = NodeId::generate();
+    engine.create_node(node, "test/point_source", &[("x".into(), number(2)), ("y".into(), number(3))]).unwrap();
+    let crash = NodeId::generate();
+    engine.create_node(crash, "test/crash", &[]).unwrap();
+    engine.trigger_node(crash, PinId(0));
+    engine.tick();
+    assert!(engine.host_state.logs.iter().any(|(id, log)| *id == crash && log.contains("Plugin crashed")));
+    // Edit before the next tick recreates the resource from the stored properties.
+    engine.set_node_property(node, "y", number(9)).unwrap();
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    let Some(DataValue::Object { fields, .. }) = output(&engine, node, 1) else { panic!("missing point") };
+    assert_eq!(fields["x"].value, DataValue::from(2.0));
+    assert_eq!(fields["y"].value, DataValue::from(9.0));
+    let properties = engine.node_model(node).unwrap().properties;
+    assert_eq!(properties.iter().filter(|(key, _)| key == "y").count(), 1);
+    assert!(properties.contains(&("y".into(), DataValue::from(9.0))));
+}

@@ -143,14 +143,22 @@ async fn run(id: WsId, request: Request<()>, mut outbound: mpsc::UnboundedReceiv
     let _ = inbox.send(WsEvent::Closed(id, reason)).await;
 }
 
-/// Runs the connection until it ends; returns the reason.
-async fn connection(id: WsId, request: Request<()>, outbound: &mut mpsc::UnboundedReceiver<String>, inbox: &mpsc::Sender<WsEvent>) -> String {
+/// Opens a text transport with the plugin's message limits and the default TCP coalescing policy.
+async fn open_stream(request: Request<()>) -> Result<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    tokio_tungstenite::tungstenite::Error,
+> {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE_BYTES))
         .max_frame_size(Some(MAX_MESSAGE_BYTES));
-    let connecting = tokio_tungstenite::connect_async_with_config(request, Some(config), false);
+    tokio_tungstenite::connect_async_with_config(request, Some(config), false).await.map(|(stream, _)| stream)
+}
+
+/// Runs the connection until it ends; returns the reason.
+async fn connection(id: WsId, request: Request<()>, outbound: &mut mpsc::UnboundedReceiver<String>, inbox: &mpsc::Sender<WsEvent>) -> String {
+    let connecting = open_stream(request);
     let stream = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
-        Ok(Ok((stream, _))) => stream,
+        Ok(Ok(stream)) => stream,
         Ok(Err(e)) => return format!("Connection failed: {e}"),
         Err(_) => return "Connection failed: timed out".to_string(),
     };
@@ -211,3 +219,7 @@ mod tests {
         assert!(hub.connect("ws://127.0.0.1:1/", &[]).is_ok());
     }
 }
+
+#[cfg(test)]
+#[path = "ws/tests.rs"]
+mod contract_tests;

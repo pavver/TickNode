@@ -184,3 +184,5 @@
         assert_eq!(engine.executed.iter().map(|t| t.node_id).collect::<Vec<_>>(), [source, ids[0]]);
         assert_eq!(engine.last_tick, crate::TickStats { spent: 2, deferred: 2 });
     }
+
+mod core_c;

@@ -179,3 +179,6 @@ fn perform_http_request(request: HttpRequest) -> TaskResult {
     response.into_reader().take(MAX_HTTP_BODY).read_to_end(&mut body).map_err(|e| e.to_string())?;
     Ok(TaskOutput::Http(HttpResponse { status, headers, body }))
 }
+
+#[cfg(test)]
+mod tests;

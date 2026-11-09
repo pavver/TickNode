@@ -47,7 +47,7 @@ impl Interaction {
         }
         self.cursor.set(world);
         self.pending_wire.set(Some(from));
-        self.drag.set_value(Drag::Wire { from });
+        self.drag.set_value(Drag::Wire { from, detached: None });
     }
 
     pub(super) fn toggle_node(self, id: NodeId) {

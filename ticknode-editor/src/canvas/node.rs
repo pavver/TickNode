@@ -44,10 +44,12 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
     };
     // Stub node: its plugin is unavailable — the node is dimmed and properties are read-only
     let unavailable = Memo::new(move |_| node.instance.with(|i| i.unavailable.clone()));
-    let trigger = Memo::new(move |_| if unavailable.with(Option::is_some) { None } else { def.with(super::trigger_pin) });
+    let frozen = Memo::new(move |_| node.instance.with(|i| !i.frozen.is_empty()));
+    let trigger = Memo::new(move |_| if frozen.get() || unavailable.with(Option::is_some) { None } else { def.with(super::trigger_pin) });
     view! {
         <div
             class="node"
+            class:frozen=move || frozen.get()
             class:unavailable=move || unavailable.with(Option::is_some)
             title=move || unavailable.get().map(|m| i18n::ui_text(&m)).unwrap_or_default()
             data-node=id.0.to_string()
@@ -56,7 +58,7 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
             class:active=move || ed.now.get() - node.last_exec.get() < EXEC_HIGHLIGHT_MS
             style=style
         >
-            <div class="node-header">
+            <div class="node-header" on:pointerdown=crate::match_editor::stop_on_controls>
                 <span class="node-title ellipsis">{move || def.with(i18n::node_title)}</span>
                 <span class="node-cat ellipsis" class:node-unavailable=move || unavailable.with(Option::is_some)>
                     {move || if unavailable.with(Option::is_some) { t!("node-plugin-unavailable") } else { def.with(|d| category_label(&d.category)) }}
@@ -64,6 +66,12 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                 {move || def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p))).then(|| view! {
                     <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}
+                <Show when=move || frozen.get()>
+                    <span class="mdi mdi-alert-outline node-frozen-warning" title=move || node.instance.with(|i| {
+                        i.frozen.iter().map(|change| crate::frozen::change_text(ed, &i.definition, change)).collect::<Vec<_>>().join("\n")
+                    })></span>
+                    <crate::frozen::ConfirmPins id=id compact=true />
+                </Show>
                 {move || trigger.get().map(|pin| view! {
                     // For ClickButton, triggering is its entire purpose, so "run" is always visible; for others, on hover
                     <button

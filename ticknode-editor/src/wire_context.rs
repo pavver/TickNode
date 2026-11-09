@@ -1,7 +1,8 @@
-//! Fixed-position menu for editor-only wire route points.
+//! Fixed-position menu for route points and detached wire removal.
 
 use leptos::prelude::*;
 use wasm_bindgen::{JsCast, closure::Closure};
+use ticknode_shared::ClientMessage;
 
 use crate::canvas::{PointEdit, edit_route};
 use crate::i18n::t;
@@ -16,8 +17,10 @@ pub fn WireContextLayer() -> impl IntoView {
         if first.is_some() { ed.wire_context.set(None); }
     });
     Effect::new(move |_| {
-        if let Some(state) = ed.wire_context.get()
-            && !ed.wire_exists((state.exec, state.connection)) { ed.wire_context.set(None); }
+        if let Some(state) = ed.wire_context.get() {
+            let exists = state.detached.map_or_else(|| ed.wire_exists((state.exec, state.connection)), |d| ed.detached.with(|all| all.contains(&d)));
+            if !exists { ed.wire_context.set(None); }
+        }
     });
     let outside = Closure::<dyn Fn(web_sys::PointerEvent)>::new(move |ev: web_sys::PointerEvent| {
         let inside = ev.target().and_then(|t| t.dyn_into::<web_sys::Element>().ok())
@@ -38,7 +41,7 @@ fn WireContextPopup(state: WireContext) -> impl IntoView {
     let button = NodeRef::<leptos::html::Button>::new();
     Effect::new(move |_| { if let Some(el) = button.get() { let _ = el.focus(); } });
     let key = (state.exec, state.connection);
-    let has_points = move || ed.wire_routes.with(|all| all.get(&key).is_some_and(|points| !points.is_empty()));
+    let has_points = move || state.detached.is_none() && ed.wire_routes.with(|all| all.get(&key).is_some_and(|points| !points.is_empty()));
     let choose = move |edit| {
         edit_route(ed, key, state.world, edit);
         ed.wire_context.set(None);
@@ -54,10 +57,15 @@ fn WireContextPopup(state: WireContext) -> impl IntoView {
             on:keydown=move |ev: web_sys::KeyboardEvent| {
                 if ev.key() == "Escape" { ev.prevent_default(); ed.wire_context.set(None); }
             }>
-            {match state.index {
+            {if let Some(d) = state.detached {
+                view! { <button node_ref=button class="picker-row" on:click=move |_| {
+                    ed.send(ClientMessage::RemoveDetached(d));
+                    ed.wire_context.set(None);
+                }>{move || t!("wire-detached-remove")}</button> }.into_any()
+            } else { match state.index {
                 Some(index) => view! { <button node_ref=button class="picker-row" on:click=move |_| choose(PointEdit::Remove(index))>{move || t!("wire-point-remove")}</button> }.into_any(),
                 None => view! { <button node_ref=button class="picker-row" on:click=move |_| choose(PointEdit::Add)>{move || t!("wire-point-add")}</button> }.into_any(),
-            }}
+            }}}
             <Show when=has_points>
                 <button class="picker-row" on:click=move |_| choose(PointEdit::Clear)>{move || t!("wire-points-clear")}</button>
             </Show>

@@ -36,7 +36,8 @@ pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
     let wire_routes = ed.wire_routes.with_untracked(|all| all.iter()
         .filter(|((exec, c), _)| if *exec { exec_connections.contains(c) } else { data_connections.contains(c) })
         .map(|((exec, connection), points)| WireRoute { exec: *exec, connection: *connection, points: points.clone() }).collect());
-    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes, detached_connections: Vec::new() })
+    let detached_connections = ed.detached.with_untracked(|all| all.iter().copied().filter(|d| inside(&d.connection)).collect());
+    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes, detached_connections })
 }
 
 pub fn to_text(graph: GraphModel) -> String {
@@ -132,6 +133,7 @@ pub fn delete_selection(ed: Editor) {
         Some(Selection::Nodes(ids)) => ed.send_batch(ids.into_iter().map(ClientMessage::RemoveNode).collect()),
         Some(Selection::Exec(c)) => ed.send(ClientMessage::DisconnectExec(c)),
         Some(Selection::Data(c)) => ed.send(ClientMessage::DisconnectData { dst_node: c.dst_node, dst_pin: c.dst_pin }),
+        Some(Selection::Detached(d)) => ed.send(ClientMessage::RemoveDetached(d)),
         None => {}
     }
 }

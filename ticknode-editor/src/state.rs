@@ -48,6 +48,7 @@ pub enum Selection {
     Nodes(BTreeSet<NodeId>),
     Exec(ConnectionModel),
     Data(ConnectionModel),
+    Detached(DetachedConnection),
 }
 
 /// Dragging a node from the palette onto the canvas.
@@ -167,6 +168,7 @@ pub struct Editor {
     pub nodes: RwSignal<BTreeMap<NodeId, ClientNode>>,
     pub exec: RwSignal<Vec<ConnectionModel>>,
     pub data: RwSignal<Vec<ConnectionModel>>,
+    pub detached: RwSignal<Vec<DetachedConnection>>,
     pub wire_routes: RwSignal<WireRoutes>,
     pub wire_context: RwSignal<Option<WireContext>>,
     /// Route point last pressed on the selected wire: Delete removes it instead of the wire.
@@ -231,6 +233,7 @@ impl Editor {
             nodes: RwSignal::new(BTreeMap::new()),
             exec: RwSignal::new(Vec::new()),
             data: RwSignal::new(Vec::new()),
+            detached: RwSignal::new(Vec::new()),
             wire_routes: RwSignal::new(HashMap::new()),
             wire_context: RwSignal::new(None),
             selected_point: RwSignal::new(None),

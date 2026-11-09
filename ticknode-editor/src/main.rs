@@ -6,6 +6,7 @@ mod categories;
 mod clipboard;
 mod connection;
 mod geometry;
+mod frozen;
 mod events;
 pub mod i18n;
 mod inline;

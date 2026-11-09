@@ -23,7 +23,7 @@ impl Interaction {
             // Clicking a node in a group selects only that node.
             (Drag::Nodes { clicked, .. }, true) => ed.select_nodes([clicked]),
             (Drag::Box { start, additive }, true) => self.finish_box(boxed.unwrap_or(SelectBox { start, end: start }), additive),
-            (Drag::Wire { from }, true) => self.finish_wire(ev, from),
+            (Drag::Wire { from, detached }, true) => self.finish_wire(ev, from, detached),
             _ => {},
         }
     }
@@ -38,10 +38,20 @@ impl Interaction {
         self.ed.select_nodes(ids);
     }
 
-    fn finish_wire(self, ev: &PointerEvent, from: WireEnd) {
+    fn finish_wire(self, ev: &PointerEvent, from: WireEnd, detached: Option<DetachedConnection>) {
         let hit = document().element_from_point(ev.client_x() as f32, ev.client_y() as f32);
         let Some(hit) = hit else { return };
         let to = hit.closest("[data-pin]").ok().flatten().and_then(|el| parse_pin(&el));
+        if let Some(d) = detached {
+            if !self.ed.detached.with_untracked(|all| all.contains(&d)) { return; }
+            if let Some(to) = to {
+                let kind = |end: WireEnd| self.ed.node(end.node).and_then(|n| n.instance.with_untracked(|i| pin_type(&i.definition, end.pin, end.dir).cloned()));
+                let command = self.ed.types.with_untracked(|types| self.ed.data.with_untracked(|data|
+                    super::super::detached::reconnect(d, to, kind(from).as_ref(), kind(to).as_ref(), types, data)));
+                if let Some(command) = command { self.ed.send(command); }
+            }
+            return;
+        }
         let Some(to) = to else {
             // Pointer capture retargets pointerup to the canvas; use the element under the cursor.
             let background = hit.closest(".canvas").ok().flatten().is_some()

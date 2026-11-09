@@ -363,3 +363,15 @@ error-wire-route = Invalid wire route: the connection must exist and the route m
 
 error-plugin-api-mismatch = The plugin was built for plugin API { $plugin_api } (SDK { $plugin_sdk }), but this server uses plugin API { $server_api } (TickNode { $server_version }). Rebuild the plugin with the current SDK.
 error-plugin-api-unknown = The plugin was built with an SDK that predates plugin API checks. This server uses plugin API { $server_api } (TickNode { $server_version }). Rebuild the plugin with the current SDK.
+
+# Unconfirmed pin contracts and detached wires
+node-frozen-title = Pins changed
+node-frozen-confirm = Looks right
+node-frozen-help = This node does not run until confirmed. Disconnected wires stay until you remove or reconnect them.
+pin-change-removed = Removed { $direction } pin “{ $name }” ({ $kind })
+pin-change-changed = Pin “{ $name }”: { $old } → { $new }
+pin-change-required = New required input “{ $name }” ({ $kind })
+pin-direction-input = input
+pin-direction-output = output
+wire-detached-title = Wire disconnected: the pin changed
+wire-detached-remove = Remove wire

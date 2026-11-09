@@ -1115,3 +1115,16 @@ body:has(.palette-ghost) { cursor: copy; }
 .wire-context { padding: var(--du); }
 .wire-context button { width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
 .wire-context button:hover, .wire-context button:focus-visible { background: var(--selection); }
+
+/* Frozen contracts retain the existing header and pin geometry. */
+.node.frozen::after { border-color: var(--warning); border-width: var(--border-thick); }
+.node.frozen .node-header { background: color-mix(in srgb, var(--warning) 14%, var(--surface-alt)); }
+.node-frozen-warning { color: var(--warning); flex: none; }
+.node-confirm { display: inline-flex; align-items: center; justify-content: center; flex: none; width: calc(var(--du) * 6); height: calc(var(--du) * 6); padding: 0; border: var(--border-w) solid var(--warning); background: var(--surface); color: var(--warning); cursor: pointer; }
+.node-confirm:hover, .node-confirm:focus-visible { background: color-mix(in srgb, var(--warning) 20%, var(--surface)); }
+.frozen-info ul { margin: 0; padding-left: calc(var(--du) * 4); }
+.wire.detached { stroke: var(--error); stroke-dasharray: 6 4; }
+.wire.detached.selected { stroke: var(--error); stroke-width: calc(var(--du) * 1); }
+.detached-square { fill: var(--surface); stroke: var(--error); stroke-width: calc(var(--du) * 0.5); pointer-events: none; }
+.detached-group.selected .detached-square { stroke-width: var(--du); }
+.detached-end-hit { fill: transparent; pointer-events: all; cursor: crosshair; }

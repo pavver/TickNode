@@ -176,3 +176,21 @@ fn insertion_uses_the_nearest_curve_segment_including_backwards_routes() {
     // Coincident endpoints do not divide by zero and tie-breaking is deterministic.
     assert_eq!(route_insert_index(a, &[Position::default()], a, a), 0);
 }
+
+#[test]
+fn detached_anchor_uses_pin_then_clamped_directional_rows_and_outward_offset() {
+    let layout = NodeLayout { width: NODE_WIDTH, height: 180.0, pins_top: 60.0, cases_top: 160.0,
+        inputs: vec![(PinId(1), 72.0), (PinId(2), 96.0)],
+        outputs: vec![(PinId(1), 144.0)],
+    };
+    let pos = Position { x: 100.0, y: 200.0 };
+    // The pin ID and direction take precedence over its saved row.
+    assert_eq!(layout.detached_anchor(pos, PinId(1), PinDirection::Input, 100, true), (68.0, 272.0));
+    assert_eq!(layout.detached_anchor(pos, PinId(1), PinDirection::Output, 0, true), (372.0, 344.0));
+    assert_eq!(layout.detached_anchor(pos, PinId(9), PinDirection::Input, 0, true), (68.0, 272.0));
+    assert_eq!(layout.detached_anchor(pos, PinId(9), PinDirection::Input, u32::MAX, true), (68.0, 296.0));
+    assert_eq!(layout.detached_anchor(pos, PinId(9), PinDirection::Output, 100, false), (340.0, 344.0));
+    let empty = NodeLayout { inputs: vec![], outputs: vec![], ..layout };
+    assert_eq!(empty.detached_anchor(pos, PinId(9), PinDirection::Input, 99, true), (68.0, 260.0));
+    assert_eq!(empty.detached_anchor(pos, PinId(9), PinDirection::Output, 99, false), (340.0, 260.0));
+}

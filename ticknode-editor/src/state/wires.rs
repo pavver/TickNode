@@ -7,6 +7,7 @@ pub type WireRoutes = HashMap<WireKey, Vec<Position>>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WireContext {
+    pub detached: Option<DetachedConnection>,
     pub exec: bool,
     pub connection: ConnectionModel,
     pub index: Option<usize>,

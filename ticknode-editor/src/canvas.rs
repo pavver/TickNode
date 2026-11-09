@@ -10,6 +10,7 @@ use crate::i18n::t;
 use crate::state::{Selection, use_editor};
 
 mod camera;
+mod detached;
 mod interaction;
 mod node;
 mod paste;
@@ -87,6 +88,9 @@ pub fn Canvas() -> impl IntoView {
                     </For>
                     <For each=move || ed.data.get() key=|c| *c let:c>
                         <Wire conn=c exec=false />
+                    </For>
+                    <For each=move || ed.detached.get() key=|d| *d let:d>
+                        <detached::DetachedWire detached=d />
                     </For>
                     <PendingWire from=pending_wire cursor=cursor />
                 </svg>

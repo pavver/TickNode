@@ -157,6 +157,20 @@ impl NodeLayout {
         Self { width: node_width(&def.type_name), height, pins_top, cases_top: height, inputs, outputs }
     }
 
+    /// Existing pin anchor, or the old directional row clamped to the current layout.
+    pub fn detached_anchor(&self, pos: Position, pin: PinId, direction: PinDirection, row: u32, loose: bool) -> (f64, f64) {
+        let (rows, sign) = match direction {
+            PinDirection::Input => (&self.inputs, -1.0),
+            PinDirection::Output => (&self.outputs, 1.0),
+        };
+        let (x, y) = self.anchor(pos, pin, direction).unwrap_or_else(|| {
+            let y = rows.get((row as usize).min(rows.len().saturating_sub(1)))
+                .map_or(self.pins_top, |(_, y)| *y);
+            (pos.x as f64 + if sign > 0.0 { self.width } else { 0.0 }, pos.y as f64 + y)
+        });
+        (x + if loose { sign * 8.0 * DU } else { 0.0 }, y)
+    }
+
     pub fn of(instance: &NodeInstance) -> Self {
         Self::new(&instance.definition, &instance.model.properties)
     }

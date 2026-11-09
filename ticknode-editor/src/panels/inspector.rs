@@ -32,6 +32,13 @@ pub fn Inspector() -> impl IntoView {
                 Some(Selection::Nodes(ids)) => view! { <GroupInspector count=ids.len() /> }.into_any(),
                 Some(Selection::Exec(c)) => view! { <ConnectionInspector conn=c exec=true /> }.into_any(),
                 Some(Selection::Data(c)) => view! { <ConnectionInspector conn=c exec=false /> }.into_any(),
+                Some(Selection::Detached(d)) => view! {
+                    <div class="panel-section">
+                        <span class="t-body-small">{move || t!("wire-detached-title")}</span>
+                        <ActionButton text=Signal::derive(move || t!("wire-detached-remove")) icon=icons::DELETE
+                            danger=true full=true on_click=Callback::new(move |_| ed.send(ClientMessage::RemoveDetached(d))) />
+                    </div>
+                }.into_any(),
                 None => view! { <GraphOverview /> }.into_any(),
             }}
         </aside>
@@ -82,6 +89,7 @@ fn NodeInspector(id: NodeId) -> impl IntoView {
             <span class="t-body-small">{move || def.with(i18n::node_description)}</span>
         </div>
         // Properties, input values, conditions, and triggers live directly on the node
+        <crate::frozen::FrozenInfo id=id />
         <ExecutionInfo id=id />
         <div class="section-title">{move || t!("inspector-section-actions")}</div>
         <div class="panel-section">

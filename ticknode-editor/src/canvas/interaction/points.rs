@@ -71,7 +71,7 @@ impl Interaction {
         self.ed.selection.set(Some(wire));
         self.ed.picker.set(None);
         self.ed.wire_menu.set(None);
-        self.ed.wire_context.set(Some(WireContext { exec, connection, index, world, screen }));
+        self.ed.wire_context.set(Some(WireContext { detached: None, exec, connection, index, world, screen }));
     }
 
     pub(in crate::canvas) fn double_click(self, ev: web_sys::MouseEvent) {

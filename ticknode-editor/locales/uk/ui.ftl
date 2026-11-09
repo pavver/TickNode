@@ -360,3 +360,15 @@ error-wire-route = Некоректний маршрут дроту: з’єдн
 
 error-plugin-api-mismatch = Плагін зібрано для API плагінів { $plugin_api } (SDK { $plugin_sdk }), а сервер використовує { $server_api } (TickNode { $server_version }). Перезберіть плагін з поточним SDK.
 error-plugin-api-unknown = Плагін зібрано з SDK, який ще не підтримував перевірку API плагінів. Сервер використовує API плагінів { $server_api } (TickNode { $server_version }). Перезберіть плагін з поточним SDK.
+
+# Unconfirmed pin contracts and detached wires
+node-frozen-title = Піни змінились
+node-frozen-confirm = Все правильно
+node-frozen-help = Вузол не працюватиме, доки ви не підтвердите зміни. Від’єднані дроти залишаться, доки ви не видалите або не під’єднаєте їх знову.
+pin-change-removed = Видалено { $direction } пін «{ $name }» ({ $kind })
+pin-change-changed = Пін «{ $name }»: { $old } → { $new }
+pin-change-required = Новий обов’язковий вхід «{ $name }» ({ $kind })
+pin-direction-input = вхідний
+pin-direction-output = вихідний
+wire-detached-title = Дріт від'єднано: пін змінився
+wire-detached-remove = Видалити дріт

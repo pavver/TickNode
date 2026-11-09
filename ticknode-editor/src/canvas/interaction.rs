@@ -39,7 +39,7 @@ pub(super) enum Drag {
     Point { key: WireKey, index: usize, origin: Vec<Position>, before: Vec<Position>, start_world: (f64, f64), start: (f64, f64), moved: bool },
     /// A press on a wire: pulling it sideways past `WIRE_PULL_THRESHOLD` inserts a point and drags it.
     WirePull { key: WireKey, start: (f64, f64), start_world: (f64, f64) },
-    Wire { from: WireEnd },
+    Wire { from: WireEnd, detached: Option<DetachedConnection> },
     Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
     /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
     Box { start: (f64, f64), additive: bool },
@@ -157,6 +157,34 @@ impl Interaction {
         }
 
         let target = ev.target();
+        let detached_hit = closest(target.clone(), "[data-detached]");
+        let detached = detached_hit.as_ref().and_then(|el| serde_json::from_str::<DetachedConnection>(&el.get_attribute("data-detached")?).ok())
+            .filter(|d| ed.detached.with_untracked(|all| all.contains(d)));
+        if ev.button() != 1 && let Some(d) = detached {
+            ed.selected_point.set(None);
+            ed.selection.set(Some(Selection::Detached(d)));
+            if ev.button() == 2 {
+                ev.prevent_default();
+                ed.wire_menu.set(None);
+                ed.picker.set(None);
+                ed.wire_context.set(Some(crate::state::WireContext {
+                    detached: Some(d), exec: d.exec, connection: d.connection, index: None,
+                    world: ed.view.get_untracked().to_world(p.0, p.1),
+                    screen: (ev.client_x() as f64, ev.client_y() as f64),
+                }));
+            } else if detached_hit.is_some_and(|el| el.has_attribute("data-detached-end")) {
+                let (from, _) = super::detached::ends(d);
+                let live = ed.node(from.node).and_then(|n| n.instance.with_untracked(|i| pin_type(&i.definition, from.pin, from.dir).cloned()));
+                if let Some(kind) = live {
+                    let from = WireEnd { exec: matches!(kind, PinType::Exec), ..from };
+                    ed.wire_menu.set(None);
+                    self.cursor.set(ed.view.get_untracked().to_world(p.0, p.1));
+                    pending_wire.set(Some(from));
+                    drag.set_value(Drag::Wire { from, detached: Some(d) });
+                }
+            }
+            return;
+        }
         let pin = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el));
         let point = closest(target.clone(), "[data-wire-point]");
         let index = point.as_ref().and_then(|el| el.get_attribute("data-wire-point")?.parse().ok());

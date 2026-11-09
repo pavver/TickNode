@@ -67,8 +67,8 @@ impl TickEngine {
         slot.active = true;
         slot.settings_error = settings_error;
 
-        let (replaced, removed) = self.revive_stubs();
-        Ok(PluginChange { replaced, removed })
+        let (replaced, removed, detached) = self.revive_stubs();
+        Ok(PluginChange { replaced, removed, detached })
     }
 
     /// Disables a plugin: its nodes become stubs (connections and properties are preserved), node
@@ -113,7 +113,7 @@ impl TickEngine {
             rt.discard();
             lock(&rt.options).clear();
         }
-        Ok(PluginChange { replaced, removed: RemovedConnections::default() })
+        Ok(PluginChange { replaced, removed: RemovedConnections::default(), detached: Vec::new() })
     }
 
     /// Passes new settings to the plugin (`settings` already includes defaults). Does nothing for a

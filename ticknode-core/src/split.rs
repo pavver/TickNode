@@ -39,6 +39,7 @@ impl TickEngine {
         let set = self.split_pins.entry(node).or_default();
         if split { set.insert(pin.0); } else { set.remove(&pin.0); }
         self.invalidate_definition(node);
+        self.pins_edited(node);
         self.pure_cache.clear();
         self.required_reported.remove(&node);
         let effective = self.node_definition(node).expect("node exists");

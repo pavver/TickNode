@@ -17,7 +17,7 @@ fn diff_ignores_positions_but_recreates_changed_properties_and_types() {
     target.nodes.iter_mut().find(|n| n.id == ids[2]).unwrap().type_name = "const".into();
     target.nodes.retain(|n| n.id != ids[3]);
     let new = NodeId::generate();
-    target.nodes.push(NodeModel { id: new, type_name: "const".into(), properties: vec![], position: Position::default() });
+    target.nodes.push(NodeModel { id: new, type_name: "const".into(), properties: vec![], position: Position::default(), pins: None });
     let plan = diff(&current, &target);
     assert!(!plan.removed_nodes.contains(&ids[0]));
     assert_eq!(plan.removed_nodes.len(), 3);
@@ -39,8 +39,8 @@ fn diff_connections_between_kept_nodes_and_idempotence() {
     let c = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
     let nodes = [a, b].into_iter().map(|id| NodeModel {
         id, type_name: "for_loop".into(), properties: vec![], position: Position::default(),
-    }).collect();
-    let current = GraphModel { nodes, exec_connections: vec![c], data_connections: vec![], wire_routes: Vec::new() };
+     pins: None }).collect();
+    let current = GraphModel { nodes, exec_connections: vec![c], data_connections: vec![], wire_routes: Vec::new(), detached_connections: Vec::new() };
     let target = GraphModel { exec_connections: vec![], data_connections: vec![c], ..current.clone() };
     let plan = diff(&current, &target);
     assert!(plan.removed_nodes.is_empty());

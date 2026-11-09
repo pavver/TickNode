@@ -858,29 +858,34 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
 }
 
 #[test]
-fn enabling_drops_connections_that_became_invalid() {
+fn enabling_detaches_connections_that_became_invalid() {
     let Some(mut engine) = engine_with_disabled_test_plugin() else { return };
     let counter = NodeId::generate();
     let debug = NodeId::generate();
     let ghost_link = ConnectionModel { src_node: counter, src_pin: PinId(9), dst_node: debug, dst_pin: PinId(0) };
     let graph = GraphModel {
         nodes: vec![
-            NodeModel { id: counter, type_name: "test/counter".into(), properties: vec![("step".into(), number(2))], position: Position::default() },
-            NodeModel { id: debug, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default() },
+            NodeModel { id: counter, type_name: "test/counter".into(), properties: vec![("step".into(), number(2))], position: Position::default(), pins: None },
+            NodeModel { id: debug, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None },
         ],
         // Pin 9 was inferred by the stub from the connection, but the real counter node has no such pin
         exec_connections: vec![ghost_link],
         data_connections: vec![ConnectionModel { src_node: counter, src_pin: PinId(1), dst_node: debug, dst_pin: PinId(1) }],
-        wire_routes: Vec::new(),
+        wire_routes: Vec::new(), detached_connections: Vec::new(),
     };
     let mut graph = graph;
     graph.nodes.sort_by_key(|n| n.id.0);
     assert!(engine.load_graph(&graph).is_empty());
-    assert_eq!(engine.export_graph(), graph);
+    let graph = engine.export_graph();
+    assert!(graph.nodes.iter().all(|n| n.pins.is_some()));
 
     let change = engine.enable_plugin("test_plugin", &test_settings("Hi", "good")).unwrap();
     assert_eq!(change.replaced, vec![counter]);
-    assert_eq!(change.removed.exec, vec![ghost_link]);
+    assert!(change.removed.exec.is_empty());
+    assert_eq!(change.detached.len(), 1);
+    assert_eq!(change.detached[0].connection, ghost_link);
+    assert_eq!(change.detached[0].end, DetachedEnd::Source);
+    assert!(!engine.frozen_changes(counter).is_empty());
     assert!(change.removed.data.is_empty());
     let after = engine.export_graph();
     assert!(after.exec_connections.is_empty());
@@ -894,21 +899,24 @@ fn unknown_node_type_survives_load_and_save() {
     let c = NodeId::generate();
     let graph = GraphModel {
         nodes: vec![
-            NodeModel { id: a, type_name: "ghost/source".into(), properties: vec![("k".into(), number(1)), ("in:3".into(), DataValue::String("x".into()))], position: Position { x: 5.0, y: 6.0 } },
-            NodeModel { id: b, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default() },
-            NodeModel { id: c, type_name: "ghost/sink".into(), properties: vec![], position: Position::default() },
+            NodeModel { id: a, type_name: "ghost/source".into(), properties: vec![("k".into(), number(1)), ("in:3".into(), DataValue::String("x".into()))], position: Position { x: 5.0, y: 6.0 }, pins: None },
+            NodeModel { id: b, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None },
+            NodeModel { id: c, type_name: "ghost/sink".into(), properties: vec![], position: Position::default(), pins: None },
         ],
         exec_connections: vec![ConnectionModel { src_node: a, src_pin: PinId(0), dst_node: c, dst_pin: PinId(4) }],
         data_connections: vec![
             ConnectionModel { src_node: a, src_pin: PinId(1), dst_node: b, dst_pin: PinId(1) },
             ConnectionModel { src_node: a, src_pin: PinId(2), dst_node: c, dst_pin: PinId(5) },
         ],
-        wire_routes: Vec::new(),
+        wire_routes: Vec::new(), detached_connections: Vec::new(),
     };
     let mut engine = TickEngine::new();
     assert!(engine.load_graph(&graph).is_empty());
     let mut expected = graph.clone();
-    expected.nodes.iter_mut().for_each(|n| n.position = Position::default());
+    expected.nodes.iter_mut().for_each(|n| {
+        n.position = Position::default();
+        n.pins = engine.node_model(n.id).unwrap().pins;
+    });
     assert_eq!(engine.export_graph().nodes.len(), 3);
     let mut exported = engine.export_graph();
     exported.nodes.sort_by_key(|n| n.id.0);

@@ -72,7 +72,7 @@ fn settings_paste_rejects_type_mismatch_unknown_nodes_and_stubs_without_changing
     apply(&mut actor, ClientMessage::Undo);
     let stub = NodeId::generate();
     let mut graph = actor.graph_snapshot();
-    graph.nodes.push(NodeModel { id: stub, type_name: "missing/node".into(), properties: vec![], position: Position::default() });
+    graph.nodes.push(NodeModel { id: stub, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None });
     actor.engine.load_graph(&graph);
     let before = actor.graph_snapshot();
     let history = actor.history.state();

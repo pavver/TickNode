@@ -200,7 +200,7 @@ impl Actor {
     fn instance(&self, id: NodeId) -> Option<NodeInstance> {
         let mut model = self.engine.node_model(id)?;
         model.position = self.positions.get(&id).copied().unwrap_or_default();
-        Some(NodeInstance { model, definition: self.engine.node_definition(id)?, unavailable: self.engine.node_unavailable(id) })
+        Some(NodeInstance { model, definition: self.engine.node_definition(id)?, unavailable: self.engine.node_unavailable(id), frozen: self.engine.frozen_changes(id).to_vec() })
     }
 
     fn snapshot(&self) -> ServerMessage {
@@ -213,6 +213,7 @@ impl Actor {
             property_options: self.engine.property_options(),
             history: self.history.state(),
             wire_routes: routes::sorted(&self.routes),
+            detached_connections: graph.detached_connections,
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,

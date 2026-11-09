@@ -32,6 +32,7 @@ impl TickEngine {
                 self.host_state.log(id, format!("[ERROR] Plugin {plugin} emitted outputs for node {id:?}, which is not one of its nodes: dropped"));
                 continue;
             };
+            if self.skip_frozen(id) { continue; }
             let (outputs, errors) = validate_emission_outputs(&definition, emission.outputs);
             for e in errors {
                 self.host_state.log(id, format!("[ERROR] {e}"));
@@ -41,5 +42,35 @@ impl TickEngine {
                 self.apply_outputs(id, Vec::new(), outputs, next_tick_queue);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::convert::encode_value;
+
+    #[test]
+    fn frozen_emissions_are_dropped_until_confirmation() {
+        let mut engine = TickEngine::new();
+        engine.registry.register_owned("probe", Box::new(|id| Box::new(crate::builtin::ConstNode { id, value: 1i64.into() })));
+        let id = NodeId::generate();
+        engine.create_node(id, "const", &[]).unwrap();
+        let mut graph = engine.export_graph();
+        graph.nodes[0].pins.as_mut().unwrap()[0].kind = PinKind::Data(DataType::Object);
+        engine.load_graph(&graph);
+        assert!(!engine.frozen_changes(id).is_empty());
+        let mut queue = Default::default();
+        let emission = || wit::Emission {
+            node: id.0.as_u64_pair(), outputs: vec![wit::Output::Data((0, encode_value(&42i64.into())))],
+        };
+        engine.apply_emissions("probe", vec![emission(), emission()], &mut queue);
+        assert!(!engine.data_cache.contains_key(&id));
+        assert!(engine.executed.is_empty());
+        assert_eq!(engine.host_state.logs.iter().filter(|(_, s)| s.contains("Node is frozen:")).count(), 1);
+        engine.confirm_pins(id).unwrap();
+        engine.apply_emissions("probe", vec![emission()], &mut queue);
+        assert_eq!(engine.data_cache[&id][&PinId(0)], 42i64.into());
+        assert_eq!(engine.executed.len(), 1);
     }
 }

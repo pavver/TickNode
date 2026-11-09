@@ -7,6 +7,7 @@ use crate::{RemovedConnections, TickEngine};
 pub struct GraphReconcile {
     pub removed_nodes: Vec<NodeId>,
     pub added_nodes: Vec<NodeId>,
+    pub updated_nodes: Vec<NodeId>,
     pub disconnected: RemovedConnections,
     pub connected_exec: Vec<ConnectionModel>,
     pub connected_data: Vec<ConnectionModel>,
@@ -40,7 +41,7 @@ fn diff(current: &GraphModel, target: &GraphModel) -> GraphDiff {
         removed_nodes, disconnected: RemovedConnections { exec, data },
         insert: GraphModel {
             nodes: target.nodes.iter().filter(|n| !kept.contains(&n.id)).cloned().collect(),
-            exec_connections, data_connections, wire_routes: Vec::new(),
+            exec_connections, data_connections, wire_routes: Vec::new(), detached_connections: Vec::new(),
         },
     }
 }
@@ -49,6 +50,16 @@ impl TickEngine {
     /// Restores a snapshot with minimal edits. Unchanged nodes retain tasks and runtime state;
     /// variables and the execution queue are not reset (removed nodes still cancel their work).
     pub fn reconcile(&mut self, target: &GraphModel) -> GraphReconcile {
+        self.reconcile_edit(target, None)
+    }
+
+    /// Settings pasted by the user accept their new contract and prune invalid wires.
+    pub fn reconcile_settings(&mut self, target: &GraphModel, edited: NodeId) -> GraphReconcile {
+        self.reconcile_edit(target, Some(edited))
+    }
+
+    fn reconcile_edit(&mut self, target: &GraphModel, user_edit: Option<NodeId>) -> GraphReconcile {
+        let before_frozen = self.frozen.clone();
         let plan = diff(&self.export_graph(), target);
         let mut result = GraphReconcile::default();
         for id in plan.removed_nodes {
@@ -67,7 +78,18 @@ impl TickEngine {
                 result.disconnected.data.push(c);
             }
         }
-        result.warnings = self.insert_graph(&plan.insert, |id| id);
+        self.detached.clear();
+        // A user edit accepts new pins only on a node that was not frozen: editing a frozen node
+        // keeps it frozen until it is confirmed explicitly.
+        let accept = user_edit.filter(|id| !before_frozen.contains_key(id));
+        result.warnings = self.insert_graph_edit(&plan.insert, |id| id, user_edit, accept);
+        for n in &target.nodes {
+            self.restore_pins(n.id, if accept == Some(n.id) { None } else { n.pins.as_deref() });
+            if before_frozen.get(&n.id).map(Vec::as_slice).unwrap_or(&[]) != self.frozen_changes(n.id) {
+                result.updated_nodes.push(n.id);
+            }
+        }
+        self.restore_detached(&target.detached_connections);
         result.added_nodes = plan.insert.nodes.iter().filter(|n| self.has_node(n.id)).map(|n| n.id).collect();
         result.connected_exec = plan.insert.exec_connections.into_iter().filter(|c| self.connections.contains_exec(c)).collect();
         result.connected_data = plan.insert.data_connections.into_iter().filter(|c| self.connections.contains_data(c)).collect();

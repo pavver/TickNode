@@ -37,3 +37,5 @@ fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {
         assert!(instance.definition.pins.iter().any(|p| p.id == if split { split_field_pin(PinId(0), 0).unwrap() } else { PinId(0) } && p.direction == PinDirection::Output));
     }
 }
+
+mod frozen;

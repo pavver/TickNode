@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
+use crate::{DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -35,6 +35,8 @@ pub enum ClientMessage {
     AddNodeConnected { type_name: String, position: Position, from: ConnectionEnd, pin: PinId },
     /// Replaces layout points of an existing connection; an empty list clears the route.
     SetWireRoute(WireRoute),
+    ConfirmPins(NodeId),
+    RemoveDetached(DetachedConnection),
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -86,6 +88,8 @@ pub enum ServerMessage {
         history: HistoryState,
         #[serde(default)]
         wire_routes: Vec<WireRoute>,
+        #[serde(default)]
+        detached_connections: Vec<DetachedConnection>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -113,4 +117,6 @@ pub enum ServerMessage {
     Error(UiMessage),
     History(HistoryState),
     WireRouted(WireRoute),
+    Detached(DetachedConnection),
+    DetachedRemoved(DetachedConnection),
 }

@@ -58,9 +58,9 @@ fn relative_times_round_down_at_unit_boundaries() {
 fn only_match_case_outputs_use_conditions_as_pin_labels() {
     let mut instance = NodeInstance {
         model: NodeModel { id: NodeId::generate(), type_name: "match".into(), position: Position::default(),
-            properties: vec![("cases".into(), DataValue::List { element_type: DataType::String, elements: vec![DataValue::String("4: a > 5".into())] })] },
+            properties: vec![("cases".into(), DataValue::List { element_type: DataType::String, elements: vec![DataValue::String("4: a > 5".into())] })], pins: None },
         definition: NodeDefinition { cost: 1, type_name: "match".into(), title: "Match".into(), category: "Control Flow".into(), description: String::new(), help: String::new(), pins: vec![], properties: vec![] },
-        unavailable: None,
+        unavailable: None, frozen: Vec::new(),
     };
     with_locale(Locale::En, || {
         assert_eq!(instance_pin_label(&instance, PinId(4), PinDirection::Output, "Case"), "a > 5");

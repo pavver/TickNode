@@ -16,6 +16,10 @@ impl Actor {
         let result = match msg {
             ClientMessage::AddNode { type_name, position } => self.add_node(&type_name, position)?,
             ClientMessage::AddNodeConnected { type_name, position, from, pin } => self.add_node_connected(&type_name, position, from, pin)?,
+            ClientMessage::ConfirmPins(id) => only(if self.engine.confirm_pins(id).map_err(|e| e.ui_message())? {
+                vec![ServerMessage::NodeUpdated(self.instance(id).expect("the node exists"))]
+            } else { vec![] }),
+            ClientMessage::RemoveDetached(d) => only(if self.engine.remove_detached(&d) { vec![ServerMessage::DetachedRemoved(d)] } else { vec![] }),
             ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
             ClientMessage::SetWireRoute(route) => only(self.set_wire_route(route)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
@@ -84,10 +88,14 @@ impl Actor {
 
     fn remove_node(&mut self, id: NodeId) -> Result<Vec<ServerMessage>, UiMessage> {
         self.require_node(id)?;
+        let detached: Vec<_> = self.engine.detached_connections().iter()
+            .filter(|d| d.connection.src_node == id || d.connection.dst_node == id).copied().collect();
         self.engine.remove_node(id);
         self.positions.remove(&id);
         self.traces.remove(&id);
-        Ok(vec![ServerMessage::NodeRemoved(id)])
+        let mut events: Vec<_> = detached.into_iter().map(ServerMessage::DetachedRemoved).collect();
+        events.push(ServerMessage::NodeRemoved(id));
+        Ok(events)
     }
 
     fn move_node(&mut self, id: NodeId, position: Position) -> Result<Vec<ServerMessage>, UiMessage> {
@@ -120,6 +128,7 @@ impl Actor {
         let inner = self.engine.export_snippet(&ids);
         events.extend(inner.exec_connections.into_iter().map(ServerMessage::ExecConnected));
         events.extend(inner.data_connections.into_iter().map(ServerMessage::DataConnected));
+        events.extend(inner.detached_connections.into_iter().map(ServerMessage::Detached));
         events.extend(self.paste_routes(&snippet.wire_routes, &imported));
         Ok((events, Some(ids)))
     }
@@ -193,10 +202,11 @@ impl Actor {
         // Send new definitions first so the editor knows the pins of converted nodes
         let mut events = vec![self.catalog()];
         events.extend(outcome.change.replaced.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeUpdated));
-        if !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {
+        if !outcome.change.replaced.is_empty() || !outcome.change.detached.is_empty() || !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {
             self.dirty_since.get_or_insert_with(Instant::now);
         }
         events.extend(removed_events(outcome.change.removed));
+        events.extend(outcome.change.detached.into_iter().map(ServerMessage::Detached));
         events.extend(self.plugins.info(&self.engine, name).map(ServerMessage::PluginUpdated));
         Ok(events)
     }

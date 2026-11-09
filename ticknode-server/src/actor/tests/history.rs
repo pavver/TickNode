@@ -162,6 +162,8 @@ fn paste_returns_created_ids_positions_warnings_and_limit_errors() {
     let b = add(&mut actor, 2.0);
     let mut snippet = actor.graph_snapshot();
     snippet.data_connections.push(ConnectionModel { src_node: a, src_pin: PinId(99), dst_node: b, dst_pin: PinId(1) });
+    // Invalid pins detach; a cycle remains a paste warning.
+    snippet.data_connections.push(ConnectionModel { src_node: a, src_pin: PinId(5), dst_node: a, dst_pin: PinId(1) });
     let expected_positions = snippet.nodes.iter().map(|node| node.position).collect::<Vec<_>>();
     let (reply, mut replies) = mpsc::unbounded_channel();
     let (events, created) = actor.apply(ClientMessage::Paste(snippet.clone()), &reply).unwrap();
@@ -172,6 +174,7 @@ fn paste_returns_created_ids_positions_warnings_and_limit_errors() {
         ServerMessage::NodeAdded(node) => Some(node.model.position), _ => None,
     }).collect::<Vec<_>>();
     assert_eq!(positions, expected_positions);
+    assert!(events.iter().any(|event| matches!(event, ServerMessage::Detached(_))));
     let Ok(ServerMessage::Error(warning)) = replies.try_recv() else { panic!("missing paste warning") };
     assert_eq!(warning.key, "error-paste-incomplete");
     assert!(warning.fallback.contains("Data connection"));

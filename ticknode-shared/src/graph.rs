@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{Uuid, PinId, DataValue, NodeDefinition, UiMessage};
+use crate::{Uuid, PinId, DataValue, NodeDefinition, UiMessage, PinSignature, PinChange};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub Uuid);
@@ -31,6 +31,8 @@ pub struct NodeModel {
     pub type_name: String,
     pub properties: Vec<(String, DataValue)>,
     pub position: Position,
+    #[serde(default)]
+    pub pins: Option<Vec<PinSignature>>,
 }
 
 /// Editor routing of a wire through intermediate points (layout only, ignored by execution).
@@ -51,6 +53,8 @@ pub struct GraphModel {
     pub data_connections: Vec<ConnectionModel>,
     #[serde(default)]
     pub wire_routes: Vec<WireRoute>,
+    #[serde(default)]
+    pub detached_connections: Vec<DetachedConnection>,
 }
 
 /// A node paired with its current definition (pins may depend on properties).
@@ -62,4 +66,18 @@ pub struct NodeInstance {
     /// for the editor. Properties and pins are preserved, but the node cannot execute or be edited.
     #[serde(default)]
     pub unavailable: Option<UiMessage>,
+    #[serde(default)]
+    pub frozen: Vec<PinChange>,
+}
+
+/// The endpoint whose old pin no longer accepts the connection.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum DetachedEnd { Source, Target }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct DetachedConnection {
+    pub exec: bool,
+    pub connection: ConnectionModel,
+    pub end: DetachedEnd,
+    pub row: u32,
 }

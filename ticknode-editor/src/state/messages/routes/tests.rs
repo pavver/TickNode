@@ -47,7 +47,7 @@ fn init_replaces_all_routes_including_an_empty_snapshot() {
     let c = ConnectionModel { src_node: NodeId::generate(), src_pin: PinId(4), dst_node: NodeId::generate(), dst_pin: PinId(0) };
     let snapshot = |wire_routes| ServerMessage::Init {
         definitions: vec![], nodes: vec![], exec_connections: vec![c], data_connections: vec![], traces: vec![],
-        types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(), wire_routes,
+        types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(), wire_routes, detached_connections: Vec::new(),
     };
     let mut all = WireRoutes::new();
     apply_twice(&mut all, ServerMessage::WireRouted(route(false, c)));

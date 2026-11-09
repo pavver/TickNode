@@ -9,6 +9,7 @@ mod connections_index;
 mod persistence;
 mod execution;
 mod reconcile;
+mod frozen;
 
 pub use reconcile::GraphReconcile;
 
@@ -27,6 +28,10 @@ pub struct TickEngine {
     pub budget: crate::TickBudget,
     /// Work accounting for the most recent tick, including tasks, emissions, polls and pure pulls.
     pub last_tick: crate::TickStats,
+    pub(crate) confirmed_pins: HashMap<NodeId, Vec<PinSignature>>,
+    pub(crate) frozen: HashMap<NodeId, Vec<PinChange>>,
+    pub(crate) frozen_reported: std::collections::HashSet<NodeId>,
+    pub(crate) detached: Vec<DetachedConnection>,
     pub(crate) nodes: HashMap<NodeId, Box<dyn Node>>,
     definitions: HashMap<NodeId, (u64, Arc<NodeDefinition>)>,
     /// Event sources (`Node::polls`), polled every tick.
@@ -68,6 +73,10 @@ impl TickEngine {
         Self {
             budget: Default::default(),
             last_tick: Default::default(),
+            confirmed_pins: HashMap::new(),
+            frozen: HashMap::new(),
+            frozen_reported: Default::default(),
+            detached: Vec::new(),
             nodes: HashMap::new(),
             definitions: HashMap::new(),
             sources: BTreeSet::new(),

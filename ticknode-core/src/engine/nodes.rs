@@ -8,6 +8,7 @@ impl TickEngine {
     pub fn add_node(&mut self, node: Box<dyn Node>) {
         let id = node.id();
         self.invalidate_definition(id);
+        self.confirmed_pins.entry(id).or_insert_with(|| pin_signature(&node.definition()));
         self.nodes.insert(id, node);
         self.update_roles(id);
     }
@@ -113,12 +114,17 @@ impl TickEngine {
                     .map(|(pin, v)| (input_value_property(PinId(*pin)), v.clone())))
                 .collect(),
             position: Position::default(),
+            pins: self.confirmed_pins.get(&node_id).cloned(),
         })
     }
 
     pub fn remove_node(&mut self, node_id: NodeId) -> RemovedConnections {
         self.invalidate_definition(node_id);
         self.nodes.remove(&node_id);
+        self.confirmed_pins.remove(&node_id);
+        self.frozen.remove(&node_id);
+        self.frozen_reported.remove(&node_id);
+        self.detached.retain(|d| d.connection.src_node != node_id && d.connection.dst_node != node_id);
         self.update_roles(node_id);
         self.input_values.remove(&node_id);
         self.split_pins.remove(&node_id);
@@ -151,6 +157,7 @@ impl TickEngine {
         }
         node.set_property(name, value);
         self.invalidate_definition(node_id);
+        self.pins_edited(node_id);
         self.update_roles(node_id);
         self.pure_cache.remove(&node_id);
         self.data_cache.remove(&node_id);

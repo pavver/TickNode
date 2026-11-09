@@ -54,6 +54,7 @@ pub struct PluginChange {
     pub replaced: Vec<NodeId>,
     /// Connections removed after restoring nodes (when pins changed).
     pub removed: RemovedConnections,
+    pub detached: Vec<DetachedConnection>,
 }
 
 #[cfg(test)]

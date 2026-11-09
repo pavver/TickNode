@@ -36,7 +36,7 @@ pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
     let wire_routes = ed.wire_routes.with_untracked(|all| all.iter()
         .filter(|((exec, c), _)| if *exec { exec_connections.contains(c) } else { data_connections.contains(c) })
         .map(|((exec, connection), points)| WireRoute { exec: *exec, connection: *connection, points: points.clone() }).collect());
-    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes })
+    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes, detached_connections: Vec::new() })
 }
 
 pub fn to_text(graph: GraphModel) -> String {

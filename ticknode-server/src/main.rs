@@ -202,7 +202,7 @@ mod tests {
             nodes: vec![updated.model.clone(), dbg.model.clone()],
             exec_connections: vec![],
             data_connections: vec![conn],
-            wire_routes: Vec::new(),
+            wire_routes: Vec::new(), detached_connections: Vec::new(),
         };
         snippet.nodes[0].position = Position { x: 100.0, y: 200.0 };
         send(&mut ws, ClientMessage::Paste(snippet)).await;

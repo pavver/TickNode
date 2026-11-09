@@ -115,9 +115,8 @@ impl TickEngine {
         ids
     }
 
-    /// Converts stubs whose type is registered again back into real nodes. Connections that became
-    /// invalid (pins changed) are pruned and returned.
-    pub(crate) fn revive_stubs(&mut self) -> (Vec<NodeId>, RemovedConnections) {
+    /// Revives registered types, comparing their confirmed contracts and detaching invalid wires.
+    pub(crate) fn revive_stubs(&mut self) -> (Vec<NodeId>, RemovedConnections, Vec<DetachedConnection>) {
         let mut ids: Vec<NodeId> = self.nodes.iter()
             .filter(|(_, n)| n.unavailable().is_some() && self.registry.get_definition(&n.definition().type_name).is_some())
             .map(|(id, _)| *id)
@@ -127,14 +126,18 @@ impl TickEngine {
         for id in ids {
             let Some(model) = self.node_model(id) else { continue };
             match self.create_node(id, &model.type_name, &model.properties) {
-                Ok(()) => revived.push(id),
+                Ok(()) => {
+                    self.restore_pins(id, model.pins.as_deref());
+                    revived.push(id);
+                }
                 Err(EngineError::UnknownNodeType(_)) => {}
                 Err(e) => tracing::warn!(node = ?id, "Failed to restore node {}: {e}", model.type_name),
             }
         }
         self.pure_cache.clear();
         let removed = self.prune_connections(|c| revived.contains(&c.src_node) || revived.contains(&c.dst_node));
-        (revived, removed)
+        let detached = self.detach_pruned(removed);
+        (revived, RemovedConnections::default(), detached)
     }
 }
 

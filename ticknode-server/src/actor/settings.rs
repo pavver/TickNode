@@ -19,6 +19,6 @@ impl Actor {
         }
         if node.properties == properties { return Ok(vec![]); }
         node.properties = properties;
-        Ok(self.reconcile_graph(&target))
+        Ok(self.reconcile_graph_edit(&target, Some(id)))
     }
 }

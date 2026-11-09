@@ -1,18 +1,19 @@
 use super::*;
 
 fn actor(dir: &std::path::Path) -> Actor {
-    let (events, _) = broadcast::channel(64);
-    Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), frames: BTreeMap::new(),
-        storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir), events,
-        dirty_since: None, traces: HashMap::new(), history: Default::default(),
-        telemetry: super::telemetry::Telemetry::new(Instant::now()),
-    }
+    test_actor(dir)
+}
+
+fn history_state(actor: &Actor) -> HistoryState {
+    let sheet_id = actor.sheets[0].id;
+    actor.histories.get(&sheet_id).map_or_default(|h| h.state())
 }
 
 fn seed(actor: &mut Actor, kind: &str) -> NodeId {
+    let sheet_id = actor.sheets[0].id;
     let id = NodeId::generate();
     actor.engine.create_node(id, kind, &[]).unwrap();
+    actor.node_sheet.insert(id, sheet_id);
     id
 }
 
@@ -24,13 +25,15 @@ fn command(node: NodeId, from_pin: u32, kind: &str, new_pin: u32) -> ClientMessa
 }
 
 fn apply(actor: &mut Actor, command: ClientMessage) -> (Vec<ServerMessage>, NodeId) {
+    let sheet = actor.sheets.first().map(|s| s.id);
     let bytes = postcard::to_allocvec(&command).unwrap();
     assert_eq!(postcard::from_bytes::<ClientMessage>(&bytes).unwrap(), command);
     let (reply, _) = mpsc::unbounded_channel();
-    let (events, created) = actor.apply(command, &reply).unwrap();
+    let (events, created) = actor.apply(command, sheet, &reply).unwrap();
     let created = created.unwrap();
     assert_eq!(created.len(), 1);
     let id = created[0];
+    let events: Vec<ServerMessage> = events.into_iter().map(|(_, m)| m).collect();
     assert!(matches!(events.first(), Some(ServerMessage::NodeAdded(n))
         if n.model.id == id && n.model.position == Position { x: 125.0, y: 238.0 }));
     (events, id)
@@ -47,11 +50,12 @@ fn output_data_creation_and_connection_are_one_undoable_edit() {
     assert!(events.contains(&ServerMessage::DataConnected(c)));
     assert_eq!(actor.engine.data_connections(), &[c]);
     let (reply, _) = mpsc::unbounded_channel();
-    let (events, _) = actor.apply(ClientMessage::Undo, &reply).unwrap();
+    let (events, _) = actor.apply(ClientMessage::Undo, actor.sheets.first().map(|s| s.id), &reply).unwrap();
+    let events: Vec<ServerMessage> = events.into_iter().map(|(_, m)| m).collect();
     assert!(events.contains(&ServerMessage::NodeRemoved(id)));
     assert_eq!(actor.graph_snapshot(), before);
-    assert!(!actor.history.state().can_undo);
-    actor.apply(ClientMessage::Redo, &reply).unwrap();
+    assert!(!history_state(&actor).can_undo);
+    actor.apply(ClientMessage::Redo, actor.sheets.first().map(|s| s.id), &reply).unwrap();
     assert_eq!(actor.engine.data_connections(), &[c]);
 }
 
@@ -70,7 +74,7 @@ fn input_drag_reverses_direction_and_reports_replaced_source() {
         ServerMessage::DataConnected(connected), ServerMessage::History(_)] if *dst_node == sink && *connected == c));
     assert_eq!(actor.engine.data_connections(), &[c]);
     let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(ClientMessage::Undo, &reply).unwrap();
+    actor.apply(ClientMessage::Undo, actor.sheets.first().map(|s| s.id), &reply).unwrap();
     assert_eq!(actor.graph_snapshot(), before);
 }
 
@@ -96,6 +100,7 @@ fn exec_drag_works_in_both_directions_and_in_batch() {
 fn rejection_rolls_back_node_positions_events_and_history() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
+    let sheet_id = actor.sheets[0].id;
     actor.engine.register_types(&[TypeDefinition::new_struct("test.point", "Point",
         vec![FieldDefinition::new("x", "X", DataType::Number)])], &[]).unwrap();
     let existing = seed(&mut actor, "for_loop");
@@ -106,10 +111,10 @@ fn rejection_rolls_back_node_positions_events_and_history() {
     for cmd in [command(existing, 5, "for_loop", 0), command(existing, 5, "for_loop", 999),
         command(existing, 999, "for_loop", 1), command(NodeId::generate(), 0, "for_loop", 1),
         command(existing, 5, "missing", 0), command(existing, 1, "type/make/test.point", 0)] {
-        assert!(actor.apply(cmd, &reply).is_err());
+        assert!(actor.apply(cmd, Some(sheet_id), &reply).is_err());
         assert_eq!(actor.graph_snapshot(), before);
         assert!(actor.positions.is_empty());
-        assert!(!actor.history.state().can_undo);
+        assert!(!history_state(&actor).can_undo);
         assert!(actor.dirty_since.is_none());
         assert!(replies.try_recv().is_err());
     }
@@ -119,15 +124,20 @@ fn rejection_rolls_back_node_positions_events_and_history() {
 fn initiator_receives_created_after_broadcast_and_failure_only_returns_error() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
+    let sheet_id = actor.sheets[0].id;
     let source = seed(&mut actor, "for_loop");
     let mut broadcast = actor.events.subscribe();
     let (reply, mut replies) = mpsc::unbounded_channel();
-    actor.handle_command(Command::Client { msg: command(source, 5, "for_loop", 1), reply: reply.clone() });
-    let ServerMessage::NodeAdded(node) = postcard::from_bytes(&broadcast.try_recv().unwrap()).unwrap() else { panic!("missing NodeAdded") };
-    assert!(matches!(postcard::from_bytes::<ServerMessage>(&broadcast.try_recv().unwrap()).unwrap(), ServerMessage::DataConnected(_)));
-    assert!(matches!(postcard::from_bytes::<ServerMessage>(&broadcast.try_recv().unwrap()).unwrap(), ServerMessage::History(_)));
+    actor.handle_command(Command::Client { msg: command(source, 5, "for_loop", 1), sheet: Some(sheet_id), reply: reply.clone() });
+    let (tag, bytes) = broadcast.try_recv().unwrap();
+    assert_eq!(tag, Some(sheet_id));
+    let ServerMessage::NodeAdded(node) = postcard::from_bytes(&bytes).unwrap() else { panic!("missing NodeAdded") };
+    let (_, bytes2) = broadcast.try_recv().unwrap();
+    assert!(matches!(postcard::from_bytes::<ServerMessage>(&bytes2).unwrap(), ServerMessage::DataConnected(_)));
+    let (_, bytes3) = broadcast.try_recv().unwrap();
+    assert!(matches!(postcard::from_bytes::<ServerMessage>(&bytes3).unwrap(), ServerMessage::History(_)));
     assert_eq!(replies.try_recv().unwrap(), ServerMessage::Created(vec![node.model.id]));
-    actor.handle_command(Command::Client { msg: command(source, 5, "for_loop", 0), reply });
+    actor.handle_command(Command::Client { msg: command(source, 5, "for_loop", 0), sheet: Some(sheet_id), reply });
     assert!(matches!(replies.try_recv().unwrap(), ServerMessage::Error(_)));
     assert!(broadcast.try_recv().is_err());
 }
@@ -161,10 +171,10 @@ fn duration_input_adapts_constant_before_connecting_as_one_history_entry() {
     assert!(events.contains(&ServerMessage::DataConnected(connection)));
     assert_eq!(actor.engine.data_connections(), &[connection]);
     let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(ClientMessage::Undo, &reply).unwrap();
+    actor.apply(ClientMessage::Undo, actor.sheets.first().map(|s| s.id), &reply).unwrap();
     assert_eq!(actor.graph_snapshot(), before);
-    assert!(!actor.history.state().can_undo);
-    actor.apply(ClientMessage::Redo, &reply).unwrap();
+    assert!(!history_state(&actor).can_undo);
+    actor.apply(ClientMessage::Redo, actor.sheets.first().map(|s| s.id), &reply).unwrap();
     assert_eq!(actor.engine.data_connections(), &[connection]);
     assert_eq!(actor.engine.node_definition(id).unwrap().pins[0].pin_type, PinType::Data(DataType::Duration));
 }
@@ -173,20 +183,21 @@ fn duration_input_adapts_constant_before_connecting_as_one_history_entry() {
 fn init_contains_current_delay_timers_and_completed_delays_disappear() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
+    let sheet_id = actor.sheets[0].id;
     let node = seed(&mut actor, "sleep");
     actor.engine.set_input_value(node, PinId(1), Some(DataValue::Ticks(2))).unwrap();
     actor.engine.trigger_node(node, PinId(0));
     actor.engine.tick();
-    let snapshot = actor.snapshot();
+    let snapshot = actor.snapshot(Some(sheet_id));
     assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&snapshot)).unwrap(), snapshot);
     let ServerMessage::Init { timers, .. } = snapshot else { panic!("expected Init") };
     assert_eq!(timers, vec![NodeTimer { node, total_ms: 200, remaining_ms: 200, count: 1 }]);
     let now = Instant::now();
     let mut telemetry = super::telemetry::Telemetry::new(now);
-    assert_eq!(telemetry.flush(now, &mut actor.engine), vec![ServerMessage::Timers(timers)]);
+    assert_eq!(telemetry.flush(now, &mut actor.engine, &actor.node_sheet), vec![(Some(sheet_id), ServerMessage::Timers(timers))]);
     actor.engine.tick();
-    assert!(telemetry.flush(now + super::telemetry::INTERVAL, &mut actor.engine).is_empty());
+    assert!(telemetry.flush(now + super::telemetry::INTERVAL, &mut actor.engine, &actor.node_sheet).is_empty());
     actor.engine.tick();
-    assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &mut actor.engine), vec![ServerMessage::Timers(vec![])]);
-    assert!(matches!(actor.snapshot(), ServerMessage::Init { timers, .. } if timers.is_empty()));
+    assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &mut actor.engine, &actor.node_sheet), vec![(Some(sheet_id), ServerMessage::Timers(vec![]))]);
+    assert!(matches!(actor.snapshot(Some(sheet_id)), ServerMessage::Init { timers, .. } if timers.is_empty()));
 }

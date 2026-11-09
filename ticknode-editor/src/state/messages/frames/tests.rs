@@ -82,6 +82,8 @@ fn init_replaces_all_frames_including_empty_snapshot() {
         timers: vec![],
         node_errors: vec![],
         frames,
+        sheets: vec![],
+        open_sheet: None,
     };
 
     apply_twice(&mut all, snapshot(vec![test_frame(id1, "One"), test_frame(id2, "Two")]));

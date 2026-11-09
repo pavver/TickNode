@@ -1,23 +1,24 @@
 use super::*;
 
 fn actor(dir: &std::path::Path) -> Actor {
-    let (events, _) = broadcast::channel(256);
-    Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), frames: BTreeMap::new(),
-        storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
-        events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
-    }
+    test_actor(dir)
 }
 
 fn apply(actor: &mut Actor, msg: ClientMessage) -> Vec<ServerMessage> {
-    let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(msg, &reply).unwrap().0
+    test_apply(actor, msg)
+}
+
+fn history_state(actor: &Actor) -> HistoryState {
+    let sheet_id = actor.sheets[0].id;
+    actor.histories.get(&sheet_id).map_or_default(|h| h.state())
 }
 
 fn expression(actor: &mut Actor, formula: &str) -> NodeId {
     let id = NodeId::generate();
+    let sheet_id = actor.sheets[0].id;
     actor.engine.create_node(id, "math/expression", &[("expression".into(), DataValue::from(formula))]).unwrap();
     actor.positions.insert(id, Position { x: 36.0, y: 80.0 });
+    actor.node_sheet.insert(id, sheet_id);
     id
 }
 
@@ -54,11 +55,11 @@ fn settings_paste_preserves_id_position_valid_wires_and_undo_restores_removed_wi
     assert!(!events.contains(&ServerMessage::NodeRemoved(id)), "recreating the same ID must preserve editor selection");
     assert!(!events.contains(&ServerMessage::DataDisconnected { dst_node: id, dst_pin: valid.dst_pin }), "valid wire selection must survive");
     assert!(!events.contains(&ServerMessage::DataConnected(valid)), "unchanged wires need no event");
-    assert!(actor.history.state().can_undo);
+    assert!(history_state(&actor).can_undo);
     let events = apply(&mut actor, ClientMessage::Undo);
     assert_eq!(actor.graph_snapshot(), before);
     assert!(events.contains(&ServerMessage::DataConnected(removed)));
-    assert!(!actor.history.state().can_undo, "paste must add exactly one history entry");
+    assert!(!history_state(&actor).can_undo, "paste must add exactly one history entry");
     apply(&mut actor, ClientMessage::Redo);
     assert_eq!(actor.engine.data_connections(), &[valid]);
 }
@@ -67,6 +68,7 @@ fn settings_paste_preserves_id_position_valid_wires_and_undo_restores_removed_wi
 fn settings_paste_rejects_type_mismatch_unknown_nodes_and_stubs_without_changing_history() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
+    let sheet_id = actor.sheets[0].id;
     let id = expression(&mut actor, "a");
     apply(&mut actor, paste(id, "b"));
     apply(&mut actor, ClientMessage::Undo);
@@ -74,20 +76,21 @@ fn settings_paste_rejects_type_mismatch_unknown_nodes_and_stubs_without_changing
     let mut graph = actor.graph_snapshot();
     graph.nodes.push(NodeModel { id: stub, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None, size: None });
     actor.engine.load_graph(&graph);
+    actor.node_sheet.insert(stub, sheet_id);
     let before = actor.graph_snapshot();
-    let history = actor.history.state();
+    let history = history_state(&actor);
     actor.dirty_since = None;
     let (reply, _) = mpsc::unbounded_channel();
-    let error = actor.apply(ClientMessage::PasteSettings { id, type_name: "const".into(), properties: vec![] }, &reply).unwrap_err();
+    let error = actor.apply(ClientMessage::PasteSettings { id, type_name: "const".into(), properties: vec![] }, Some(sheet_id), &reply).unwrap_err();
     assert_eq!(error.key, "error-settings-type-mismatch");
     assert_eq!(error.args, vec![("from".into(), "const".into()), ("to".into(), "math/expression".into())]);
     let missing = NodeId::generate();
-    assert_eq!(actor.apply(paste(missing, "1"), &reply).unwrap_err(), EngineError::NodeNotFound(missing).ui_message());
+    assert_eq!(actor.apply(paste(missing, "1"), Some(sheet_id), &reply).unwrap_err(), EngineError::NodeNotFound(missing).ui_message());
     let reason = actor.engine.node_unavailable(stub).unwrap();
     assert!(!reason.key.is_empty());
-    assert_eq!(actor.apply(ClientMessage::PasteSettings { id: stub, type_name: "missing/node".into(), properties: vec![] }, &reply).unwrap_err(), EngineError::PluginUnavailable(reason).ui_message());
+    assert_eq!(actor.apply(ClientMessage::PasteSettings { id: stub, type_name: "missing/node".into(), properties: vec![] }, Some(sheet_id), &reply).unwrap_err(), EngineError::PluginUnavailable(reason).ui_message());
     assert_eq!(actor.graph_snapshot(), before);
-    assert_eq!(actor.history.state(), history);
+    assert_eq!(history_state(&actor), history);
     assert!(actor.dirty_since.is_none());
 }
 
@@ -101,7 +104,7 @@ fn settings_paste_identical_properties_has_no_events_history_or_dirty_mark() {
     let events = apply(&mut actor, ClientMessage::PasteSettings { id, type_name: "math/expression".into(), properties });
     assert!(events.is_empty());
     assert_eq!(actor.graph_snapshot(), before);
-    assert_eq!(actor.history.state(), HistoryState::default());
+    assert_eq!(history_state(&actor), HistoryState::default());
     assert!(actor.dirty_since.is_none());
 }
 
@@ -109,11 +112,13 @@ fn settings_paste_identical_properties_has_no_events_history_or_dirty_mark() {
 fn settings_paste_is_allowed_in_batch_and_replaces_split_properties() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
+    let sheet_id = actor.sheets[0].id;
     actor.engine.register_types(&[TypeDefinition::new_struct("test.point", "Point", vec![
         FieldDefinition::new("x", "X", DataType::Number),
     ])], &[]).unwrap();
     let id = NodeId::generate();
     actor.engine.create_node(id, "type/break/test.point", &[]).unwrap();
+    actor.node_sheet.insert(id, sheet_id);
     let before = actor.graph_snapshot();
     let properties = vec![("split:0".into(), DataValue::Bool(true))];
     apply(&mut actor, ClientMessage::Batch(vec![
@@ -124,5 +129,5 @@ fn settings_paste_is_allowed_in_batch_and_replaces_split_properties() {
     assert!(actor.engine.node_definition(id).unwrap().pins.iter().any(|p| p.id == split_field_pin(PinId(0), 0).unwrap()));
     apply(&mut actor, ClientMessage::Undo);
     assert_eq!(actor.graph_snapshot(), before);
-    assert!(!actor.history.state().can_undo);
+    assert!(!history_state(&actor).can_undo);
 }

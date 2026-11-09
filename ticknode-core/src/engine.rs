@@ -11,6 +11,8 @@ mod execution;
 mod reconcile;
 mod frozen;
 mod errors;
+#[cfg(test)]
+mod disabled_tests;
 
 pub use reconcile::GraphReconcile;
 
@@ -34,6 +36,7 @@ pub struct TickEngine {
     pub(crate) confirmed_pins: HashMap<NodeId, Vec<PinSignature>>,
     pub(crate) frozen: HashMap<NodeId, Vec<PinChange>>,
     pub(crate) frozen_reported: std::collections::HashSet<NodeId>,
+    pub(crate) disabled: std::collections::HashSet<NodeId>,
     pub(crate) detached: Vec<DetachedConnection>,
     pub(crate) nodes: HashMap<NodeId, Box<dyn Node>>,
     definitions: HashMap<NodeId, (u64, Arc<NodeDefinition>)>,
@@ -81,6 +84,7 @@ impl TickEngine {
             confirmed_pins: HashMap::new(),
             frozen: HashMap::new(),
             frozen_reported: Default::default(),
+            disabled: std::collections::HashSet::new(),
             detached: Vec::new(),
             nodes: HashMap::new(),
             definitions: HashMap::new(),

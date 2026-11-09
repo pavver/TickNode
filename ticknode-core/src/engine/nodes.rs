@@ -19,13 +19,30 @@ impl TickEngine {
         self.update_roles(id);
     }
 
+    pub fn is_disabled(&self, id: NodeId) -> bool {
+        self.disabled.contains(&id)
+    }
+
+    pub fn set_disabled(&mut self, nodes: impl IntoIterator<Item = NodeId>, disabled: bool) {
+        for id in nodes {
+            if disabled {
+                self.disabled.insert(id);
+                self.pure_cache.remove(&id);
+            } else {
+                self.disabled.remove(&id);
+            }
+            self.update_roles(id);
+        }
+    }
+
     /// Keeps the per-tick node sets (event sources, plugin nodes kept live) in step with the node map.
     /// Called wherever a node is added, removed or changes its definition.
     fn update_roles(&mut self, id: NodeId) {
         let node = self.nodes.get(&id);
+        let active = node.is_some() && !self.is_disabled(id);
         for (set, member) in [
-            (&mut self.sources, node.is_some_and(|n| n.polls())),
-            (&mut self.live_nodes, node.is_some_and(|n| n.needs_live())),
+            (&mut self.sources, active && node.unwrap().polls()),
+            (&mut self.live_nodes, active && node.unwrap().needs_live()),
         ] {
             if member { set.insert(id); } else { set.remove(&id); }
         }
@@ -132,6 +149,7 @@ impl TickEngine {
         self.confirmed_pins.remove(&node_id);
         self.frozen.remove(&node_id);
         self.frozen_reported.remove(&node_id);
+        self.disabled.remove(&node_id);
         self.detached.retain(|d| d.connection.src_node != node_id && d.connection.dst_node != node_id);
         self.update_roles(node_id);
         self.input_values.remove(&node_id);

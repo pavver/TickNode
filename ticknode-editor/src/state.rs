@@ -216,6 +216,8 @@ impl ClientNode {
 #[derive(Clone, Copy)]
 pub struct Editor {
     pub status: RwSignal<ConnStatus>,
+    pub sheets: RwSignal<Vec<SheetSummary>>,
+    pub open_sheet: RwSignal<Option<SheetId>>,
     pub history: RwSignal<HistoryState>,
     pub timers: RwSignal<timers::NodeTimers>,
     pub node_errors: RwSignal<errors::NodeErrors>,
@@ -292,6 +294,8 @@ impl Editor {
     pub fn new(theme: Theme, locale: RwSignal<Locale>, wide_screen: bool) -> Self {
         Self {
             status: RwSignal::new(ConnStatus::Connecting),
+            sheets: RwSignal::new(Vec::new()),
+            open_sheet: RwSignal::new(None),
             history: RwSignal::new(HistoryState::default()),
             timers: RwSignal::new(BTreeMap::new()),
             node_errors: RwSignal::new(BTreeMap::new()),

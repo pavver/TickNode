@@ -1,10 +1,10 @@
 //! Node size validation and layout reconciliation, independent of engine runtime state.
 use super::*;
-use ticknode_shared::GraphModel;
+use ticknode_shared::{GraphModel, SheetId};
 
 impl Actor {
-    pub(super) fn resize_node(&mut self, id: NodeId, size: Option<NodeSize>) -> Result<Vec<ServerMessage>, UiMessage> {
-        self.require_node(id)?;
+    pub(super) fn resize_node(&mut self, id: NodeId, size: Option<NodeSize>, sheet: SheetId) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_session_node(id, sheet)?;
         let size = size.map(|size| size.validated().ok_or_else(||
             UiMessage::new("error-node-size", "Node dimensions must be finite")
         )).transpose()?;

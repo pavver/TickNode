@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId};
+use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId, SheetId, SheetInfo, SheetSummary};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -42,6 +42,12 @@ pub enum ClientMessage {
     AddNodeWith { type_name: String, position: Position, properties: Vec<(String, DataValue)> },
     SetFrame(Frame),
     RemoveFrame(FrameId),
+    OpenSheet(Option<SheetId>),
+    CreateSheet { title: String, caption: String },
+    UpdateSheet(SheetInfo),
+    DeleteSheet(SheetId),
+    MoveSheet { id: SheetId, index: u32 },
+    DuplicateSheet(SheetId),
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -119,6 +125,10 @@ pub enum ServerMessage {
         node_errors: Vec<NodeError>,
         #[serde(default)]
         frames: Vec<Frame>,
+        #[serde(default)]
+        sheets: Vec<SheetSummary>,
+        #[serde(default)]
+        open_sheet: Option<SheetId>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -155,4 +165,6 @@ pub enum ServerMessage {
     NodeErrors { set: Vec<NodeError>, cleared: Vec<NodeId> },
     FrameSet(Frame),
     FrameRemoved(FrameId),
+    Sheets(Vec<SheetSummary>),
+    SheetCreated(SheetId),
 }

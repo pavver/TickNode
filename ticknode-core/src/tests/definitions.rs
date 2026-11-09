@@ -9,7 +9,7 @@ fn assert_definitions(engine: &mut TickEngine) {
         assert!(Arc::ptr_eq(&cached, &engine.definition_arc(id).unwrap()), "cache miss for {id:?}");
     }
     // The per-tick node sets follow the same edits as the definition cache.
-    let expected = |pick: fn(&dyn Node) -> bool| engine.nodes.iter().filter(|(_, n)| pick(n.as_ref())).map(|(id, _)| *id).collect::<std::collections::BTreeSet<_>>();
+    let expected = |pick: fn(&dyn Node) -> bool| engine.nodes.iter().filter(|(id, n)| !engine.is_disabled(**id) && pick(n.as_ref())).map(|(id, _)| *id).collect::<std::collections::BTreeSet<_>>();
     assert_eq!(engine.sources, expected(|n| n.polls()));
     assert_eq!(engine.live_nodes, expected(|n| n.needs_live()));
 }

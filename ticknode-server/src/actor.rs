@@ -3,26 +3,40 @@
 //! (synchronous wasmtime-wasi) cannot be made inside an async context. Network tasks
 //! are spawned by the engine onto the server runtime via `HostState::runtime`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::mpsc as std_mpsc;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use ticknode_core::{EngineError, RemovedConnections, TickEngine};
-use ticknode_shared::{ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeTrace, NodeSize, Position, ServerMessage, UiMessage};
+use ticknode_shared::{
+    ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeTrace, NodeSize,
+    Position, ServerMessage, SheetId, SheetInfo, SheetSummary, UiMessage,
+};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
 
 use crate::plugins::Plugins;
-use crate::storage::Storage;
+use crate::storage::{LoadedSheets, Storage};
 
 const SAVE_DEBOUNCE: Duration = Duration::from_secs(1);
 /// A larger fragment is almost certainly a bug or abuse.
 const MAX_PASTE_NODES: usize = 1000;
 
 pub enum Command {
-    Client { msg: ClientMessage, reply: mpsc::UnboundedSender<ServerMessage> },
-    Snapshot(oneshot::Sender<ServerMessage>),
+    Client {
+        msg: ClientMessage,
+        sheet: Option<SheetId>,
+        reply: mpsc::UnboundedSender<ServerMessage>,
+    },
+    Snapshot {
+        sheet: Option<SheetId>,
+        reply: oneshot::Sender<ServerMessage>,
+    },
+    OpenSheet {
+        sheet: Option<SheetId>,
+        reply: oneshot::Sender<Result<ServerMessage, UiMessage>>,
+    },
     Shutdown(oneshot::Sender<()>),
 }
 
@@ -30,23 +44,31 @@ pub enum Command {
 #[derive(Clone)]
 pub struct EngineHandle {
     commands: std_mpsc::Sender<Command>,
-    events: broadcast::Sender<Bytes>,
+    events: broadcast::Sender<(Option<SheetId>, Bytes)>,
 }
 
 impl EngineHandle {
-    /// Events broadcast to all editors, pre-encoded with postcard.
-    pub fn subscribe(&self) -> broadcast::Receiver<Bytes> {
+    /// Events broadcast to all editors, tagged by sheet (or None for global), pre-encoded with postcard.
+    pub fn subscribe(&self) -> broadcast::Receiver<(Option<SheetId>, Bytes)> {
         self.events.subscribe()
     }
 
-    pub fn send(&self, msg: ClientMessage, reply: mpsc::UnboundedSender<ServerMessage>) {
-        let _ = self.commands.send(Command::Client { msg, reply });
+    pub fn send(&self, msg: ClientMessage, sheet: Option<SheetId>, reply: mpsc::UnboundedSender<ServerMessage>) {
+        let _ = self.commands.send(Command::Client { msg, sheet, reply });
     }
 
-    pub async fn snapshot(&self) -> Option<ServerMessage> {
+    pub async fn snapshot(&self, sheet: Option<SheetId>) -> Option<ServerMessage> {
         let (tx, rx) = oneshot::channel();
-        self.commands.send(Command::Snapshot(tx)).ok()?;
+        self.commands.send(Command::Snapshot { sheet, reply: tx }).ok()?;
         rx.await.ok()
+    }
+
+    pub async fn open_sheet(&self, sheet: Option<SheetId>) -> Result<ServerMessage, UiMessage> {
+        let (tx, rx) = oneshot::channel();
+        if self.commands.send(Command::OpenSheet { sheet, reply: tx }).is_err() {
+            return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
+        }
+        rx.await.unwrap_or_else(|_| Err(UiMessage::new("error-sheet-not-found", "Sheet not found")))
     }
 
     /// Stops the engine and waits for the final graph save to complete.
@@ -64,39 +86,65 @@ pub fn encode(msg: &ServerMessage) -> Bytes {
 
 pub fn spawn(
     mut engine: TickEngine,
-    layout: crate::storage::Layout,
+    loaded: LoadedSheets,
     storage: Storage,
     plugins: Plugins,
     tick: Duration,
 ) -> std::io::Result<EngineHandle> {
-    let (positions, sizes, routes, frames) = layout;
     let (commands, rx) = std_mpsc::channel();
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, sizes, routes, frames, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
+    let actor = Actor {
+        engine,
+        sheets: loaded.sheets,
+        node_sheet: loaded.node_sheet,
+        frame_sheet: loaded.frame_sheet,
+        histories: HashMap::new(),
+        positions: loaded.positions,
+        sizes: loaded.sizes,
+        routes: loaded.routes,
+        frames: loaded.frames,
+        storage,
+        plugins,
+        events: events.clone(),
+        dirty_since: None,
+        dirty_sheets: HashSet::new(),
+        dirty_sheets_meta: false,
+        traces: HashMap::new(),
+        telemetry: telemetry::Telemetry::new(Instant::now()),
+        last_sheets_broadcast: Instant::now(),
+        last_sheet_summaries: Vec::new(),
+    };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
     Ok(EngineHandle { commands, events })
 }
 
-struct Actor {
-    engine: TickEngine,
-    history: history::History,
-    positions: HashMap<NodeId, Position>,
-    sizes: HashMap<NodeId, NodeSize>,
-    routes: routes::Routes,
-    frames: BTreeMap<FrameId, Frame>,
-    storage: Storage,
-    plugins: Plugins,
-    events: broadcast::Sender<Bytes>,
+pub(super) struct Actor {
+    pub(super) engine: TickEngine,
+    pub(super) sheets: Vec<SheetInfo>,
+    pub(super) node_sheet: HashMap<NodeId, SheetId>,
+    pub(super) frame_sheet: HashMap<FrameId, SheetId>,
+    pub(super) histories: HashMap<SheetId, history::History>,
+    pub(super) positions: HashMap<NodeId, Position>,
+    pub(super) sizes: HashMap<NodeId, NodeSize>,
+    pub(super) routes: routes::Routes,
+    pub(super) frames: BTreeMap<FrameId, Frame>,
+    pub(super) storage: Storage,
+    pub(super) plugins: Plugins,
+    pub(super) events: broadcast::Sender<(Option<SheetId>, Bytes)>,
     /// When the graph was first modified since the last save.
-    dirty_since: Option<Instant>,
+    pub(super) dirty_since: Option<Instant>,
+    pub(super) dirty_sheets: HashSet<SheetId>,
+    pub(super) dirty_sheets_meta: bool,
     /// Latest execution of each node (in-memory only: runtime state, not part of the graph).
-    traces: HashMap<NodeId, (NodeTrace, Instant)>,
+    pub(super) traces: HashMap<NodeId, (NodeTrace, Instant)>,
     /// Traces and logs waiting for the next telemetry interval.
-    telemetry: telemetry::Telemetry,
+    pub(super) telemetry: telemetry::Telemetry,
+    pub(super) last_sheets_broadcast: Instant,
+    pub(super) last_sheet_summaries: Vec<SheetSummary>,
 }
 
 impl Actor {
@@ -130,19 +178,28 @@ impl Actor {
 
     fn handle_command(&mut self, command: Command) -> bool {
         match command {
-            Command::Client { msg, reply } => match self.apply(msg, &reply) {
+            Command::Client { msg, sheet, reply } => match self.apply(msg, sheet, &reply) {
                 Ok((events, created)) => {
-                    events.iter().for_each(|e| self.broadcast(e));
-                    // Enabling, disabling or configuring a plugin may change its options
+                    for (tag, event) in events {
+                        self.broadcast(tag, &event);
+                    }
                     self.broadcast_option_changes();
-                    // Sent after broadcast: `NodeAdded` is already in the event channel, and the ws session delivers it first
                     if let Some(ids) = created {
                         let _ = reply.send(ServerMessage::Created(ids));
                     }
                 }
                 Err(e) => { let _ = reply.send(ServerMessage::Error(e)); }
             },
-            Command::Snapshot(tx) => { let _ = tx.send(self.snapshot()); }
+            Command::Snapshot { sheet, reply } => { let _ = reply.send(self.snapshot(sheet)); }
+            Command::OpenSheet { sheet, reply } => {
+                if let Some(id) = sheet {
+                    if !self.sheets.iter().any(|s| s.id == id) {
+                        let _ = reply.send(Err(UiMessage::new("error-sheet-not-found", "Sheet not found")));
+                        return false;
+                    }
+                }
+                let _ = reply.send(Ok(self.snapshot(sheet)));
+            }
             Command::Shutdown(done) => {
                 self.save();
                 info!("Engine stopped");
@@ -153,11 +210,9 @@ impl Actor {
         false
     }
 
-    /// Broadcasts the dynamic property options that plugins changed since the last check.
-    /// Unchanged lists never appear here (the engine tracks changes), so editors are not spammed.
     fn broadcast_option_changes(&mut self) {
         for set in self.engine.take_property_option_changes() {
-            self.broadcast(&ServerMessage::PropertyOptions { plugin: set.plugin, source: set.source, options: set.options });
+            self.broadcast(None, &ServerMessage::PropertyOptions { plugin: set.plugin, source: set.source, options: set.options });
         }
     }
 
@@ -176,57 +231,107 @@ impl Actor {
         }
         self.telemetry.add_traces(&self.engine.executed);
         self.telemetry.add_logs(std::mem::take(&mut self.engine.host_state.logs));
-        for message in self.telemetry.flush(now, &mut self.engine) {
-            self.broadcast(&message);
+        for (tag, message) in self.telemetry.flush(now, &mut self.engine, &self.node_sheet) {
+            self.broadcast(tag, &message);
         }
+        self.check_sheets_broadcast(now);
     }
 
-    fn broadcast(&self, msg: &ServerMessage) {
-        // An error simply means there are no active subscribers.
-        let _ = self.events.send(encode(msg));
+    pub(crate) fn broadcast(&self, sheet: Option<SheetId>, msg: &ServerMessage) {
+        let _ = self.events.send((sheet, encode(msg)));
     }
 
     fn save(&mut self) {
         if self.dirty_since.is_none() {
             return;
         }
-        match self.storage.save(&self.engine, &self.positions, &self.sizes, &self.routes, &self.frames) {
-            Ok(()) => self.dirty_since = None,
-            Err(e) => {
-                error!("Failed to save the graph: {:#}", e);
-                // Retry after the next debounce interval.
-                self.dirty_since = Some(Instant::now());
+        let mut ok = true;
+        if self.dirty_sheets_meta || !self.storage.sheets_json_path().exists() {
+            if let Err(e) = self.storage.save_sheets_meta(&self.sheets) {
+                error!("Failed to save sheets.json: {:#}", e);
+                ok = false;
+            } else {
+                self.dirty_sheets_meta = false;
             }
+        }
+        let mut dirty_list: Vec<SheetId> = self.dirty_sheets.iter().copied().collect();
+        if dirty_list.is_empty() {
+            dirty_list = self.sheets.iter().map(|s| s.id).collect();
+        }
+        for id in dirty_list {
+            let graph = self.sheet_graph(id);
+            if let Err(e) = self.storage.save_sheet(id, &graph) {
+                error!("Failed to save sheet {}: {:#}", id, e);
+                ok = false;
+            } else {
+                self.dirty_sheets.remove(&id);
+            }
+        }
+        if ok {
+            self.dirty_since = None;
+        } else {
+            self.dirty_since = Some(Instant::now());
         }
     }
 
-    fn instance(&self, id: NodeId) -> Option<NodeInstance> {
+    pub(crate) fn instance(&self, id: NodeId) -> Option<NodeInstance> {
         let mut model = self.engine.node_model(id)?;
         model.position = self.positions.get(&id).copied().unwrap_or_default();
         model.size = self.sizes.get(&id).copied();
-        Some(NodeInstance { model, definition: self.engine.node_definition(id)?, unavailable: self.engine.node_unavailable(id), frozen: self.engine.frozen_changes(id).to_vec() })
+        Some(NodeInstance {
+            model,
+            definition: self.engine.node_definition(id)?,
+            unavailable: self.engine.node_unavailable(id),
+            frozen: self.engine.frozen_changes(id).to_vec(),
+        })
     }
 
-    fn snapshot(&self) -> ServerMessage {
-        let graph = self.engine.export_graph();
+    pub(crate) fn snapshot(&self, open_sheet: Option<SheetId>) -> ServerMessage {
+        let active_sheet = open_sheet.or_else(|| self.sheets.first().map(|s| s.id));
+        let summaries = self.sheet_summaries();
+        let (graph, traces, history, timers, node_errors) = match active_sheet {
+            Some(sheet_id) => {
+                let g = self.sheet_graph(sheet_id);
+                let t = self.traces.values()
+                    .filter(|(trace, _)| self.node_sheet.get(&trace.node_id) == Some(&sheet_id))
+                    .map(|(trace, at)| (trace.clone(), at.elapsed().as_millis() as u64))
+                    .collect();
+                let h = self.histories.get(&sheet_id).map_or_default(|h| h.state());
+                let timers = self.engine.delay_timers().into_iter()
+                    .filter(|t| self.node_sheet.get(&t.node) == Some(&sheet_id))
+                    .collect();
+                let errors = self.engine.node_errors().into_iter()
+                    .filter(|e| self.node_sheet.get(&e.node) == Some(&sheet_id))
+                    .collect();
+                (g, t, h, timers, errors)
+            }
+            None => (
+                ticknode_shared::GraphModel::default(),
+                Vec::new(),
+                ticknode_shared::HistoryState::default(),
+                Vec::new(),
+                Vec::new(),
+            ),
+        };
+
         ServerMessage::Init {
             definitions: self.engine.registry.get_definitions(),
             types: self.engine.types.definitions(),
             plugins: self.plugins.infos(&self.engine),
             translations: self.engine.translations(),
             property_options: self.engine.property_options(),
-            history: self.history.state(),
-            wire_routes: routes::sorted(&self.routes),
+            history,
+            wire_routes: graph.wire_routes,
             detached_connections: graph.detached_connections,
-            timers: self.engine.delay_timers(),
-            node_errors: self.engine.node_errors(),
+            timers,
+            node_errors,
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,
-            traces: self.traces.values()
-                .map(|(trace, at)| (trace.clone(), at.elapsed().as_millis() as u64))
-                .collect(),
-            frames: self.frames.values().cloned().collect(),
+            traces,
+            frames: graph.frames,
+            sheets: summaries,
+            open_sheet: active_sheet,
         }
     }
 
@@ -237,13 +342,10 @@ impl Actor {
             translations: self.engine.translations(),
         }
     }
-
-    fn require_node(&self, id: NodeId) -> Result<(), UiMessage> {
-        if self.engine.has_node(id) { Ok(()) } else { Err(EngineError::NodeNotFound(id).ui_message()) }
-    }
 }
 
 pub(crate) mod routes;
+pub(crate) mod sheets;
 mod commands;
 mod history;
 mod telemetry;

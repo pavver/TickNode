@@ -425,6 +425,10 @@ resources-loading = No items yet
 
 error-frame-invalid = Frame position and size must be finite
 error-frame-limit = Too many frames
+error-sheet-limit = Too many sheets
+error-cross-sheet = Nodes on different sheets cannot be connected
+error-no-sheet = Open a sheet first
+error-sheet-not-found = Sheet not found
 frame-default-title = Comment
 frame-resize-title = Drag to resize frame
 frame-color-gray = Gray

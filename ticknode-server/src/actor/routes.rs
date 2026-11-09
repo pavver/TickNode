@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use ticknode_core::TickEngine;
-use ticknode_shared::{ConnectionModel, Position, ServerMessage, UiMessage, WireRoute, MAX_WIRE_POINTS};
+use ticknode_shared::{ConnectionModel, Position, ServerMessage, SheetId, UiMessage, WireRoute, MAX_WIRE_POINTS};
 
 use super::Actor;
 
@@ -33,7 +33,8 @@ pub(crate) fn from_routes(engine: &TickEngine, routes: &[WireRoute]) -> Routes {
 }
 
 impl Actor {
-    pub(super) fn set_wire_route(&mut self, route: WireRoute) -> Result<Vec<ServerMessage>, UiMessage> {
+    pub(super) fn set_wire_route(&mut self, route: WireRoute, sheet: SheetId) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_session_connection(&route.connection, sheet)?;
         let existing = if route.exec { self.engine.exec_connections() } else { self.engine.data_connections() };
         if !existing.contains(&route.connection) || !valid_points(&route.points) {
             return Err(UiMessage::new("error-wire-route", "Invalid wire route: the connection must exist and the route must contain at most 32 finite points"));
@@ -51,16 +52,25 @@ impl Actor {
         self.routes.retain(|key, _| existing.contains(key));
     }
 
-    pub(super) fn restore_routes(&mut self, target: &[WireRoute]) -> Vec<ServerMessage> {
+    pub(super) fn restore_routes_for_sheet(&mut self, sheet: SheetId, target: &[WireRoute]) -> Vec<ServerMessage> {
         let restored = from_routes(&self.engine, target);
         let mut changes = Routes::new();
         for (key, points) in &restored {
-            if self.routes.get(key) != Some(points) { changes.insert(*key, points.clone()); }
+            if self.routes.get(key) != Some(points) {
+                changes.insert(*key, points.clone());
+                self.routes.insert(*key, points.clone());
+            }
         }
-        for key in self.routes.keys() {
-            if !restored.contains_key(key) { changes.insert(*key, Vec::new()); }
+        let sheet_keys: Vec<_> = self.routes.keys()
+            .filter(|(_, conn)| self.node_sheet.get(&conn.src_node) == Some(&sheet))
+            .copied()
+            .collect();
+        for key in sheet_keys {
+            if !restored.contains_key(&key) {
+                changes.insert(key, Vec::new());
+                self.routes.remove(&key);
+            }
         }
-        self.routes = restored;
         sorted(&changes).into_iter().map(ServerMessage::WireRouted).collect()
     }
 

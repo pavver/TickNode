@@ -2,23 +2,22 @@ use super::*;
 use ticknode_shared::{Frame, FrameColor, FrameId, MAX_FRAMES};
 
 fn actor(dir: &std::path::Path) -> Actor {
-    let (events, _) = broadcast::channel(32);
-    Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(),
-        frames: BTreeMap::new(), storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir), events,
-        dirty_since: None, traces: HashMap::new(), history: Default::default(),
-        telemetry: super::super::telemetry::Telemetry::new(Instant::now()),
-    }
+    test_actor(dir)
 }
 
 fn apply(actor: &mut Actor, msg: ClientMessage) -> Vec<ServerMessage> {
-    let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(msg, &reply).unwrap().0
+    test_apply(actor, msg)
 }
 
 fn apply_err(actor: &mut Actor, msg: ClientMessage) -> UiMessage {
+    let sheet = actor.sheets.first().map(|s| s.id);
     let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(msg, &reply).unwrap_err()
+    actor.apply(msg, sheet, &reply).unwrap_err()
+}
+
+fn history_state(actor: &Actor) -> HistoryState {
+    let sheet_id = actor.sheets[0].id;
+    actor.histories.get(&sheet_id).map_or_default(|h| h.state())
 }
 
 fn sample_frame(id: FrameId, title: &str) -> Frame {
@@ -45,15 +44,16 @@ fn set_and_persist_after_reload() {
     assert_eq!(actor.frames.get(&id), Some(&frame));
 
     actor.save();
-    let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
+    let sheet_id = actor.sheets[0].id;
+    let first = std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap();
     let graph: GraphModel = serde_json::from_str(&first).unwrap();
     assert_eq!(graph.frames, vec![frame.clone()]);
 
     let mut engine = TickEngine::new();
-    let (positions, sizes, routes, restored_frames) = actor.storage.load(&mut engine).unwrap();
-    assert_eq!(restored_frames.get(&id), Some(&frame));
-    actor.storage.save(&engine, &positions, &sizes, &routes, &restored_frames).unwrap();
-    assert_eq!(std::fs::read_to_string(dir.path().join("graph.json")).unwrap(), first);
+    let loaded = actor.storage.load(&mut engine).unwrap();
+    assert_eq!(loaded.frames.get(&id), Some(&frame));
+    actor.storage.save_sheet(sheet_id, &graph).unwrap();
+    assert_eq!(std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap(), first);
 }
 
 #[test]
@@ -81,18 +81,18 @@ fn noop_produces_no_event_or_history() {
     let id = FrameId::generate();
     let frame = sample_frame(id, "Fixed");
     apply(&mut actor, ClientMessage::SetFrame(frame.clone()));
-    let history_before = actor.history.state();
+    let history_before = history_state(&actor);
 
     // Identical frame produces empty events and no history entry
     let events = apply(&mut actor, ClientMessage::SetFrame(frame.clone()));
     assert!(events.is_empty());
-    assert_eq!(actor.history.state(), history_before);
+    assert_eq!(history_state(&actor), history_before);
 
     // Removing unknown frame produces empty events and no history entry
     let unknown_id = FrameId::generate();
     let events = apply(&mut actor, ClientMessage::RemoveFrame(unknown_id));
     assert!(events.is_empty());
-    assert_eq!(actor.history.state(), history_before);
+    assert_eq!(history_state(&actor), history_before);
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn batch_set_frame_and_move_node_is_one_history_entry() {
     let mut actor = actor(dir.path());
     let node_id = apply(&mut actor, ClientMessage::AddNode { type_name: "const".into(), position: Position { x: 10.0, y: 10.0 } })
         .into_iter().find_map(|e| match e { ServerMessage::NodeAdded(n) => Some(n.model.id), _ => None }).unwrap();
-    actor.history = Default::default();
+    actor.histories.clear();
 
     let frame_id = FrameId::generate();
     let frame = sample_frame(frame_id, "Batch Frame");
@@ -259,7 +259,7 @@ fn init_carries_frames() {
     let frame = sample_frame(id, "Init Frame");
     apply(&mut actor, ClientMessage::SetFrame(frame.clone()));
 
-    let snapshot = actor.snapshot();
+    let snapshot = actor.snapshot(Some(actor.sheets[0].id));
     let ServerMessage::Init { frames, .. } = &snapshot else { panic!("Expected Init") };
     assert_eq!(frames, &vec![frame.clone()]);
 

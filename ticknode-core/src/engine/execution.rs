@@ -62,7 +62,7 @@ impl TickEngine {
     pub(crate) fn run_queue(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
         let mut current_tick_queue = std::mem::take(&mut self.execution_queue);
         while let Some((node_id, trigger_pin)) = current_tick_queue.pop_front() {
-            if self.skip_frozen(node_id) { continue; }
+            if self.is_disabled(node_id) || self.skip_frozen(node_id) { continue; }
             let Some(def) = self.definition_arc(node_id) else { continue };
             if self.budget.should_defer(self.last_tick.spent, def.cost) {
                 current_tick_queue.push_front((node_id, trigger_pin));
@@ -89,7 +89,7 @@ impl TickEngine {
     fn deliver_finished(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
         // Completed tasks (delays, HTTP) are delivered to their owning nodes.
         for (node_id, task, result) in self.host_state.take_finished() {
-            if self.skip_frozen(node_id) { continue; }
+            if self.is_disabled(node_id) || self.skip_frozen(node_id) { continue; }
             let Some(def) = self.definition_arc(node_id) else { continue };
             self.last_tick.charge(def.cost);
             let mut stack = Vec::new();
@@ -108,7 +108,7 @@ impl TickEngine {
         let mut fired = Vec::new();
         let sources: Vec<_> = self.sources.iter().copied().collect();
         for id in sources {
-            if self.skip_frozen(id) { continue; }
+            if self.is_disabled(id) || self.skip_frozen(id) { continue; }
             let Some(def) = self.definition_arc(id) else { continue };
             self.last_tick.charge(def.cost);
             let Some(node) = self.nodes.get_mut(&id) else { continue };

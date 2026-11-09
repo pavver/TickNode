@@ -55,9 +55,9 @@ async fn main() -> anyhow::Result<()> {
     let mut plugins = plugins::Plugins::new(&config.data_dir).with_bundled_dir(config.bundled_plugins_dir.clone());
     plugins.load_all(&mut engine);
 
-    let storage = Storage::new(config.data_dir.join("graph.json"));
-    let (positions, sizes, routes, frames) = storage.load(&mut engine)?;
-    let handle = actor::spawn(engine, (positions, sizes, routes, frames), storage, plugins, config.tick)?;
+    let storage = Storage::new(config.data_dir.clone());
+    let loaded = storage.load(&mut engine)?;
+    let handle = actor::spawn(engine, loaded, storage, plugins, config.tick)?;
 
     let app = router(handle.clone(), &config.web_dir);
 
@@ -150,7 +150,8 @@ mod tests {
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir.path())).into_future());
 
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
-        let ServerMessage::Init { definitions, nodes, .. } = recv(&mut ws).await else { panic!("expected Init") };
+        let ServerMessage::Init { definitions, nodes, open_sheet, .. } = recv(&mut ws).await else { panic!("expected Init") };
+        let sheet_id = open_sheet.expect("open_sheet is set");
         assert!(definitions.iter().any(|d| d.type_name == "const"));
         assert!(nodes.is_empty());
 
@@ -227,7 +228,8 @@ mod tests {
         assert_eq!(connected.unwrap(), ConnectionModel { src_node: ids[0], src_pin: PinId(0), dst_node: ids[1], dst_pin: PinId(1) });
 
         handle.shutdown().await;
-        let saved: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(graph_path).unwrap()).unwrap();
+        let sheet_file = dir.path().join("sheets").join(format!("{}.json", sheet_id));
+        let saved: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(sheet_file).unwrap()).unwrap();
         assert_eq!(saved.nodes.len(), 4);
         assert_eq!(saved.data_connections.len(), 2);
         assert!(saved.data_connections.contains(&conn));
@@ -263,9 +265,9 @@ mod tests {
         let mut engine = TickEngine::new();
         let mut plugins = plugins::Plugins::new(dir);
         plugins.load_all(&mut engine);
-        let storage = Storage::new(dir.join("graph.json"));
-        let (positions, sizes, routes, frames) = storage.load(&mut engine).unwrap();
-        let handle = actor::spawn(engine, (positions, sizes, routes, frames), storage, plugins, Duration::from_millis(10)).unwrap();
+        let storage = Storage::new(dir);
+        let loaded = storage.load(&mut engine).unwrap();
+        let handle = actor::spawn(engine, loaded, storage, plugins, Duration::from_millis(10)).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());
@@ -298,7 +300,8 @@ mod tests {
         let mut seen = Vec::new();
 
         // Init: plugin is enabled, but configure rejected the empty token
-        let ServerMessage::Init { plugins, definitions, translations, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
+        let ServerMessage::Init { plugins, definitions, translations, open_sheet, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
+        let sheet_id = open_sheet.expect("open_sheet is set");
         let info = plugin_of(&plugins);
         assert_eq!((info.state, info.file.as_str()), (PluginState::Enabled, "test_plugin.wasm"));
         assert_eq!(info.settings_error.as_ref().map(|e| e.key.as_str()), Some("test-plugin-error-no-token"));
@@ -387,7 +390,8 @@ mod tests {
 
         // Restart: plugin stays disabled, graph preserves the plugin node as a stub
         server.handle.shutdown().await;
-        let on_disk: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(dir.path().join("graph.json")).unwrap()).unwrap();
+        let sheet_file = dir.path().join("sheets").join(format!("{}.json", sheet_id));
+        let on_disk: ticknode_shared::GraphModel = serde_json::from_str(&std::fs::read_to_string(sheet_file).unwrap()).unwrap();
         assert_eq!(on_disk.nodes.len(), 1);
         assert_eq!(on_disk.nodes[0].position, Position { x: 3.0, y: 4.0 });
         let server = start(dir.path()).await;

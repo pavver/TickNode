@@ -32,7 +32,7 @@ impl TickEngine {
                 self.host_state.error(id, UiMessage::plain(format!("Plugin {plugin} emitted outputs for node {id:?}, which is not one of its nodes: dropped")), format!("[ERROR] Plugin {plugin} emitted outputs for node {id:?}, which is not one of its nodes: dropped"));
                 continue;
             };
-            if self.skip_frozen(id) { continue; }
+            if self.is_disabled(id) || self.skip_frozen(id) { continue; }
             let (outputs, errors) = validate_emission_outputs(&definition, emission.outputs);
             if errors.is_empty() { self.node_succeeded(id); }
             for e in errors {

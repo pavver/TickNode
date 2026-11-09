@@ -1,16 +1,14 @@
 use super::*;
 
 fn actor(dir: &std::path::Path) -> (Actor, ConnectionModel, ConnectionModel) {
-    let (events, _) = broadcast::channel(256);
-    let mut actor = Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), frames: BTreeMap::new(),
-        storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
-        events, dirty_since: None, traces: HashMap::new(), history: Default::default(),
-        telemetry: super::telemetry::Telemetry::new(Instant::now()),
-    };
+    let mut actor = test_actor(dir);
+    let sheet_id = actor.sheets[0].id;
     let a = NodeId::generate();
     let b = NodeId::generate();
-    for id in [a, b] { actor.engine.create_node(id, "for_loop", &[]).unwrap(); }
+    for id in [a, b] {
+        actor.engine.create_node(id, "for_loop", &[]).unwrap();
+        actor.node_sheet.insert(id, sheet_id);
+    }
     let exec = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
     let data = ConnectionModel { src_pin: PinId(5), dst_pin: PinId(1), ..exec };
     actor.engine.connect_exec(a, exec.src_pin, b, exec.dst_pin).unwrap();
@@ -19,8 +17,7 @@ fn actor(dir: &std::path::Path) -> (Actor, ConnectionModel, ConnectionModel) {
 }
 
 fn apply(actor: &mut Actor, msg: ClientMessage) -> Vec<ServerMessage> {
-    let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(msg, &reply).unwrap().0
+    test_apply(actor, msg)
 }
 
 fn route(exec: bool, connection: ConnectionModel, x: f32) -> WireRoute {
@@ -40,9 +37,9 @@ fn set_clear_noop_history_and_protocol_roundtrip() {
         assert!(actor.dirty_since.is_some());
         assert!(actor.engine.export_graph().wire_routes.is_empty());
         assert_eq!(actor.graph_snapshot().wire_routes, [route.clone()]);
-        let ServerMessage::Init { wire_routes, .. } = actor.snapshot() else { panic!() };
+        let ServerMessage::Init { wire_routes, .. } = actor.snapshot(Some(actor.sheets[0].id)) else { panic!() };
         assert_eq!(wire_routes, [route.clone()]);
-        for event in [events[0].clone(), actor.snapshot()] {
+        for event in [events[0].clone(), actor.snapshot(Some(actor.sheets[0].id))] {
             assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&event)).unwrap(), event);
         }
         actor.dirty_since = None;
@@ -73,10 +70,10 @@ fn rejects_unknown_connections_excess_points_and_nonfinite_coordinates() {
     ];
     let (reply, _) = mpsc::unbounded_channel();
     for route in invalid {
-        let error = actor.apply(ClientMessage::SetWireRoute(route), &reply).unwrap_err();
+        let error = actor.apply(ClientMessage::SetWireRoute(route), Some(actor.sheets[0].id), &reply).unwrap_err();
         assert_eq!(error.key, "error-wire-route");
         assert!(actor.routes.is_empty());
-        assert_eq!(actor.history.state(), HistoryState::default());
+        assert_eq!(actor.histories.get(&actor.sheets[0].id).map_or_default(|h| h.state()), HistoryState::default());
         assert!(actor.dirty_since.is_none());
     }
     apply(&mut actor, ClientMessage::SetWireRoute(WireRoute { points: vec![Position::default(); MAX_WIRE_POINTS], ..route(false, d, 0.0) }));
@@ -97,6 +94,7 @@ fn pruning_disconnect_remove_and_replaced_data_source_is_undoable() {
             _ => {
                 let other = NodeId::generate();
                 actor.engine.create_node(other, "for_loop", &[]).unwrap();
+                actor.node_sheet.insert(other, actor.sheets[0].id);
                 ClientMessage::ConnectData(ConnectionModel { src_node: other, ..d })
             }
         };

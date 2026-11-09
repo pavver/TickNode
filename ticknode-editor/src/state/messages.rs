@@ -16,7 +16,9 @@ impl Editor {
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
         if frames::applies(&msg) { self.frames.update(|all| frames::apply(all, &msg)); }
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, .. } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, .. } => {
+                self.sheets.set(sheets.clone());
+                self.open_sheet.set(open_sheet);
                 self.history.set(history);
                 let gone = self.remove_absent_nodes(&nodes);
                 self.apply_catalog(definitions, types, translations);
@@ -25,6 +27,13 @@ impl Editor {
                 self.frame_pos_previews.set(std::collections::HashMap::new());
                 self.frame_size_previews.set(std::collections::HashMap::new());
                 self.replace_graph(nodes, exec_connections, data_connections, traces, gone);
+                if open_sheet.is_none() {
+                    if let Some(first) = sheets.first() {
+                        self.send(ClientMessage::OpenSheet(Some(first.info.id)));
+                    } else {
+                        self.send(ClientMessage::CreateSheet { title: "Main".into(), caption: String::new() });
+                    }
+                }
             }
             ServerMessage::NodeAdded(instance) | ServerMessage::NodeUpdated(instance) => { self.upsert_node(instance); }
             ServerMessage::NodeRemoved(id) => self.remove_node(id),
@@ -76,6 +85,12 @@ impl Editor {
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => self.node_log(node_id, message),
             ServerMessage::History(history) => self.history.set(history),
+            ServerMessage::Sheets(sheets) => self.sheets.set(sheets),
+            ServerMessage::SheetCreated(id) => {
+                if self.open_sheet.get_untracked().is_none() {
+                    self.send(ClientMessage::OpenSheet(Some(id)));
+                }
+            }
             ServerMessage::Error(message) => {
                 self.error_seq.update(|n| *n += 1);
                 // The answer to the user's action: translated, unlike technical log lines.

@@ -430,6 +430,10 @@ resources-loading = Поки що порожньо
 
 error-frame-invalid = Позиція і розмір рамки мають бути скінченними числами
 error-frame-limit = Забагато рамок
+error-sheet-limit = Забагато аркушів
+error-cross-sheet = Не можна з'єднувати ноди з різних аркушів
+error-no-sheet = Спершу відкрийте аркуш
+error-sheet-not-found = Аркуш не знайдено
 frame-default-title = Коментар
 frame-resize-title = Тягніть, щоб змінити розмір рамки
 frame-color-gray = Сірий

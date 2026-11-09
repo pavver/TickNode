@@ -2,41 +2,132 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use serde::{Deserialize, Serialize};
 use ticknode_core::TickEngine;
-use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position};
+use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, SheetId, SheetInfo};
 use tracing::{info, warn};
 use crate::actor::routes::{self, Routes};
 
-/// Layout metadata owned by the server, outside the execution engine.
-pub type Layout = (HashMap<NodeId, Position>, HashMap<NodeId, NodeSize>, Routes, BTreeMap<FrameId, Frame>);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SheetsFile {
+    pub sheets: Vec<SheetInfo>,
+}
 
-/// The graph is stored as pretty-printed JSON with deterministic ordering so it diffs cleanly in git.
+pub struct LoadedSheets {
+    pub sheets: Vec<SheetInfo>,
+    pub node_sheet: HashMap<NodeId, SheetId>,
+    pub frame_sheet: HashMap<FrameId, SheetId>,
+    pub positions: HashMap<NodeId, Position>,
+    pub sizes: HashMap<NodeId, NodeSize>,
+    pub routes: Routes,
+    pub frames: BTreeMap<FrameId, Frame>,
+}
+
+impl Default for LoadedSheets {
+    fn default() -> Self {
+        let main = SheetInfo {
+            id: SheetId::generate(),
+            title: "Main".to_string(),
+            caption: String::new(),
+            enabled: true,
+        };
+        Self {
+            sheets: vec![main],
+            node_sheet: HashMap::new(),
+            frame_sheet: HashMap::new(),
+            positions: HashMap::new(),
+            sizes: HashMap::new(),
+            routes: Routes::new(),
+            frames: BTreeMap::new(),
+        }
+    }
+}
+
+/// The sheets metadata and individual sheet graphs are stored as pretty-printed JSON.
 pub struct Storage {
-    path: PathBuf,
+    data_dir: PathBuf,
 }
 
 impl Storage {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new(path_or_dir: impl Into<PathBuf>) -> Self {
+        let path_or_dir = path_or_dir.into();
+        let data_dir = if path_or_dir.extension().is_some() {
+            path_or_dir.parent().unwrap_or(&path_or_dir).to_path_buf()
+        } else {
+            path_or_dir
+        };
+        Self { data_dir }
     }
 
-    /// Loads the graph into the engine and returns node positions, sizes, wire routes and frames. A missing file starts with an empty graph;
-    /// a corrupted file returns an error rather than overwriting it with an empty graph.
-    pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<Layout> {
-        if !self.path.exists() {
-            info!(path = %self.path.display(), "Graph file not found, starting with an empty graph");
-            return Ok((HashMap::new(), HashMap::new(), Routes::new(), BTreeMap::new()));
-        }
-        let text = std::fs::read_to_string(&self.path)
-            .with_context(|| format!("failed to read {}", self.path.display()))?;
-        let graph: GraphModel = serde_json::from_str(&text)
-            .with_context(|| format!("invalid graph JSON in {}", self.path.display()))?;
+    pub fn sheets_json_path(&self) -> PathBuf {
+        self.data_dir.join("sheets.json")
+    }
 
-        for warning in engine.load_graph(&graph) {
+    pub fn sheets_dir(&self) -> PathBuf {
+        self.data_dir.join("sheets")
+    }
+
+    pub fn sheet_path(&self, id: SheetId) -> PathBuf {
+        self.sheets_dir().join(format!("{}.json", id.0))
+    }
+
+    pub fn trash_dir(&self) -> PathBuf {
+        self.sheets_dir().join("trash")
+    }
+
+    pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<LoadedSheets> {
+        self.ensure_migrated()?;
+
+        let sheets_text = std::fs::read_to_string(self.sheets_json_path())
+            .with_context(|| format!("failed to read {}", self.sheets_json_path().display()))?;
+        let sheets_file: SheetsFile = serde_json::from_str(&sheets_text)
+            .with_context(|| format!("invalid sheets JSON in {}", self.sheets_json_path().display()))?;
+
+        let mut node_sheet = HashMap::new();
+        let mut frame_sheet = HashMap::new();
+        let mut merged_graph = GraphModel::default();
+
+        for sheet in &sheets_file.sheets {
+            let sheet_path = self.sheet_path(sheet.id);
+            let graph: GraphModel = if sheet_path.exists() {
+                let text = std::fs::read_to_string(&sheet_path)
+                    .with_context(|| format!("failed to read {}", sheet_path.display()))?;
+                serde_json::from_str(&text)
+                    .with_context(|| format!("invalid sheet JSON in {}", sheet_path.display()))?
+            } else {
+                GraphModel::default()
+            };
+
+            for node in &graph.nodes {
+                node_sheet.insert(node.id, sheet.id);
+            }
+            for frame in &graph.frames {
+                frame_sheet.insert(frame.id, sheet.id);
+            }
+
+            merged_graph.nodes.extend(graph.nodes);
+            merged_graph.exec_connections.extend(graph.exec_connections);
+            merged_graph.data_connections.extend(graph.data_connections);
+            merged_graph.wire_routes.extend(graph.wire_routes);
+            merged_graph.detached_connections.extend(graph.detached_connections);
+            merged_graph.frames.extend(graph.frames);
+        }
+
+        for warning in engine.load_graph(&merged_graph) {
             warn!("{}", warning);
         }
+
+        for sheet in &sheets_file.sheets {
+            if !sheet.enabled {
+                let disabled = node_sheet.iter()
+                    .filter(|(_, s)| **s == sheet.id)
+                    .map(|(n, _)| *n);
+                engine.set_disabled(disabled, true);
+            }
+        }
+
         let mut frames = BTreeMap::new();
-        for frame in graph.frames {
+        for frame in merged_graph.frames {
             let id = frame.id;
             if let Some(valid) = frame.validated() {
                 frames.insert(valid.id, valid);
@@ -44,31 +135,99 @@ impl Storage {
                 warn!("Dropping invalid frame {}: non-finite position or size", id.0);
             }
         }
-        info!(nodes = graph.nodes.len(), frames = frames.len(), path = %self.path.display(), "Graph loaded");
-        Ok((
-            graph.nodes.iter().map(|n| (n.id, n.position)).collect(),
-            graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect(),
-            routes::from_routes(engine, &graph.wire_routes),
+
+        let positions = merged_graph.nodes.iter().map(|n| (n.id, n.position)).collect();
+        let sizes = merged_graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect();
+        let routes = routes::from_routes(engine, &merged_graph.wire_routes);
+
+        info!(
+            sheets = sheets_file.sheets.len(),
+            nodes = merged_graph.nodes.len(),
+            frames = frames.len(),
+            "Sheets and graph loaded"
+        );
+
+        Ok(LoadedSheets {
+            sheets: sheets_file.sheets,
+            node_sheet,
+            frame_sheet,
+            positions,
+            sizes,
+            routes,
             frames,
-        ))
+        })
     }
 
-    pub fn save(
-        &self,
-        engine: &TickEngine,
-        positions: &HashMap<NodeId, Position>,
-        sizes: &HashMap<NodeId, NodeSize>,
-        routes: &Routes,
-        frames: &BTreeMap<FrameId, Frame>,
-    ) -> anyhow::Result<()> {
-        let mut graph = engine.export_graph();
-        for node in &mut graph.nodes {
-            node.position = positions.get(&node.id).copied().unwrap_or_default();
-            node.size = sizes.get(&node.id).copied();
+    fn ensure_migrated(&self) -> anyhow::Result<()> {
+        let sheets_json = self.sheets_json_path();
+        if sheets_json.exists() {
+            return Ok(());
         }
-        graph.wire_routes = routes::sorted(routes);
-        graph.frames = frames.values().cloned().collect();
-        write_atomic(&self.path, &(serde_json::to_string_pretty(&graph)? + "\n"))
+
+        let old_graph = self.data_dir.join("graph.json");
+        let (graph, should_migrate_old) = if old_graph.exists() {
+            let text = std::fs::read_to_string(&old_graph)
+                .with_context(|| format!("failed to read {}", old_graph.display()))?;
+            let g: GraphModel = serde_json::from_str(&text)
+                .with_context(|| format!("invalid graph JSON in {}", old_graph.display()))?;
+            (g, true)
+        } else {
+            (GraphModel::default(), false)
+        };
+
+        std::fs::create_dir_all(self.sheets_dir())
+            .with_context(|| format!("failed to create sheets dir {}", self.sheets_dir().display()))?;
+
+        let main_id = SheetId::generate();
+        let main_sheet = SheetInfo {
+            id: main_id,
+            title: "Main".to_string(),
+            caption: String::new(),
+            enabled: true,
+        };
+
+        let sheets_file = SheetsFile {
+            sheets: vec![main_sheet],
+        };
+
+        let sheet_path = self.sheet_path(main_id);
+        write_atomic(&sheet_path, &(serde_json::to_string_pretty(&graph)? + "\n"))?;
+        write_atomic(&sheets_json, &(serde_json::to_string_pretty(&sheets_file)? + "\n"))?;
+
+        if should_migrate_old {
+            let migrated = self.data_dir.join("graph.json.migrated");
+            std::fs::rename(&old_graph, &migrated)
+                .with_context(|| format!("failed to rename {} to {}", old_graph.display(), migrated.display()))?;
+            info!("Migrated graph.json to sheets layout and renamed to graph.json.migrated");
+        }
+
+        Ok(())
+    }
+
+    pub fn save_sheets_meta(&self, sheets: &[SheetInfo]) -> anyhow::Result<()> {
+        let file = SheetsFile { sheets: sheets.to_vec() };
+        write_atomic(&self.sheets_json_path(), &(serde_json::to_string_pretty(&file)? + "\n"))
+    }
+
+    pub fn save_sheet(&self, id: SheetId, graph: &GraphModel) -> anyhow::Result<()> {
+        std::fs::create_dir_all(self.sheets_dir())?;
+        write_atomic(&self.sheet_path(id), &(serde_json::to_string_pretty(graph)? + "\n"))
+    }
+
+    pub fn delete_sheet(&self, id: SheetId) -> anyhow::Result<()> {
+        let src = self.sheet_path(id);
+        if src.exists() {
+            let trash_dir = self.trash_dir();
+            std::fs::create_dir_all(&trash_dir)?;
+            let now_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let dest = trash_dir.join(format!("{}-{}.json", id.0, now_secs));
+            std::fs::rename(&src, &dest)
+                .with_context(|| format!("failed to move {} to trash {}", src.display(), dest.display()))?;
+        }
+        Ok(())
     }
 }
 
@@ -81,94 +240,4 @@ fn write_atomic(path: &Path, contents: &str) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use ticknode_shared::{DataValue, PinId};
-
-    #[test]
-    fn save_and_load_roundtrip() {
-        let dir = tempfile::tempdir().unwrap();
-        let storage = Storage::new(dir.path().join("graph.json"));
-
-        let mut engine = TickEngine::new();
-        let c = NodeId::generate();
-        let dbg = NodeId::generate();
-        engine.create_node(c, "const", &[("value".into(), DataValue::String("x".into()))]).unwrap();
-        engine.create_node(dbg, "test/debug", &[]).unwrap();
-        engine.connect_data(c, PinId(0), dbg, PinId(1)).unwrap();
-        let positions = HashMap::from([(c, Position { x: 10.0, y: 20.0 })]);
-        let connection = engine.data_connections()[0];
-        let routes = Routes::from([((false, connection), vec![Position { x: 48.0, y: -80.0 }])]);
-        let frame = Frame {
-            id: FrameId::generate(),
-            title: "Test Group".into(),
-            color: ticknode_shared::FrameColor::Blue,
-            position: Position { x: 5.0, y: 15.0 },
-            size: NodeSize { width: 300.0, height: 200.0 },
-        };
-        let frames = BTreeMap::from([(frame.id, frame.clone())]);
-        storage.save(&engine, &positions, &HashMap::new(), &routes, &frames).unwrap();
-
-        let mut restored = TickEngine::new();
-        let (restored_positions, restored_sizes, restored_routes, restored_frames) = storage.load(&mut restored).unwrap();
-        assert_eq!(restored_positions[&c], Position { x: 10.0, y: 20.0 });
-        assert_eq!(restored.export_graph(), engine.export_graph());
-        assert_eq!(restored_routes, routes);
-        assert_eq!(restored_frames, frames);
-
-        // Saving again without changes produces an identical file (stable diff)
-        let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
-        storage.save(&restored, &restored_positions, &restored_sizes, &restored_routes, &restored_frames).unwrap();
-        let second = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
-        assert_eq!(first, second);
-    }
-
-    #[test]
-    fn broken_file_is_an_error() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("graph.json");
-        std::fs::write(&path, "{ not json").unwrap();
-        assert!(Storage::new(path).load(&mut TickEngine::new()).is_err());
-    }
-
-    #[test]
-    fn old_graphs_load_without_routes_and_stale_routes_are_ignored() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("graph.json");
-        let storage = Storage::new(path.clone());
-        let mut engine = TickEngine::new();
-        assert!(storage.load(&mut engine).unwrap().2.is_empty());
-        std::fs::write(&path, r#"{"nodes":[],"exec_connections":[],"data_connections":[]}"#).unwrap();
-        assert!(storage.load(&mut engine).unwrap().2.is_empty());
-        let route = ticknode_shared::WireRoute {
-            exec: true,
-            connection: ticknode_shared::ConnectionModel { src_node: NodeId::generate(), src_pin: PinId(0), dst_node: NodeId::generate(), dst_pin: PinId(0) },
-            points: vec![Position { x: 4.0, y: 8.0 }],
-        };
-        let graph = GraphModel { wire_routes: vec![route], ..Default::default() };
-        std::fs::write(&path, serde_json::to_string(&graph).unwrap()).unwrap();
-        assert!(storage.load(&mut engine).unwrap().2.is_empty());
-    }
-
-    #[test]
-    fn routes_are_saved_in_a_deterministic_connection_order() {
-        let dir = tempfile::tempdir().unwrap();
-        let storage = Storage::new(dir.path().join("graph.json"));
-        let mut engine = TickEngine::new();
-        let a = NodeId::generate();
-        let b = NodeId::generate();
-        for id in [a, b] { engine.create_node(id, "for_loop", &[]).unwrap(); }
-        engine.connect_exec(a, PinId(4), b, PinId(0)).unwrap();
-        engine.connect_exec(b, PinId(4), a, PinId(0)).unwrap();
-        engine.connect_data(a, PinId(5), b, PinId(1)).unwrap();
-        let routes: Routes = routes::connections(&engine).into_iter().map(|key| (key, vec![Position::default()])).collect();
-        storage.save(&engine, &HashMap::new(), &HashMap::new(), &routes, &BTreeMap::new()).unwrap();
-        let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
-        let graph: GraphModel = serde_json::from_str(&first).unwrap();
-        assert!(!graph.wire_routes[0].exec);
-        assert!(graph.wire_routes[1].connection.src_node < graph.wire_routes[2].connection.src_node);
-        let reordered: Routes = routes.iter().map(|(key, points)| (*key, points.clone())).collect();
-        storage.save(&engine, &HashMap::new(), &HashMap::new(), &reordered, &BTreeMap::new()).unwrap();
-        assert_eq!(first, std::fs::read_to_string(dir.path().join("graph.json")).unwrap());
-    }
-}
+mod tests;

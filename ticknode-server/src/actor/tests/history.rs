@@ -1,17 +1,11 @@
 use super::*;
 
 fn actor(dir: &std::path::Path) -> Actor {
-    let (events, _) = broadcast::channel(256);
-    Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), frames: BTreeMap::new(),
-        storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
-        events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
-    }
+    test_actor(dir)
 }
 
 fn apply(actor: &mut Actor, msg: ClientMessage) -> Vec<ServerMessage> {
-    let (reply, _) = mpsc::unbounded_channel();
-    actor.apply(msg, &reply).unwrap().0
+    test_apply(actor, msg)
 }
 
 fn add(actor: &mut Actor, x: f32) -> NodeId {
@@ -20,7 +14,8 @@ fn add(actor: &mut Actor, x: f32) -> NodeId {
 }
 
 fn state(actor: &Actor, undo: bool, redo: bool) {
-    let ServerMessage::Init { history, .. } = actor.snapshot() else { panic!("missing Init") };
+    let sheet = actor.sheets.first().map(|s| s.id);
+    let ServerMessage::Init { history, .. } = actor.snapshot(sheet) else { panic!("missing Init") };
     assert_eq!(history, HistoryState { can_undo: undo, can_redo: redo });
 }
 
@@ -39,7 +34,7 @@ fn history_add_undo_redo_same_id_and_protocol_state() {
     let events = apply(&mut actor, ClientMessage::Redo);
     assert!(matches!(events.first(), Some(ServerMessage::NodeAdded(n)) if n.model.id == id && n.model.position.x == 12.0));
     state(&actor, true, false);
-    for event in events.into_iter().chain([actor.snapshot()]) {
+    for event in events.into_iter().chain([actor.snapshot(actor.sheets.first().map(|s| s.id))]) {
         assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&event)).unwrap(), event);
     }
 }
@@ -75,7 +70,7 @@ fn history_new_edit_clears_redo_but_failures_and_noops_do_not() {
     let id = add(&mut actor, 10.0);
     apply(&mut actor, ClientMessage::Undo);
     let (reply, _) = mpsc::unbounded_channel();
-    assert!(actor.apply(ClientMessage::RemoveNode(id), &reply).is_err());
+    assert!(actor.apply(ClientMessage::RemoveNode(id), actor.sheets.first().map(|s| s.id), &reply).is_err());
     apply(&mut actor, ClientMessage::DisconnectData { dst_node: id, dst_pin: PinId(1) });
     state(&actor, false, true);
     let id = add(&mut actor, 40.0);
@@ -100,7 +95,8 @@ fn history_batch_keeps_successes_skips_forbidden_and_reports_first_error() {
         ClientMessage::SetPluginEnabled { name: "missing".into(), enabled: false },
         ClientMessage::ConfigurePlugin { name: "missing".into(), values: vec![] },
         ClientMessage::RemoveNode(a), ClientMessage::RemoveNode(a), ClientMessage::RemoveNode(b),
-    ]), &reply).unwrap();
+    ]), actor.sheets.first().map(|s| s.id), &reply).unwrap();
+    let events: Vec<ServerMessage> = events.into_iter().map(|(_, m)| m).collect();
     assert_eq!(events.iter().filter(|e| matches!(e, ServerMessage::NodeRemoved(_))).count(), 2);
     assert!(matches!(errors.try_recv(), Ok(ServerMessage::Error(e)) if e.key == "error-batch-command"));
     assert!(errors.try_recv().is_err());
@@ -166,7 +162,8 @@ fn paste_returns_created_ids_positions_warnings_and_limit_errors() {
     snippet.data_connections.push(ConnectionModel { src_node: a, src_pin: PinId(5), dst_node: a, dst_pin: PinId(1) });
     let expected_positions = snippet.nodes.iter().map(|node| node.position).collect::<Vec<_>>();
     let (reply, mut replies) = mpsc::unbounded_channel();
-    let (events, created) = actor.apply(ClientMessage::Paste(snippet.clone()), &reply).unwrap();
+    let (events, created) = actor.apply(ClientMessage::Paste(snippet.clone()), actor.sheets.first().map(|s| s.id), &reply).unwrap();
+    let events: Vec<ServerMessage> = events.into_iter().map(|(_, m)| m).collect();
     let ids = created.unwrap();
     assert_eq!(ids.len(), 2);
     assert!(ids.iter().all(|id| *id != a && *id != b));
@@ -180,7 +177,7 @@ fn paste_returns_created_ids_positions_warnings_and_limit_errors() {
     assert!(warning.fallback.contains("Data connection"));
     let node = snippet.nodes[0].clone();
     snippet.nodes = vec![node; MAX_PASTE_NODES + 1];
-    let error = actor.apply(ClientMessage::Paste(snippet), &reply).unwrap_err();
+    let error = actor.apply(ClientMessage::Paste(snippet), actor.sheets.first().map(|s| s.id), &reply).unwrap_err();
     assert_eq!(error.key, "error-paste-too-many");
     assert_eq!(error.args, vec![("count".into(), "1001".into()), ("max".into(), "1000".into())]);
     assert_eq!(actor.engine.node_ids().len(), 4);
@@ -193,15 +190,26 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
     let id = NodeId::generate();
     engine.create_node(id, "console", &[]).unwrap();
     engine.set_input_value(id, PinId(1), Some(DataValue::from("tick output"))).unwrap();
-    let handle = spawn(engine, Default::default(), Storage::new(dir.path().join("graph.json")),
+    let storage = Storage::new(dir.path());
+    let sheet_id = SheetId::generate();
+    let loaded = LoadedSheets {
+        sheets: vec![SheetInfo::new(sheet_id, "Main")],
+        node_sheet: HashMap::from([(id, sheet_id)]),
+        frame_sheet: HashMap::new(),
+        positions: HashMap::new(),
+        sizes: HashMap::new(),
+        routes: HashMap::new(),
+        frames: BTreeMap::new(),
+    };
+    let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_millis(5)).unwrap();
     let mut events = handle.subscribe();
     let (reply, _) = mpsc::unbounded_channel();
-    handle.send(ClientMessage::TriggerNode { id, pin: PinId(0) }, reply);
+    handle.send(ClientMessage::TriggerNode { id, pin: PinId(0) }, None, reply);
     let mut executed = false;
     let mut logged = false;
     while !executed || !logged {
-        let bytes = tokio::time::timeout(Duration::from_secs(5), events.recv()).await.unwrap().unwrap();
+        let (_sheet, bytes) = tokio::time::timeout(Duration::from_secs(5), events.recv()).await.unwrap().unwrap();
         match postcard::from_bytes::<ServerMessage>(&bytes).unwrap() {
             ServerMessage::Executed(traces) => {
                 assert!(traces.iter().any(|trace| trace.node_id == id && trace.inputs.contains(&(PinId(1), Some(DataValue::from("tick output"))))));
@@ -214,7 +222,7 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
             _ => {},
         }
     }
-    let Some(ServerMessage::Init { traces, .. }) = handle.snapshot().await else { panic!("missing snapshot") };
+    let Some(ServerMessage::Init { traces, .. }) = handle.snapshot(None).await else { panic!("missing snapshot") };
     assert!(traces.iter().any(|(trace, _)| trace.node_id == id));
     handle.shutdown().await;
 }
@@ -246,7 +254,7 @@ fn history_batch_collects_created_ids_and_keeps_first_command_error() {
         ClientMessage::RemoveNode(missing), ClientMessage::Undo,
         ClientMessage::AddNode { type_name: "const".into(), position: Position::default() },
         ClientMessage::AddNode { type_name: "for_loop".into(), position: Position::default() },
-    ]), &reply).unwrap();
+    ]), actor.sheets.first().map(|s| s.id), &reply).unwrap();
     let ids = ids.unwrap();
     assert_eq!(ids.len(), 2);
     assert!(ids.iter().all(|id| actor.engine.has_node(*id)));
@@ -287,27 +295,33 @@ fn history_moves_kept_nodes_and_recreates_changed_nodes_in_event_order() {
 #[tokio::test]
 async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
     let dir = tempfile::tempdir().unwrap();
-    let handle = spawn(TickEngine::new(), Default::default(), Storage::new(dir.path().join("graph.json")),
+    let mut engine = TickEngine::new();
+    let storage = Storage::new(dir.path());
+    let loaded = storage.load(&mut engine).unwrap();
+    let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
     let mut first = handle.subscribe();
     let mut second = handle.subscribe();
     let (reply, mut replies) = mpsc::unbounded_channel();
-    handle.send(ClientMessage::AddNode { type_name: "const".into(), position: Position::default() }, reply);
+    handle.send(ClientMessage::AddNode { type_name: "const".into(), position: Position::default() }, None, reply);
     for receiver in [&mut first, &mut second] {
-        let node = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
+        let (_sheet, node) = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
         assert!(matches!(postcard::from_bytes::<ServerMessage>(&node).unwrap(), ServerMessage::NodeAdded(_)));
-        let history = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
+        let (_sheet, history) = tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await.unwrap().unwrap();
         assert_eq!(postcard::from_bytes::<ServerMessage>(&history).unwrap(), ServerMessage::History(HistoryState { can_undo: true, can_redo: false }));
     }
     assert!(matches!(replies.recv().await, Some(ServerMessage::Created(_))));
-    assert!(matches!(handle.snapshot().await, Some(ServerMessage::Init { history: HistoryState { can_undo: true, can_redo: false }, .. })));
+    assert!(matches!(handle.snapshot(None).await, Some(ServerMessage::Init { history: HistoryState { can_undo: true, can_redo: false }, .. })));
     handle.shutdown().await;
 }
 
 #[tokio::test]
 async fn add_node_with_creates_node_with_properties_replies_created_and_supports_undo() {
     let dir = tempfile::tempdir().unwrap();
-    let handle = spawn(TickEngine::new(), Default::default(), Storage::new(dir.path().join("graph.json")),
+    let mut engine = TickEngine::new();
+    let storage = Storage::new(dir.path());
+    let loaded = storage.load(&mut engine).unwrap();
+    let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
     let (reply, mut replies) = mpsc::unbounded_channel();
     let pos = Position { x: 42.0, y: 84.0 };
@@ -315,7 +329,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         type_name: "const".into(),
         position: pos,
         properties: vec![("value".into(), DataValue::from(123.0))],
-    }, reply);
+    }, None, reply);
 
     let created_id = match replies.recv().await {
         Some(ServerMessage::Created(ids)) => {
@@ -325,7 +339,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         other => panic!("Expected Created, got {other:?}"),
     };
 
-    let snapshot = handle.snapshot().await.unwrap();
+    let snapshot = handle.snapshot(None).await.unwrap();
     let ServerMessage::Init { nodes, .. } = snapshot else { panic!("Expected Init") };
     let node = nodes.iter().find(|n| n.model.id == created_id).expect("node exists");
     assert_eq!(node.model.position, pos);
@@ -333,10 +347,10 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
 
     // Undo removes it
     let (undo_reply, _) = mpsc::unbounded_channel();
-    handle.send(ClientMessage::Undo, undo_reply);
+    handle.send(ClientMessage::Undo, None, undo_reply);
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let snapshot = handle.snapshot().await.unwrap();
+    let snapshot = handle.snapshot(None).await.unwrap();
     let ServerMessage::Init { nodes, .. } = snapshot else { panic!("Expected Init") };
     assert!(!nodes.iter().any(|n| n.model.id == created_id));
 
@@ -346,7 +360,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         type_name: "const".into(),
         position: Position::default(),
         properties: vec![("in:0".into(), DataValue::Bool(true))],
-    }, err_reply);
+    }, None, err_reply);
     match err_replies.recv().await {
         Some(ServerMessage::Error(err)) => {
             assert_eq!(err.key, "error-invalid-property");
@@ -360,7 +374,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         type_name: "const".into(),
         position: Position::default(),
         properties: vec![("split:0".into(), DataValue::Bool(true))],
-    }, err_reply2);
+    }, None, err_reply2);
     match err_replies2.recv().await {
         Some(ServerMessage::Error(err)) => {
             assert_eq!(err.key, "error-invalid-property");
@@ -375,7 +389,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         type_name: "unknown_type".into(),
         position: Position::default(),
         properties: vec![],
-    }, err_reply3);
+    }, None, err_reply3);
     match err_replies3.recv().await {
         Some(ServerMessage::Error(err)) => {
             assert_eq!(err.key, "error-unknown-node-type");

@@ -2,7 +2,7 @@ use super::*;
 
 impl TickEngine {
     pub(crate) fn pull_data(&mut self, node_id: NodeId, pin_id: PinId, stack: &mut Vec<NodeId>) -> Option<DataValue> {
-        if self.skip_frozen(node_id) { return None; }
+        if self.is_disabled(node_id) || self.skip_frozen(node_id) { return None; }
         if stack.contains(&node_id) { return None; }
         if let Some((parent, field)) = self.split_output_field(node_id, pin_id) {
             let DataValue::Object { fields, .. } = self.pull_data(node_id, parent, stack)? else { return None };

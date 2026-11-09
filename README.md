@@ -28,7 +28,8 @@ Its first target is **Home Assistant**: TickNode is being developed into an add-
 - **Everything edited on the node.** Properties, input values, types and conditions are set right on the canvas; resize nodes to give text fields more room and edit multiline messages. The inspector shows the last execution of each node.
 - **Comfortable editing.** Shared undo/redo, copy/paste, copying settings between nodes of one type, compatible node suggestions when a wire is dropped on empty canvas, and route points to lead wires around cards.
 - **Safe updates.** Plugins carry a fingerprint of the plugin API, and an incompatible plugin is reported instead of crashing. When an update changes a node's pins, the node is frozen until you confirm it, and wires that no longer fit stay visible as detached wires instead of disappearing.
-- **Git-friendly storage.** The graph is a stable, pretty-printed `data/graph.json`.
+- **Scenario sheets.** Organize complex automations into independent scenario sheets. Each sheet has its own canvas, lifecycle (enable/disable), and undo/redo history, while all enabled sheets run concurrently on the same engine.
+- **Git-friendly storage.** Graphs are stored as pretty-printed JSON in `data/sheets/<id>.json` with metadata in `data/sheets.json`.
 - **English and Ukrainian UI**, localized with Mozilla Fluent.
 - **Rust end to end.** Engine, server, editor (Leptos → WebAssembly) and plugins share one set of types.
 

@@ -5,7 +5,7 @@ impl Actor {
     pub(super) fn paste_settings(
         &mut self, id: NodeId, type_name: &str, properties: Vec<(String, DataValue)>,
     ) -> Result<Vec<ServerMessage>, UiMessage> {
-        self.require_node(id)?;
+        let sheet = self.node_sheet.get(&id).copied().ok_or_else(|| EngineError::NodeNotFound(id).ui_message())?;
         if let Some(reason) = self.engine.node_unavailable(id) {
             return Err(EngineError::PluginUnavailable(reason).ui_message());
         }
@@ -22,6 +22,7 @@ impl Actor {
             return Ok(vec![]);
         }
         node.properties = properties;
-        Ok(self.reconcile_graph_edit(&target, Some(id)))
+        let tagged = self.reconcile_graph_edit_for_sheet(&target, Some(id), sheet);
+        Ok(tagged.into_iter().map(|(_, e)| e).collect())
     }
 }

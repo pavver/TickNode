@@ -58,6 +58,17 @@ pub struct NodeDefinition {
 
 fn default_cost() -> u32 { 1 }
 
+/// Lets plugin code fill only the fields it cares about (`..Default::default()`), so adding a
+/// field to definitions does not break existing plugins at the source level. The cost defaults to 1.
+impl Default for NodeDefinition {
+    fn default() -> Self {
+        Self {
+            type_name: String::new(), title: String::new(), category: String::new(), description: String::new(),
+            help: String::new(), pins: Vec::new(), properties: Vec::new(), cost: default_cost(), adaptive: false,
+        }
+    }
+}
+
 impl NodeDefinition {
     /// Set relative work for this definition (also re-exported by the plugin SDK).
     pub fn cost(mut self, cost: u32) -> Self {

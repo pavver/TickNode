@@ -21,11 +21,13 @@ Its first target is **Home Assistant**: TickNode is being developed into an add-
 
 - **Predictable execution.** Work happens in ticks (100 ms by default). Execution impulses move one step per tick, so loops never freeze the engine; data is pulled on demand, and data cycles are rejected when you connect them.
 - **Two kinds of wires.** *Exec* wires decide **when** something happens, *data* wires carry **values**. Pure nodes (math, comparisons, field access) compute only when their result is needed.
-- **Strong types.** Numbers, strings, booleans, time of day, date-time, duration, colour, typed lists and objects — plus **types defined by plugins** (structures and enumerations) with generated *Make*/*Break* nodes and required inputs.
+- **Strong types.** Numbers, strings, booleans, time of day, date-time, duration (in time such as `5s` or in ticks such as `10t`), colour, typed lists and objects — plus **types defined by plugins** (structures and enumerations) with generated *Make*/*Break* nodes, required inputs and struct pins that can be split into fields.
 - **A decision node that reads like a sentence.** `Match` routes execution by conditions such as `temp > 25 and mode = "auto"`, with operators chosen by input type.
 - **Sandboxed plugins.** Plugins are WebAssembly components run by wasmtime. They have no network or files unless granted a capability, every call has a CPU and memory budget, and a crashing plugin is restarted without stopping the engine.
 - **Plugins managed from the UI.** Enable, disable and configure plugins in the editor; secrets stay on the server. Nodes of a disabled or missing plugin are kept as stubs, so the graph never loses them.
 - **Everything edited on the node.** Properties, input values, types and conditions are set right on the canvas; the inspector shows the last execution of each node.
+- **Comfortable editing.** Shared undo/redo, copy/paste, copying settings between nodes of one type, compatible node suggestions when a wire is dropped on empty canvas, and route points to lead wires around cards.
+- **Safe updates.** Plugins carry a fingerprint of the plugin API, and an incompatible plugin is reported instead of crashing. When an update changes a node's pins, the node is frozen until you confirm it, and wires that no longer fit stay visible as detached wires instead of disappearing.
 - **Git-friendly storage.** The graph is a stable, pretty-printed `data/graph.json`.
 - **English and Ukrainian UI**, localized with Mozilla Fluent.
 - **Rust end to end.** Engine, server, editor (Leptos → WebAssembly) and plugins share one set of types.
@@ -43,7 +45,7 @@ Build the plugins, the editor and run the server:
 
 ```bash
 # Plugins (WebAssembly components) go to data/plugins/
-cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin
+cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p ha-plugin
 mkdir -p data/plugins && cp target/wasm32-wasip2/release/*_plugin.wasm data/plugins/
 
 # Editor
@@ -55,6 +57,10 @@ cargo run --release -p ticknode-server
 
 Open <http://localhost:8099>.
 
+For development, `./dev.sh` rebuilds the plugins, the editor and the server and restarts the server on a separate `.dev-data/` directory (`./dev.sh editor server` rebuilds only those parts).
+
+Plugins must be rebuilt whenever the plugin API changes (the server reports such plugins in the *Plugins* panel).
+
 The server is configured with environment variables:
 
 | Variable | Default | |
@@ -64,6 +70,8 @@ The server is configured with environment variables:
 | `TICKNODE_WEB_DIR` | `ticknode-editor/dist` | the built editor |
 | `TICKNODE_BUNDLED_PLUGINS_DIR` | | extra read-only directory with `*.wasm` plugins, scanned in addition to `<data>/plugins` (a same-named file in `<data>/plugins` wins) |
 | `TICKNODE_TICK_MS` | `100` | tick length |
+| `TICKNODE_TICK_BUDGET` | unlimited | work units per tick; queued work beyond it moves to the next tick (`0` = unlimited) |
+| `TICKNODE_PLUGIN_<PLUGIN>_<KEY>` | | default for a plugin setting when none is saved, e.g. `TICKNODE_PLUGIN_HOME_ASSISTANT_TOKEN` |
 | `RUST_LOG` | | log filter |
 
 ## Home Assistant add-on
@@ -106,6 +114,7 @@ impl PluginNode for Double {
                 data_in(2, "Val", DataType::Number),
                 data_out(3, "Res", DataType::Number),
             ],
+            ..Default::default()
         }
     }
 
@@ -122,7 +131,7 @@ impl Plugin for DoublePlugin {
         PluginManifest::new("double_plugin", "0.1.0", "you")
     }
 
-    fn create(type_name: &str) -> Option<Box<dyn PluginNode>> {
+    fn create(type_name: &str, _node: NodeId) -> Option<Box<dyn PluginNode>> {
         (type_name == "example/double").then(|| Box::new(Double) as Box<dyn PluginNode>)
     }
 }
@@ -155,9 +164,13 @@ How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).
 - [x] Plugins panel: enable, disable, configure
 - [x] English and Ukrainian UI
 - [x] Translations shipped by plugins; translatable UI errors
-- [ ] WebSocket capability for plugins
-- [ ] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client))
-- [ ] Home Assistant add-on: install by adding this repository to the add-on store
+- [x] WebSocket capability for plugins
+- [x] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client)): triggers, conditions, actions and entity values
+- [x] Home Assistant add-on: install by adding this repository to the add-on store (built locally on install)
+- [x] Undo/redo, settings copy, wire suggestions and route points
+- [x] Plugin API fingerprint; frozen nodes and detached wires after pin changes
+- [ ] Prebuilt add-on images
+- [ ] Editor redesign
 
 ## Contributing
 

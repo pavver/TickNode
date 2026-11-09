@@ -40,6 +40,8 @@ Time is divided into ticks, 100 ms by default (`TICKNODE_TICK_MS`). One tick:
 2. Every enabled plugin gets one `plugin-tick` call (WebSocket events in, emissions to its nodes out), then event sources are polled (clocks, triggers, plugin nodes that declared `polls`).
 3. The execution queue runs.
 
+An optional work budget (`TICKNODE_TICK_BUDGET`) limits how much work one tick may do: every node has a relative `cost`, and activations that do not fit move, in order, to the next tick. An idle tick only visits event sources and the nodes that need to stay live, so its cost does not grow with the size of the graph.
+
 ### Two flows
 
 | | Execution flow | Data flow |
@@ -68,7 +70,7 @@ Global variables (`variable/set`, `variable/get`) share state between branches o
 | `string` | |
 | `time` | time of day, `07:30` |
 | `datetime` | UTC timestamp |
-| `duration` | `90`, `1h 30m`, `500ms` |
+| `duration` | wall-clock time (`90`, `1h 30m`, `500ms`) or engine ticks (`10t`); delay nodes convert either to ticks |
 | `color` | `#rrggbb[aa]` |
 | `list<T>` | typed list, may be nested |
 | `object` | untyped set of named fields |
@@ -94,6 +96,10 @@ Virtual field ids reserve `0x8000_0000..=0xbfff_ffff`: `0x8000_0000 | (pin << 8)
 
 A pin can be marked as required (every non-optional field of a Make node is). A node whose required input is neither connected nor set on the node does not run, and the editor highlights it.
 
+### Pin changes after updates
+
+Every node in the saved graph records the signature of its pins (id, direction, exec or data type, required). When a plugin or TickNode update changes them in a breaking way (a pin is gone, its kind or type changed, or a new required input appeared), the node is **frozen**: it does not run, poll or produce values until the user confirms the new pins in the editor. Connections that no longer fit are kept as **detached** connections, drawn from their live end to a loose end next to the old pin, so the user can reconnect or delete them. New optional pins and renamed pins are accepted silently.
+
 ## 3. Plugins
 
 Third-party nodes run only inside WebAssembly components ([`wit/plugin.wit`](wit/plugin.wit)), executed by wasmtime:
@@ -107,13 +113,16 @@ Third-party nodes run only inside WebAssembly components ([`wit/plugin.wit`](wit
 - **Property schema and dynamic options.** A node can describe its string properties (title, a static drop-down, or a searchable picker). The options of a picker are published at runtime by the plugin (`set-options`) - for example the Home Assistant plugin lists its entities with icon, name and id - kept by the host per plugin, cleared when the plugin is disabled and sent to editors (`Init`, then only when a list changes).
 - **Enable/disable at runtime.** Disabling a plugin turns its nodes into stubs that keep their properties and connections; enabling it brings them back. A graph that references a missing plugin keeps those nodes as stubs too, so nothing is lost on save.
 
+- **API fingerprint.** `ticknode_shared::PLUGIN_API` is a hash of the WIT contract (without comments and whitespace) and of a snapshot of the `DataValue` serialization layout. The SDK embeds it in every plugin, and the host compares it before instantiating the plugin, so an outdated plugin gets a clear "rebuild the plugin" message instead of a low-level type error.
+
 Plugins are written in Rust with [`ticknode-plugin-sdk`](ticknode-plugin-sdk); see `delay-plugin`, `math-plugin`, `string-plugin` and `http-weather-plugin` for examples.
 
 ## 4. Server and protocol
 
 - **Engine actor.** The engine lives on a dedicated OS thread that processes ticks and editor commands one after another, so the engine needs no locks. (A dedicated thread is also required by wasmtime's synchronous WASI, which must not run inside a tokio task.)
-- **Protocol.** postcard over WebSocket. After connecting, an editor receives a snapshot (`Init`); afterwards every change is broadcast to all editors as an event, so several editors stay in sync. Errors go only to the editor that caused them.
-- **Persistence.** The graph is stored in `data/graph.json`: pretty-printed with a stable order so that it diffs well in git, written atomically with a short debounce and on shutdown. A corrupt file stops the start-up instead of being overwritten.
+- **Protocol.** postcard over WebSocket. After connecting, an editor receives a snapshot (`Init`); afterwards every change is broadcast to all editors as an event, so several editors stay in sync. Errors go only to the editor that caused them. Execution traces, logs and delay timers are sent at a fixed rate (every 100 ms) independent of the tick length.
+- **History.** Undo/redo belongs to the server and is shared by all editors: every successful edit (or a batch of edits) stores a snapshot, and undo reconciles the live graph to it, recreating only the nodes that differ.
+- **Persistence.** The graph is stored in `data/graph.json`: nodes with positions and pin signatures, connections, detached connections and wire route points, pretty-printed with a stable order so that it diffs well in git, written atomically with a short debounce and on shutdown. A corrupt file stops the start-up instead of being overwritten.
 
 ## 5. Editor
 
@@ -125,4 +134,6 @@ Plugins are written in Rust with [`ticknode-plugin-sdk`](ticknode-plugin-sdk); s
 
 ## 6. Home Assistant
 
-TickNode is meant to become a Home Assistant add-on that replaces HA's automations, but Home Assistant support is **a plugin, not part of the core**: TickNode runs standalone as well. The plugin will be built on [ha-core-client](https://github.com/pavver/ha-core-client), whose sans-IO `Session` lets the host own the WebSocket while the protocol logic runs inside the plugin.
+TickNode is meant to replace Home Assistant's automations, but Home Assistant support is **a plugin, not part of the core**: TickNode runs standalone as well. The `ha-plugin` is built on [ha-core-client](https://github.com/pavver/ha-core-client), whose sans-IO `Session` runs inside the plugin while the host owns the WebSocket connection. It provides trigger nodes for every HA trigger platform, condition gates, an action node with typed fields from the service catalog, entity value nodes and searchable entity/action pickers.
+
+The add-on (`ha-addon/ticknode`, made installable by `repository.yaml`) runs the server with the editor in the Home Assistant sidebar through ingress, ships the plugins in the image, and connects the Home Assistant plugin to Core through the Supervisor proxy with the Supervisor token, so no setup is needed.

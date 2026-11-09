@@ -15,6 +15,10 @@ FROM debian:bookworm-slim AS fetch
 ARG TICKNODE_REPO
 ARG TICKNODE_REF
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+# The clone command never changes, so Docker would reuse a cached clone on "Rebuild". Adding the
+# current commit description invalidates the cache whenever TICKNODE_REF points to a new commit.
+ARG TICKNODE_GITHUB=pavver/TickNode
+ADD https://api.github.com/repos/${TICKNODE_GITHUB}/commits/${TICKNODE_REF} /tmp/ticknode-ref.json
 RUN git clone --depth 1 --branch "$TICKNODE_REF" "$TICKNODE_REPO" /src \
     || (git clone "$TICKNODE_REPO" /src && git -C /src checkout "$TICKNODE_REF")
 

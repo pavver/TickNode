@@ -6,12 +6,12 @@ Bug reports, ideas and pull requests are welcome. Before you open a pull request
 
 ```bash
 cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin
-TICKNODE_REQUIRE_PLUGINS=1 cargo test -p ticknode-core -p ticknode-shared -p ticknode-server
+TICKNODE_REQUIRE_PLUGINS=1 cargo test -p ticknode-core -p ticknode-shared -p ticknode-server -p ticknode-plugin-sdk
 cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu
 (cd ticknode-editor && trunk build)
 ```
 
-Changes to the graph format or the editor protocol go into `ticknode-shared`; changes to the plugin contract go into `wit/plugin.wit` and `ticknode-plugin-sdk`. Host-side plugin behaviour needs a test in `ticknode-core/tests/plugins.rs`. `CLAUDE.md` describes the architecture and conventions; code comments and documentation are in Ukrainian.
+Changes to the graph format or the editor protocol go into `ticknode-shared`; changes to the plugin contract go into `wit/plugin.wit` and `ticknode-plugin-sdk`. Host-side plugin behaviour needs a test in `ticknode-core/tests/plugins.rs`. [AGENTS.md](AGENTS.md) describes the conventions and [ARCHITECTURE.md](ARCHITECTURE.md) the design; code comments and documentation are in English, the editor UI is translated with Fluent (English and Ukrainian).
 
 ## Contribution terms
 

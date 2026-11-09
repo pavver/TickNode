@@ -8,8 +8,11 @@ TickNode server together with its web editor and plugs it into Home Assistant.
 1. Install and start the add-on.
 2. Open **TickNode** in the Home Assistant sidebar (or use **Open web UI**). The editor is served
    through Home Assistant ingress, so Home Assistant authentication protects it; no port is exposed.
-3. Build graphs from the palette. Nodes of the `Home Assistant` plugin (state changes, get state,
-   call service) are available right away.
+3. Build graphs from the palette. Nodes of the `Home Assistant` plugin are available right away:
+   triggers for every Home Assistant trigger platform (state, numeric state, time, sun, zone,
+   event, MQTT, webhook, template and others), condition gates, an **Action** node with fields
+   from the service catalog, **Entity** value nodes, and lower-level state/service nodes. Entities
+   and actions are chosen in searchable pickers.
 
 ## How the Home Assistant connection works
 
@@ -33,8 +36,15 @@ TickNode does not require Home Assistant: the same server can run on its own (se
 README). Without the Supervisor the Home Assistant plugin needs an explicit URL and a long-lived
 access token.
 
-## Installation note
+## Installation and updates
 
 Prebuilt images are not published yet, so Home Assistant builds the add-on locally on
-installation. This needs network access and takes several minutes (it compiles the server, the
-plugins and the editor).
+installation: it downloads the current `master` branch from GitHub and compiles the server, the
+plugins and the editor. This needs network access, several minutes, and a few gigabytes of free
+memory and disk space (the build on aarch64 devices has not been tested yet).
+
+Until images are published the add-on version stays the same, so Home Assistant does not offer
+updates by itself. To get the latest TickNode, open the add-on page and use **Rebuild**; your
+graph and settings in `/data` are kept. After an update that changes node pins, affected nodes are
+frozen until you confirm them in the editor (see the inspector), and wires that no longer fit are
+shown as detached wires.

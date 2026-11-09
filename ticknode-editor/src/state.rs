@@ -81,6 +81,14 @@ pub struct PickerState {
     pub anchor: (f64, f64, f64, f64),
 }
 
+/// A connection awaiting a new node, anchored at the background release point.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WireMenu {
+    pub from: crate::canvas::WireEnd,
+    pub position: Position,
+    pub screen: (f64, f64),
+}
+
 /// Options published by plugins for dynamic properties, by `(plugin, source)`.
 pub type PropertyOptions = HashMap<(String, String), Arc<Vec<PropertyOption>>>;
 
@@ -185,6 +193,7 @@ pub struct Editor {
     pub property_options: RwSignal<PropertyOptions>,
     /// The open property picker popup.
     pub picker: RwSignal<Option<PickerState>>,
+    pub wire_menu: RwSignal<Option<WireMenu>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
@@ -236,6 +245,7 @@ impl Editor {
             tooltip: RwSignal::new(None),
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),
+            wire_menu: RwSignal::new(None),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),

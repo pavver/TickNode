@@ -17,6 +17,8 @@ mod shortcuts;
 mod state;
 mod ui;
 mod toolbar;
+mod wire_suggest;
+mod wire_menu;
 
 use std::time::Duration;
 
@@ -90,6 +92,7 @@ fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
     match action {
         Shortcut::Delete => clipboard::delete_selection(editor),
         Shortcut::Escape => {
+            editor.wire_menu.set(None);
             editor.copied_settings.set(None);
             if !clipboard::cancel_paste(editor) { editor.selection.set(None); }
         }
@@ -177,6 +180,7 @@ fn App() -> impl IntoView {
             <PaletteGhost />
             <TooltipLayer />
             <PickerLayer />
+            <wire_menu::WireMenuLayer />
         </div>
     }
 }

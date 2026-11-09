@@ -34,7 +34,7 @@ impl Editor {
             // Plugin enabled or disabled: refresh palette and type colors from the updated catalog.
             ServerMessage::Catalog { definitions, types, translations } => self.apply_catalog(definitions, types, translations),
             ServerMessage::PropertyOptions { plugin, source, options } => self.property_options.update(|all| update_options(all, plugin, source, options)),
-            // Created follows the NodeAdded messages for our AddNode / Paste request.
+            // Created follows the NodeAdded messages for our AddNode / AddNodeConnected / Paste request.
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => self.node_log(node_id, message),
             ServerMessage::History(history) => self.history.set(history),

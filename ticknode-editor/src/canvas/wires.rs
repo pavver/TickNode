@@ -8,11 +8,11 @@ use crate::state::{Editor, Selection, use_editor};
 use crate::i18n::t;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct WireEnd {
-    pub(super) node: NodeId,
-    pub(super) pin: PinId,
-    pub(super) dir: PinDirection,
-    pub(super) exec: bool,
+pub(crate) struct WireEnd {
+    pub(crate) node: NodeId,
+    pub(crate) pin: PinId,
+    pub(crate) dir: PinDirection,
+    pub(crate) exec: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -83,10 +83,12 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
 
 #[component]
 pub(super) fn PendingWire(from: RwSignal<Option<WireEnd>>, cursor: RwSignal<(f64, f64)>) -> impl IntoView {
+    let ed = use_editor();
     move || {
-        let end = from.get()?;
+        let menu = ed.wire_menu.get();
+        let end = from.get().or_else(|| menu.map(|m| m.from))?;
         let a = anchor(end.node, end.pin, end.dir)?;
-        let c = cursor.get();
+        let c = menu.map(|m| (m.position.x as f64, m.position.y as f64)).unwrap_or_else(|| cursor.get());
         let d = if end.dir == PinDirection::Output { wire_path(a, c) } else { wire_path(c, a) };
         Some(view! { <path class="wire pending" d=d /> })
     }

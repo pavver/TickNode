@@ -174,9 +174,9 @@ pub(super) fn option_is_current(current: &str, value: &str) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-enum KeyAction { Move(usize), Pick, Close, Handled, Ignore }
+pub(crate) enum KeyAction { Move(usize), Pick, Close, Handled, Ignore }
 
-fn key_action(key: &str, active: usize, count: usize) -> KeyAction {
+pub(crate) fn key_action(key: &str, active: usize, count: usize) -> KeyAction {
     match key {
         "ArrowDown" if count > 0 => KeyAction::Move((active + 1).min(count - 1)),
         "ArrowDown" => KeyAction::Handled,

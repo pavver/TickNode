@@ -25,7 +25,8 @@ use interaction::{Drag, Interaction};
 use node::NodeView;
 use paste::PastePreview;
 use selection::{SelectBox, SelectionBounds};
-use wires::{PendingConnection, PendingWire, Wire, WireEnd};
+use wires::{PendingConnection, PendingWire, Wire};
+pub(crate) use wires::WireEnd;
 
 pub const CANVAS_ID: &str = "ticknode-canvas";
 const GRID: f64 = 5.0 * DU;

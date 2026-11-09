@@ -39,7 +39,23 @@ impl Interaction {
 
     fn finish_wire(self, ev: &PointerEvent, from: WireEnd) {
         let hit = document().element_from_point(ev.client_x() as f32, ev.client_y() as f32);
-        let Some(to) = hit.and_then(|el| el.closest("[data-pin]").ok().flatten()).and_then(|el| parse_pin(&el)) else { return };
+        let Some(hit) = hit else { return };
+        let to = hit.closest("[data-pin]").ok().flatten().and_then(|el| parse_pin(&el));
+        let Some(to) = to else {
+            // Pointer capture retargets pointerup to the canvas; use the element under the cursor.
+            let background = hit.closest(".canvas").ok().flatten().is_some()
+                && hit.closest("[data-node], [data-wire], button, input, select, textarea").ok().flatten().is_none();
+            if background {
+                let local = self.local_point(ev);
+                let world = self.ed.view.get_untracked().to_world(local.0, local.1);
+                self.ed.picker.set(None);
+                self.ed.wire_menu.set(Some(crate::state::WireMenu {
+                    from, position: Position { x: world.0 as f32, y: world.1 as f32 },
+                    screen: (ev.client_x() as f64, ev.client_y() as f64),
+                }));
+            }
+            return;
+        };
         match decisions::wire_command(from, to) {
             Ok(Some(command)) => self.ed.send(command),
             Err(message) => self.ed.log(LogKind::Error, message),

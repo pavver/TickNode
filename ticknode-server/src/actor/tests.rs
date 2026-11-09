@@ -3,6 +3,7 @@ use ticknode_shared::*;
 
 mod history;
 mod settings;
+mod wire_suggest;
 
 #[test]
 fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {

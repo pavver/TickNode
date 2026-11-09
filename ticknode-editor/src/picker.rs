@@ -13,7 +13,8 @@ use crate::state::{Editor, PickerState, use_editor};
 
 mod popup;
 
-pub use popup::*;
+pub use popup::PickerLayer;
+pub(crate) use popup::{KeyAction, key_action};
 
 /// How many matching rows are rendered at most (the rest is reached by refining the search).
 pub const MAX_ROWS: usize = 100;
@@ -82,7 +83,7 @@ pub fn placement(anchor: (f64, f64, f64, f64), viewport: (f64, f64)) -> Placemen
     }
 }
 
-fn viewport() -> (f64, f64) {
+pub(crate) fn viewport() -> (f64, f64) {
     (
         window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1280.0),
         window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(800.0),

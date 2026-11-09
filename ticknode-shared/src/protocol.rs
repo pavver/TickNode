@@ -31,6 +31,15 @@ pub enum ClientMessage {
     Batch(Vec<ClientMessage>),
     /// Replaces all stored settings of an existing node of the same type.
     PasteSettings { id: NodeId, type_name: String, properties: Vec<(String, DataValue)> },
+    /// Creates and connects a node as one atomic graph edit.
+    AddNodeConnected { type_name: String, position: Position, from: ConnectionEnd, pin: PinId },
+}
+
+/// An existing endpoint from which a connection is dragged.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConnectionEnd {
+    pub node: NodeId,
+    pub pin: PinId,
 }
 
 /// Shared server history availability for every editor.
@@ -85,7 +94,7 @@ pub enum ServerMessage {
     DataDisconnected { dst_node: NodeId, dst_pin: PinId },
     /// Nodes executed on the latest tick, with their inputs and outputs.
     Executed(Vec<NodeTrace>),
-    /// Sent only to the initiator of `AddNode` / `Paste`: IDs of created nodes (to select them).
+    /// Sent only to the initiator of `AddNode` / `AddNodeConnected` / `Paste`: IDs of created nodes (to select them).
     /// Arrives after the corresponding `NodeAdded` messages.
     Created(Vec<NodeId>),
     Log { node_id: NodeId, message: String },

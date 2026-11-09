@@ -1,5 +1,5 @@
 use super::*;
-use ticknode_shared::{ConnectionModel, DataValue, PinId};
+use ticknode_shared::{ConnectionEnd, ConnectionModel, DataValue, PinDirection, PinType, PinId};
 
 type Applied = (Vec<ServerMessage>, Option<Vec<NodeId>>);
 
@@ -15,6 +15,7 @@ impl Actor {
         let only = |events: Vec<ServerMessage>| (events, None);
         let result = match msg {
             ClientMessage::AddNode { type_name, position } => self.add_node(&type_name, position)?,
+            ClientMessage::AddNodeConnected { type_name, position, from, pin } => self.add_node_connected(&type_name, position, from, pin)?,
             ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
             ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
@@ -46,6 +47,38 @@ impl Actor {
         self.engine.create_node(id, type_name, &[]).map_err(|e| e.ui_message())?;
         self.positions.insert(id, position);
         Ok((vec![ServerMessage::NodeAdded(self.instance(id).expect("the node was just created"))], Some(vec![id])))
+    }
+
+    fn add_node_connected(&mut self, type_name: &str, position: Position, from: ConnectionEnd, pin: PinId) -> Result<Applied, UiMessage> {
+        self.require_node(from.node)?;
+        let definition = self.engine.node_definition(from.node).expect("the node exists");
+        let origin = definition.pins.iter().find(|p| p.id == from.pin)
+            .ok_or_else(|| ticknode_core::EngineError::InvalidPinConnection.ui_message())?;
+        let (mut events, created) = self.add_node(type_name, position)?;
+        let id = created.as_ref().expect("add_node returns an ID")[0];
+        // A pin ID may occur in both directions; the chosen new pin disambiguates it.
+        let new_definition = self.engine.node_definition(id).expect("the node was just created");
+        let origin = definition.pins.iter().find(|p| p.id == from.pin && new_definition.pins.iter().any(|n|
+            n.id == pin && n.direction != p.direction && matches!((&p.pin_type, &n.pin_type),
+                (PinType::Exec, PinType::Exec) | (PinType::Data(_), PinType::Data(_)))))
+            .unwrap_or(origin);
+        let c = if origin.direction == PinDirection::Output {
+            ConnectionModel { src_node: from.node, src_pin: from.pin, dst_node: id, dst_pin: pin }
+        } else {
+            ConnectionModel { src_node: id, src_pin: pin, dst_node: from.node, dst_pin: from.pin }
+        };
+        let connected = match origin.pin_type {
+            PinType::Exec => self.connect_exec(c),
+            PinType::Data(_) => self.connect_data(c),
+        };
+        match connected {
+            Ok(changes) => { events.extend(changes); Ok((events, created)) }
+            Err(error) => {
+                self.engine.remove_node(id);
+                self.positions.remove(&id);
+                Err(error)
+            }
+        }
     }
 
     fn remove_node(&mut self, id: NodeId) -> Result<Vec<ServerMessage>, UiMessage> {
@@ -130,8 +163,12 @@ impl Actor {
 
     fn connect_data(&mut self, c: ConnectionModel) -> Result<Vec<ServerMessage>, UiMessage> {
         if self.engine.data_connections().contains(&c) { return Ok(vec![]); }
+        let replaced = self.engine.data_connections().iter().any(|old| old.dst_node == c.dst_node && old.dst_pin == c.dst_pin);
         self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
-        Ok(vec![ServerMessage::DataConnected(c)])
+        let mut events = Vec::new();
+        if replaced { events.push(ServerMessage::DataDisconnected { dst_node: c.dst_node, dst_pin: c.dst_pin }); }
+        events.push(ServerMessage::DataConnected(c));
+        Ok(events)
     }
 
     fn trigger(&mut self, id: NodeId, pin: PinId) -> Result<Vec<ServerMessage>, UiMessage> {

@@ -1,4 +1,5 @@
     mod behavior;
+    mod mutation_contracts;
     mod definitions;
     mod builtin_contracts;
     use super::*;

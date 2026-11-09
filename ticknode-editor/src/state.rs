@@ -76,36 +76,47 @@ pub enum PaletteDrag {
         at: (f64, f64),
         active: bool,
     },
+    Variable {
+        variable: Variable,
+        title: String,
+        color: String,
+        start: (f64, f64),
+        at: (f64, f64),
+        active: bool,
+    },
 }
 
 impl PaletteDrag {
     pub fn title(&self) -> &str {
         match self {
-            Self::Node { title, .. } | Self::Resource { title, .. } => title,
+            Self::Node { title, .. } | Self::Resource { title, .. } | Self::Variable { title, .. } => title,
         }
     }
 
-    pub fn color(&self) -> &'static str {
+    pub fn color(&self) -> &str {
         match self {
             Self::Node { color, .. } | Self::Resource { color, .. } => color,
+            Self::Variable { color, .. } => color.as_str(),
         }
     }
 
     pub fn at(&self) -> (f64, f64) {
         match self {
-            Self::Node { at, .. } | Self::Resource { at, .. } => *at,
+            Self::Node { at, .. } | Self::Resource { at, .. } | Self::Variable { at, .. } => *at,
         }
     }
 
     pub fn active(&self) -> bool {
         match self {
-            Self::Node { active, .. } | Self::Resource { active, .. } => *active,
+            Self::Node { active, .. } | Self::Resource { active, .. } | Self::Variable { active, .. } => *active,
         }
     }
 
     pub fn update_motion(&mut self, at: (f64, f64), threshold: f64) {
         let (start, active) = match self {
-            Self::Node { start, active, at: cur_at, .. } | Self::Resource { start, active, at: cur_at, .. } => {
+            Self::Node { start, active, at: cur_at, .. }
+            | Self::Resource { start, active, at: cur_at, .. }
+            | Self::Variable { start, active, at: cur_at, .. } => {
                 *cur_at = at;
                 (*start, active)
             }
@@ -268,6 +279,7 @@ pub struct Editor {
     pub wire_menu: RwSignal<Option<WireMenu>>,
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
     pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
+    pub variable_menu: RwSignal<Option<crate::variables_panel::menu::VariableMenu>>,
     pub recent_nodes: RwSignal<Vec<String>>,
     pub pending_frame_select: StoredValue<Option<FrameId>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
@@ -338,6 +350,7 @@ impl Editor {
             wire_menu: RwSignal::new(None),
             quick_add: RwSignal::new(None),
             resource_menu: RwSignal::new(None),
+            variable_menu: RwSignal::new(None),
             recent_nodes: RwSignal::new(Vec::new()),
             pending_frame_select: StoredValue::new(None),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),

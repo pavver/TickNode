@@ -15,6 +15,7 @@ pub fn property_label(name: &str) -> String {
         ("prefix", "prop-prefix"),
         ("label", "prop-label"),
         ("element_type", "prop-element-type"),
+        ("value_type", "prop-value-type"),
         ("field_type", "prop-field-type"),
         ("fields_list", "prop-fields-list"),
         ("interval_ticks", "prop-interval-ticks"),

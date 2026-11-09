@@ -8,7 +8,7 @@ use crate::picker::PickerField;
 use crate::ui::Switch;
 
 /// Selectable types for `*_type` properties (list elements, object field); custom types are appended from the registry.
-const TYPE_OPTIONS: [&str; 8] = ["number", "string", "bool", "time", "datetime", "duration", "color", "object"];
+pub(crate) const TYPE_OPTIONS: [&str; 8] = ["number", "string", "bool", "time", "datetime", "duration", "color", "object"];
 /// Selectable value types for a Constant node.
 const CONST_TYPES: [&str; 7] = ["number", "string", "bool", "time", "datetime", "duration", "color"];
 
@@ -21,7 +21,7 @@ pub(super) fn default_value(type_name: &str) -> DataValue {
 }
 
 /// `(value, label)` pairs: built-in types followed by custom plugin types (labeled with `title`).
-fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
+pub(crate) fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
     let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect();
     ed.types.with_untracked(|types| {
         options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", i18n::type_def_title(&d), d.name))));

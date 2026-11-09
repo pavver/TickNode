@@ -2,7 +2,7 @@
 
 use super::*;
 
-mod units;
+pub(crate) mod units;
 use units::{Unit, parse, presentation};
 
 #[component]

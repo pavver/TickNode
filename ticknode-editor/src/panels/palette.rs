@@ -348,6 +348,9 @@ pub fn drop_on_canvas(ed: Editor, drag: &PaletteDrag, ev: &PointerEvent) {
         PaletteDrag::Resource { plugin, collection_id, item, actions, .. } => {
             handle_resource_drop(ed, plugin, collection_id, item, actions, position, (x as f64, y as f64));
         }
+        PaletteDrag::Variable { variable, .. } => {
+            crate::variables_panel::menu::handle_variable_drop(ed, variable, position, (x as f64, y as f64));
+        }
     }
 }
 
@@ -416,6 +419,7 @@ pub fn open_resource_menu(
     ed.quick_add.set(None);
     ed.wire_menu.set(None);
     ed.picker.set(None);
+    ed.variable_menu.set(None);
     ed.resource_menu.set(Some(crate::resource_menu::ResourceMenu {
         position,
         screen,

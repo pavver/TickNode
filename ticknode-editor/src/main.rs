@@ -27,6 +27,7 @@ mod wire_suggest;
 mod wire_menu;
 mod wire_context;
 mod resource_menu;
+pub mod variables_panel;
 
 use std::time::Duration;
 
@@ -213,6 +214,7 @@ fn App() -> impl IntoView {
                     <quick_add::QuickAddLayer />
                     <wire_context::WireContextLayer />
                     <resource_menu::ResourceMenuLayer />
+                    <variables_panel::menu::VariableMenuLayer />
                 }.into_any()
             } else {
                 view! {

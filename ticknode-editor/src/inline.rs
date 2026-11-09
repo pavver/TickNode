@@ -8,8 +8,8 @@ use crate::i18n::{self, t};
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, flash};
 
-mod properties;
-mod duration;
+pub(crate) mod properties;
+pub(crate) mod duration;
 mod text_field;
 
 pub use properties::*;

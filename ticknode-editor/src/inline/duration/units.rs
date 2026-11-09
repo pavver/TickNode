@@ -5,7 +5,7 @@ use ticknode_shared::{DataValue, UiMessage, text};
 use crate::i18n::t;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Unit { Ticks, Milliseconds, Seconds, Minutes, Hours }
+pub(crate) enum Unit { Ticks, Milliseconds, Seconds, Minutes, Hours }
 
 impl Unit {
     pub const ALL: [Self; 5] = [Self::Ticks, Self::Milliseconds, Self::Seconds, Self::Minutes, Self::Hours];
@@ -46,7 +46,7 @@ impl Unit {
 }
 
 /// Keep a selected unit if it can represent the value exactly; otherwise choose the largest whole unit.
-pub(super) fn presentation(value: Option<&DataValue>, preferred: Option<Unit>) -> (String, Unit) {
+pub(crate) fn presentation(value: Option<&DataValue>, preferred: Option<Unit>) -> (String, Unit) {
     let Some(value) = value else { return (String::new(), preferred.unwrap_or(Unit::Seconds)) };
     for unit in preferred.into_iter().chain([Unit::Ticks, Unit::Hours, Unit::Minutes, Unit::Seconds, Unit::Milliseconds]) {
         if let Some(number) = unit.whole(value) { return (number, unit); }
@@ -59,7 +59,7 @@ pub(super) fn presentation(value: Option<&DataValue>, preferred: Option<Unit>) -
     (text, preferred.unwrap_or(Unit::Seconds))
 }
 
-pub(super) fn parse(input: &str, unit: Unit) -> Result<Option<DataValue>, UiMessage> {
+pub(crate) fn parse(input: &str, unit: Unit) -> Result<Option<DataValue>, UiMessage> {
     let input = input.trim();
     if input.is_empty() { return Ok(None); }
     let normalized = input.replace(',', ".");

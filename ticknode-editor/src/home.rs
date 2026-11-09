@@ -16,6 +16,7 @@ const HOME_SECTION_KEY: &str = "ticknode.home-section";
 pub enum HomeSection {
     #[default]
     Sheets,
+    Variables,
     Plugins,
     Log,
 }
@@ -28,6 +29,7 @@ fn load_home_section() -> HomeSection {
         .and_then(|s| s.get_item(HOME_SECTION_KEY).ok().flatten())
         .as_deref()
     {
+        Some("variables") => HomeSection::Variables,
         Some("plugins") => HomeSection::Plugins,
         Some("log") => HomeSection::Log,
         _ => HomeSection::Sheets,
@@ -38,6 +40,7 @@ fn save_home_section(sec: HomeSection) {
     if let Some(storage) = window().local_storage().ok().flatten() {
         let val = match sec {
             HomeSection::Sheets => "sheets",
+            HomeSection::Variables => "variables",
             HomeSection::Plugins => "plugins",
             HomeSection::Log => "log",
         };
@@ -69,6 +72,15 @@ pub fn HomePage() -> impl IntoView {
                 </button>
                 <button
                     class="home-nav-item ctl"
+                    class:st-selected=move || section.get() == HomeSection::Variables
+                    title=move || t!("home-variables")
+                    on:click=move |_| select_section(HomeSection::Variables)
+                >
+                    <span class="mdi mdi-variable" aria-hidden="true"></span>
+                    <span>{move || t!("home-variables")}</span>
+                </button>
+                <button
+                    class="home-nav-item ctl"
                     class:st-selected=move || section.get() == HomeSection::Plugins
                     title=move || t!("plugins-title")
                     on:click=move |_| select_section(HomeSection::Plugins)
@@ -89,10 +101,20 @@ pub fn HomePage() -> impl IntoView {
             <div class="home-content">
                 {move || match section.get() {
                     HomeSection::Sheets => view! { <SheetsSection /> }.into_any(),
+                    HomeSection::Variables => view! { <HomeVariables /> }.into_any(),
                     HomeSection::Plugins => view! { <HomePlugins /> }.into_any(),
                     HomeSection::Log => view! { <HomeLog /> }.into_any(),
                 }}
             </div>
+        </div>
+    }
+}
+
+#[component]
+fn HomeVariables() -> impl IntoView {
+    view! {
+        <div class="home-variables-section">
+            <crate::variables_panel::VariablesList sheet=None />
         </div>
     }
 }

@@ -24,7 +24,7 @@ impl Interaction {
                 || document().query_selector(".node-resize:active").ok().flatten().is_some()
                 || ed.nodes.with_untracked(|nodes| nodes.values().any(|n| n.size_preview.with_untracked(|s| s.is_some()))),
             ed.picker.with_untracked(|p| p.is_some()) || ed.wire_menu.with_untracked(|p| p.is_some())
-                || ed.resource_menu.with_untracked(|p| p.is_some())
+                || ed.resource_menu.with_untracked(|p| p.is_some()) || ed.variable_menu.with_untracked(|p| p.is_some())
                 || ed.wire_context.with_untracked(|p| p.is_some()) || ed.quick_add.with_untracked(|p| p.is_some())
                 || ed.tooltip.with_untracked(|p| p.is_some()),
         )

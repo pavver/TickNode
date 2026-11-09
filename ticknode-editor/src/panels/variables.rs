@@ -1,13 +1,13 @@
-//! Variables tab in the left panel (placeholder).
+//! Variables tab in the left panel.
 
 use leptos::prelude::*;
-use crate::i18n::t;
+use crate::state::use_editor;
+use crate::variables_panel::VariablesList;
 
 #[component]
 pub fn VariablesPanel() -> impl IntoView {
+    let ed = use_editor();
     view! {
-        <div class="empty variables-empty">
-            {move || t!("variables-coming-soon")}
-        </div>
+        <VariablesList sheet=ed.open_sheet.get() />
     }
 }

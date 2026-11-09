@@ -65,6 +65,7 @@ pub fn encode(msg: &ServerMessage) -> Bytes {
 pub fn spawn(
     mut engine: TickEngine,
     positions: HashMap<NodeId, Position>,
+    routes: routes::Routes,
     storage: Storage,
     plugins: Plugins,
     tick: Duration,
@@ -73,7 +74,7 @@ pub fn spawn(
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
+    let actor = Actor { engine, positions, routes, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
@@ -84,6 +85,7 @@ struct Actor {
     engine: TickEngine,
     history: history::History,
     positions: HashMap<NodeId, Position>,
+    routes: routes::Routes,
     storage: Storage,
     plugins: Plugins,
     events: broadcast::Sender<Bytes>,
@@ -185,7 +187,7 @@ impl Actor {
         if self.dirty_since.is_none() {
             return;
         }
-        match self.storage.save(&self.engine, &self.positions) {
+        match self.storage.save(&self.engine, &self.positions, &self.routes) {
             Ok(()) => self.dirty_since = None,
             Err(e) => {
                 error!("Failed to save the graph: {:#}", e);
@@ -210,6 +212,7 @@ impl Actor {
             translations: self.engine.translations(),
             property_options: self.engine.property_options(),
             history: self.history.state(),
+            wire_routes: routes::sorted(&self.routes),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,
@@ -232,6 +235,7 @@ impl Actor {
     }
 }
 
+pub(crate) mod routes;
 mod commands;
 mod history;
 mod telemetry;

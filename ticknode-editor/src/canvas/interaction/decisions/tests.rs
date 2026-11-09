@@ -82,3 +82,58 @@ fn wire_drags_send_identical_commands_from_either_end() {
         assert_eq!(wire_command(from, WireEnd { exec: !exec, ..to }), Err("[ERROR] An exec pin can only be connected to an exec pin"));
     }
 }
+
+#[test]
+fn route_gestures_prioritize_points_but_keep_node_and_pan_actions() {
+    let (a, b) = ends(false);
+    let wire = Selection::Data(ConnectionModel { src_node: a.node, src_pin: a.pin, dst_node: b.node, dst_pin: b.pin });
+    assert_eq!(route_gesture(0, None, Some(wire.clone()), Some(2)), Some(Gesture::Point { wire: wire.clone(), index: 2 }));
+    assert_eq!(route_gesture(2, None, Some(wire.clone()), Some(2)), Some(Gesture::Context { wire: wire.clone(), index: Some(2) }));
+    assert_eq!(route_gesture(2, None, Some(wire.clone()), None), Some(Gesture::Context { wire: wire.clone(), index: None }));
+    assert_eq!(route_gesture(2, Some(a.node), Some(wire.clone()), Some(2)), None);
+    assert_eq!(route_gesture(1, None, Some(wire.clone()), Some(2)), None);
+    assert_eq!(route_gesture(0, None, Some(wire), None), None);
+    assert_eq!(route_gesture(2, None, None, None), None);
+}
+
+#[test]
+fn point_edits_snap_insert_in_order_remove_clear_and_enforce_limit() {
+    use super::super::Position;
+    let (a, b) = ((0.0, 0.0), (400.0, 100.0));
+    let points = [Position { x: 200.0, y: 0.0 }];
+    let edited = edit_points(&points, a, b, (302.0, 50.0), PointEdit::Add).unwrap();
+    assert_eq!(edited, [points[0], Position { x: 304.0, y: 52.0 }]);
+    assert_eq!(edit_points(&edited, a, b, a, PointEdit::Remove(0)).unwrap(), [edited[1]]);
+    assert_eq!(edit_points(&points, a, b, a, PointEdit::Clear), Some(vec![]));
+    assert_eq!(edit_points(&[], a, b, a, PointEdit::Clear), None);
+    assert_eq!(edit_points(&points, a, b, a, PointEdit::Remove(1)), None);
+    let full = vec![Position::default(); ticknode_shared::MAX_WIRE_POINTS];
+    assert_eq!(edit_points(&full, a, b, a, PointEdit::Add), None);
+}
+
+#[test]
+fn group_drag_captures_only_routes_with_both_endpoints_selected() {
+    use super::super::{Position, WireRoutes};
+    let (a, b) = ends(false);
+    let third = NodeId::generate();
+    let inside = ConnectionModel { src_node: a.node, src_pin: a.pin, dst_node: b.node, dst_pin: b.pin };
+    let outside = ConnectionModel { dst_node: third, ..inside };
+    let all = WireRoutes::from([
+        ((true, inside), vec![Position::default()]),
+        ((false, inside), vec![Position { x: 4.0, y: 8.0 }]),
+        ((false, outside), vec![Position::default()]),
+    ]);
+    let selected = [(a.node, Position::default()), (b.node, Position::default())];
+    let routes = group_routes(&all, &selected);
+    assert_eq!(routes.len(), 2);
+    assert!(routes.contains_key(&(true, inside)));
+    assert!(routes.contains_key(&(false, inside)));
+    assert!(group_routes(&all, &selected[..1]).is_empty());
+}
+
+#[test]
+fn group_translation_snaps_the_dragged_card_even_if_its_original_position_is_off_grid() {
+    use super::super::Position;
+    assert_eq!(group_delta(Position { x: 10.0, y: -10.0 }, (0.0, 0.0)), Position { x: 2.0, y: -2.0 });
+    assert_eq!(group_delta(Position { x: 8.0, y: 12.0 }, (5.0, -3.0)), Position { x: 4.0, y: -4.0 });
+}

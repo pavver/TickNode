@@ -31,6 +31,8 @@ pub(super) enum Gesture {
     Pan { moved: bool },
     Wire(WireEnd),
     Select(Selection),
+    Point { wire: Selection, index: usize },
+    Context { wire: Selection, index: Option<usize> },
     Node(NodeId),
     Box,
     Ignore,
@@ -68,3 +70,45 @@ pub(super) fn wire_command(from: WireEnd, to: WireEnd) -> Result<Option<ClientMe
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum PointEdit { Add, Remove(usize), Clear }
+
+/// Point hits take precedence over the surrounding wire; node hits retain their settings gesture.
+pub(super) fn route_gesture(button: i16, node: Option<NodeId>, wire: Option<Selection>, index: Option<usize>) -> Option<Gesture> {
+    if node.is_some() { return None; }
+    let wire = wire?;
+    match (button, index) {
+        (0, Some(index)) => Some(Gesture::Point { wire, index }),
+        (2, index) => Some(Gesture::Context { wire, index }),
+        _ => None,
+    }
+}
+
+pub(super) fn edit_points(points: &[super::Position], a: (f64, f64), b: (f64, f64), world: (f64, f64), edit: PointEdit) -> Option<Vec<super::Position>> {
+    let mut result = points.to_vec();
+    match edit {
+        PointEdit::Add => {
+            if points.len() >= ticknode_shared::MAX_WIRE_POINTS { return None; }
+            let at = crate::geometry::route_insert_index(a, points, b, world);
+            let (x, y) = crate::clipboard::snap_point(world);
+            result.insert(at, super::Position { x: x as f32, y: y as f32 });
+        }
+        PointEdit::Remove(index) if index < result.len() => { result.remove(index); }
+        PointEdit::Clear => result.clear(),
+        _ => return None,
+    }
+    (result != points).then_some(result)
+}
+
+pub(super) fn group_routes(all: &super::WireRoutes, origins: &[(NodeId, super::Position)]) -> super::WireRoutes {
+    let ids: std::collections::HashSet<_> = origins.iter().map(|(id, _)| *id).collect();
+    all.iter().filter(|((_, c), _)| ids.contains(&c.src_node) && ids.contains(&c.dst_node))
+        .map(|(key, points)| (*key, points.clone())).collect()
+}
+
+/// Snapping the dragged card defines one translation shared by all selected nodes and routes.
+pub(super) fn group_delta(origin: super::Position, delta: (f64, f64)) -> super::Position {
+    let (x, y) = crate::clipboard::snap_point((origin.x as f64 + delta.0, origin.y as f64 + delta.1));
+    super::Position { x: x as f32 - origin.x, y: y as f32 - origin.y }
+}

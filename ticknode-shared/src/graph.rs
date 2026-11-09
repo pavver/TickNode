@@ -33,12 +33,24 @@ pub struct NodeModel {
     pub position: Position,
 }
 
+/// Editor routing of a wire through intermediate points (layout only, ignored by execution).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WireRoute {
+    pub exec: bool,
+    pub connection: ConnectionModel,
+    pub points: Vec<Position>,
+}
+
+pub const MAX_WIRE_POINTS: usize = 32;
+
 /// Complete graph (or a fragment for copying) in a format independent of node implementations.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphModel {
     pub nodes: Vec<NodeModel>,
     pub exec_connections: Vec<ConnectionModel>,
     pub data_connections: Vec<ConnectionModel>,
+    #[serde(default)]
+    pub wire_routes: Vec<WireRoute>,
 }
 
 /// A node paired with its current definition (pins may depend on properties).

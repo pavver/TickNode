@@ -10,7 +10,7 @@ use web_sys::{Element, PointerEvent};
 
 use crate::clipboard;
 use crate::geometry::*;
-use crate::state::{Editor, LogKind, Selection};
+use crate::state::{Editor, LogKind, Selection, WireKey, WireRoutes};
 use super::paste::move_paste;
 use super::selection::{SelectBox, nodes_in_box};
 use super::wires::WireEnd;
@@ -18,6 +18,9 @@ use super::wires::WireEnd;
 mod motion;
 mod decisions;
 mod start;
+mod points;
+pub(crate) use points::edit_route;
+pub(crate) use decisions::PointEdit;
 
 use decisions::{Press, Gesture, press, gesture};
 
@@ -29,7 +32,8 @@ pub(super) enum Drag {
     Idle,
     Pan { start: (f64, f64), origin: Camera, moved: bool },
     /// Dragging selected nodes; `clicked` is the node under the cursor.
-    Nodes { origins: Vec<(NodeId, Position)>, start_world: (f64, f64), start: (f64, f64), moved: bool, clicked: NodeId },
+    Nodes { origins: Vec<(NodeId, Position)>, routes: WireRoutes, start_world: (f64, f64), start: (f64, f64), moved: bool, clicked: NodeId },
+    Point { key: WireKey, index: usize, origin: Vec<Position>, start_world: (f64, f64), start: (f64, f64), moved: bool },
     Wire { from: WireEnd },
     Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
     /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
@@ -95,7 +99,7 @@ impl Interaction {
 
     // Send new positions of dragged nodes to the server. Positions were already updated locally, so an
     // interrupted drag (pointercancel, second finger) is also sent to keep editor and server in sync.
-    fn send_moves(self, origins: Vec<(NodeId, Position)>) {
+    fn send_moves(self, origins: Vec<(NodeId, Position)>, routes: WireRoutes) {
         let ed = self.ed;
         let mut commands = Vec::new();
         for (id, origin) in origins {
@@ -105,6 +109,11 @@ impl Interaction {
                     commands.push(ClientMessage::MoveNode { id, position });
                 }
             }
+        }
+        for (key, origin) in routes {
+            if !ed.wire_exists_untracked(key) { continue; }
+            let points = ed.wire_routes.with_untracked(|all| all.get(&key).cloned().unwrap_or_default());
+            if points != origin { commands.push(ClientMessage::SetWireRoute(WireRoute { exec: key.0, connection: key.1, points })); }
         }
         ed.send_batch(commands);
     }
@@ -128,8 +137,10 @@ impl Interaction {
         // Second finger starts pinch-to-zoom
         let active: Vec<(f64, f64)> = pointers.with_value(|ps| ps.values().copied().collect());
         if active.len() == 2 {
-            if let Drag::Nodes { origins, moved: true, .. } = drag.get_value() {
-                self.send_moves(origins);
+            match drag.get_value() {
+                Drag::Nodes { origins, routes, moved: true, .. } => self.send_moves(origins, routes),
+                Drag::Point { key, origin, moved: true, .. } => self.send_point(key, origin),
+                _ => {}
             }
             pending_wire.set(None);
             drag.set_value(Drag::Pinch {
@@ -142,17 +153,27 @@ impl Interaction {
 
         let target = ev.target();
         let pin = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el));
-        let wire = closest(target.clone(), "[data-wire]").and_then(|el| parse_wire(&el));
+        let point = closest(target.clone(), "[data-wire-point]");
+        let index = point.as_ref().and_then(|el| el.get_attribute("data-wire-point")?.parse().ok());
+        let wire = point.or_else(|| closest(target.clone(), "[data-wire]")).and_then(|el| parse_wire(&el));
         let node = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
         let view = ed.view.get_untracked();
         let world = view.to_world(p.0, p.1);
-        match gesture(ev.button(), &ev.pointer_type(), pin, wire, node) {
+        let action = decisions::route_gesture(ev.button(), node, wire.clone(), index)
+            .unwrap_or_else(|| gesture(ev.button(), &ev.pointer_type(), pin, wire, node));
+        if !matches!(action, Gesture::Point { .. } | Gesture::Context { .. }) { ed.selected_point.set(None); }
+        match action {
             Gesture::Pan { moved } => {
                 if moved { ev.prevent_default(); }
                 drag.set_value(Drag::Pan { start: p, origin: view, moved });
                 panning.set(true);
             }
             Gesture::Wire(from) => self.start_wire(from, world),
+            Gesture::Point { wire, index } => self.start_point(wire, index, p, world),
+            Gesture::Context { wire, index } => {
+                ev.prevent_default();
+                self.open_context(wire, index, world, (ev.client_x() as f64, ev.client_y() as f64));
+            }
             Gesture::Select(selection) => ed.selection.set(Some(selection)),
             Gesture::Node(id) => self.start_node_click(id, &ev, p, world),
             Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),

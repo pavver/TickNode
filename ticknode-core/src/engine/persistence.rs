@@ -21,7 +21,7 @@ impl TickEngine {
             .filter(|c| node_ids.contains(&c.src_node) && node_ids.contains(&c.dst_node))
             .copied().collect();
         data_connections.sort_by_key(sort_key);
-        GraphModel { nodes, exec_connections, data_connections }
+        GraphModel { nodes, exec_connections, data_connections, wire_routes: Vec::new() }
     }
 
     /// Replaces the current graph with the saved one. Returns warnings for elements that could not be restored.
@@ -44,6 +44,7 @@ impl TickEngine {
             nodes: snippet.nodes.clone(),
             exec_connections: snippet.exec_connections.iter().filter(inside).copied().collect(),
             data_connections: snippet.data_connections.iter().filter(inside).copied().collect(),
+            wire_routes: Vec::new(),
         };
         let warnings = self.insert_graph(&snippet, |id| id_map[&id]);
         let created = snippet.nodes.iter().map(|n| (n.id, id_map[&n.id])).filter(|(_, new)| self.has_node(*new)).collect();

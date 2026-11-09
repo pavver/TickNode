@@ -40,7 +40,7 @@ fn diff(current: &GraphModel, target: &GraphModel) -> GraphDiff {
         removed_nodes, disconnected: RemovedConnections { exec, data },
         insert: GraphModel {
             nodes: target.nodes.iter().filter(|n| !kept.contains(&n.id)).cloned().collect(),
-            exec_connections, data_connections,
+            exec_connections, data_connections, wire_routes: Vec::new(),
         },
     }
 }

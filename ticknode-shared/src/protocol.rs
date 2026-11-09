@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
+use crate::{WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -33,6 +33,8 @@ pub enum ClientMessage {
     PasteSettings { id: NodeId, type_name: String, properties: Vec<(String, DataValue)> },
     /// Creates and connects a node as one atomic graph edit.
     AddNodeConnected { type_name: String, position: Position, from: ConnectionEnd, pin: PinId },
+    /// Replaces layout points of an existing connection; an empty list clears the route.
+    SetWireRoute(WireRoute),
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -82,6 +84,8 @@ pub enum ServerMessage {
         #[serde(default)]
         property_options: Vec<PropertyOptionSet>,
         history: HistoryState,
+        #[serde(default)]
+        wire_routes: Vec<WireRoute>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -108,4 +112,5 @@ pub enum ServerMessage {
     /// Error for the client that caused it; translatable.
     Error(UiMessage),
     History(HistoryState),
+    WireRouted(WireRoute),
 }

@@ -17,6 +17,7 @@ impl Actor {
             ClientMessage::AddNode { type_name, position } => self.add_node(&type_name, position)?,
             ClientMessage::AddNodeConnected { type_name, position, from, pin } => self.add_node_connected(&type_name, position, from, pin)?,
             ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
+            ClientMessage::SetWireRoute(route) => only(self.set_wire_route(route)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
             ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
             ClientMessage::PasteSettings { id, type_name, properties } => only(self.paste_settings(id, &type_name, properties)?),
@@ -119,6 +120,7 @@ impl Actor {
         let inner = self.engine.export_snippet(&ids);
         events.extend(inner.exec_connections.into_iter().map(ServerMessage::ExecConnected));
         events.extend(inner.data_connections.into_iter().map(ServerMessage::DataConnected));
+        events.extend(self.paste_routes(&snippet.wire_routes, &imported));
         Ok((events, Some(ids)))
     }
 

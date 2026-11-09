@@ -129,6 +129,8 @@ pub fn PickerField(
             .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
             .map(|el| el.get_bounding_client_rect())
         else { return };
+        ed.wire_context.set(None);
+        ed.wire_menu.set(None);
         ed.picker.set(Some(PickerState {
             node,
             property: prop.clone(),

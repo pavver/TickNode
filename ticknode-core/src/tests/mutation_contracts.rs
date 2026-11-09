@@ -341,6 +341,7 @@ fn unavailable_bare_nodes_charge_work_and_preserve_saved_properties() {
     let graph = GraphModel {
         nodes: vec![NodeModel { id, type_name: "missing/node".into(), properties: vec![("value".into(), 5i64.into())], position: Position::default() }],
         exec_connections: vec![], data_connections: vec![],
+        wire_routes: Vec::new(),
     };
     assert!(e.load_graph(&graph).is_empty());
     e.trigger_node(id, PinId(0));

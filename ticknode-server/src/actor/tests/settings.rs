@@ -3,7 +3,7 @@ use super::*;
 fn actor(dir: &std::path::Path) -> Actor {
     let (events, _) = broadcast::channel(256);
     Actor {
-        engine: TickEngine::new(), positions: HashMap::new(),
+        engine: TickEngine::new(), positions: HashMap::new(), routes: HashMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
         events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
     }

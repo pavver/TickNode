@@ -8,6 +8,9 @@ use ticknode_shared::{
     TypeRegistry, parse_input_value_property,
 };
 
+mod routes;
+pub use routes::{route_path, route_insert_index};
+
 /// Connection presentation: solid for compatible pins, dashed for conversion, absent if invalid.
 pub fn wire_conversion(types: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<bool> {
     match (src, dst) {
@@ -180,8 +183,7 @@ pub fn pin_type(def: &NodeDefinition, pin: PinId, direction: PinDirection) -> Op
 
 /// Horizontal cubic Bézier curve from output to input.
 pub fn wire_path((x1, y1): (f64, f64), (x2, y2): (f64, f64)) -> String {
-    let dx = ((x2 - x1).abs() / 2.0).max(10.0 * DU);
-    format!("M {x1} {y1} C {} {y1}, {} {y2}, {x2} {y2}", x1 + dx, x2 - dx)
+    route_path((x1, y1), &[], (x2, y2))
 }
 
 /// CSS color of a pin by its type.

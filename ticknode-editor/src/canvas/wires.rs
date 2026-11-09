@@ -22,8 +22,7 @@ pub(super) fn connection_pin(ed: Editor, node: NodeId, pin: PinId, dir: PinDirec
     ed.node_tracked(node)?.instance.with(|i| pin_type(&i.definition, pin, dir).cloned())
 }
 
-fn anchor(id: NodeId, pin: PinId, dir: PinDirection) -> Option<(f64, f64)> {
-    let ed = use_editor();
+pub(crate) fn anchor(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection) -> Option<(f64, f64)> {
     let node = ed.node_tracked(id)?;
     let pos = node.pos.get();
     node.instance.with(|i| NodeLayout::of(i).anchor(pos, pin, dir))
@@ -32,10 +31,11 @@ fn anchor(id: NodeId, pin: PinId, dir: PinDirection) -> Option<(f64, f64)> {
 #[component]
 pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
     let ed = use_editor();
+    let route = Memo::new(move |_| ed.wire_routes.with(|all| all.get(&(exec, conn)).cloned().unwrap_or_default()));
     let path = Memo::new(move |_| {
-        let a = anchor(conn.src_node, conn.src_pin, PinDirection::Output)?;
-        let b = anchor(conn.dst_node, conn.dst_pin, PinDirection::Input)?;
-        Some(wire_path(a, b))
+        let a = anchor(ed, conn.src_node, conn.src_pin, PinDirection::Output)?;
+        let b = anchor(ed, conn.dst_node, conn.dst_pin, PinDirection::Input)?;
+        Some(route_path(a, &route.get(), b))
     });
     let color = Memo::new(move |_| {
         ed.node_tracked(conn.src_node)
@@ -56,7 +56,8 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
     move || {
         path.get().map(|d| {
             view! {
-                <g>
+                <g class=move || if selected.get() { "wire-group selected" } else { "wire-group" }
+                    style=move || format!("--wire-color:{}", if exec { "var(--text-secondary)".to_string() } else { color.get() })>
                     <title>{move || conversion.get().unwrap_or_default()}</title>
                     <path
                         class="wire"
@@ -75,6 +76,15 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
                         data-dst=conn.dst_node.0.to_string()
                         data-dst-pin=conn.dst_pin.0.to_string()
                     />
+                    {move || route.get().into_iter().enumerate().map(|(index, point)| view! {
+                        <rect class=move || if ed.selected_point.get() == Some(((exec, conn), index)) { "wire-point current" } else { "wire-point" }
+                            x=point.x as f64 - DU y=point.y as f64 - DU width=2.0 * DU height=2.0 * DU
+                            data-wire-point=index.to_string()
+                            data-wire=if exec { "exec" } else { "data" }
+                            data-src=conn.src_node.0.to_string() data-src-pin=conn.src_pin.0.to_string()
+                            data-dst=conn.dst_node.0.to_string() data-dst-pin=conn.dst_pin.0.to_string()
+                        />
+                    }).collect_view()}
                 </g>
             }
         })
@@ -87,7 +97,7 @@ pub(super) fn PendingWire(from: RwSignal<Option<WireEnd>>, cursor: RwSignal<(f64
     move || {
         let menu = ed.wire_menu.get();
         let end = from.get().or_else(|| menu.map(|m| m.from))?;
-        let a = anchor(end.node, end.pin, end.dir)?;
+        let a = anchor(ed, end.node, end.pin, end.dir)?;
         let c = menu.map(|m| (m.position.x as f64, m.position.y as f64)).unwrap_or_else(|| cursor.get());
         let d = if end.dir == PinDirection::Output { wire_path(a, c) } else { wire_path(c, a) };
         Some(view! { <path class="wire pending" d=d /> })

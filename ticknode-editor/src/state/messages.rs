@@ -4,11 +4,13 @@ use super::*;
 
 mod connections;
 mod snapshot;
+mod routes;
 
 impl Editor {
     pub fn apply(&self, msg: ServerMessage) {
+        if routes::applies(&msg) { self.wire_routes.update(|all| routes::apply(all, &msg)); }
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, .. } => {
                 self.history.set(history);
                 let gone = self.remove_absent_nodes(&nodes);
                 self.apply_catalog(definitions, types, translations);
@@ -28,6 +30,10 @@ impl Editor {
             ServerMessage::DataDisconnected { dst_node, dst_pin } => {
                 self.data.update(|all| connections::disconnect_data(all, dst_node, dst_pin));
                 self.prune_selection();
+            }
+            ServerMessage::WireRouted(route) => {
+                let key = (route.exec, route.connection);
+                if self.selected_point.get_untracked().is_some_and(|(k, i)| k == key && i >= route.points.len()) { self.selected_point.set(None); }
             }
             ServerMessage::Executed(traces) => self.apply_traces(traces),
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),

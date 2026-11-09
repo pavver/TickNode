@@ -355,3 +355,8 @@ inspector-cost = cost { $cost }
 inspector-cost-help = Relative work per call; native logic costs 1. The tick budget spreads queued work over ticks.
 
 wire-menu-empty = No compatible nodes
+
+wire-point-add = Add point
+wire-point-remove = Remove point
+wire-points-clear = Remove all points
+error-wire-route = Invalid wire route: the connection must exist and the route must contain at most 32 finite points.

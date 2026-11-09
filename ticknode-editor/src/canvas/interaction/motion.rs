@@ -16,7 +16,8 @@ impl Interaction {
         select_box.set(None);
         match (state, commit) {
             // Interrupted drags still synchronize positions with the server.
-            (Drag::Nodes { origins, moved: true, .. }, _) => self.send_moves(origins),
+            (Drag::Nodes { origins, routes, moved: true, .. }, _) => self.send_moves(origins, routes),
+            (Drag::Point { key, origin, moved: true, .. }, _) => self.send_point(key, origin),
             (_, false) => {},
             (Drag::Pan { moved: false, .. }, true) => ed.selection.set(None),
             // Clicking a node in a group selects only that node.
@@ -48,6 +49,7 @@ impl Interaction {
             if background {
                 let local = self.local_point(ev);
                 let world = self.ed.view.get_untracked().to_world(local.0, local.1);
+                self.ed.wire_context.set(None);
                 self.ed.picker.set(None);
                 self.ed.wire_menu.set(Some(crate::state::WireMenu {
                     from, position: Position { x: world.0 as f32, y: world.1 as f32 },
@@ -81,10 +83,22 @@ impl Interaction {
                 drag.set_value(Drag::Pan { start, origin, moved });
                 ed.view.set(Camera { x: origin.x + p.0 - start.0, y: origin.y + p.1 - start.1, ..origin });
             }
-            Drag::Nodes { origins, start_world, start, moved, clicked } => {
+            Drag::Nodes { origins, routes, start_world, start, moved, clicked } => {
                 let moved = moved || distance(start, p) > DRAG_THRESHOLD;
-                if moved { self.move_nodes(&origins, start_world, p); }
-                drag.set_value(Drag::Nodes { origins, start_world, start, moved, clicked });
+                if moved { self.move_nodes(&origins, &routes, clicked, start_world, p); }
+                drag.set_value(Drag::Nodes { origins, routes, start_world, start, moved, clicked });
+            }
+            Drag::Point { key, index, origin, start_world, start, moved } => {
+                let moved = moved || distance(start, p) > DRAG_THRESHOLD;
+                if moved && self.ed.wire_exists_untracked(key) {
+                    let world = ed.view.get_untracked().to_world(p.0, p.1);
+                    let mut points = origin.clone();
+                    if let Some(point) = points.get_mut(index) {
+                        *point = moved_position(*point, (world.0 - start_world.0, world.1 - start_world.1));
+                        ed.wire_routes.update(|all| { all.insert(key, points); });
+                    }
+                }
+                drag.set_value(Drag::Point { key, index, origin, start_world, start, moved });
             }
             Drag::Wire { .. } => cursor.set(ed.view.get_untracked().to_world(p.0, p.1)),
             Drag::Pinch { start_dist, start_mid, origin } => {
@@ -93,11 +107,22 @@ impl Interaction {
         }
     }
 
-    fn move_nodes(self, origins: &[(NodeId, Position)], start_world: (f64, f64), p: (f64, f64)) {
+    fn move_nodes(self, origins: &[(NodeId, Position)], routes: &WireRoutes, clicked: NodeId, start_world: (f64, f64), p: (f64, f64)) {
         let (wx, wy) = self.ed.view.get_untracked().to_world(p.0, p.1);
         let delta = (wx - start_world.0, wy - start_world.1);
+        // Snap the dragged card, then translate the entire group without changing its layout.
+        let anchor = origins.iter().find(|(id, _)| *id == clicked).map(|(_, p)| *p).unwrap_or_default();
+        let delta = decisions::group_delta(anchor, delta);
+        let shifted = |origin: Position| Position { x: origin.x + delta.x, y: origin.y + delta.y };
         for (id, origin) in origins {
-            if let Some(node) = self.ed.node(*id) { node.pos.set(moved_position(*origin, delta)); }
+            if let Some(node) = self.ed.node(*id) { node.pos.set(shifted(*origin)); }
+        }
+        if !routes.is_empty() {
+            self.ed.wire_routes.update(|all| {
+                for (key, points) in routes {
+                    if self.ed.wire_exists_untracked(*key) { all.insert(*key, points.iter().copied().map(shifted).collect()); }
+                }
+            });
         }
     }
 

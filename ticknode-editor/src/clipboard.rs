@@ -31,11 +31,12 @@ pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
         Some(model)
     }).collect();
     let inside = |c: &ConnectionModel| ids.contains(&c.src_node) && ids.contains(&c.dst_node);
-    Some(GraphModel {
-        nodes,
-        exec_connections: ed.exec.with_untracked(|e| e.iter().copied().filter(inside).collect()),
-        data_connections: ed.data.with_untracked(|d| d.iter().copied().filter(inside).collect()),
-    })
+    let exec_connections: Vec<_> = ed.exec.with_untracked(|e| e.iter().copied().filter(inside).collect());
+    let data_connections: Vec<_> = ed.data.with_untracked(|d| d.iter().copied().filter(inside).collect());
+    let wire_routes = ed.wire_routes.with_untracked(|all| all.iter()
+        .filter(|((exec, c), _)| if *exec { exec_connections.contains(c) } else { data_connections.contains(c) })
+        .map(|((exec, connection), points)| WireRoute { exec: *exec, connection: *connection, points: points.clone() }).collect());
+    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes })
 }
 
 pub fn to_text(graph: GraphModel) -> String {
@@ -62,6 +63,7 @@ pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
     for node in &mut graph.nodes {
         node.position = Position { x: snap(node.position.x as f64 - min_x + at.0), y: snap(node.position.y as f64 - min_y + at.1) };
     }
+    offset_routes(&mut graph, (at.0 - min_x, at.1 - min_y), true);
     ed.send(ClientMessage::Paste(graph));
 }
 
@@ -77,8 +79,18 @@ pub fn paste_text(ed: Editor, text: &str) {
     for node in &mut graph.nodes {
         node.position = Position { x: node.position.x - min_x, y: node.position.y - min_y };
     }
+    offset_routes(&mut graph, (-min_x as f64, -min_y as f64), false);
     let at = snap_point(ed.pointer_world.get_value().unwrap_or_else(|| view_center(ed)));
     ed.pending_paste.set(Some(PendingPaste { graph, at }));
+}
+
+fn offset_routes(graph: &mut GraphModel, delta: (f64, f64), snapped: bool) {
+    for route in &mut graph.wire_routes {
+        for point in &mut route.points {
+            let (x, y) = (point.x as f64 + delta.0, point.y as f64 + delta.1);
+            *point = if snapped { Position { x: snap(x), y: snap(y) } } else { Position { x: x as f32, y: y as f32 } };
+        }
+    }
 }
 
 pub fn place_paste(ed: Editor) {
@@ -107,7 +119,16 @@ pub fn duplicate(ed: Editor) {
 /// Deletes the selected nodes or wire.
 pub fn delete_selection(ed: Editor) {
     use crate::state::Selection;
-    match ed.selection.get_untracked() {
+    let selection = ed.selection.get_untracked();
+    if let Some((key, index)) = ed.selected_point.get_untracked() {
+        ed.selected_point.set(None);
+        let on_wire = match &selection { Some(Selection::Exec(c)) => key == (true, *c), Some(Selection::Data(c)) => key == (false, *c), _ => false };
+        if on_wire {
+            crate::canvas::edit_route(ed, key, (0.0, 0.0), crate::canvas::PointEdit::Remove(index));
+            return;
+        }
+    }
+    match selection {
         Some(Selection::Nodes(ids)) => ed.send_batch(ids.into_iter().map(ClientMessage::RemoveNode).collect()),
         Some(Selection::Exec(c)) => ed.send(ClientMessage::DisconnectExec(c)),
         Some(Selection::Data(c)) => ed.send(ClientMessage::DisconnectData { dst_node: c.dst_node, dst_pin: c.dst_pin }),

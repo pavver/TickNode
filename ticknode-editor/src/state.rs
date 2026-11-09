@@ -12,6 +12,8 @@ use crate::i18n::{self, Locale};
 
 mod graph;
 mod messages;
+mod wires;
+pub use wires::{WireContext, WireKey, WireRoutes};
 
 const MAX_LOG_LINES: usize = 500;
 /// Duration (ms) a node stays highlighted after execution.
@@ -165,6 +167,10 @@ pub struct Editor {
     pub nodes: RwSignal<BTreeMap<NodeId, ClientNode>>,
     pub exec: RwSignal<Vec<ConnectionModel>>,
     pub data: RwSignal<Vec<ConnectionModel>>,
+    pub wire_routes: RwSignal<WireRoutes>,
+    pub wire_context: RwSignal<Option<WireContext>>,
+    /// Route point last pressed on the selected wire: Delete removes it instead of the wire.
+    pub selected_point: RwSignal<Option<(WireKey, usize)>>,
     pub selection: RwSignal<Option<Selection>>,
     pub logs: RwSignal<Vec<LogLine>>,
     /// Server error counter: property fields in Pending transition to Error when this increments.
@@ -225,6 +231,9 @@ impl Editor {
             nodes: RwSignal::new(BTreeMap::new()),
             exec: RwSignal::new(Vec::new()),
             data: RwSignal::new(Vec::new()),
+            wire_routes: RwSignal::new(HashMap::new()),
+            wire_context: RwSignal::new(None),
+            selected_point: RwSignal::new(None),
             selection: RwSignal::new(None),
             logs: RwSignal::new(Vec::new()),
             error_seq: RwSignal::new(0),

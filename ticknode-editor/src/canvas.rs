@@ -27,6 +27,7 @@ use paste::PastePreview;
 use selection::{SelectBox, SelectionBounds};
 use wires::{PendingConnection, PendingWire, Wire};
 pub(crate) use wires::WireEnd;
+pub(crate) use interaction::{edit_route, PointEdit};
 
 pub const CANVAS_ID: &str = "ticknode-canvas";
 const GRID: f64 = 5.0 * DU;
@@ -65,6 +66,7 @@ pub fn Canvas() -> impl IntoView {
             node_ref=canvas
             style=grid_style
             on:pointerdown=move |ev| interaction.pointer_down(ev)
+            on:dblclick=move |ev| interaction.double_click(ev)
             on:pointermove=move |ev| interaction.pointer_move(ev)
             on:pointerup=move |ev| interaction.finish(&ev, true)
             on:pointercancel=move |ev| interaction.finish(&ev, false)

@@ -1107,3 +1107,11 @@ body:has(.palette-ghost) { cursor: copy; }
 .pin.split-field > .ellipsis { padding-inline-start: var(--du); border-inline-start: var(--border-w) solid var(--border); }
 .pin .pin-split { flex: none; padding: 0; width: calc(var(--du) * 4); min-width: 0; }
 .node.unavailable .pin-split { pointer-events: none; }
+
+/* Layout points follow their wire's type color and Operator selection state. */
+.wire-point { fill: var(--wire-color); stroke: var(--surface); stroke-width: 1px; cursor: move; pointer-events: all; }
+.wire-group:hover .wire-point, .wire-group.selected .wire-point { fill: var(--accent); stroke: var(--text-primary); }
+.wire-group.selected .wire-point.current { fill: var(--text-primary); stroke: var(--accent); }
+.wire-context { padding: var(--du); }
+.wire-context button { width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+.wire-context button:hover, .wire-context button:focus-visible { background: var(--selection); }

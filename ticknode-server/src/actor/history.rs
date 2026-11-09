@@ -40,6 +40,7 @@ impl Actor {
         for node in &mut graph.nodes {
             node.position = self.positions.get(&node.id).copied().unwrap_or_default();
         }
+        graph.wire_routes = super::routes::sorted(&self.routes);
         graph
     }
 
@@ -55,6 +56,7 @@ impl Actor {
             ClientMessage::Batch(commands) => self.apply_batch(commands, reply),
             msg => self.apply_command(msg, reply)?,
         };
+        self.prune_routes();
         if !events.is_empty() && let Some(before) = before {
             self.history.record(before);
         }
@@ -84,6 +86,7 @@ impl Actor {
                 }
                 Err(error) => { first_error.get_or_insert(error); }
             }
+            self.prune_routes();
             while let Ok(ServerMessage::Error(error)) = errors.try_recv() {
                 first_error.get_or_insert(error);
             }
@@ -130,6 +133,7 @@ impl Actor {
         events.extend(moved);
         events.extend(result.connected_exec.into_iter().filter(|c| !exec_before.contains(c)).map(ServerMessage::ExecConnected));
         events.extend(result.connected_data.into_iter().filter(|c| !data_before.contains(c)).map(ServerMessage::DataConnected));
+        events.extend(self.restore_routes(&target.wire_routes));
         self.dirty_since.get_or_insert_with(Instant::now);
         events
     }

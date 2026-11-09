@@ -64,9 +64,10 @@ impl Interaction {
         if !ed.selection.with_untracked(|s| matches!(s, Some(Selection::Nodes(set)) if set.contains(&id))) {
             ed.select_nodes([id]);
         }
-        let origins = ed.selected_nodes().into_iter()
+        let origins: Vec<_> = ed.selected_nodes().into_iter()
             .filter_map(|n| ed.node(n).map(|node| (n, node.pos.get_untracked())))
             .collect();
-        self.drag.set_value(Drag::Nodes { origins, start_world, start, moved: false, clicked: id });
+        let routes = ed.wire_routes.with_untracked(|all| decisions::group_routes(all, &origins));
+        self.drag.set_value(Drag::Nodes { origins, routes, start_world, start, moved: false, clicked: id });
     }
 }

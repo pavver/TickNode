@@ -377,6 +377,8 @@ impl Actor {
 pub(crate) mod routes;
 pub(crate) mod sheets;
 mod commands;
+mod plugin_commands;
+mod variables;
 mod history;
 mod telemetry;
 mod settings;

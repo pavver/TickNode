@@ -1,7 +1,6 @@
 use super::*;
 use ticknode_shared::{
-    fit_variable_value, valid_variable_name, valid_variable_value, ConnectionEnd, ConnectionModel,
-    DataValue, PinDirection, PinId, PinType, SheetId, Variable, VariableKey, VariableScope, MAX_VARIABLES,
+    ConnectionEnd, ConnectionModel, DataValue, PinDirection, PinId, PinType, SheetId,
 };
 
 type Applied = (Vec<(Option<SheetId>, ServerMessage)>, Option<Vec<NodeId>>);
@@ -361,111 +360,6 @@ impl Actor {
         self.require_session_node(id, sheet)?;
         self.engine.trigger_node(id, pin);
         Ok(vec![])
-    }
-
-    fn configure_plugin(&mut self, name: &str, values: Vec<(String, ticknode_shared::SettingUpdate)>) -> Result<Vec<(Option<SheetId>, ServerMessage)>, UiMessage> {
-        self.plugins.configure(&mut self.engine, name, values)?;
-        Ok(self.plugins.info(&self.engine, name).map(|i| (None, ServerMessage::PluginUpdated(i))).into_iter().collect())
-    }
-
-    fn set_plugin_enabled(&mut self, name: &str, enabled: bool, reply: &mpsc::UnboundedSender<ServerMessage>) -> Result<Vec<(Option<SheetId>, ServerMessage)>, UiMessage> {
-        let outcome = self.plugins.set_enabled(&mut self.engine, name, enabled)?;
-        self.histories.clear();
-        if let Some(warning) = outcome.warning {
-            let _ = reply.send(ServerMessage::Error(warning));
-        }
-        let mut events = vec![(None, self.catalog())];
-        for id in &outcome.change.replaced {
-            if let Some(inst) = self.instance(*id) {
-                let sheet = self.node_sheet.get(id).copied();
-                events.push((sheet, ServerMessage::NodeUpdated(inst)));
-            }
-        }
-        if !outcome.change.replaced.is_empty() || !outcome.change.detached.is_empty() || !outcome.change.removed.exec.is_empty() || !outcome.change.removed.data.is_empty() {
-            self.dirty_since.get_or_insert_with(Instant::now);
-            self.dirty_sheets.extend(self.sheets.iter().map(|s| s.id));
-        }
-        for c in outcome.change.removed.exec {
-            let sheet = self.node_sheet.get(&c.src_node).copied();
-            events.push((sheet, ServerMessage::ExecDisconnected(c)));
-        }
-        for c in outcome.change.removed.data {
-            let sheet = self.node_sheet.get(&c.dst_node).copied();
-            events.push((sheet, ServerMessage::DataDisconnected { dst_node: c.dst_node, dst_pin: c.dst_pin }));
-        }
-        for d in outcome.change.detached {
-            let sheet = self.node_sheet.get(&d.connection.src_node).copied();
-            events.push((sheet, ServerMessage::Detached(d)));
-        }
-        if let Some(info) = self.plugins.info(&self.engine, name) {
-            events.push((None, ServerMessage::PluginUpdated(info)));
-        }
-        for sheet in &self.sheets {
-            events.push((Some(sheet.id), ServerMessage::History(ticknode_shared::HistoryState::default())));
-        }
-        Ok(events)
-    }
-
-    fn create_variable(&mut self, var: Variable) -> Result<(), UiMessage> {
-        if !valid_variable_name(&var.key.name) {
-            return Err(UiMessage::new("error-variable-name", "Invalid variable name").arg("name", &var.key.name));
-        }
-        match var.key.scope {
-            VariableScope::Sheet => {
-                let Some(sheet_id) = var.key.sheet else {
-                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
-                };
-                if !self.sheets.iter().any(|s| s.id == sheet_id) {
-                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
-                }
-            }
-            VariableScope::Global | VariableScope::Persistent => {
-                if var.key.sheet.is_some() {
-                    return Err(UiMessage::new("error-variable-scope", "Global and persistent variables cannot have a sheet"));
-                }
-            }
-        }
-        if self.engine.variables.len() >= MAX_VARIABLES && !self.engine.variables.contains_key(&var.key) {
-            return Err(UiMessage::new("error-variable-limit", "Variable limit reached (maximum 10,000)"));
-        }
-        if !valid_variable_value(&var.value) {
-            return Err(UiMessage::new("error-variable-limit", "Variable value exceeds maximum size (64 KiB)"));
-        }
-        let Some(fitted_value) = fit_variable_value(&self.engine.types, var.value, &var.data_type) else {
-            return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
-        };
-        if !self.engine.variables.create(var.key, var.data_type, fitted_value) {
-            return Err(UiMessage::new("error-variable-exists", "Variable already exists in this scope"));
-        }
-        if self.engine.variables.is_persistent_dirty() {
-            self.dirty_since.get_or_insert_with(Instant::now);
-        }
-        Ok(())
-    }
-
-    fn set_variable(&mut self, key: VariableKey, value: DataValue) -> Result<(), UiMessage> {
-        if !valid_variable_value(&value) {
-            return Err(UiMessage::new("error-variable-limit", "Variable value exceeds maximum size (64 KiB)"));
-        }
-        let Some(existing) = self.engine.variables.get(&key) else {
-            return Err(UiMessage::new("error-variable-missing", "Variable not found").arg("name", &key.name));
-        };
-        let Some(fitted) = fit_variable_value(&self.engine.types, value, &existing.data_type) else {
-            return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
-        };
-        self.engine.variables.set(&key, fitted);
-        if self.engine.variables.is_persistent_dirty() {
-            self.dirty_since.get_or_insert_with(Instant::now);
-        }
-        Ok(())
-    }
-
-    fn delete_variable(&mut self, key: VariableKey) -> Result<(), UiMessage> {
-        self.engine.variables.delete(&key);
-        if self.engine.variables.is_persistent_dirty() {
-            self.dirty_since.get_or_insert_with(Instant::now);
-        }
-        Ok(())
     }
 }
 

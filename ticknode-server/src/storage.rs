@@ -3,9 +3,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use ticknode_core::TickEngine;
-use ticknode_shared::{GraphModel, NodeId, Position};
+use ticknode_shared::{GraphModel, NodeId, NodeSize, Position};
 use tracing::{info, warn};
 use crate::actor::routes::{self, Routes};
+
+/// Layout metadata owned by the server, outside the execution engine.
+pub type Layout = (HashMap<NodeId, Position>, HashMap<NodeId, NodeSize>, Routes);
 
 /// The graph is stored as pretty-printed JSON with deterministic ordering so it diffs cleanly in git.
 pub struct Storage {
@@ -17,12 +20,12 @@ impl Storage {
         Self { path }
     }
 
-    /// Loads the graph into the engine and returns node positions and wire routes. A missing file starts with an empty graph;
+    /// Loads the graph into the engine and returns node positions, sizes and wire routes. A missing file starts with an empty graph;
     /// a corrupted file returns an error rather than overwriting it with an empty graph.
-    pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<(HashMap<NodeId, Position>, Routes)> {
+    pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<Layout> {
         if !self.path.exists() {
             info!(path = %self.path.display(), "Graph file not found, starting with an empty graph");
-            return Ok((HashMap::new(), Routes::new()));
+            return Ok((HashMap::new(), HashMap::new(), Routes::new()));
         }
         let text = std::fs::read_to_string(&self.path)
             .with_context(|| format!("failed to read {}", self.path.display()))?;
@@ -33,13 +36,14 @@ impl Storage {
             warn!("{}", warning);
         }
         info!(nodes = graph.nodes.len(), path = %self.path.display(), "Graph loaded");
-        Ok((graph.nodes.iter().map(|n| (n.id, n.position)).collect(), routes::from_routes(engine, &graph.wire_routes)))
+        Ok((graph.nodes.iter().map(|n| (n.id, n.position)).collect(), graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect(), routes::from_routes(engine, &graph.wire_routes)))
     }
 
-    pub fn save(&self, engine: &TickEngine, positions: &HashMap<NodeId, Position>, routes: &Routes) -> anyhow::Result<()> {
+    pub fn save(&self, engine: &TickEngine, positions: &HashMap<NodeId, Position>, sizes: &HashMap<NodeId, NodeSize>, routes: &Routes) -> anyhow::Result<()> {
         let mut graph = engine.export_graph();
         for node in &mut graph.nodes {
             node.position = positions.get(&node.id).copied().unwrap_or_default();
+            node.size = sizes.get(&node.id).copied();
         }
         graph.wire_routes = routes::sorted(routes);
         write_atomic(&self.path, &(serde_json::to_string_pretty(&graph)? + "\n"))
@@ -73,17 +77,17 @@ mod tests {
         let positions = HashMap::from([(c, Position { x: 10.0, y: 20.0 })]);
         let connection = engine.data_connections()[0];
         let routes = Routes::from([((false, connection), vec![Position { x: 48.0, y: -80.0 }])]);
-        storage.save(&engine, &positions, &routes).unwrap();
+        storage.save(&engine, &positions, &HashMap::new(), &routes).unwrap();
 
         let mut restored = TickEngine::new();
-        let (restored_positions, restored_routes) = storage.load(&mut restored).unwrap();
+        let (restored_positions, restored_sizes, restored_routes) = storage.load(&mut restored).unwrap();
         assert_eq!(restored_positions[&c], Position { x: 10.0, y: 20.0 });
         assert_eq!(restored.export_graph(), engine.export_graph());
         assert_eq!(restored_routes, routes);
 
         // Saving again without changes produces an identical file (stable diff)
         let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
-        storage.save(&restored, &restored_positions, &restored_routes).unwrap();
+        storage.save(&restored, &restored_positions, &restored_sizes, &restored_routes).unwrap();
         let second = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
         assert_eq!(first, second);
     }
@@ -102,9 +106,9 @@ mod tests {
         let path = dir.path().join("graph.json");
         let storage = Storage::new(path.clone());
         let mut engine = TickEngine::new();
-        assert!(storage.load(&mut engine).unwrap().1.is_empty());
+        assert!(storage.load(&mut engine).unwrap().2.is_empty());
         std::fs::write(&path, r#"{"nodes":[],"exec_connections":[],"data_connections":[]}"#).unwrap();
-        assert!(storage.load(&mut engine).unwrap().1.is_empty());
+        assert!(storage.load(&mut engine).unwrap().2.is_empty());
         let route = ticknode_shared::WireRoute {
             exec: true,
             connection: ticknode_shared::ConnectionModel { src_node: NodeId::generate(), src_pin: PinId(0), dst_node: NodeId::generate(), dst_pin: PinId(0) },
@@ -112,7 +116,7 @@ mod tests {
         };
         let graph = GraphModel { wire_routes: vec![route], ..Default::default() };
         std::fs::write(&path, serde_json::to_string(&graph).unwrap()).unwrap();
-        assert!(storage.load(&mut engine).unwrap().1.is_empty());
+        assert!(storage.load(&mut engine).unwrap().2.is_empty());
     }
 
     #[test]
@@ -127,13 +131,13 @@ mod tests {
         engine.connect_exec(b, PinId(4), a, PinId(0)).unwrap();
         engine.connect_data(a, PinId(5), b, PinId(1)).unwrap();
         let routes: Routes = routes::connections(&engine).into_iter().map(|key| (key, vec![Position::default()])).collect();
-        storage.save(&engine, &HashMap::new(), &routes).unwrap();
+        storage.save(&engine, &HashMap::new(), &HashMap::new(), &routes).unwrap();
         let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
         let graph: GraphModel = serde_json::from_str(&first).unwrap();
         assert!(!graph.wire_routes[0].exec);
         assert!(graph.wire_routes[1].connection.src_node < graph.wire_routes[2].connection.src_node);
         let reordered: Routes = routes.iter().map(|(key, points)| (*key, points.clone())).collect();
-        storage.save(&engine, &HashMap::new(), &reordered).unwrap();
+        storage.save(&engine, &HashMap::new(), &HashMap::new(), &reordered).unwrap();
         assert_eq!(first, std::fs::read_to_string(dir.path().join("graph.json")).unwrap());
     }
 }

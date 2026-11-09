@@ -1144,3 +1144,37 @@ body:has(.palette-ghost) { cursor: copy; }
 .detached-square { fill: var(--surface); stroke: var(--error); stroke-width: calc(var(--du) * 0.5); pointer-events: none; }
 .detached-group.selected .detached-square { stroke-width: var(--du); }
 .detached-end-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
+
+/* Resize dimensions and row heights come from NodeLayout. Column sockets stay on their first line. */
+.node-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    padding: 0;
+    border: 0;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-secondary) 3px 4px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    cursor: nwse-resize;
+    touch-action: none;
+    opacity: 0;
+}
+.node:hover .node-resize, .node.selected .node-resize, .node-resize:focus-visible { opacity: .7; }
+.node-resize:hover, .node-resize:active { opacity: 1; }
+.node > .pins.in { width: max(40%, calc(120px + (var(--node-width) - var(--default-node-width)) * .6)); }
+.node > .pins.out { max-width: 45%; }
+.node > .pins.in > .pin { width: 100%; max-width: none; min-width: 0; }
+.node > .pins.out > .pin { max-width: 100%; }
+.node > .pins.in > .pin > .inline-value { flex: 1 1 52px; min-width: 20px; max-width: none; }
+.node > .pins.in > .pin > .duration-value { flex-shrink: 1; min-width: 0; }
+.node > .pins.in > .pin > .ellipsis { flex: 0 1 auto; min-width: 0; }
+.prop-row.grown, .pin.grown { align-items: flex-start; }
+.prop-row.grown > .prop-label, .pin.grown > .ellipsis { line-height: calc(var(--du) * 6); }
+.prop-row.grown > .inline-value.select { margin-top: calc(var(--du) * .75); min-width: 0; }
+.pin.grown > .socket { margin-top: calc(var(--du) * 1.75); }
+.pin.grown > .pin-split { margin-top: calc(var(--du) * .75); }
+.inline-value.multiline { height: calc(100% - var(--du) * 1.5); margin-top: calc(var(--du) * .75); resize: none; overflow: auto; line-height: 16px; white-space: pre-wrap; text-overflow: clip; }
+.prop-row > .prop-label { min-width: 0; }
+.prop-row > .inline-value.select { min-width: 0; }

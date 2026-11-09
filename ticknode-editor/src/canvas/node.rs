@@ -13,6 +13,7 @@ use crate::ui::{Icon, icons};
 use super::pins::Pin;
 
 mod timer;
+mod resize;
 
 /// Pin used to trigger a node manually: first exec input; for event sources (Clock, button),
 /// their exec output.
@@ -28,13 +29,13 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
         return ().into_any();
     };
     let def = Memo::new(move |_| node.instance.with(|i| i.definition.clone()));
-    let layout = Memo::new(move |_| node.instance.with(NodeLayout::of));
+    let layout = Memo::new(move |_| ed.layout_of(node));
     let is_match = move || def.with(|d| d.type_name == "match");
     let style = move || {
         let p = node.pos.get();
         def.with(|d| format!(
-            "left:{}px;top:{}px;width:{}px;height:{}px;--cat-color:{}",
-            p.x, p.y, layout.with(|l| l.width), layout.with(|l| l.height), category_color(&d.category)
+            "left:{}px;top:{}px;width:{}px;height:{}px;--node-width:{}px;--default-node-width:{}px;--cat-color:{}",
+            p.x, p.y, layout.with(|l| l.width), layout.with(|l| l.height), layout.with(|l| l.width), node_width(&d.type_name), category_color(&d.category)
         ))
     };
     let pins_style = move || format!("top:{}px", layout.with(|l| l.pins_top));
@@ -98,6 +99,9 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                 }.into_any()
             }}
             <timer::TimerBar id=id />
+            <Show when=move || unavailable.with(Option::is_none)>
+                <resize::ResizeHandle id=id />
+            </Show>
         </div>
     }
     .into_any()

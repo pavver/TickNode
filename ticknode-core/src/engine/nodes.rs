@@ -107,7 +107,7 @@ impl TickEngine {
         self.nodes.get(&id).map(|node| self.effective_definition(id, node.definition()))
     }
 
-    /// Node model for persistence/editor (position is managed by the server, defaulted here).
+    /// Node model for persistence/editor (position and size are managed by the server, defaulted here).
     pub fn node_model(&self, node_id: NodeId) -> Option<NodeModel> {
         self.nodes.get(&node_id).map(|n| NodeModel {
             id: node_id,
@@ -120,6 +120,7 @@ impl TickEngine {
                 .collect(),
             position: Position::default(),
             pins: self.confirmed_pins.get(&node_id).cloned(),
+            size: None,
         })
     }
 

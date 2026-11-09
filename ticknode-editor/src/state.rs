@@ -124,6 +124,8 @@ pub enum Theme {
 pub struct ClientNode {
     pub instance: RwSignal<NodeInstance>,
     pub pos: RwSignal<Position>,
+    /// Only present during a resize gesture; server dimensions remain in the model.
+    pub size_preview: RwSignal<Option<NodeSize>>,
     /// Local timestamp (ms) of the last execution.
     pub last_exec: RwSignal<f64>,
     /// Inputs and outputs from the last execution.
@@ -140,6 +142,7 @@ impl ClientNode {
     fn new(instance: NodeInstance) -> Self {
         Self {
             pos: RwSignal::new(instance.model.position),
+            size_preview: RwSignal::new(None),
             instance: RwSignal::new(instance),
             last_exec: RwSignal::new(f64::NEG_INFINITY),
             trace: RwSignal::new(None),
@@ -154,6 +157,7 @@ impl ClientNode {
     fn dispose(self) {
         self.instance.dispose();
         self.pos.dispose();
+        self.size_preview.dispose();
         self.last_exec.dispose();
         self.trace.dispose();
     }

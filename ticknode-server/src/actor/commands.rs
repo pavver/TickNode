@@ -23,6 +23,7 @@ impl Actor {
             ClientMessage::RemoveNode(id) => only(self.remove_node(id)?),
             ClientMessage::SetWireRoute(route) => only(self.set_wire_route(route)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
+            ClientMessage::ResizeNode { id, size } => only(self.resize_node(id, size)?),
             ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
             ClientMessage::PasteSettings { id, type_name, properties } => only(self.paste_settings(id, &type_name, properties)?),
             ClientMessage::SetProperty { id, name, value } => only(self.set_property(id, &name, value)?),
@@ -71,6 +72,7 @@ impl Actor {
             if let Err(error) = self.engine.adapt_node(id, pin, data_type) {
                 self.engine.remove_node(id);
                 self.positions.remove(&id);
+                self.sizes.remove(&id);
                 return Err(error.ui_message());
             }
             events[0] = ServerMessage::NodeAdded(self.instance(id).expect("the node exists"));
@@ -89,6 +91,7 @@ impl Actor {
             Err(error) => {
                 self.engine.remove_node(id);
                 self.positions.remove(&id);
+                self.sizes.remove(&id);
                 Err(error)
             }
         }
@@ -100,6 +103,7 @@ impl Actor {
             .filter(|d| d.connection.src_node == id || d.connection.dst_node == id).copied().collect();
         self.engine.remove_node(id);
         self.positions.remove(&id);
+        self.sizes.remove(&id);
         self.traces.remove(&id);
         let mut events: Vec<_> = detached.into_iter().map(ServerMessage::DetachedRemoved).collect();
         events.push(ServerMessage::NodeRemoved(id));
@@ -131,6 +135,9 @@ impl Actor {
         let ids: Vec<NodeId> = imported.iter().map(|(_, new)| *new).collect();
         for (old, new) in &imported {
             self.positions.insert(*new, positions.get(old).copied().unwrap_or_default());
+            if let Some(size) = snippet.nodes.iter().find(|n| n.id == *old).and_then(|n| n.size).and_then(NodeSize::validated) {
+                self.sizes.insert(*new, size);
+            }
         }
         let mut events: Vec<ServerMessage> = ids.iter().filter_map(|id| self.instance(*id)).map(ServerMessage::NodeAdded).collect();
         let inner = self.engine.export_snippet(&ids);

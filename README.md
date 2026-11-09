@@ -25,7 +25,7 @@ Its first target is **Home Assistant**: TickNode is being developed into an add-
 - **A decision node that reads like a sentence.** `Match` routes execution by conditions such as `temp > 25 and mode = "auto"`, with operators chosen by input type.
 - **Sandboxed plugins.** Plugins are WebAssembly components run by wasmtime. They have no network or files unless granted a capability, every call has a CPU and memory budget, and a crashing plugin is restarted without stopping the engine.
 - **Plugins managed from the UI.** Enable, disable and configure plugins in the editor; secrets stay on the server. Nodes of a disabled or missing plugin are kept as stubs, so the graph never loses them.
-- **Everything edited on the node.** Properties, input values, types and conditions are set right on the canvas; the inspector shows the last execution of each node.
+- **Everything edited on the node.** Properties, input values, types and conditions are set right on the canvas; resize nodes to give text fields more room and edit multiline messages. The inspector shows the last execution of each node.
 - **Comfortable editing.** Shared undo/redo, copy/paste, copying settings between nodes of one type, compatible node suggestions when a wire is dropped on empty canvas, and route points to lead wires around cards.
 - **Safe updates.** Plugins carry a fingerprint of the plugin API, and an incompatible plugin is reported instead of crashing. When an update changes a node's pins, the node is frozen until you confirm it, and wires that no longer fit stay visible as detached wires instead of disappearing.
 - **Git-friendly storage.** The graph is a stable, pretty-printed `data/graph.json`.

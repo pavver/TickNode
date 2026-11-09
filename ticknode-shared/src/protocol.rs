@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
+use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -37,6 +37,8 @@ pub enum ClientMessage {
     SetWireRoute(WireRoute),
     ConfirmPins(NodeId),
     RemoveDetached(DetachedConnection),
+    /// Sets layout dimensions; None restores automatic sizing.
+    ResizeNode { id: NodeId, size: Option<NodeSize> },
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -132,4 +134,5 @@ pub enum ServerMessage {
     DetachedRemoved(DetachedConnection),
     /// Full current list, emitted only when the first delay or count changes.
     Timers(Vec<NodeTimer>),
+    NodeResized { id: NodeId, size: Option<NodeSize> },
 }

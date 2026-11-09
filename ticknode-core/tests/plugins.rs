@@ -875,8 +875,8 @@ fn enabling_detaches_connections_that_became_invalid() {
     let ghost_link = ConnectionModel { src_node: counter, src_pin: PinId(9), dst_node: debug, dst_pin: PinId(0) };
     let graph = GraphModel {
         nodes: vec![
-            NodeModel { id: counter, type_name: "test/counter".into(), properties: vec![("step".into(), number(2))], position: Position::default(), pins: None },
-            NodeModel { id: debug, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None },
+            NodeModel { id: counter, type_name: "test/counter".into(), properties: vec![("step".into(), number(2))], position: Position::default(), pins: None, size: None },
+            NodeModel { id: debug, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None, size: None },
         ],
         // Pin 9 was inferred by the stub from the connection, but the real counter node has no such pin
         exec_connections: vec![ghost_link],
@@ -909,9 +909,9 @@ fn unknown_node_type_survives_load_and_save() {
     let c = NodeId::generate();
     let graph = GraphModel {
         nodes: vec![
-            NodeModel { id: a, type_name: "ghost/source".into(), properties: vec![("k".into(), number(1)), ("in:3".into(), DataValue::String("x".into()))], position: Position { x: 5.0, y: 6.0 }, pins: None },
-            NodeModel { id: b, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None },
-            NodeModel { id: c, type_name: "ghost/sink".into(), properties: vec![], position: Position::default(), pins: None },
+            NodeModel { id: a, type_name: "ghost/source".into(), properties: vec![("k".into(), number(1)), ("in:3".into(), DataValue::String("x".into()))], position: Position { x: 5.0, y: 6.0 }, pins: None, size: None },
+            NodeModel { id: b, type_name: "test/debug".into(), properties: vec![("prefix".into(), DataValue::String(String::new()))], position: Position::default(), pins: None, size: None },
+            NodeModel { id: c, type_name: "ghost/sink".into(), properties: vec![], position: Position::default(), pins: None, size: None },
         ],
         exec_connections: vec![ConnectionModel { src_node: a, src_pin: PinId(0), dst_node: c, dst_pin: PinId(4) }],
         data_connections: vec![

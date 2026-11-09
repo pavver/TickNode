@@ -4,7 +4,7 @@ use ticknode_shared::{DetachedConnection, DetachedEnd, GraphModel};
 fn frozen_actor(dir: &std::path::Path) -> (Actor, NodeId, DetachedConnection) {
     let (events, _) = broadcast::channel(256);
     let mut actor = Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), routes: HashMap::new(),
+        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
         events, dirty_since: None, traces: HashMap::new(), history: Default::default(),
         telemetry: super::telemetry::Telemetry::new(Instant::now()),
@@ -113,9 +113,9 @@ fn storage_roundtrip_is_stable_and_loads_legacy_json() {
     assert!(graph.nodes.iter().all(|n| n.pins.is_some()));
     assert_eq!(graph.detached_connections, vec![d, other]);
     let mut restored = TickEngine::new();
-    let (positions, routes) = actor.storage.load(&mut restored).unwrap();
+    let (positions, sizes, routes) = actor.storage.load(&mut restored).unwrap();
     assert!(!restored.frozen_changes(id).is_empty());
-    actor.storage.save(&restored, &positions, &routes).unwrap();
+    actor.storage.save(&restored, &positions, &sizes, &routes).unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), first);
     let mut legacy = serde_json::to_value(&graph).unwrap();
     legacy.as_object_mut().unwrap().remove("detached_connections");

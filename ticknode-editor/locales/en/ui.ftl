@@ -391,3 +391,7 @@ pin-direction-input = input
 pin-direction-output = output
 wire-detached-title = Wire disconnected: the pin changed
 wire-detached-remove = Remove wire
+
+node-resize-title = Drag to resize, double-click to reset
+overview-hint-resize = Drag the bottom-right corner to resize a node; double-click it to reset. Esc cancels. In multiline fields, Ctrl/Cmd+Enter saves.
+error-node-size = Node dimensions must be finite

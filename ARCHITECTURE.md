@@ -122,7 +122,7 @@ Plugins are written in Rust with [`ticknode-plugin-sdk`](ticknode-plugin-sdk); s
 - **Engine actor.** The engine lives on a dedicated OS thread that processes ticks and editor commands one after another, so the engine needs no locks. (A dedicated thread is also required by wasmtime's synchronous WASI, which must not run inside a tokio task.)
 - **Protocol.** postcard over WebSocket. After connecting, an editor receives a snapshot (`Init`); afterwards every change is broadcast to all editors as an event, so several editors stay in sync. Errors go only to the editor that caused them. Execution traces, logs and delay timers are sent at a fixed rate (every 100 ms) independent of the tick length.
 - **History.** Undo/redo belongs to the server and is shared by all editors: every successful edit (or a batch of edits) stores a snapshot, and undo reconciles the live graph to it, recreating only the nodes that differ.
-- **Persistence.** The graph is stored in `data/graph.json`: nodes with positions and pin signatures, connections, detached connections and wire route points, pretty-printed with a stable order so that it diffs well in git, written atomically with a short debounce and on shutdown. A corrupt file stops the start-up instead of being overwritten.
+- **Persistence.** The graph is stored in `data/graph.json`: nodes with positions, optional user sizes and pin signatures, connections, detached connections and wire route points, pretty-printed with a stable order so that it diffs well in git, written atomically with a short debounce and on shutdown. A corrupt file stops the start-up instead of being overwritten.
 
 ## 5. Editor
 

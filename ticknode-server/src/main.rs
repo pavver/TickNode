@@ -56,8 +56,8 @@ async fn main() -> anyhow::Result<()> {
     plugins.load_all(&mut engine);
 
     let storage = Storage::new(config.data_dir.join("graph.json"));
-    let (positions, routes) = storage.load(&mut engine)?;
-    let handle = actor::spawn(engine, positions, routes, storage, plugins, config.tick)?;
+    let (positions, sizes, routes) = storage.load(&mut engine)?;
+    let handle = actor::spawn(engine, (positions, sizes, routes), storage, plugins, config.tick)?;
 
     let app = router(handle.clone(), &config.web_dir);
 
@@ -143,7 +143,7 @@ mod tests {
     async fn editor_session_over_websocket_persists_graph() {
         let dir = tempfile::tempdir().unwrap();
         let graph_path = dir.path().join("graph.json");
-        let handle = actor::spawn(TickEngine::new(), Default::default(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), Duration::from_millis(10)).unwrap();
+        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), Duration::from_millis(10)).unwrap();
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -264,8 +264,8 @@ mod tests {
         let mut plugins = plugins::Plugins::new(dir);
         plugins.load_all(&mut engine);
         let storage = Storage::new(dir.join("graph.json"));
-        let (positions, routes) = storage.load(&mut engine).unwrap();
-        let handle = actor::spawn(engine, positions, routes, storage, plugins, Duration::from_millis(10)).unwrap();
+        let (positions, sizes, routes) = storage.load(&mut engine).unwrap();
+        let handle = actor::spawn(engine, (positions, sizes, routes), storage, plugins, Duration::from_millis(10)).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());

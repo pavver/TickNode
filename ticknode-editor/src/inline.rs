@@ -10,6 +10,7 @@ use crate::ui::{ControlState, flash};
 
 mod properties;
 mod duration;
+mod text_field;
 
 pub use properties::*;
 
@@ -38,6 +39,7 @@ pub fn InlineValue(
     value_type: DataType,
     on_commit: Callback<Option<DataValue>>,
     #[prop(optional)] optional: bool,
+    #[prop(optional, into)] multiline: Signal<bool>,
     #[prop(optional, into)] title: Signal<String>,
 ) -> impl IntoView {
     let ed = use_editor();
@@ -107,6 +109,10 @@ pub fn InlineValue(
         .into_any();
     }
 
+    if value_type == DataType::String {
+        return view! { <text_field::TextField value=value on_commit=on_commit title=title multiline=multiline /> }.into_any();
+    }
+
     let hint_type = value_type.clone();
     let shown_type = value_type.clone();
     let shown = Memo::new(move |_| value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
@@ -168,13 +174,14 @@ fn property_value(node: ClientNode, name: &str) -> Option<DataValue> {
 
 /// Value of an unconnected data input (rendered inside the pin row).
 #[component]
-pub fn PinValue(ed: Editor, node: NodeId, pin: PinId, value_type: DataType) -> impl IntoView {
+pub fn PinValue(ed: Editor, node: NodeId, pin: PinId, value_type: DataType, #[prop(optional, into)] multiline: Signal<bool>) -> impl IntoView {
     let Some(client) = ed.node(node) else { return ().into_any() };
     let name = input_value_property(pin);
     view! {
         <InlineValue
             value=Signal::derive(move || property_value(client, &name))
             value_type=value_type
+            multiline=multiline
             optional=true
             title=Signal::derive(move || t!("inline-pin-value-title"))
             on_commit=Callback::new(move |value| ed.send(ClientMessage::SetInputValue { id: node, pin, value }))

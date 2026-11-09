@@ -25,7 +25,7 @@ pub(super) fn connection_pin(ed: Editor, node: NodeId, pin: PinId, dir: PinDirec
 pub(crate) fn anchor(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection) -> Option<(f64, f64)> {
     let node = ed.node_tracked(id)?;
     let pos = node.pos.get();
-    node.instance.with(|i| NodeLayout::of(i).anchor(pos, pin, dir))
+    ed.layout(id)?.anchor(pos, pin, dir)
 }
 
 #[component]

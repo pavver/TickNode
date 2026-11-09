@@ -139,7 +139,7 @@ impl EditFn {
 pub fn stop_on_controls(ev: web_sys::PointerEvent) {
     let on_control = ev.target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-        .and_then(|el| el.closest("input, select, button").ok().flatten())
+        .and_then(|el| el.closest("input, textarea, select, button").ok().flatten())
         .is_some();
     if on_control {
         ev.stop_propagation();

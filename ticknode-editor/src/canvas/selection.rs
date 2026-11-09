@@ -43,7 +43,7 @@ pub(super) fn nodes_in_box(ed: Editor, b: SelectBox) -> Vec<NodeId> {
     let view = ed.view.get_untracked();
     ed.nodes.with_untracked(|nodes| {
         nodes.iter().filter(|(_, node)| {
-            b.hits(view, node.pos.get_untracked(), node.instance.with_untracked(instance_size))
+            b.hits(view, node.pos.get_untracked(), untrack(|| { let l = ed.layout_of(**node); (l.width, l.height) }))
         }).map(|(id, _)| *id).collect()
     })
 }
@@ -67,7 +67,8 @@ pub(super) fn SelectionBounds() -> impl IntoView {
         for id in ids {
             let Some(node) = ed.node_tracked(id) else { continue };
             let p = node.pos.get();
-            let (w, h) = node.instance.with(instance_size);
+            let Some(layout) = ed.layout(id) else { continue };
+            let (w, h) = (layout.width, layout.height);
             x0 = x0.min(p.x as f64);
             y0 = y0.min(p.y as f64);
             x1 = x1.max(p.x as f64 + w);

@@ -46,7 +46,7 @@ pub(super) fn DetachedWire(detached: DetachedConnection) -> impl IntoView {
         let (live, broken) = ends(detached);
         let anchor = |end: WireEnd, loose| {
             let node = ed.node_tracked(end.node)?;
-            Some(node.instance.with(|i| NodeLayout::of(i).detached_anchor(node.pos.get(), end.pin, end.dir, detached.row, loose)))
+            Some(ed.layout(end.node)?.detached_anchor(node.pos.get(), end.pin, end.dir, detached.row, loose))
         };
         let a = anchor(live, false)?;
         let b = anchor(broken, true)?;

@@ -40,7 +40,7 @@ pub(super) fn PastePreview() -> impl IntoView {
         let pos = |n: &NodeModel| Position { x: n.position.x + ax as f32, y: n.position.y + ay as f32 };
         let positions: HashMap<NodeId, Position> = pending.graph.nodes.iter().map(|n| (n.id, pos(n))).collect();
         let layouts: HashMap<NodeId, NodeLayout> = pending.graph.nodes.iter()
-            .filter_map(|n| Some((n.id, NodeLayout::new(defs.get(&n.id)?.as_ref()?, &n.properties))))
+            .filter_map(|n| Some((n.id, NodeLayout::sized(defs.get(&n.id)?.as_ref()?, &n.properties, n.size, &pending.graph.data_connections.iter().filter(|c| c.dst_node == n.id).map(|c| c.dst_pin).collect::<Vec<_>>()))))
             .collect();
         let wire = |c: &ConnectionModel| {
             let a = layouts.get(&c.src_node)?.anchor(*positions.get(&c.src_node)?, c.src_pin, PinDirection::Output)?;
@@ -56,7 +56,9 @@ pub(super) fn PastePreview() -> impl IntoView {
             let p = positions[&n.id];
             let def = defs.get(&n.id).cloned().flatten();
             // Ghost renders only header and pins (no fields), but matches the real node's size
-            let height = layouts.get(&n.id).map_or(MIN_NODE_HEIGHT, |l| l.height);
+            let stored = n.size.and_then(NodeSize::validated);
+            let height = layouts.get(&n.id).map_or(stored.map_or(MIN_NODE_HEIGHT, |s| s.height.max(MIN_NODE_HEIGHT)), |l| l.height);
+            let width = layouts.get(&n.id).map_or(stored.map_or(node_width(&n.type_name), |s| s.width), |l| l.width);
             let top = layouts.get(&n.id).map_or(0.0, |l| l.pins_top);
             let (title, category) = def.as_ref().map_or((n.type_name.clone(), String::new()), |d| (i18n::node_title(d), category_label(&d.category)));
             let layout = layouts.get(&n.id).cloned();
@@ -74,7 +76,7 @@ pub(super) fn PastePreview() -> impl IntoView {
                 }
             }).collect_view());
             view! {
-                <div class="node paste-ghost" style=format!("left:{}px;top:{}px;width:{}px;height:{}px", p.x, p.y, node_width(&n.type_name), height)>
+                <div class="node paste-ghost" style=format!("left:{}px;top:{}px;width:{}px;height:{}px", p.x, p.y, width, height)>
                     <div class="node-header">
                         <span class="node-title ellipsis">{title}</span>
                         <span class="node-cat ellipsis">{category}</span>

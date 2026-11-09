@@ -39,6 +39,7 @@ impl Actor {
         let mut graph = self.engine.export_graph();
         for node in &mut graph.nodes {
             node.position = self.positions.get(&node.id).copied().unwrap_or_default();
+            node.size = self.sizes.get(&node.id).copied();
         }
         graph.wire_routes = super::routes::sorted(&self.routes);
         graph
@@ -122,6 +123,7 @@ impl Actor {
             self.traces.remove(id);
             if !self.engine.has_node(*id) {
                 self.positions.remove(id);
+                self.sizes.remove(id);
                 events.push(ServerMessage::NodeRemoved(*id));
             }
         }
@@ -132,6 +134,7 @@ impl Actor {
         };
         events.extend(super::commands::removed_events(disconnected));
         let moved = self.restore_positions(target, &result.added_nodes);
+        let resized = self.restore_sizes(target, &result.added_nodes);
         // A recreated node keeps its editor identity and selection, as do unchanged wires.
         events.extend(result.added_nodes.iter().copied().filter_map(|id| self.instance(id)).map(|instance| {
             if result.removed_nodes.contains(&instance.model.id) { ServerMessage::NodeUpdated(instance) }
@@ -140,6 +143,7 @@ impl Actor {
         events.extend(result.updated_nodes.into_iter().filter(|id| !result.added_nodes.contains(id))
             .filter_map(|id| self.instance(id)).map(ServerMessage::NodeUpdated));
         events.extend(moved);
+        events.extend(resized);
         events.extend(result.connected_exec.into_iter().filter(|c| !exec_before.contains(c)).map(ServerMessage::ExecConnected));
         events.extend(result.connected_data.into_iter().filter(|c| !data_before.contains(c)).map(ServerMessage::DataConnected));
         events.extend(detached_added.into_iter().map(ServerMessage::Detached));

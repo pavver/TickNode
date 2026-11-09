@@ -92,3 +92,18 @@ impl Editor {
     }
 
 }
+
+impl Editor {
+    /// All canvas consumers use the same connection-aware layout, including live resize previews.
+    pub fn layout(&self, id: NodeId) -> Option<crate::geometry::NodeLayout> {
+        self.node_tracked(id).map(|node| self.layout_of(node))
+    }
+
+    pub fn layout_of(&self, node: ClientNode) -> crate::geometry::NodeLayout {
+        node.instance.with(|i| {
+            let connected = self.data.with(|all| all.iter().filter(|c| c.dst_node == i.model.id).map(|c| c.dst_pin).collect::<Vec<_>>());
+            crate::geometry::NodeLayout::sized(&i.definition, &i.model.properties,
+                node.size_preview.get().or(i.model.size), &connected)
+        })
+    }
+}

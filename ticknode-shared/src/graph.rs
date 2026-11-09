@@ -24,6 +24,27 @@ pub struct Position {
     pub y: f32,
 }
 
+/// User-selected node dimensions in world pixels (layout only).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct NodeSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+pub const MIN_NODE_W: f64 = 160.0;
+pub const MAX_NODE_W: f64 = 800.0;
+pub const MAX_NODE_H: f64 = 1000.0;
+
+impl NodeSize {
+    /// Rejects non-finite dimensions and clamps finite ones to absolute layout bounds.
+    pub fn validated(self) -> Option<Self> {
+        (self.width.is_finite() && self.height.is_finite()).then(|| Self {
+            width: self.width.clamp(MIN_NODE_W, MAX_NODE_W),
+            height: self.height.clamp(0.0, MAX_NODE_H),
+        })
+    }
+}
+
 /// Persisted state of a single node: type + properties from which it can be recreated via the registry.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NodeModel {
@@ -33,6 +54,8 @@ pub struct NodeModel {
     pub position: Position,
     #[serde(default)]
     pub pins: Option<Vec<PinSignature>>,
+    #[serde(default)]
+    pub size: Option<NodeSize>,
 }
 
 /// Editor routing of a wire through intermediate points (layout only, ignored by execution).
@@ -81,3 +104,6 @@ pub struct DetachedConnection {
     pub end: DetachedEnd,
     pub row: u32,
 }
+
+#[cfg(test)]
+mod tests;

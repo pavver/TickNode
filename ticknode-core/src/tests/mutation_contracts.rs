@@ -281,7 +281,7 @@ fn unknown_graph_nodes_keep_inferred_pin_types_order_and_fanout() {
     let console = add(&mut e, "console");
     let unknown = NodeId::generate();
     let mut graph = e.export_graph();
-    graph.nodes.push(NodeModel { id: unknown, type_name: "missing/node".into(), properties: vec![("saved".into(), "kept".into())], position: Position::default(), pins: None });
+    graph.nodes.push(NodeModel { id: unknown, type_name: "missing/node".into(), properties: vec![("saved".into(), "kept".into())], position: Position::default(), pins: None, size: None });
     let connection = |src_node, src_pin, dst_node, dst_pin| ConnectionModel { src_node, src_pin: PinId(src_pin), dst_node, dst_pin: PinId(dst_pin) };
     graph.exec_connections = vec![connection(button, 0, unknown, 0), connection(unknown, 0, console, 0)];
     graph.data_connections = vec![
@@ -321,7 +321,7 @@ fn inferred_stub_pins_use_the_other_ends_direction() {
     ], vec![]);
     let unknown = NodeId::generate();
     let mut graph = e.export_graph();
-    graph.nodes.push(NodeModel { id: unknown, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None });
+    graph.nodes.push(NodeModel { id: unknown, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None, size: None });
     graph.data_connections.push(ConnectionModel { src_node: known, src_pin: PinId(7), dst_node: unknown, dst_pin: PinId(1) });
     assert!(e.load_graph(&graph).is_empty());
     let def = e.node_definition(unknown).unwrap();
@@ -340,7 +340,7 @@ fn unavailable_bare_nodes_charge_work_and_preserve_saved_properties() {
     let mut e = TickEngine::new();
     let id = NodeId::generate();
     let graph = GraphModel {
-        nodes: vec![NodeModel { id, type_name: "missing/node".into(), properties: vec![("value".into(), 5i64.into())], position: Position::default(), pins: None }],
+        nodes: vec![NodeModel { id, type_name: "missing/node".into(), properties: vec![("value".into(), 5i64.into())], position: Position::default(), pins: None, size: None }],
         exec_connections: vec![], data_connections: vec![],
         wire_routes: Vec::new(), detached_connections: Vec::new(),
     };

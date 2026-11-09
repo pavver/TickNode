@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn diff_ignores_positions_but_recreates_changed_properties_and_types() {
+fn diff_ignores_layout_but_recreates_changed_properties_and_types() {
     let mut engine = TickEngine::new();
     let ids: Vec<_> = (0..4).map(|_| {
         let id = NodeId::generate();
@@ -12,12 +12,14 @@ fn diff_ignores_positions_but_recreates_changed_properties_and_types() {
     engine.connect_data(ids[0], PinId(5), ids[1], PinId(1)).unwrap();
     let current = engine.export_graph();
     let mut target = current.clone();
-    target.nodes.iter_mut().find(|n| n.id == ids[0]).unwrap().position.x = 100.0;
+    let layout_only = target.nodes.iter_mut().find(|n| n.id == ids[0]).unwrap();
+    layout_only.position.x = 100.0;
+    layout_only.size = Some(NodeSize { width: 400.0, height: 300.0 });
     target.nodes.iter_mut().find(|n| n.id == ids[1]).unwrap().properties.push(("in:1".into(), DataValue::from(8.0)));
     target.nodes.iter_mut().find(|n| n.id == ids[2]).unwrap().type_name = "const".into();
     target.nodes.retain(|n| n.id != ids[3]);
     let new = NodeId::generate();
-    target.nodes.push(NodeModel { id: new, type_name: "const".into(), properties: vec![], position: Position::default(), pins: None });
+    target.nodes.push(NodeModel { id: new, type_name: "const".into(), properties: vec![], position: Position::default(), pins: None, size: None });
     let plan = diff(&current, &target);
     assert!(!plan.removed_nodes.contains(&ids[0]));
     assert_eq!(plan.removed_nodes.len(), 3);
@@ -39,7 +41,7 @@ fn diff_connections_between_kept_nodes_and_idempotence() {
     let c = ConnectionModel { src_node: a, src_pin: PinId(4), dst_node: b, dst_pin: PinId(0) };
     let nodes = [a, b].into_iter().map(|id| NodeModel {
         id, type_name: "for_loop".into(), properties: vec![], position: Position::default(),
-     pins: None }).collect();
+     pins: None, size: None }).collect();
     let current = GraphModel { nodes, exec_connections: vec![c], data_connections: vec![], wire_routes: Vec::new(), detached_connections: Vec::new() };
     let target = GraphModel { exec_connections: vec![], data_connections: vec![c], ..current.clone() };
     let plan = diff(&current, &target);

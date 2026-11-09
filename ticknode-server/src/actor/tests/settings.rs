@@ -3,7 +3,7 @@ use super::*;
 fn actor(dir: &std::path::Path) -> Actor {
     let (events, _) = broadcast::channel(256);
     Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), routes: HashMap::new(),
+        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
         events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
     }
@@ -72,7 +72,7 @@ fn settings_paste_rejects_type_mismatch_unknown_nodes_and_stubs_without_changing
     apply(&mut actor, ClientMessage::Undo);
     let stub = NodeId::generate();
     let mut graph = actor.graph_snapshot();
-    graph.nodes.push(NodeModel { id: stub, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None });
+    graph.nodes.push(NodeModel { id: stub, type_name: "missing/node".into(), properties: vec![], position: Position::default(), pins: None, size: None });
     actor.engine.load_graph(&graph);
     let before = actor.graph_snapshot();
     let history = actor.history.state();

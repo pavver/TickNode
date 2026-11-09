@@ -391,3 +391,7 @@ pin-direction-input = вхідний
 pin-direction-output = вихідний
 wire-detached-title = Дріт від'єднано: пін змінився
 wire-detached-remove = Видалити дріт
+
+node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
+overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір вузла; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
+error-node-size = Розміри вузла мають бути скінченними числами

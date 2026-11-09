@@ -67,6 +67,7 @@ fn GraphOverview() -> impl IntoView {
             <span class="t-body-small">{move || t!("overview-hint-7")}</span>
             <span class="t-body-small">{move || t!("overview-hint-8")}</span>
             <span class="t-body-small">{move || t!("overview-hint-9")}</span>
+            <span class="t-body-small">{move || t!("overview-hint-resize")}</span>
         </div>
     }
 }

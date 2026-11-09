@@ -24,7 +24,8 @@ pub fn fit_view(ed: Editor) {
     let bounds = ed.nodes.with_untracked(|nodes| {
         nodes.values().fold(None, |acc: Option<(f64, f64, f64, f64)>, n| {
             let p = n.pos.get_untracked();
-            let (w, h) = n.instance.with_untracked(instance_size);
+            let layout = untrack(|| ed.layout_of(*n));
+            let (w, h) = (layout.width, layout.height);
             let (x0, y0, x1, y1) = (p.x as f64, p.y as f64, p.x as f64 + w, p.y as f64 + h);
             Some(match acc {
                 None => (x0, y0, x1, y1),

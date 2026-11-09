@@ -3,7 +3,7 @@ use super::*;
 fn actor(dir: &std::path::Path) -> Actor {
     let (events, _) = broadcast::channel(256);
     Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), routes: HashMap::new(),
+        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir),
         events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::telemetry::Telemetry::new(std::time::Instant::now()),
     }
@@ -193,7 +193,7 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
     let id = NodeId::generate();
     engine.create_node(id, "console", &[]).unwrap();
     engine.set_input_value(id, PinId(1), Some(DataValue::from("tick output"))).unwrap();
-    let handle = spawn(engine, HashMap::new(), HashMap::new(), Storage::new(dir.path().join("graph.json")),
+    let handle = spawn(engine, Default::default(), Storage::new(dir.path().join("graph.json")),
         Plugins::new(dir.path()), Duration::from_millis(5)).unwrap();
     let mut events = handle.subscribe();
     let (reply, _) = mpsc::unbounded_channel();
@@ -287,7 +287,7 @@ fn history_moves_kept_nodes_and_recreates_changed_nodes_in_event_order() {
 #[tokio::test]
 async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
     let dir = tempfile::tempdir().unwrap();
-    let handle = spawn(TickEngine::new(), HashMap::new(), HashMap::new(), Storage::new(dir.path().join("graph.json")),
+    let handle = spawn(TickEngine::new(), Default::default(), Storage::new(dir.path().join("graph.json")),
         Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
     let mut first = handle.subscribe();
     let mut second = handle.subscribe();

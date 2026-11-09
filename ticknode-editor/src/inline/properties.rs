@@ -92,6 +92,8 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         Some(def) => i18n::property_title(&type_name(), def),
                         None => property_label(&label_name),
                     });
+                    let height_name = name.clone();
+                    let row_height = Signal::derive(move || ed.layout(id).map_or(crate::geometry::ROW_H, |l| l.property_height(&height_name)));
                     let read_name = name.clone();
                     let value = Signal::derive(move || property_value(node, &read_name));
                     let send_name = name.clone();
@@ -161,6 +163,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             <InlineValue
                                 value=value
                                 value_type=value_type
+                                multiline=Signal::derive(move || row_height.get() > crate::geometry::ROW_H)
                                 title=label
                                 on_commit=Callback::new(move |v: Option<DataValue>| {
                                     if let Some(v) = v {
@@ -172,7 +175,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         .into_any()
                     };
                     view! {
-                        <div class="prop-row">
+                        <div class="prop-row" class:grown={move || row_height.get() > crate::geometry::ROW_H} style=move || format!("height:{}px", row_height.get())>
                             <span class="ellipsis prop-label" title=move || label.get()>{move || label.get()}</span>
                             {control}
                         </div>

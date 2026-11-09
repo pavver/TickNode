@@ -24,6 +24,15 @@ impl Editor {
             ServerMessage::NodeAdded(instance) | ServerMessage::NodeUpdated(instance) => { self.upsert_node(instance); }
             ServerMessage::NodeRemoved(id) => self.remove_node(id),
             ServerMessage::NodeMoved { id, position } => self.move_node(id, position),
+            ServerMessage::NodeResized { id, size } => {
+                if let Some(node) = self.node(id) {
+                    if node.instance.with_untracked(|i| i.model.size) != size {
+                        node.instance.update(|i| i.model.size = size);
+                    }
+                    // The server's (possibly clamped) size replaces a finished drag preview.
+                    node.size_preview.set(None);
+                }
+            }
             ServerMessage::ExecConnected(c) => self.exec.update(|all| connections::connect_exec(all, c)),
             ServerMessage::ExecDisconnected(c) => {
                 self.exec.update(|all| all.retain(|x| *x != c));
@@ -62,6 +71,7 @@ impl Editor {
         match self.node(id) {
             Some(existing) => {
                 existing.pos.set(instance.model.position);
+                existing.size_preview.set(None);
                 existing.instance.set(instance);
             }
             None => self.nodes.update(|nodes| { nodes.insert(id, ClientNode::new(instance)); }),

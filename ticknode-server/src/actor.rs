@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use ticknode_core::{EngineError, RemovedConnections, TickEngine};
-use ticknode_shared::{ClientMessage, NodeId, NodeInstance, NodeTrace, Position, ServerMessage, UiMessage};
+use ticknode_shared::{ClientMessage, NodeId, NodeInstance, NodeTrace, NodeSize, Position, ServerMessage, UiMessage};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
 
@@ -64,17 +64,17 @@ pub fn encode(msg: &ServerMessage) -> Bytes {
 
 pub fn spawn(
     mut engine: TickEngine,
-    positions: HashMap<NodeId, Position>,
-    routes: routes::Routes,
+    layout: crate::storage::Layout,
     storage: Storage,
     plugins: Plugins,
     tick: Duration,
 ) -> std::io::Result<EngineHandle> {
+    let (positions, sizes, routes) = layout;
     let (commands, rx) = std_mpsc::channel();
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, routes, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
+    let actor = Actor { engine, positions, sizes, routes, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
@@ -85,6 +85,7 @@ struct Actor {
     engine: TickEngine,
     history: history::History,
     positions: HashMap<NodeId, Position>,
+    sizes: HashMap<NodeId, NodeSize>,
     routes: routes::Routes,
     storage: Storage,
     plugins: Plugins,
@@ -187,7 +188,7 @@ impl Actor {
         if self.dirty_since.is_none() {
             return;
         }
-        match self.storage.save(&self.engine, &self.positions, &self.routes) {
+        match self.storage.save(&self.engine, &self.positions, &self.sizes, &self.routes) {
             Ok(()) => self.dirty_since = None,
             Err(e) => {
                 error!("Failed to save the graph: {:#}", e);
@@ -200,6 +201,7 @@ impl Actor {
     fn instance(&self, id: NodeId) -> Option<NodeInstance> {
         let mut model = self.engine.node_model(id)?;
         model.position = self.positions.get(&id).copied().unwrap_or_default();
+        model.size = self.sizes.get(&id).copied();
         Some(NodeInstance { model, definition: self.engine.node_definition(id)?, unavailable: self.engine.node_unavailable(id), frozen: self.engine.frozen_changes(id).to_vec() })
     }
 
@@ -242,6 +244,7 @@ mod commands;
 mod history;
 mod telemetry;
 mod settings;
+mod resize;
 
 #[cfg(test)]
 mod tests;

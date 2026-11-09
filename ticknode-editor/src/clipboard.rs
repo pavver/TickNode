@@ -18,12 +18,41 @@ struct Envelope {
     graph: GraphModel,
 }
 
-/// Selected nodes with their current positions and the connections between them.
+/// Selected nodes or frame with current positions and connections.
 pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
-    let ids = ed.selected_nodes();
-    if ids.is_empty() {
-        return None;
-    }
+    use crate::state::Selection;
+    let (ids, frames) = match ed.selection.get_untracked() {
+        Some(Selection::Nodes(ids)) => {
+            if ids.is_empty() {
+                return None;
+            }
+            (ids.into_iter().collect::<Vec<_>>(), Vec::new())
+        }
+        Some(Selection::Frame(id)) => {
+            let frame = ed.frames.with_untracked(|all| all.get(&id).cloned())?;
+            let rect = (frame.position.x as f64, frame.position.y as f64, frame.size.width, frame.size.height);
+            let nodes = ed.nodes.with_untracked(|nodes| {
+                nodes.iter().map(|(n_id, node)| {
+                    let pos = node.pos.get_untracked();
+                    let l = ed.layout_of(*node);
+                    (*n_id, pos, l.width, l.height)
+                }).collect::<Vec<_>>()
+            });
+            let inside_nodes = crate::canvas::nodes_fully_inside(rect, nodes);
+
+            let all_frames = ed.frames.with_untracked(|all| {
+                all.iter().map(|(f_id, f)| (*f_id, f.position, f.size)).collect::<Vec<_>>()
+            });
+            let inside_frame_ids = crate::canvas::frames_fully_inside(rect, Some(id), all_frames);
+            let mut frames = vec![frame];
+            frames.extend(inside_frame_ids.into_iter().filter_map(|f_id| {
+                ed.frames.with_untracked(|all| all.get(&f_id).cloned())
+            }));
+            (inside_nodes, frames)
+        }
+        _ => return None,
+    };
+
     let nodes = ids.iter().filter_map(|id| {
         let node = ed.node(*id)?;
         let mut model = node.instance.with_untracked(|i| i.model.clone());
@@ -37,7 +66,7 @@ pub fn selection_snippet(ed: Editor) -> Option<GraphModel> {
         .filter(|((exec, c), _)| if *exec { exec_connections.contains(c) } else { data_connections.contains(c) })
         .map(|((exec, connection), points)| WireRoute { exec: *exec, connection: *connection, points: points.clone() }).collect());
     let detached_connections = ed.detached.with_untracked(|all| all.iter().copied().filter(|d| inside(&d.connection)).collect());
-    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes, detached_connections, frames: Vec::new() })
+    Some(GraphModel { nodes, exec_connections, data_connections, wire_routes, detached_connections, frames })
 }
 
 pub fn to_text(graph: GraphModel) -> String {
@@ -46,7 +75,14 @@ pub fn to_text(graph: GraphModel) -> String {
 
 pub fn from_text(text: &str) -> Option<GraphModel> {
     let envelope: Envelope = serde_json::from_str(text.trim()).ok()?;
-    (envelope.format == FORMAT && !envelope.graph.nodes.is_empty()).then_some(envelope.graph)
+    (envelope.format == FORMAT && (!envelope.graph.nodes.is_empty() || !envelope.graph.frames.is_empty())).then_some(envelope.graph)
+}
+
+/// Top-left corner of a snippet across its nodes and frames.
+fn snippet_origin(graph: &GraphModel) -> Option<(f64, f64)> {
+    let points = graph.nodes.iter().map(|n| n.position).chain(graph.frames.iter().map(|f| f.position));
+    let (x, y) = points.fold((f64::INFINITY, f64::INFINITY), |(x, y), p| (x.min(p.x as f64), y.min(p.y as f64)));
+    (x.is_finite() && y.is_finite()).then_some((x, y))
 }
 
 fn snap(v: f64) -> f32 {
@@ -59,10 +95,13 @@ pub fn snap_point((x, y): (f64, f64)) -> (f64, f64) {
 
 /// Offsets the snippet so its top-left corner lands at `at` and sends it to the server.
 pub fn paste_at(ed: Editor, mut graph: GraphModel, at: (f64, f64)) {
-    let min_x = graph.nodes.iter().map(|n| n.position.x as f64).fold(f64::INFINITY, f64::min);
-    let min_y = graph.nodes.iter().map(|n| n.position.y as f64).fold(f64::INFINITY, f64::min);
+    let Some((min_x, min_y)) = snippet_origin(&graph) else { return };
+
     for node in &mut graph.nodes {
         node.position = Position { x: snap(node.position.x as f64 - min_x + at.0), y: snap(node.position.y as f64 - min_y + at.1) };
+    }
+    for frame in &mut graph.frames {
+        frame.position = Position { x: snap(frame.position.x as f64 - min_x + at.0), y: snap(frame.position.y as f64 - min_y + at.1) };
     }
     offset_routes(&mut graph, (at.0 - min_x, at.1 - min_y), true);
     ed.send(ClientMessage::Paste(graph));
@@ -75,12 +114,15 @@ pub fn paste_text(ed: Editor, text: &str) {
         ed.log(LogKind::Error, "[ERROR] Clipboard does not contain TickNode nodes");
         return;
     };
-    let min_x = graph.nodes.iter().map(|n| n.position.x).fold(f32::INFINITY, f32::min);
-    let min_y = graph.nodes.iter().map(|n| n.position.y).fold(f32::INFINITY, f32::min);
+    let Some((min_x, min_y)) = snippet_origin(&graph) else { return };
+
     for node in &mut graph.nodes {
-        node.position = Position { x: node.position.x - min_x, y: node.position.y - min_y };
+        node.position = Position { x: (node.position.x as f64 - min_x) as f32, y: (node.position.y as f64 - min_y) as f32 };
     }
-    offset_routes(&mut graph, (-min_x as f64, -min_y as f64), false);
+    for frame in &mut graph.frames {
+        frame.position = Position { x: (frame.position.x as f64 - min_x) as f32, y: (frame.position.y as f64 - min_y) as f32 };
+    }
+    offset_routes(&mut graph, (-min_x, -min_y), false);
     let at = snap_point(ed.pointer_world.get_value().unwrap_or_else(|| view_center(ed)));
     ed.pending_paste.set(Some(PendingPaste { graph, at }));
 }
@@ -109,12 +151,27 @@ pub fn cancel_paste(ed: Editor) -> bool {
     pending
 }
 
-/// Duplicates selected nodes shifted down and to the right.
+/// Duplicates selected nodes or frame shifted down and to the right.
 pub fn duplicate(ed: Editor) {
     let Some(graph) = selection_snippet(ed) else { return };
-    let min_x = graph.nodes.iter().map(|n| n.position.x as f64).fold(f64::INFINITY, f64::min);
-    let min_y = graph.nodes.iter().map(|n| n.position.y as f64).fold(f64::INFINITY, f64::min);
+    let Some((min_x, min_y)) = snippet_origin(&graph) else { return };
     paste_at(ed, graph, (min_x + 6.0 * DU, min_y + 6.0 * DU));
+}
+
+/// Deletes the cut fragment (a cut frame also removes its enclosed nodes in one Batch).
+pub fn delete_cut(ed: Editor, graph: &GraphModel) {
+    if !graph.frames.is_empty() {
+        let mut batch = Vec::new();
+        for f in &graph.frames {
+            batch.push(ClientMessage::RemoveFrame(f.id));
+        }
+        for n in &graph.nodes {
+            batch.push(ClientMessage::RemoveNode(n.id));
+        }
+        ed.send_batch(batch);
+    } else {
+        delete_selection(ed);
+    }
 }
 
 /// Deletes the selected nodes or wire.

@@ -21,7 +21,10 @@ mod wires;
 mod frame;
 
 pub use camera::{fit_view, view_center};
-pub use frame::{FrameView, create_frame};
+pub use frame::{
+    build_frame_move_batch, create_frame, frame_color_class, frames_fully_inside,
+    nodes_fully_inside, FrameView,
+};
 pub use node::trigger_pin;
 pub use pins::*;
 
@@ -52,6 +55,14 @@ pub fn Canvas() -> impl IntoView {
     let pointer = StoredValue::new(None::<(f64, f64)>);
     let over = StoredValue::new(false);
     let keys = window_event_listener(leptos::ev::keydown, move |ev| {
+        if ev.key() == "Escape" {
+            if let Drag::Frame { frame_origins, node_origins, routes, .. } = drag.get_value() {
+                ev.prevent_default();
+                drag.set_value(Drag::Idle);
+                interaction.cancel_frame_drag(frame_origins, node_origins, routes);
+                return;
+            }
+        }
         interaction.quick_add_key(ev, over.get_value(), pointer.get_value());
     });
     on_cleanup(move || keys.remove());

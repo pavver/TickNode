@@ -43,6 +43,16 @@ pub(super) enum Drag {
     Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
     /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
     Box { start: (f64, f64), additive: bool },
+    /// Dragging a frame and its enclosed contents.
+    Frame {
+        frame_id: FrameId,
+        frame_origins: Vec<(FrameId, Position)>,
+        node_origins: Vec<(NodeId, Position)>,
+        routes: WireRoutes,
+        start_world: (f64, f64),
+        start: (f64, f64),
+        moved: bool,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -144,6 +154,12 @@ impl Interaction {
         if active.len() == 2 {
             match drag.get_value() {
                 Drag::Nodes { origins, routes, moved: true, .. } => self.send_moves(origins, routes),
+                Drag::Frame { frame_id, frame_origins, node_origins, routes, moved: true, .. } => {
+                    self.send_frame_moves(frame_id, frame_origins, node_origins, routes)
+                }
+                Drag::Frame { frame_origins, node_origins, routes, .. } => {
+                    self.cancel_frame_drag(frame_origins, node_origins, routes)
+                }
                 Drag::Point { key, before, moved: true, .. } => self.send_point(key, before),
                 _ => {}
             }
@@ -189,11 +205,15 @@ impl Interaction {
         let point = closest(target.clone(), "[data-wire-point]");
         let index = point.as_ref().and_then(|el| el.get_attribute("data-wire-point")?.parse().ok());
         let wire = point.or_else(|| closest(target.clone(), "[data-wire]")).and_then(|el| parse_wire(&el));
-        let node = closest(target, "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
+        let node = closest(target.clone(), "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
+        let frame_header = closest(target, ".canvas-frame-header");
+        let frame = frame_header.and_then(|el| el.closest("[data-frame]").ok().flatten())
+            .and_then(|el| el.get_attribute("data-frame"))
+            .and_then(|s| uuid::Uuid::parse_str(&s).ok().map(FrameId));
         let view = ed.view.get_untracked();
         let world = view.to_world(p.0, p.1);
         let action = decisions::route_gesture(ev.button(), node, wire.clone(), index)
-            .unwrap_or_else(|| gesture(ev.button(), &ev.pointer_type(), pin, wire, node));
+            .unwrap_or_else(|| gesture(ev.button(), &ev.pointer_type(), pin, wire, node, frame));
         if !matches!(action, Gesture::Point { .. } | Gesture::Context { .. }) { ed.selected_point.set(None); }
         match action {
             Gesture::Pan { moved } => {
@@ -214,6 +234,7 @@ impl Interaction {
                 ed.selection.set(Some(selection));
             }
             Gesture::Node(id) => self.start_node_click(id, &ev, p, world),
+            Gesture::Frame(id) => self.start_frame_drag(id, p, world),
             Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),
             Gesture::Ignore => {}
         }

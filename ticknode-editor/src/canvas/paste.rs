@@ -86,7 +86,23 @@ pub(super) fn PastePreview() -> impl IntoView {
                 </div>
             }
         }).collect_view();
+        let ghost_frames = pending.graph.frames.iter().map(|f| {
+            let px = f.position.x + ax as f32;
+            let py = f.position.y + ay as f32;
+            let color_cls = crate::canvas::frame_color_class(f.color);
+            view! {
+                <div
+                    class=format!("canvas-frame {color_cls} paste-ghost")
+                    style=format!("left:{}px;top:{}px;width:{}px;height:{}px;", px, py, f.size.width, f.size.height)
+                >
+                    <div class="canvas-frame-header">
+                        <span class="canvas-frame-title ellipsis">{f.title.clone()}</span>
+                    </div>
+                </div>
+            }
+        }).collect_view();
         Some(view! {
+            {ghost_frames}
             <svg class="wires paste-ghost">{wires}</svg>
             {nodes}
         })

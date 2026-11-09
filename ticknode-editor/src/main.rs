@@ -77,18 +77,25 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
     }
     let (Some(graph), Some(data)) = (clipboard::selection_snippet(ed), ev.clipboard_data()) else { return };
     let count = graph.nodes.len();
-    if data.set_data("text/plain", &clipboard::to_text(graph)).is_ok() {
+    let frame_count = graph.frames.len();
+    if data.set_data("text/plain", &clipboard::to_text(graph.clone())).is_ok() {
         ev.prevent_default();
         ed.log(
             LogKind::System,
-            if cut {
+            if frame_count > 0 {
+                if cut {
+                    format!("[UI] Cut frames: {frame_count}, nodes: {count}")
+                } else {
+                    format!("[UI] Copied frames: {frame_count}, nodes: {count}")
+                }
+            } else if cut {
                 format!("[UI] Cut nodes: {count}")
             } else {
                 format!("[UI] Copied nodes: {count}")
             },
         );
         if cut {
-            clipboard::delete_selection(ed);
+            clipboard::delete_cut(ed, &graph);
         }
     }
 }

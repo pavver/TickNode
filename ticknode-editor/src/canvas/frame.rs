@@ -7,6 +7,9 @@ use crate::geometry::DU;
 use crate::i18n::t;
 use crate::state::{use_editor, Editor, Selection};
 
+mod resize;
+pub(super) use resize::FrameResizeHandle;
+
 pub const FRAME_HEADER_H: f64 = 6.0 * DU;
 pub const DEFAULT_FRAME_W: f64 = 400.0;
 pub const DEFAULT_FRAME_H: f64 = 240.0;
@@ -55,6 +58,95 @@ pub fn snap_du_f32(v: f64) -> f32 {
 
 pub fn snap_du_f64(v: f64) -> f64 {
     (v / DU).round() * DU
+}
+
+/// Returns whether the target rectangle (x, y, w, h) lies fully inside the container rectangle (cx, cy, cw, ch).
+pub fn rect_contains(container: (f64, f64, f64, f64), target: (f64, f64, f64, f64)) -> bool {
+    let (cx, cy, cw, ch) = container;
+    let (tx, ty, tw, th) = target;
+    const EPS: f64 = 1e-6;
+    tx >= cx - EPS && (tx + tw) <= (cx + cw) + EPS && ty >= cy - EPS && (ty + th) <= (cy + ch) + EPS
+}
+
+/// Nodes whose rectangle lies fully inside the container rectangle.
+pub fn nodes_fully_inside(
+    container: (f64, f64, f64, f64),
+    nodes: impl IntoIterator<Item = (NodeId, Position, f64, f64)>,
+) -> Vec<NodeId> {
+    nodes
+        .into_iter()
+        .filter(|(_, pos, w, h)| rect_contains(container, (pos.x as f64, pos.y as f64, *w, *h)))
+        .map(|(id, ..)| id)
+        .collect()
+}
+
+/// Frames whose rectangle lies fully inside the container rectangle (excluding an optional id).
+pub fn frames_fully_inside(
+    container: (f64, f64, f64, f64),
+    exclude_id: Option<FrameId>,
+    frames: impl IntoIterator<Item = (FrameId, Position, NodeSize)>,
+) -> Vec<FrameId> {
+    frames
+        .into_iter()
+        .filter(|(id, pos, size)| {
+            if Some(*id) == exclude_id {
+                return false;
+            }
+            rect_contains(container, (pos.x as f64, pos.y as f64, size.width, size.height))
+        })
+        .map(|(id, ..)| id)
+        .collect()
+}
+
+/// Clamps and snaps a frame resize delta to valid bounds.
+pub fn resize_frame_size(origin: NodeSize, delta: (f64, f64)) -> NodeSize {
+    let snap = |v: f64| (v / DU).round() * DU;
+    NodeSize {
+        width: snap(origin.width + delta.0).clamp(MIN_FRAME_W, MAX_FRAME_SIZE),
+        height: snap(origin.height + delta.1).clamp(MIN_FRAME_H, MAX_FRAME_SIZE),
+    }
+}
+
+/// Builds the batch command of moved frames, nodes, and wire routes.
+pub fn build_frame_move_batch(
+    frames: impl IntoIterator<Item = Frame>,
+    nodes: impl IntoIterator<Item = (NodeId, Position)>,
+    routes: impl IntoIterator<Item = (crate::state::WireKey, Vec<Position>)>,
+    delta: Position,
+) -> Vec<ClientMessage> {
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Vec::new();
+    }
+    let mut commands = Vec::new();
+    for mut frame in frames {
+        frame.position.x += delta.x;
+        frame.position.y += delta.y;
+        commands.push(ClientMessage::SetFrame(frame));
+    }
+    for (id, pos) in nodes {
+        commands.push(ClientMessage::MoveNode {
+            id,
+            position: Position {
+                x: pos.x + delta.x,
+                y: pos.y + delta.y,
+            },
+        });
+    }
+    for (key, points) in routes {
+        let shifted = points
+            .into_iter()
+            .map(|p| Position {
+                x: p.x + delta.x,
+                y: p.y + delta.y,
+            })
+            .collect();
+        commands.push(ClientMessage::SetWireRoute(WireRoute {
+            exec: key.0,
+            connection: key.1,
+            points: shifted,
+        }));
+    }
+    commands
 }
 
 pub fn calculate_new_frame_geometry(
@@ -189,9 +281,11 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
 
     let style = move || {
         let Some(f) = frame.get() else { return String::new() };
+        let pos = ed.frame_pos_previews.with(|p| p.get(&id).copied()).unwrap_or(f.position);
+        let size = ed.frame_size_previews.with(|p| p.get(&id).copied()).unwrap_or(f.size);
         format!(
             "left:{}px;top:{}px;width:{}px;height:{}px;",
-            f.position.x, f.position.y, f.size.width, f.size.height
+            pos.x, pos.y, size.width, size.height
         )
     };
 
@@ -200,10 +294,7 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
             <div class=class style=style data-frame=id.to_string()>
                 <div
                     class="canvas-frame-header"
-                    on:pointerdown=move |ev: web_sys::PointerEvent| {
-                        ev.stop_propagation();
-                        ed.selection.set(Some(Selection::Frame(id)));
-                    }
+                    on:pointerdown=crate::match_editor::stop_on_controls
                 >
                     {move || if editing.get() {
                         view! {
@@ -254,6 +345,7 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
                         </Show>
                     </div>
                 </div>
+                <FrameResizeHandle id=id />
             </div>
         </Show>
     }

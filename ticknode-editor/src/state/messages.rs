@@ -22,6 +22,8 @@ impl Editor {
                 self.apply_catalog(definitions, types, translations);
                 self.plugins.set(plugins);
                 self.property_options.set(property_options.into_iter().map(|s| ((s.plugin, s.source), Arc::new(s.options))).collect());
+                self.frame_pos_previews.set(std::collections::HashMap::new());
+                self.frame_size_previews.set(std::collections::HashMap::new());
                 self.replace_graph(nodes, exec_connections, data_connections, traces, gone);
             }
             ServerMessage::NodeAdded(instance) | ServerMessage::NodeUpdated(instance) => { self.upsert_node(instance); }
@@ -52,12 +54,18 @@ impl Editor {
             }
             ServerMessage::Detached(_) | ServerMessage::Timers(_) | ServerMessage::NodeErrors { .. } => {},
             ServerMessage::FrameSet(frame) => {
+                self.frame_pos_previews.update(|p| { p.remove(&frame.id); });
+                self.frame_size_previews.update(|p| { p.remove(&frame.id); });
                 if self.pending_frame_select.get_value() == Some(frame.id) {
                     self.pending_frame_select.set_value(None);
                     self.selection.set(Some(Selection::Frame(frame.id)));
                 }
             }
-            ServerMessage::FrameRemoved(_) => self.prune_selection(),
+            ServerMessage::FrameRemoved(id) => {
+                self.frame_pos_previews.update(|p| { p.remove(&id); });
+                self.frame_size_previews.update(|p| { p.remove(&id); });
+                self.prune_selection();
+            }
             ServerMessage::DetachedRemoved(_) => self.prune_selection(),
             ServerMessage::Executed(traces) => self.apply_traces(traces),
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),

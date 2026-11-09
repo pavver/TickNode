@@ -17,6 +17,16 @@ impl Interaction {
         match (state, commit) {
             // Interrupted drags still synchronize positions with the server.
             (Drag::Nodes { origins, routes, moved: true, .. }, _) => self.send_moves(origins, routes),
+            (Drag::Frame { frame_id, frame_origins, node_origins, routes, moved: true, .. }, true) => {
+                self.send_frame_moves(frame_id, frame_origins, node_origins, routes);
+            }
+            (Drag::Frame { frame_id, frame_origins, node_origins, routes, moved: false, .. }, true) => {
+                self.cancel_frame_drag(frame_origins, node_origins, routes);
+                ed.selection.set(Some(Selection::Frame(frame_id)));
+            }
+            (Drag::Frame { frame_origins, node_origins, routes, .. }, false) => {
+                self.cancel_frame_drag(frame_origins, node_origins, routes);
+            }
             (Drag::Point { key, before, moved: true, .. }, _) => self.send_point(key, before),
             (_, false) => {},
             (Drag::Pan { moved: false, .. }, true) => ed.selection.set(None),
@@ -98,6 +108,19 @@ impl Interaction {
                 if moved { self.move_nodes(&origins, &routes, clicked, start_world, p); }
                 drag.set_value(Drag::Nodes { origins, routes, start_world, start, moved, clicked });
             }
+            Drag::Frame { frame_id, ref frame_origins, ref node_origins, ref routes, start_world, start, moved } => {
+                let moved = moved || distance(start, p) > DRAG_THRESHOLD;
+                if moved { self.move_frame_contents(frame_id, frame_origins, node_origins, routes, start_world, p); }
+                drag.set_value(Drag::Frame {
+                    frame_id,
+                    frame_origins: frame_origins.clone(),
+                    node_origins: node_origins.clone(),
+                    routes: routes.clone(),
+                    start_world,
+                    start,
+                    moved,
+                });
+            }
             Drag::Point { key, index, origin, before, start_world, start, moved } => {
                 let moved = moved || distance(start, p) > DRAG_THRESHOLD;
                 if moved { self.move_point(key, index, &origin, start_world, p); }
@@ -127,6 +150,95 @@ impl Interaction {
             self.ed.wire_routes.update(|all| {
                 for (key, points) in routes {
                     if self.ed.wire_exists_untracked(*key) { all.insert(*key, points.iter().copied().map(shifted).collect()); }
+                }
+            });
+        }
+    }
+
+    fn move_frame_contents(
+        self,
+        frame_id: FrameId,
+        frame_origins: &[(FrameId, Position)],
+        node_origins: &[(NodeId, Position)],
+        routes: &WireRoutes,
+        start_world: (f64, f64),
+        p: (f64, f64),
+    ) {
+        let (wx, wy) = self.ed.view.get_untracked().to_world(p.0, p.1);
+        let delta = (wx - start_world.0, wy - start_world.1);
+        let anchor = frame_origins.iter().find(|(id, _)| *id == frame_id).map(|(_, p)| *p).unwrap_or_default();
+        let delta = decisions::group_delta(anchor, delta);
+        let shifted = |origin: Position| Position { x: origin.x + delta.x, y: origin.y + delta.y };
+
+        self.ed.frame_pos_previews.update(|all| {
+            for (id, origin) in frame_origins {
+                all.insert(*id, shifted(*origin));
+            }
+        });
+
+        for (id, origin) in node_origins {
+            if let Some(node) = self.ed.node(*id) {
+                node.pos.set(shifted(*origin));
+            }
+        }
+
+        if !routes.is_empty() {
+            self.ed.wire_routes.update(|all| {
+                for (key, points) in routes {
+                    if self.ed.wire_exists_untracked(*key) {
+                        all.insert(*key, points.iter().copied().map(shifted).collect());
+                    }
+                }
+            });
+        }
+    }
+
+    pub(super) fn send_frame_moves(
+        self,
+        frame_id: FrameId,
+        frame_origins: Vec<(FrameId, Position)>,
+        node_origins: Vec<(NodeId, Position)>,
+        routes: WireRoutes,
+    ) {
+        let ed = self.ed;
+        let anchor_orig = frame_origins.iter().find(|(id, _)| *id == frame_id).map(|(_, p)| *p).unwrap_or_default();
+        let anchor_cur = ed.frame_pos_previews.with_untracked(|p| p.get(&frame_id).copied()).unwrap_or(anchor_orig);
+        let delta = Position { x: anchor_cur.x - anchor_orig.x, y: anchor_cur.y - anchor_orig.y };
+
+        // Keep the preview until `FrameSet` arrives so the frame does not jump back; nothing
+        // arrives for a zero move, so clear it right away then.
+        if delta.x == 0.0 && delta.y == 0.0 {
+            ed.frame_pos_previews.set(std::collections::HashMap::new());
+        }
+
+        let frames_to_move: Vec<Frame> = frame_origins.into_iter().filter_map(|(id, _)| {
+            ed.frames.with_untracked(|all| all.get(&id).cloned())
+        }).collect();
+
+        let commands = crate::canvas::build_frame_move_batch(frames_to_move, node_origins, routes, delta);
+        if !commands.is_empty() {
+            ed.send(ClientMessage::Batch(commands));
+        }
+        ed.selection.set(Some(Selection::Frame(frame_id)));
+    }
+
+    pub(in crate::canvas) fn cancel_frame_drag(
+        self,
+        _frame_origins: Vec<(FrameId, Position)>,
+        node_origins: Vec<(NodeId, Position)>,
+        routes: WireRoutes,
+    ) {
+        let ed = self.ed;
+        ed.frame_pos_previews.set(std::collections::HashMap::new());
+        for (id, orig) in node_origins {
+            if let Some(node) = ed.node(id) {
+                node.pos.set(orig);
+            }
+        }
+        if !routes.is_empty() {
+            ed.wire_routes.update(|all| {
+                for (key, points) in routes {
+                    all.insert(key, points);
                 }
             });
         }

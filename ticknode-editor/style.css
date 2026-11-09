@@ -1350,8 +1350,12 @@ body:has(.palette-ghost) { cursor: copy; }
     background: color-mix(in srgb, var(--frame-color) 20%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--frame-color) 30%, transparent);
     user-select: none;
-    cursor: default;
+    cursor: grab;
     box-sizing: border-box;
+}
+
+.canvas-frame-header:active {
+    cursor: grabbing;
 }
 
 .canvas-frame-title {
@@ -1421,4 +1425,36 @@ body:has(.palette-ghost) { cursor: copy; }
 .canvas-frame-color-swatch:hover {
     border-color: var(--text-primary);
     filter: brightness(1.2);
+}
+
+.canvas-frame-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    padding: 0;
+    border: 0;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-secondary) 3px 4px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    cursor: nwse-resize;
+    touch-action: none;
+    pointer-events: all;
+    opacity: 0;
+}
+
+.canvas-frame:hover .canvas-frame-resize,
+.canvas-frame.selected .canvas-frame-resize,
+.canvas-frame-resize:focus-visible {
+    opacity: .7;
+}
+
+.canvas-frame-resize:hover,
+.canvas-frame-resize:active {
+    opacity: 1;
+}
+
+.canvas-frame.paste-ghost {
+    border-style: dashed;
 }

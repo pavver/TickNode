@@ -228,6 +228,8 @@ pub struct Editor {
     pub data: RwSignal<Vec<ConnectionModel>>,
     pub detached: RwSignal<Vec<DetachedConnection>>,
     pub frames: RwSignal<BTreeMap<FrameId, Frame>>,
+    pub frame_pos_previews: RwSignal<HashMap<FrameId, Position>>,
+    pub frame_size_previews: RwSignal<HashMap<FrameId, NodeSize>>,
     pub wire_routes: RwSignal<WireRoutes>,
     pub wire_context: RwSignal<Option<WireContext>>,
     /// Route point last pressed on the selected wire: Delete removes it instead of the wire.
@@ -301,6 +303,8 @@ impl Editor {
             data: RwSignal::new(Vec::new()),
             detached: RwSignal::new(Vec::new()),
             frames: RwSignal::new(BTreeMap::new()),
+            frame_pos_previews: RwSignal::new(HashMap::new()),
+            frame_size_previews: RwSignal::new(HashMap::new()),
             wire_routes: RwSignal::new(HashMap::new()),
             wire_context: RwSignal::new(None),
             selected_point: RwSignal::new(None),

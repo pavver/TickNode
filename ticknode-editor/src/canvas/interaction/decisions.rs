@@ -1,6 +1,6 @@
 //! Pointer decisions and wire parsing without browser dependencies.
 
-use super::{PinDirection, WireEnd, Selection, NodeId, PinId, ConnectionModel, ClientMessage, parse_node_id};
+use super::{PinDirection, WireEnd, Selection, NodeId, FrameId, PinId, ConnectionModel, ClientMessage, parse_node_id};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum NodeClick { CopySettings, PasteSettings, ToggleSelect, Select, Ignore }
@@ -34,19 +34,28 @@ pub(super) enum Gesture {
     Point { wire: Selection, index: usize },
     Context { wire: Selection, index: Option<usize> },
     Node(NodeId),
+    Frame(FrameId),
     Box,
     Ignore,
 }
 
-pub(super) fn gesture(button: i16, pointer_type: &str, pin: Option<WireEnd>, wire: Option<Selection>, node: Option<NodeId>) -> Gesture {
-    match (button, pin, wire, node, pointer_type) {
+pub(super) fn gesture(
+    button: i16,
+    pointer_type: &str,
+    pin: Option<WireEnd>,
+    wire: Option<Selection>,
+    node: Option<NodeId>,
+    frame: Option<FrameId>,
+) -> Gesture {
+    match (button, pin, wire, node, frame, pointer_type) {
         (1, ..) => Gesture::Pan { moved: true },
-        (2, _, _, Some(id), _) => Gesture::Node(id),
+        (2, _, _, Some(id), ..) => Gesture::Node(id),
         (2, ..) => Gesture::Ignore,
         (_, Some(pin), ..) => Gesture::Wire(pin),
         (_, _, Some(wire), ..) => Gesture::Select(wire),
-        (_, _, _, Some(id), _) => Gesture::Node(id),
-        (_, _, _, _, "touch") => Gesture::Pan { moved: false },
+        (_, _, _, Some(id), ..) => Gesture::Node(id),
+        (0, _, _, _, Some(id), _) => Gesture::Frame(id),
+        (_, _, _, _, _, "touch") => Gesture::Pan { moved: false },
         _ => Gesture::Box,
     }
 }

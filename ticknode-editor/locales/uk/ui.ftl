@@ -400,7 +400,7 @@ wire-detached-remove = Видалити дріт
 
 node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
 overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір вузла; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
-overview-hint-frame = C — додати рамку навколо виділених нод; подвійний клік по заголовку — перейменувати
+overview-hint-frame = C — додати рамку навколо виділених нод; перетягніть заголовок рамки, щоб посунути її разом із нодами всередині; кут — змінити розмір; подвійний клік по заголовку — перейменувати
 error-node-size = Розміри вузла мають бути скінченними числами
 
 # Runtime node errors and trace values on the canvas
@@ -431,6 +431,7 @@ resources-loading = Поки що порожньо
 error-frame-invalid = Позиція і розмір рамки мають бути скінченними числами
 error-frame-limit = Забагато рамок
 frame-default-title = Коментар
+frame-resize-title = Тягніть, щоб змінити розмір рамки
 frame-color-gray = Сірий
 frame-color-red = Червоний
 frame-color-orange = Помаранчевий

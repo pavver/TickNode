@@ -44,14 +44,16 @@ fn gestures_prioritize_pan_then_pin_then_wire_then_node_then_background() {
     let (pin, _) = ends(false);
     let connection = ConnectionModel { src_node: pin.node, src_pin: pin.pin, dst_node: NodeId::generate(), dst_pin: PinId(3) };
     let wire = Selection::Data(connection);
-    assert_eq!(gesture(1, "mouse", Some(pin), Some(wire.clone()), Some(pin.node)), Gesture::Pan { moved: true });
-    assert_eq!(gesture(0, "touch", Some(pin), Some(wire.clone()), Some(pin.node)), Gesture::Wire(pin));
-    assert_eq!(gesture(0, "touch", None, Some(wire.clone()), Some(pin.node)), Gesture::Select(wire));
-    assert_eq!(gesture(2, "mouse", Some(pin), None, Some(pin.node)), Gesture::Node(pin.node));
-    assert_eq!(gesture(0, "touch", None, None, Some(pin.node)), Gesture::Node(pin.node));
-    assert_eq!(gesture(2, "mouse", None, None, None), Gesture::Ignore);
-    assert_eq!(gesture(0, "touch", None, None, None), Gesture::Pan { moved: false });
-    assert_eq!(gesture(0, "mouse", None, None, None), Gesture::Box);
+    let frame_id = FrameId::generate();
+    assert_eq!(gesture(1, "mouse", Some(pin), Some(wire.clone()), Some(pin.node), Some(frame_id)), Gesture::Pan { moved: true });
+    assert_eq!(gesture(0, "touch", Some(pin), Some(wire.clone()), Some(pin.node), Some(frame_id)), Gesture::Wire(pin));
+    assert_eq!(gesture(0, "touch", None, Some(wire.clone()), Some(pin.node), Some(frame_id)), Gesture::Select(wire));
+    assert_eq!(gesture(2, "mouse", Some(pin), None, Some(pin.node), Some(frame_id)), Gesture::Node(pin.node));
+    assert_eq!(gesture(0, "touch", None, None, Some(pin.node), Some(frame_id)), Gesture::Node(pin.node));
+    assert_eq!(gesture(0, "mouse", None, None, None, Some(frame_id)), Gesture::Frame(frame_id));
+    assert_eq!(gesture(2, "mouse", None, None, None, None), Gesture::Ignore);
+    assert_eq!(gesture(0, "touch", None, None, None, None), Gesture::Pan { moved: false });
+    assert_eq!(gesture(0, "mouse", None, None, None, None), Gesture::Box);
 }
 
 #[test]

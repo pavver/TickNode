@@ -40,3 +40,37 @@ fn snippet_routes_survive_json_and_follow_normalization_and_snapped_placement() 
     offset_routes(&mut graph, (102.0, -50.0), true);
     assert_eq!(graph.wire_routes[0].points, [Position { x: 144.0, y: -12.0 }]);
 }
+
+#[test]
+fn frame_snippet_survives_json_and_offsets_with_nodes() {
+    let frame_id = FrameId::generate();
+    let frame = Frame {
+        id: frame_id,
+        title: "Test Frame".into(),
+        color: FrameColor::Yellow,
+        position: Position { x: 50.0, y: 100.0 },
+        size: NodeSize { width: 400.0, height: 300.0 },
+    };
+    let node_id = NodeId::generate();
+    let node = NodeModel {
+        id: node_id,
+        type_name: "test".into(),
+        properties: vec![],
+        position: Position { x: 80.0, y: 140.0 },
+        pins: None,
+        size: None,
+    };
+    let graph = GraphModel {
+        nodes: vec![node],
+        frames: vec![frame],
+        ..Default::default()
+    };
+    assert_eq!(from_text(&to_text(graph.clone())), Some(graph.clone()));
+
+    // Standalone frame without nodes also roundtrips
+    let frame_only_graph = GraphModel {
+        frames: vec![graph.frames[0].clone()],
+        ..Default::default()
+    };
+    assert_eq!(from_text(&to_text(frame_only_graph.clone())), Some(frame_only_graph));
+}

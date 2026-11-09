@@ -85,6 +85,10 @@ pub mod bindings {
     });
 }
 
+mod api;
+#[doc(hidden)]
+pub use api::{PLUGIN_API_SECTION, PLUGIN_API_SECTION_LEN};
+
 mod events;
 mod values;
 mod plugin;

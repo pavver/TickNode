@@ -26,6 +26,8 @@ use decisions::{Press, Gesture, press, gesture};
 
 /// Pointer movement threshold (px) after which a press is treated as a drag rather than a click.
 const DRAG_THRESHOLD: f64 = 3.0;
+/// Larger threshold (px) for pulling a point out of a wire, so a click that selects a wire never bends it.
+const WIRE_PULL_THRESHOLD: f64 = 8.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Drag {
@@ -33,7 +35,10 @@ pub(super) enum Drag {
     Pan { start: (f64, f64), origin: Camera, moved: bool },
     /// Dragging selected nodes; `clicked` is the node under the cursor.
     Nodes { origins: Vec<(NodeId, Position)>, routes: WireRoutes, start_world: (f64, f64), start: (f64, f64), moved: bool, clicked: NodeId },
-    Point { key: WireKey, index: usize, origin: Vec<Position>, start_world: (f64, f64), start: (f64, f64), moved: bool },
+    /// Dragging route point `index`; `origin` is the route being edited, `before` the route to compare on release.
+    Point { key: WireKey, index: usize, origin: Vec<Position>, before: Vec<Position>, start_world: (f64, f64), start: (f64, f64), moved: bool },
+    /// A press on a wire: pulling it sideways past `WIRE_PULL_THRESHOLD` inserts a point and drags it.
+    WirePull { key: WireKey, start: (f64, f64), start_world: (f64, f64) },
     Wire { from: WireEnd },
     Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
     /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
@@ -139,7 +144,7 @@ impl Interaction {
         if active.len() == 2 {
             match drag.get_value() {
                 Drag::Nodes { origins, routes, moved: true, .. } => self.send_moves(origins, routes),
-                Drag::Point { key, origin, moved: true, .. } => self.send_point(key, origin),
+                Drag::Point { key, before, moved: true, .. } => self.send_point(key, before),
                 _ => {}
             }
             pending_wire.set(None);
@@ -174,7 +179,12 @@ impl Interaction {
                 ev.prevent_default();
                 self.open_context(wire, index, world, (ev.client_x() as f64, ev.client_y() as f64));
             }
-            Gesture::Select(selection) => ed.selection.set(Some(selection)),
+            Gesture::Select(selection) => {
+                if let Some(key) = points::selection_key(&selection) {
+                    drag.set_value(Drag::WirePull { key, start: p, start_world: world });
+                }
+                ed.selection.set(Some(selection));
+            }
             Gesture::Node(id) => self.start_node_click(id, &ev, p, world),
             Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),
             Gesture::Ignore => {}

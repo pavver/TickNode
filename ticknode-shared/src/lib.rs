@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 pub use uuid::Uuid;
 
+/// Fingerprint of the plugin ABI: the WIT contract without comments/whitespace and the
+/// checked-in `DataValue` serde layout snapshot. Plugins must be rebuilt when it changes.
+pub const PLUGIN_API: &str = env!("TICKNODE_PLUGIN_API");
+
 pub mod condition;
 pub mod text;
 pub mod plugin;

@@ -21,6 +21,10 @@ fn uuid_from_halves(hi: u64, lo: u64) -> ticknode_shared::Uuid {
 #[macro_export]
 macro_rules! export_plugin {
     ($plugin:ty) => {
+        #[used]
+        #[unsafe(link_section = "ticknode-plugin-api")]
+        static __TICKNODE_PLUGIN_API: [u8; $crate::PLUGIN_API_SECTION_LEN] = $crate::PLUGIN_API_SECTION;
+
         type __TickNodeExport = $crate::Exporter<$plugin>;
         $crate::bindings::__export_ticknode_plugin!(__TickNodeExport with_types_in $crate::bindings);
     };

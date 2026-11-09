@@ -357,3 +357,6 @@ wire-point-add = Додати точку
 wire-point-remove = Видалити точку
 wire-points-clear = Видалити всі точки
 error-wire-route = Некоректний маршрут дроту: з’єднання має існувати, а маршрут — містити не більше 32 точок зі скінченними координатами.
+
+error-plugin-api-mismatch = Плагін зібрано для API плагінів { $plugin_api } (SDK { $plugin_sdk }), а сервер використовує { $server_api } (TickNode { $server_version }). Перезберіть плагін з поточним SDK.
+error-plugin-api-unknown = Плагін зібрано з SDK, який ще не підтримував перевірку API плагінів. Сервер використовує API плагінів { $server_api } (TickNode { $server_version }). Перезберіть плагін з поточним SDK.

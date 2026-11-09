@@ -12,5 +12,6 @@ chrono = { workspace = true }
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]
+serde-reflection = "0.6"
 serde_json = "1.0"
 postcard = { workspace = true, features = ["alloc"] }

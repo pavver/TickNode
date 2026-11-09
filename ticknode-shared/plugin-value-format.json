@@ -1,0 +1,184 @@
+{
+  "Color": {
+    "STRUCT": [
+      {
+        "r": "U8"
+      },
+      {
+        "g": "U8"
+      },
+      {
+        "b": "U8"
+      },
+      {
+        "a": "U8"
+      }
+    ]
+  },
+  "DataType": {
+    "ENUM": {
+      "0": {
+        "Bool": "UNIT"
+      },
+      "1": {
+        "Number": "UNIT"
+      },
+      "2": {
+        "String": "UNIT"
+      },
+      "3": {
+        "Time": "UNIT"
+      },
+      "4": {
+        "DateTime": "UNIT"
+      },
+      "5": {
+        "Duration": "UNIT"
+      },
+      "6": {
+        "Color": "UNIT"
+      },
+      "7": {
+        "List": {
+          "NEWTYPE": {
+            "TYPENAME": "DataType"
+          }
+        }
+      },
+      "8": {
+        "Object": "UNIT"
+      },
+      "9": {
+        "Any": "UNIT"
+      },
+      "10": {
+        "Named": {
+          "NEWTYPE": "STR"
+        }
+      }
+    }
+  },
+  "DataValue": {
+    "ENUM": {
+      "0": {
+        "Bool": {
+          "NEWTYPE": "BOOL"
+        }
+      },
+      "1": {
+        "Number": {
+          "NEWTYPE": {
+            "TYPENAME": "NumberValue"
+          }
+        }
+      },
+      "2": {
+        "String": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "3": {
+        "Time": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "4": {
+        "DateTime": {
+          "NEWTYPE": "STR"
+        }
+      },
+      "5": {
+        "Duration": {
+          "NEWTYPE": {
+            "TYPENAME": "Duration"
+          }
+        }
+      },
+      "6": {
+        "Color": {
+          "NEWTYPE": {
+            "TYPENAME": "Color"
+          }
+        }
+      },
+      "7": {
+        "List": {
+          "STRUCT": [
+            {
+              "element_type": {
+                "TYPENAME": "DataType"
+              }
+            },
+            {
+              "elements": {
+                "SEQ": {
+                  "TYPENAME": "DataValue"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "8": {
+        "Object": {
+          "STRUCT": [
+            {
+              "fields": {
+                "MAP": {
+                  "KEY": "STR",
+                  "VALUE": {
+                    "TYPENAME": "ObjectField"
+                  }
+                }
+              }
+            },
+            {
+              "type_name": {
+                "OPTION": "STR"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Duration": {
+    "STRUCT": [
+      {
+        "secs": "U64"
+      },
+      {
+        "nanos": "U32"
+      }
+    ]
+  },
+  "NumberValue": {
+    "ENUM": {
+      "0": {
+        "Int": {
+          "NEWTYPE": "I64"
+        }
+      },
+      "1": {
+        "Float": {
+          "NEWTYPE": "F64"
+        }
+      }
+    }
+  },
+  "ObjectField": {
+    "STRUCT": [
+      {
+        "name": "STR"
+      },
+      {
+        "description": "STR"
+      },
+      {
+        "value": {
+          "TYPENAME": "DataValue"
+        }
+      }
+    ]
+  }
+}

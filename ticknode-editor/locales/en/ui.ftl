@@ -360,3 +360,6 @@ wire-point-add = Add point
 wire-point-remove = Remove point
 wire-points-clear = Remove all points
 error-wire-route = Invalid wire route: the connection must exist and the route must contain at most 32 finite points.
+
+error-plugin-api-mismatch = The plugin was built for plugin API { $plugin_api } (SDK { $plugin_sdk }), but this server uses plugin API { $server_api } (TickNode { $server_version }). Rebuild the plugin with the current SDK.
+error-plugin-api-unknown = The plugin was built with an SDK that predates plugin API checks. This server uses plugin API { $server_api } (TickNode { $server_version }). Rebuild the plugin with the current SDK.

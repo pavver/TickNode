@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use ticknode_shared::*;
 use crate::RemovedConnections;
 
+mod api;
 mod bindings;
 mod host;
 mod runtime;

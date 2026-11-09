@@ -17,7 +17,7 @@ impl Interaction {
         match (state, commit) {
             // Interrupted drags still synchronize positions with the server.
             (Drag::Nodes { origins, routes, moved: true, .. }, _) => self.send_moves(origins, routes),
-            (Drag::Point { key, origin, moved: true, .. }, _) => self.send_point(key, origin),
+            (Drag::Point { key, before, moved: true, .. }, _) => self.send_point(key, before),
             (_, false) => {},
             (Drag::Pan { moved: false, .. }, true) => ed.selection.set(None),
             // Clicking a node in a group selects only that node.
@@ -88,17 +88,13 @@ impl Interaction {
                 if moved { self.move_nodes(&origins, &routes, clicked, start_world, p); }
                 drag.set_value(Drag::Nodes { origins, routes, start_world, start, moved, clicked });
             }
-            Drag::Point { key, index, origin, start_world, start, moved } => {
+            Drag::Point { key, index, origin, before, start_world, start, moved } => {
                 let moved = moved || distance(start, p) > DRAG_THRESHOLD;
-                if moved && self.ed.wire_exists_untracked(key) {
-                    let world = ed.view.get_untracked().to_world(p.0, p.1);
-                    let mut points = origin.clone();
-                    if let Some(point) = points.get_mut(index) {
-                        *point = moved_position(*point, (world.0 - start_world.0, world.1 - start_world.1));
-                        ed.wire_routes.update(|all| { all.insert(key, points); });
-                    }
-                }
-                drag.set_value(Drag::Point { key, index, origin, start_world, start, moved });
+                if moved { self.move_point(key, index, &origin, start_world, p); }
+                drag.set_value(Drag::Point { key, index, origin, before, start_world, start, moved });
+            }
+            Drag::WirePull { key, start, start_world } => {
+                if distance(start, p) > WIRE_PULL_THRESHOLD { self.pull_point(key, start, start_world, p); }
             }
             Drag::Wire { .. } => cursor.set(ed.view.get_untracked().to_world(p.0, p.1)),
             Drag::Pinch { start_dist, start_mid, origin } => {
@@ -143,7 +139,7 @@ impl Interaction {
     }
 }
 
-fn moved_position(origin: Position, delta: (f64, f64)) -> Position {
+pub(super) fn moved_position(origin: Position, delta: (f64, f64)) -> Position {
     let snap = |v: f64| ((v / DU).round() * DU) as f32;
     Position { x: snap(origin.x as f64 + delta.0), y: snap(origin.y as f64 + delta.1) }
 }

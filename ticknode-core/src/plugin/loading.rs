@@ -56,6 +56,7 @@ impl TickEngine {
         storage_root: Option<&Path>,
         grant: impl FnOnce(&PluginManifest) -> Vec<Capability>,
     ) -> Result<PluginManifest, UiMessage> {
+        super::api::check_plugin_api(wasm)?;
         let mut runtime = unprivileged_runtime(wasm)?;
         let (manifest, definitions, types, translations) = read_metadata(&mut runtime)?;
         runtime.instance = None;

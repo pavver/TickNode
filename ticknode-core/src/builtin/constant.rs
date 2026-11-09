@@ -7,6 +7,7 @@ impl Node for ConstNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: true,
             cost: 1,
             properties: Vec::new(),
             type_name: "const".to_string(),
@@ -23,6 +24,13 @@ impl Node for ConstNode {
     }
     fn execute(&mut self, _:Option<PinId>, _:&mut NodeContext) -> Vec<NodeOutput> {
         vec![NodeOutput::Data(PinId(0), self.value.clone())]
+    }
+    fn adapt_to(&mut self, pin: PinId, data_type: &DataType) -> bool {
+        if pin != PinId(0) { return false; }
+        let value = text::default_of(data_type);
+        if value == self.value { return false; }
+        self.set_property("value", value);
+        true
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![("value".to_string(), self.value.clone())]

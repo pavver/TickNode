@@ -12,6 +12,7 @@ pub(super) struct PointSource {
 impl PluginNode for PointSource {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/point_source".into(),
@@ -48,6 +49,7 @@ pub(super) struct BadSource;
 impl PluginNode for BadSource {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/bad_source".into(),
@@ -70,6 +72,7 @@ pub(super) struct PointSink;
 impl PluginNode for PointSink {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/point_sink".into(),

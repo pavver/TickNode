@@ -12,6 +12,7 @@
         fn is_pure(&self) -> bool { self.pure }
         fn definition(&self) -> NodeDefinition {
             NodeDefinition {
+                adaptive: false,
                 cost: 1,
                 type_name: "test/input_probe".into(), title: "Input probe".into(), category: "Test".into(),
                 description: String::new(), help: String::new(), properties: vec![],
@@ -397,14 +398,9 @@
 
         // Connect Sleep inputs
         let const_delay_id = NodeId::generate();
-        let const_delay = Box::new(ConstNode { id: const_delay_id, value: DataValue::Number(NumberValue::Int(3)) });
+        let const_delay = Box::new(ConstNode { id: const_delay_id, value: DataValue::Ticks(3) });
         engine.add_node(const_delay);
         engine.connect_data(const_delay_id, PinId(0), sleep_id, PinId(1)).unwrap();
-
-        let const_ticks_id = NodeId::generate();
-        let const_ticks = Box::new(ConstNode { id: const_ticks_id, value: DataValue::Bool(true) });
-        engine.add_node(const_ticks);
-        engine.connect_data(const_ticks_id, PinId(0), sleep_id, PinId(2)).unwrap();
 
         // Connect Sleep Out to dummy target node to trace exec flow
         let dummy_sleep_out_id = add_sink(&mut engine);
@@ -605,7 +601,7 @@
         let sleep = NodeId::generate();
         engine.create_node(sleep, "sleep", &[]).unwrap();
         let delay = NodeId::generate();
-        engine.create_node(delay, "const", &[("value".into(), DataValue::Number(NumberValue::Int(100)))]).unwrap();
+        engine.create_node(delay, "const", &[("value".into(), DataValue::Ticks(100))]).unwrap();
         engine.connect_data(delay, PinId(0), sleep, PinId(1)).unwrap();
         engine.trigger_node(sleep, PinId(0));
         engine.tick();

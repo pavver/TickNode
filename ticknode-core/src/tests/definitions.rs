@@ -132,3 +132,30 @@ fn definitions_follow_plugin_trap_refresh_and_stub_revival() {
     assert!(engine.sources.contains(&ticker) && engine.live_nodes.len() == 3);
     assert_eq!(engine.definition_arc(cost).unwrap().cost, 2);
 }
+
+#[test]
+fn adaptation_reconciles_contracts_connections_and_cached_values() {
+    let mut engine = TickEngine::new();
+    let (constant, add) = (NodeId::generate(), NodeId::generate());
+    engine.create_node(constant, "const", &[]).unwrap();
+    engine.create_node(add, "math/add", &[]).unwrap();
+    engine.connect_data(constant, PinId(0), add, PinId(0)).unwrap();
+    let previous = engine.definition_arc(constant).unwrap();
+    assert!(previous.adaptive);
+    engine.pull_data(constant, PinId(0), &mut vec![]);
+    let removed = engine.adapt_node(constant, PinId(0), &DataType::Duration).unwrap();
+    assert_eq!(removed.data.len(), 1);
+    assert_definitions(&mut engine);
+    let current = engine.definition_arc(constant).unwrap();
+    assert!(!Arc::ptr_eq(&previous, &current));
+    assert_eq!(current.pins[0].pin_type, PinType::Data(DataType::Duration));
+    assert_eq!(engine.pull_data(constant, PinId(0), &mut vec![]), Some(DataValue::Duration(std::time::Duration::from_secs(1))));
+    assert!(engine.frozen_changes(constant).is_empty());
+    engine.adapt_node(constant, PinId(99), &DataType::Bool).unwrap();
+    engine.adapt_node(constant, PinId(0), &DataType::Duration).unwrap();
+    assert!(Arc::ptr_eq(&current, &engine.definition_arc(constant).unwrap()));
+    let graph = engine.export_graph();
+    engine.load_graph(&graph);
+    assert_eq!(engine.export_graph(), graph);
+    assert_definitions(&mut engine);
+}

@@ -24,6 +24,7 @@ impl Node for ObjectCreateNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "object/create".to_string(),
@@ -47,6 +48,7 @@ impl Node for ObjectSetFieldNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "object/set_field".to_string(),
@@ -93,6 +95,7 @@ impl Node for ObjectGetFieldNode {
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "object/get_field".to_string(),
@@ -154,6 +157,7 @@ impl Node for ObjectUnpackNode {
                 direction: PinDirection::Output, required: false });
         }
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "object/unpack".to_string(),

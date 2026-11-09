@@ -76,7 +76,7 @@ fn defaults_hints_and_text_errors_are_stable() {
         (DataType::String, DataValue::from(""), "—"),
         (DataType::Time, DataValue::Time(chrono::NaiveTime::MIN), "HH:MM"),
         (DataType::DateTime, DataValue::DateTime(chrono::DateTime::UNIX_EPOCH), "YYYY-MM-DD HH:MM"),
-        (DataType::Duration, DataValue::Duration(Duration::from_secs(60)), "1h 30m / 45s"),
+        (DataType::Duration, DataValue::Duration(Duration::from_secs(1)), "10t / 1h 30m / 45s"),
         (DataType::Color, DataValue::Color(Color { r: 255, g: 255, b: 255, a: 255 }), "#rrggbb"),
         (DataType::Object, DataValue::Object { fields: Default::default(), type_name: None }, "—"),
         (DataType::Named("test.point".into()), DataValue::Object { fields: Default::default(), type_name: None }, "—"),
@@ -88,7 +88,7 @@ fn defaults_hints_and_text_errors_are_stable() {
     for (ty, description) in [
         (DataType::Number, "a number"), (DataType::Bool, "true/false"),
         (DataType::Time, "a time (HH:MM or HH:MM:SS)"), (DataType::DateTime, "a date-time (YYYY-MM-DD HH:MM)"),
-        (DataType::Duration, "a duration (90, 1h 30m, 500ms)"), (DataType::Color, "a color (#rrggbb)"),
+        (DataType::Duration, "a duration (10t, 90, 1h 30m, 500ms)"), (DataType::Color, "a color (#rrggbb)"),
     ] {
         assert_eq!(parse_value(" invalid ", &ty), Err(format!("\"invalid\" is not {description}")));
     }

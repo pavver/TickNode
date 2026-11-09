@@ -230,19 +230,15 @@ node-for-loop-pin-Completed = Completed
 
 # sleep
 node-sleep-title = Sleep
-node-sleep-description = Delays execution by the specified number of milliseconds or ticks
+node-sleep-description = Delays execution by a duration in ticks or time
 node-sleep-help =
     A signal at In starts a delay, and when it elapses, emits a signal on Out.
 
-    • Delay — duration in milliseconds (rounded up to whole ticks).
-    • UseTicks = true — Delay is counted in ticks.
-    • TickDuration — tick duration in ms for calculation (defaults to the server tick).
+    • Delay — duration in ticks or time, e.g. 10t or 5s. Time is rounded up to whole server ticks. Without a value, waits one tick.
 
     Each signal at In starts its own independent delay, like Queue Delay.
 node-sleep-pin-In = In
 node-sleep-pin-Delay = Delay
-node-sleep-pin-UseTicks = UseTicks
-node-sleep-pin-TickDuration = TickDuration
 node-sleep-pin-Out = Out
 
 # list/create

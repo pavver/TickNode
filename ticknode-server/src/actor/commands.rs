@@ -67,6 +67,14 @@ impl Actor {
             n.id == pin && n.direction != p.direction && matches!((&p.pin_type, &n.pin_type),
                 (PinType::Exec, PinType::Exec) | (PinType::Data(_), PinType::Data(_)))))
             .unwrap_or(origin);
+        if new_definition.adaptive && let PinType::Data(data_type) = &origin.pin_type {
+            if let Err(error) = self.engine.adapt_node(id, pin, data_type) {
+                self.engine.remove_node(id);
+                self.positions.remove(&id);
+                return Err(error.ui_message());
+            }
+            events[0] = ServerMessage::NodeAdded(self.instance(id).expect("the node exists"));
+        }
         let c = if origin.direction == PinDirection::Output {
             ConnectionModel { src_node: from.node, src_pin: from.pin, dst_node: id, dst_pin: pin }
         } else {

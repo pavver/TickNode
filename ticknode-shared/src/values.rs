@@ -129,6 +129,8 @@ pub enum DataValue {
         #[serde(default)]
         type_name: Option<String>,
     },
+    /// A duration measured in engine ticks rather than wall-clock time. Keep last for postcard.
+    Ticks(u64),
 }
 
 impl DataValue {
@@ -139,7 +141,7 @@ impl DataValue {
             Self::String(_) => DataType::String,
             Self::Time(_) => DataType::Time,
             Self::DateTime(_) => DataType::DateTime,
-            Self::Duration(_) => DataType::Duration,
+            Self::Duration(_) | Self::Ticks(_) => DataType::Duration,
             Self::Color(_) => DataType::Color,
             Self::List { element_type, .. } => DataType::List(Box::new(element_type.clone())),
             Self::Object { type_name: Some(name), .. } => DataType::Named(name.clone()),

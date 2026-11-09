@@ -31,6 +31,7 @@ fn split_fields_use_regular_rows_and_settings_add_no_property_row() {
     let field = ticknode_shared::split_field_pin(PinId(5), 0).unwrap();
     let next = ticknode_shared::split_field_pin(PinId(5), 1).unwrap();
     let mut def = NodeDefinition {
+        adaptive: false,
         cost: 1,
         type_name: "example".into(), title: String::new(), category: String::new(),
         description: String::new(), help: String::new(), properties: vec![],
@@ -61,6 +62,7 @@ fn zoom_keeps_cursor_point_fixed() {
 
 fn def(type_name: &str, pins: Vec<(u32, PinType, PinDirection)>) -> NodeDefinition {
     NodeDefinition {
+        adaptive: false,
         cost: 1,
         properties: Vec::new(),
         type_name: type_name.into(), title: "T".into(), category: "Data".into(), description: String::new(), help: String::new(),

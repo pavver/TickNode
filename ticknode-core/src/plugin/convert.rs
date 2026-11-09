@@ -55,6 +55,7 @@ pub(super) fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition
 /// Definition and `polls` flag (not part of `NodeDefinition`: it concerns the host, not the editor).
 pub(super) fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (NodeDefinition, bool) {
     let definition = NodeDefinition {
+        adaptive: false,
         cost: d.cost,
         properties: d.properties.into_iter().map(|p| PropertyDefinition {
             name: p.name,

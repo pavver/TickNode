@@ -11,6 +11,7 @@ impl Node for ForLoopNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "for_loop".to_string(),

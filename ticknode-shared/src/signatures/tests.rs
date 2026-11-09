@@ -9,6 +9,7 @@ fn pin(id: u32) -> PinSignature {
 fn base_definition_signature_keeps_order_and_display_names() {
     let pins = vec![pin(2), pin(1)];
     let definition = NodeDefinition {
+        adaptive: false,
         type_name: "test".into(), title: "Test".into(), category: "Test".into(),
         description: String::new(), help: String::new(), properties: Vec::new(), cost: 1,
         pins: pins.iter().map(|p| PinDefinition {

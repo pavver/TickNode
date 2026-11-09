@@ -6,6 +6,7 @@ pub(super) struct Clock;
 impl PluginNode for Clock {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             type_name: "test/clock".into(), title: "Host Clock".into(), category: "Test".into(),
             description: "Reports the host clock".into(),
             help: "Checks the call context and reserved pin filtering in the plugin host.".into(),

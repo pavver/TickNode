@@ -66,6 +66,15 @@ pub struct NodeTrace {
     pub fired: Vec<PinId>,
 }
 
+/// Progress of the first started host delay for a node; count includes every active delay.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NodeTimer {
+    pub node: NodeId,
+    pub total_ms: u64,
+    pub remaining_ms: u64,
+    pub count: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ServerMessage {
     /// Full state snapshot — sent immediately after connecting.
@@ -90,6 +99,8 @@ pub enum ServerMessage {
         wire_routes: Vec<WireRoute>,
         #[serde(default)]
         detached_connections: Vec<DetachedConnection>,
+        #[serde(default)]
+        timers: Vec<NodeTimer>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -119,4 +130,6 @@ pub enum ServerMessage {
     WireRouted(WireRoute),
     Detached(DetachedConnection),
     DetachedRemoved(DetachedConnection),
+    /// Full current list, emitted only when the first delay or count changes.
+    Timers(Vec<NodeTimer>),
 }

@@ -30,6 +30,7 @@ fn pin(id: u32, direction: PinDirection, pin_type: PinType) -> PinDefinition {
 }
 fn definition(name: &str) -> NodeDefinition {
     NodeDefinition {
+        adaptive: false,
         type_name: name.into(), title: "Probe".into(), category: "Test".into(), description: String::new(),
         help: String::new(), properties: Vec::new(), cost: 1,
         pins: vec![pin(0, PinDirection::Input, PinType::Exec),

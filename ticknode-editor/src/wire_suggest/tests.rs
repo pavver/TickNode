@@ -3,6 +3,7 @@ use ticknode_shared::{FieldDefinition, PinDefinition, TypeDefinition};
 
 fn node(name: &str, pins: Vec<(u32, PinDirection, PinType)>) -> NodeDefinition {
     NodeDefinition {
+        adaptive: false,
         type_name: name.into(), title: name.into(), category: "Data".into(), description: String::new(),
         help: String::new(), properties: vec![], cost: 1,
         pins: pins.into_iter().map(|(id, direction, pin_type)| PinDefinition {

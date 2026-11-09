@@ -20,6 +20,7 @@ pub(super) struct Greeter;
 impl PluginNode for Greeter {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/greeter".into(),
@@ -50,6 +51,7 @@ pub(super) struct Picker {
 impl PluginNode for Picker {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: vec![
                 PropertyDefinition::dynamic("choice", "Choice", "greetings"),

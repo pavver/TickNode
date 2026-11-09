@@ -15,6 +15,7 @@ pub(super) struct GetState {
 impl PluginNode for GetState {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 50,
             properties: Vec::new(),
             type_name: "ha/get_state".into(),
@@ -50,6 +51,7 @@ pub(super) struct CallService {
 impl PluginNode for CallService {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 50,
             properties: Vec::new(),
             type_name: "ha/call_service".into(),

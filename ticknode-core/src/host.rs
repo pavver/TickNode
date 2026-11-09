@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ticknode_shared::NodeId;
+use ticknode_shared::{DataValue, NodeId, NodeTimer};
 
 pub type TaskId = u64;
 
@@ -37,7 +37,7 @@ const MAX_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_HTTP_BODY: u64 = 4 * 1024 * 1024;
 
 enum TaskState {
-    Delay { due_tick: u64 },
+    Delay { start_tick: u64, due_tick: u64 },
     Spawned(tokio::task::JoinHandle<TaskResult>),
 }
 
@@ -78,8 +78,17 @@ impl HostState {
 
     /// Number of ticks needed to cover `duration` (rounded up).
     pub fn ticks_for(&self, duration: Duration) -> u64 {
-        let tick = self.tick_duration.as_millis().max(1);
-        duration.as_millis().div_ceil(tick) as u64
+        let tick = self.tick_duration.max(Duration::from_millis(1)).as_nanos();
+        duration.as_nanos().div_ceil(tick).min(u128::from(u64::MAX)) as u64
+    }
+
+    /// Tick durations pass through; wall-clock durations round up to whole engine ticks.
+    pub fn ticks_for_value(&self, value: &DataValue) -> Option<u64> {
+        match value {
+            DataValue::Ticks(n) => Some(*n),
+            DataValue::Duration(d) => Some(self.ticks_for(*d)),
+            _ => None,
+        }
     }
 
     fn insert(&mut self, node_id: NodeId, state: TaskState) -> TaskId {
@@ -91,8 +100,29 @@ impl HostState {
 
     /// The task will complete at tick `current_tick + ticks` (no earlier than the next tick).
     pub fn start_delay(&mut self, node_id: NodeId, ticks: u64) -> TaskId {
-        let due_tick = self.current_tick + ticks.max(1);
-        self.insert(node_id, TaskState::Delay { due_tick })
+        let due_tick = self.current_tick.saturating_add(ticks.max(1));
+        self.insert(node_id, TaskState::Delay { start_tick: self.current_tick, due_tick })
+    }
+
+    /// One timer per node and its first task ID, for telemetry change detection.
+    /// Sort by node to keep the result stable despite the task map's iteration order.
+    pub fn delay_timers_with_tasks(&self) -> Vec<(TaskId, NodeTimer)> {
+        let mut first = std::collections::BTreeMap::new();
+        for (&id, task) in &self.active_tasks {
+            let TaskState::Delay { start_tick, due_tick } = task.state else { continue };
+            let entry = first.entry(task.node_id).or_insert((start_tick, id, due_tick, 0u32));
+            entry.3 = entry.3.saturating_add(1);
+            if (start_tick, id) < (entry.0, entry.1) {
+                *entry = (start_tick, id, due_tick, entry.3);
+            }
+        }
+        let ms = self.tick_duration.as_millis().min(u128::from(u64::MAX)) as u64;
+        first.into_iter().map(|(node, (start, id, due, count))| (id, NodeTimer {
+            node,
+            total_ms: due.saturating_sub(start).saturating_mul(ms),
+            remaining_ms: due.saturating_sub(self.current_tick).saturating_mul(ms),
+            count,
+        })).collect()
     }
 
     /// Spawns an HTTP request in the background. Domain permissions are checked by the caller (plugin host).
@@ -128,7 +158,7 @@ impl HostState {
         let tick = self.current_tick;
         let mut ready: Vec<TaskId> = self.active_tasks.iter()
             .filter(|(_, t)| match &t.state {
-                TaskState::Delay { due_tick } => *due_tick <= tick,
+                TaskState::Delay { due_tick, .. } => *due_tick <= tick,
                 TaskState::Spawned(handle) => handle.is_finished(),
             })
             .map(|(id, _)| *id)

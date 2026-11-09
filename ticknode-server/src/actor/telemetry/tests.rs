@@ -18,9 +18,9 @@ fn traces_of_one_interval_merge_per_node() {
     let (a, b) = (NodeId::generate(), NodeId::generate());
     telemetry.add_traces(&[trace(a, 1, 1, &[1])]);
     telemetry.add_traces(&[trace(b, 2, 5, &[]), trace(a, 2, 2, &[2, 1])]);
-    assert!(telemetry.flush(start).is_empty(), "nothing is sent before the interval passes");
+    assert!(telemetry.flush(start, &ticknode_core::TickEngine::new()).is_empty(), "nothing is sent before the interval passes");
 
-    let messages = telemetry.flush(start + INTERVAL);
+    let messages = telemetry.flush(start + INTERVAL, &ticknode_core::TickEngine::new());
     let [ServerMessage::Executed(traces)] = messages.as_slice() else { panic!("{messages:?}") };
     assert_eq!(traces.iter().map(|t| t.node_id).collect::<Vec<_>>(), [a, b]);
     assert_eq!(traces[0].tick, 2);
@@ -28,8 +28,8 @@ fn traces_of_one_interval_merge_per_node() {
     assert_eq!(traces[0].fired, vec![PinId(1), PinId(2)]);
 
     telemetry.add_traces(&[trace(a, 3, 3, &[])]);
-    assert!(telemetry.flush(start + INTERVAL + INTERVAL / 2).is_empty());
-    let messages = telemetry.flush(start + INTERVAL * 2);
+    assert!(telemetry.flush(start + INTERVAL + INTERVAL / 2, &ticknode_core::TickEngine::new()).is_empty());
+    let messages = telemetry.flush(start + INTERVAL * 2, &ticknode_core::TickEngine::new());
     let [ServerMessage::Executed(traces)] = messages.as_slice() else { panic!("{messages:?}") };
     assert_eq!(traces.len(), 1, "a new interval starts with fresh traces");
     assert_eq!(traces[0].fired, Vec::<PinId>::new());
@@ -42,12 +42,12 @@ fn logs_keep_order_and_report_overflow() {
     let node = NodeId::generate();
     telemetry.add_logs((0..MAX_LOGS + 5).map(|i| (node, format!("line {i}"))).collect());
     telemetry.add_logs(vec![(node, "late".into())]);
-    let messages = telemetry.flush(now);
+    let messages = telemetry.flush(now, &ticknode_core::TickEngine::new());
     assert_eq!(messages.len(), MAX_LOGS + 1);
     assert!(matches!(&messages[0], ServerMessage::Log { message, .. } if message == "line 0"));
     assert!(matches!(&messages[MAX_LOGS - 1], ServerMessage::Log { message, .. } if *message == format!("line {}", MAX_LOGS - 1)));
     assert!(matches!(&messages[MAX_LOGS], ServerMessage::Log { node_id, message } if node_id.0.is_nil() && message.starts_with("[WARN] 6 log lines dropped")));
-    assert!(telemetry.flush(now + INTERVAL).is_empty(), "the overflow counter resets");
+    assert!(telemetry.flush(now + INTERVAL, &ticknode_core::TickEngine::new()).is_empty(), "the overflow counter resets");
 }
 
 #[test]
@@ -57,5 +57,36 @@ fn discard_drops_everything_collected() {
     telemetry.add_traces(&[trace(NodeId::generate(), 1, 1, &[])]);
     telemetry.add_logs(vec![(NodeId::generate(), "x".into())]);
     telemetry.discard();
-    assert!(telemetry.flush(now).is_empty());
+    assert!(telemetry.flush(now, &ticknode_core::TickEngine::new()).is_empty());
+}
+
+#[test]
+fn timers_emit_only_when_first_task_or_count_changes() {
+    let now = Instant::now();
+    let mut telemetry = Telemetry::new(now);
+    let mut engine = ticknode_core::TickEngine::new();
+    let node = NodeId::generate();
+    assert!(telemetry.flush(now, &engine).is_empty());
+    let first = engine.host_state.start_delay(node, 10);
+    assert!(telemetry.flush(now + INTERVAL / 2, &engine).is_empty());
+    let messages = telemetry.flush(now + INTERVAL, &engine);
+    assert_eq!(messages, vec![ServerMessage::Timers(engine.delay_timers())]);
+    telemetry.discard();
+    assert!(telemetry.flush(now + INTERVAL + INTERVAL / 2, &engine).is_empty());
+    engine.host_state.current_tick = 2;
+    assert!(telemetry.flush(now + INTERVAL * 2, &engine).is_empty(), "remaining time alone does not emit");
+    // A second task changes count while the first timer remains selected.
+    engine.host_state.start_delay(node, 1);
+    let messages = telemetry.flush(now + INTERVAL * 3, &engine);
+    let [ServerMessage::Timers(timers)] = messages.as_slice() else { panic!("{messages:?}") };
+    assert_eq!((timers[0].total_ms, timers[0].remaining_ms, timers[0].count), (1000, 800, 2));
+    engine.host_state.cancel_task(node, first);
+    assert_eq!(telemetry.flush(now + INTERVAL * 4, &engine), vec![ServerMessage::Timers(engine.delay_timers())]);
+    // Reset in the same tick keeps count/total unchanged but changes the first task ID.
+    engine.host_state.cancel_node_tasks(node);
+    engine.host_state.start_delay(node, 1);
+    assert_eq!(telemetry.flush(now + INTERVAL * 5, &engine), vec![ServerMessage::Timers(engine.delay_timers())]);
+    engine.host_state.cancel_node_tasks(node);
+    assert_eq!(telemetry.flush(now + INTERVAL * 6, &engine), vec![ServerMessage::Timers(vec![])]);
+    assert!(telemetry.flush(now + INTERVAL * 7, &engine).is_empty());
 }

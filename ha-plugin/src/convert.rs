@@ -65,7 +65,7 @@ fn list_value(items: &[Value]) -> DataValue {
     }
 }
 
-/// A value to JSON for a service call. Times and colors become their text form, durations seconds.
+/// A value to JSON for a service call. Times and colors become their text form, wall-clock durations seconds, tick durations their text form.
 pub fn value_to_json(value: &DataValue) -> Value {
     match value {
         DataValue::Bool(b) => Value::Bool(*b),
@@ -79,7 +79,7 @@ pub fn value_to_json(value: &DataValue) -> Value {
         DataValue::Duration(d) => {
             Number::from_f64(d.as_secs_f64()).map_or(Value::Null, Value::Number)
         }
-        DataValue::Color(_) => Value::String(text::format_value(value)),
+        DataValue::Color(_) | DataValue::Ticks(_) => Value::String(text::format_value(value)),
         DataValue::List { elements, .. } => {
             Value::Array(elements.iter().map(value_to_json).collect())
         }

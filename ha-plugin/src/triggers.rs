@@ -253,6 +253,7 @@ impl Platform {
         };
         pins.extend(extra.into_iter().enumerate().map(|(i, (name, ty))| data_out(i as u32 + 2, name, ty)));
         NodeDefinition {
+            adaptive: false,
             cost: 2,
             type_name: self.type_name().into(),
             title: title.into(),

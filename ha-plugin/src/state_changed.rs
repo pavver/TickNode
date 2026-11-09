@@ -39,6 +39,7 @@ impl Drop for StateChanged {
 impl PluginNode for StateChanged {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 2,
             properties: vec![
                 PropertyDefinition::dynamic("entity_id", "Entity", entities::ENTITIES_SOURCE)

@@ -1,5 +1,4 @@
-//! Delays with different retrigger behaviors. The delay is specified in milliseconds
-//! and rounded up to whole ticks.
+//! Delays with different retrigger behaviors, specified in ticks or wall-clock time.
 
 use ticknode_plugin_sdk::*;
 
@@ -51,6 +50,7 @@ impl PluginNode for DelayNode {
     fn definition(&self) -> NodeDefinition {
         let (type_name, title, description, base) = self.info();
         NodeDefinition {
+            adaptive: false,
             cost: 2,
             properties: Vec::new(),
             type_name: type_name.into(),
@@ -58,13 +58,13 @@ impl PluginNode for DelayNode {
             category: "Time".into(),
             description: description.into(),
             help: match self.mode {
-                Mode::Queue => "Each signal on In starts its own delay of \"Delay ms\" milliseconds and fires Out when it finishes.\n\nSeveral signals in a row produce as many signals on the output, with the same intervals.",
-                Mode::Ignore => "A signal on In starts a delay of \"Delay ms\" milliseconds and fires Out when it finishes. While the delay is running, new signals are ignored.\n\nUseful to avoid reacting to frequent repeats of an event.",
-                Mode::Reset => "Each signal on In cancels the current delay and restarts the countdown. Out fires only after a pause without signals lasting \"Delay ms\".\n\nFor example: turn the light off 5 minutes after the last motion.",
-            }.to_string() + "\n\nThe delay is rounded up to whole ticks (the server tick is 100 ms).",
+                Mode::Queue => "Each signal on In starts its own delay of \"Delay\" and fires Out when it finishes.\n\nSeveral signals in a row produce as many signals on the output, with the same intervals.",
+                Mode::Ignore => "A signal on In starts a delay of \"Delay\" and fires Out when it finishes. While the delay is running, new signals are ignored.\n\nUseful to avoid reacting to frequent repeats of an event.",
+                Mode::Reset => "Each signal on In cancels the current delay and restarts the countdown. Out fires only after a pause without signals lasting \"Delay\".\n\nFor example: turn the light off 5 minutes after the last motion.",
+            }.to_string() + "\n\nDelay accepts ticks or time, e.g. 10t or 5s. Time is rounded up to whole server ticks. Without a value, waits one tick.",
             pins: vec![
                 exec_in(base, "In"),
-                data_in(base + 2, "Delay ms", DataType::Number),
+                data_in(base + 2, "Delay", DataType::Duration),
                 exec_out(base + 1, "Out"),
             ],
         }
@@ -135,8 +135,8 @@ impl DelayNode {
         if let (Mode::Reset, Some(task)) = (self.mode, self.active.take()) {
             scheduler.cancel(task);
         }
-        let ms = inputs.number(PinId(base + 2), 0.0).max(0.0) as u64;
-        match scheduler.delay_ms(ms) {
+        let value = inputs.get(PinId(base + 2)).cloned().unwrap_or(DataValue::Ticks(1));
+        match scheduler.delay_for(&value) {
             Ok(task) => self.active = Some(task),
             Err(e) => scheduler.error(&e),
         }
@@ -144,14 +144,14 @@ impl DelayNode {
 }
 
 trait Scheduler {
-    fn delay_ms(&mut self, ms: u64) -> Result<TaskId, String>;
+    fn delay_for(&mut self, value: &DataValue) -> Result<TaskId, String>;
     fn cancel(&mut self, task: TaskId);
     fn error(&mut self, error: &str);
 }
 struct HostScheduler;
 impl Scheduler for HostScheduler {
-    fn delay_ms(&mut self, ms: u64) -> Result<TaskId, String> {
-        host::delay_ms(ms)
+    fn delay_for(&mut self, value: &DataValue) -> Result<TaskId, String> {
+        host::delay_for(value)
     }
     fn cancel(&mut self, task: TaskId) {
         host::cancel(task);

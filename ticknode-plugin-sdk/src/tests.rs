@@ -111,6 +111,7 @@ fn node_definitions_keep_pin_types_directions_and_property_metadata() {
     ];
     for (kind, expected) in types.into_iter().zip(expected) {
         let d = NodeDefinition {
+            adaptive: false,
             cost: 1,
             type_name: "demo/node".into(),
             title: "Title".into(),

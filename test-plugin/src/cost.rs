@@ -7,6 +7,7 @@ impl Default for CostProbe {
 impl PluginNode for CostProbe {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             type_name: "test/cost".into(), title: "Cost Probe".into(), category: "Test".into(),
             description: "Exercises property-dependent work costs".into(),
             help: "Cost is relative work per call; native logic costs one unit. The cost property sets an arbitrary work cost.".into(),

@@ -230,19 +230,15 @@ node-for-loop-pin-Completed = Completed
 
 # sleep
 node-sleep-title = Sleep
-node-sleep-description = Затримує виконання на вказану кількість мілісекунд або тактів
+node-sleep-description = Затримує виконання на тривалість у тактах або часі
 node-sleep-help =
     Сигнал на In запускає затримку, а коли вона мине — видає сигнал на Out.
 
-    • Delay — тривалість у мілісекундах (округлюється вгору до цілих тактів).
-    • UseTicks = true — Delay рахується в тактах.
-    • TickDuration — тривалість такту в мс для розрахунку (типово — такт сервера).
+    • Delay — тривалість у тактах або часі, наприклад 10t або 5s. Час округлюється вгору до цілих тактів сервера. Без значення чекає один такт.
 
     Кожен сигнал на In запускає власну затримку, як у Queue Delay.
 node-sleep-pin-In = In
 node-sleep-pin-Delay = Delay
-node-sleep-pin-UseTicks = UseTicks
-node-sleep-pin-TickDuration = TickDuration
 node-sleep-pin-Out = Out
 
 # list/create

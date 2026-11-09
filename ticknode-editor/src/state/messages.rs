@@ -37,7 +37,7 @@ impl Editor {
                 let key = (route.exec, route.connection);
                 if self.selected_point.get_untracked().is_some_and(|(k, i)| k == key && i >= route.points.len()) { self.selected_point.set(None); }
             }
-            ServerMessage::Detached(_) => {},
+            ServerMessage::Detached(_) | ServerMessage::Timers(_) => {},
             ServerMessage::DetachedRemoved(_) => self.prune_selection(),
             ServerMessage::Executed(traces) => self.apply_traces(traces),
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),

@@ -146,3 +146,47 @@ fn split_field_origin_uses_its_effective_data_type() {
     assert!(events.contains(&ServerMessage::DataConnected(c)));
     assert_eq!(actor.engine.data_connections(), &[c]);
 }
+
+#[test]
+fn duration_input_adapts_constant_before_connecting_as_one_history_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let sleep = seed(&mut actor, "sleep");
+    let before = actor.graph_snapshot();
+    let (events, id) = apply(&mut actor, command(sleep, 1, "const", 0));
+    let ServerMessage::NodeAdded(instance) = &events[0] else { panic!("expected NodeAdded") };
+    assert_eq!(instance.definition.pins[0].pin_type, PinType::Data(DataType::Duration));
+    assert_eq!(instance.model.properties, vec![("value".into(), DataValue::Duration(Duration::from_secs(1)))]);
+    let connection = ConnectionModel { src_node: id, src_pin: PinId(0), dst_node: sleep, dst_pin: PinId(1) };
+    assert!(events.contains(&ServerMessage::DataConnected(connection)));
+    assert_eq!(actor.engine.data_connections(), &[connection]);
+    let (reply, _) = mpsc::unbounded_channel();
+    actor.apply(ClientMessage::Undo, &reply).unwrap();
+    assert_eq!(actor.graph_snapshot(), before);
+    assert!(!actor.history.state().can_undo);
+    actor.apply(ClientMessage::Redo, &reply).unwrap();
+    assert_eq!(actor.engine.data_connections(), &[connection]);
+    assert_eq!(actor.engine.node_definition(id).unwrap().pins[0].pin_type, PinType::Data(DataType::Duration));
+}
+
+#[test]
+fn init_contains_current_delay_timers_and_completed_delays_disappear() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let node = seed(&mut actor, "sleep");
+    actor.engine.set_input_value(node, PinId(1), Some(DataValue::Ticks(2))).unwrap();
+    actor.engine.trigger_node(node, PinId(0));
+    actor.engine.tick();
+    let snapshot = actor.snapshot();
+    assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&snapshot)).unwrap(), snapshot);
+    let ServerMessage::Init { timers, .. } = snapshot else { panic!("expected Init") };
+    assert_eq!(timers, vec![NodeTimer { node, total_ms: 200, remaining_ms: 200, count: 1 }]);
+    let now = Instant::now();
+    let mut telemetry = super::telemetry::Telemetry::new(now);
+    assert_eq!(telemetry.flush(now, &actor.engine), vec![ServerMessage::Timers(timers)]);
+    actor.engine.tick();
+    assert!(telemetry.flush(now + super::telemetry::INTERVAL, &actor.engine).is_empty());
+    actor.engine.tick();
+    assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &actor.engine), vec![ServerMessage::Timers(vec![])]);
+    assert!(matches!(actor.snapshot(), ServerMessage::Init { timers, .. } if timers.is_empty()));
+}

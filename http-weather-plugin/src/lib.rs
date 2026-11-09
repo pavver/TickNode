@@ -29,6 +29,7 @@ fn parse(body: &str) -> Option<(f64, String)> {
 impl PluginNode for WeatherNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 100,
             properties: Vec::new(),
             type_name: "http/weather".into(),

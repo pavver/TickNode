@@ -38,6 +38,7 @@ impl Drop for WsProbe {
 impl PluginNode for WsProbe {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/ws_probe".into(),

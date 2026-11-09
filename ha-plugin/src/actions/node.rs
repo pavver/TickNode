@@ -70,6 +70,7 @@ impl PluginNode for ActionNode {
             data_out(RESPONSE.0, "Response", DataType::Object),
         ]);
         NodeDefinition {
+            adaptive: false,
             cost: 50,
             type_name: "ha/action".into(), title: "Action".into(), category: CATEGORY.into(),
             description: "Runs a Home Assistant action with fields from its form".into(),

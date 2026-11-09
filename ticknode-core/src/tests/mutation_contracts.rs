@@ -17,6 +17,7 @@ impl Node for FixedNode {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1, type_name: "test/fixed".into(), title: "Fixed".into(), category: "Test".into(),
             description: String::new(), help: String::new(), properties: vec![], pins: self.pins.clone(),
         }

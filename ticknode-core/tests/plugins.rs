@@ -116,7 +116,7 @@ fn delay_queue_fires_after_delay() {
     let delay = NodeId::generate();
     engine.create_node(delay, "delay/queue", &[]).unwrap();
     // 500 ms at 100 ms per tick is 5 ticks.
-    constant(&mut engine, number(500), delay, 2);
+    constant(&mut engine, DataValue::Duration(std::time::Duration::from_millis(500)), delay, 2);
     let next = sink(&mut engine, delay, 1);
 
     engine.trigger_node(delay, PinId(0));
@@ -136,10 +136,10 @@ fn delay_nodes_keep_their_own_state() {
     let Some(mut engine) = engine_with("delay_plugin", vec![]) else { return };
     let ignore = NodeId::generate();
     engine.create_node(ignore, "delay/ignore", &[]).unwrap();
-    constant(&mut engine, number(300), ignore, 12);
+    constant(&mut engine, DataValue::Ticks(3), ignore, 12);
     let reset = NodeId::generate();
     engine.create_node(reset, "delay/reset", &[]).unwrap();
-    constant(&mut engine, number(300), reset, 22);
+    constant(&mut engine, DataValue::Ticks(3), reset, 22);
 
     // Repeated impulses: Ignore keeps a single task, Reset replaces its own.
     for _ in 0..3 {
@@ -150,6 +150,15 @@ fn delay_nodes_keep_their_own_state() {
     let owners: Vec<_> = engine.host_state.active_tasks.values().map(|t| t.node_id).collect();
     assert_eq!(owners.iter().filter(|n| **n == ignore).count(), 1);
     assert_eq!(owners.iter().filter(|n| **n == reset).count(), 1);
+    let timer = |engine: &TickEngine, node| engine.delay_timers().into_iter().find(|t| t.node == node).unwrap();
+    assert_eq!((timer(&engine, ignore).total_ms, timer(&engine, ignore).remaining_ms), (300, 100));
+    assert_eq!((timer(&engine, reset).total_ms, timer(&engine, reset).remaining_ms), (300, 300));
+    engine.tick();
+    assert_eq!(engine.delay_timers().len(), 1);
+    assert_eq!(engine.delay_timers()[0].node, reset);
+    engine.tick();
+    engine.tick();
+    assert!(engine.delay_timers().is_empty());
 }
 
 #[test]
@@ -157,7 +166,7 @@ fn removing_plugin_node_cancels_tasks() {
     let Some(mut engine) = engine_with("delay_plugin", vec![]) else { return };
     let delay = NodeId::generate();
     engine.create_node(delay, "delay/queue", &[]).unwrap();
-    constant(&mut engine, number(1000), delay, 2);
+    constant(&mut engine, DataValue::Duration(std::time::Duration::from_secs(1)), delay, 2);
     engine.trigger_node(delay, PinId(0));
     engine.tick();
     assert_eq!(engine.host_state.active_tasks.len(), 1);
@@ -415,6 +424,7 @@ fn type_conflicts_and_unknown_types_are_rejected() {
 
     // Node pin referencing an unknown type
     let node = NodeDefinition {
+        adaptive: false,
         cost: 1,
         properties: Vec::new(),
         type_name: "other/node".into(),
@@ -2173,4 +2183,32 @@ fn core_c_editing_existing_plugin_properties_survives_instance_recreation() {
     let properties = engine.node_model(node).unwrap().properties;
     assert_eq!(properties.iter().filter(|(key, _)| key == "y").count(), 1);
     assert!(properties.contains(&("y".into(), DataValue::from(9.0))));
+}
+
+#[test]
+fn delay_queue_timers_and_sdk_time_rounding() {
+    let Some(mut engine) = engine_with("delay_plugin", vec![]) else { return };
+    let node = NodeId::generate();
+    engine.create_node(node, "delay/queue", &[]).unwrap();
+    engine.set_input_value(node, PinId(2), Some(DataValue::Ticks(5))).unwrap();
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    engine.set_input_value(node, PinId(2), Some(DataValue::Duration(std::time::Duration::from_millis(100) + std::time::Duration::from_nanos(1)))).unwrap();
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    // The second task rounds up to two ticks, but the older, longer task supplies progress.
+    assert_eq!(engine.delay_timers(), vec![NodeTimer { node, total_ms: 500, remaining_ms: 400, count: 2 }]);
+    engine.tick();
+    assert_eq!(engine.delay_timers()[0].count, 2);
+    engine.tick();
+    assert_eq!(engine.delay_timers()[0].count, 1);
+    engine.tick();
+    engine.tick();
+    assert!(engine.delay_timers().is_empty());
+    engine.set_input_value(node, PinId(2), Some(DataValue::Duration(std::time::Duration::from_nanos(1)))).unwrap();
+    engine.trigger_node(node, PinId(0));
+    engine.tick();
+    assert_eq!(engine.delay_timers()[0].total_ms, 100);
+    engine.tick();
+    assert!(engine.delay_timers().is_empty());
 }

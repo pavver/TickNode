@@ -9,6 +9,7 @@ pub(super) struct Counter {
 impl PluginNode for Counter {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/counter".into(),
@@ -49,6 +50,7 @@ pub(super) struct Ticker {
 impl PluginNode for Ticker {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/ticker".into(),
@@ -78,6 +80,7 @@ pub(super) struct Crash;
 impl PluginNode for Crash {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/crash".into(),
@@ -109,6 +112,7 @@ pub(super) struct Storage;
 impl PluginNode for Storage {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "test/storage".into(),
@@ -133,6 +137,7 @@ pub(super) struct ClearProbe;
 impl PluginNode for ClearProbe {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             type_name: "test/clear".into(), title: "Clear".into(), category: "Test".into(),
             description: "Sets or clears a data output".into(), help: "Set emits a value; Clear removes it and attempts invalid clears.".into(), properties: vec![],

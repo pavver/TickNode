@@ -20,11 +20,12 @@ pub(super) struct Telemetry {
     logs: Vec<(NodeId, String)>,
     dropped_logs: usize,
     next_flush: Instant,
+    timers: Vec<(NodeId, ticknode_core::TaskId, u32)>,
 }
 
 impl Telemetry {
     pub(super) fn new(now: Instant) -> Self {
-        Self { traces: Vec::new(), index: HashMap::new(), logs: Vec::new(), dropped_logs: 0, next_flush: now }
+        Self { traces: Vec::new(), index: HashMap::new(), logs: Vec::new(), dropped_logs: 0, next_flush: now, timers: Vec::new() }
     }
 
     pub(super) fn add_traces(&mut self, traces: &[NodeTrace]) {
@@ -46,12 +47,18 @@ impl Telemetry {
     }
 
     /// The messages to send now: empty until the interval has passed or when nothing happened.
-    pub(super) fn flush(&mut self, now: Instant) -> Vec<ServerMessage> {
+    pub(super) fn flush(&mut self, now: Instant, engine: &ticknode_core::TickEngine) -> Vec<ServerMessage> {
         if now < self.next_flush {
             return Vec::new();
         }
         self.next_flush = now + INTERVAL;
         let mut messages = Vec::new();
+        let timers = engine.host_state.delay_timers_with_tasks();
+        let keys: Vec<_> = timers.iter().map(|(id, timer)| (timer.node, *id, timer.count)).collect();
+        if keys != self.timers {
+            self.timers = keys;
+            messages.push(ServerMessage::Timers(timers.into_iter().map(|(_, timer)| timer).collect()));
+        }
         if !self.traces.is_empty() {
             self.index.clear();
             messages.push(ServerMessage::Executed(std::mem::take(&mut self.traces)));

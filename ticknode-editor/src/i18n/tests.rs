@@ -189,6 +189,7 @@ fn field_hints_and_parse_errors_follow_the_selected_type() {
 
     fn def(type_name: &str) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: type_name.into(),

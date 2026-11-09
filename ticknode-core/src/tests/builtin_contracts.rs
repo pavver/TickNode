@@ -253,25 +253,21 @@ fn clock_with_zero_interval_still_pulses_every_tick() {
 }
 
 #[test]
-fn sleep_defaults_and_millisecond_overrides_deliver_on_the_expected_tick() {
-    for (delay, use_ticks, tick_duration, expected_ticks) in [
-        (None, None, None, 1),
-        (Some(0), None, None, 1),
-        (Some(1), None, None, 1),
-        (Some(250), None, None, 3),
-        (Some(250), None, Some(100.0), 3),
-        (Some(250), Some(false), Some(100.0), 3),
-        (None, None, Some(0.5), 1),
-        (Some(1), None, Some(0.5), 2),
-        (Some(3), Some(true), None, 3),
+fn sleep_duration_and_tick_values_deliver_on_the_expected_tick() {
+    for (delay, expected_ticks) in [
+        (None, 1),
+        (Some(DataValue::Ticks(0)), 1),
+        (Some(DataValue::Ticks(1)), 1),
+        (Some(DataValue::Ticks(3)), 3),
+        (Some(DataValue::Duration(std::time::Duration::ZERO)), 1),
+        (Some(DataValue::Duration(std::time::Duration::from_nanos(1))), 1),
+        (Some(DataValue::Duration(std::time::Duration::from_millis(250))), 3),
     ] {
         let mut engine = TickEngine::new();
         let sleep = add(&mut engine, "sleep", &[]);
         let sink = add(&mut engine, "console", &[]);
         engine.connect_exec(sleep, PinId(4), sink, PinId(0)).unwrap();
-        engine.set_input_value(sleep, PinId(1), delay.map(number)).unwrap();
-        engine.set_input_value(sleep, PinId(2), use_ticks.map(DataValue::Bool)).unwrap();
-        engine.set_input_value(sleep, PinId(3), tick_duration.map(DataValue::from)).unwrap();
+        engine.set_input_value(sleep, PinId(1), delay).unwrap();
         assert!(activate(&mut engine, sleep, 0).fired.is_empty());
         assert_eq!(engine.host_state.active_tasks.len(), 1);
         for elapsed in 1..=expected_ticks {

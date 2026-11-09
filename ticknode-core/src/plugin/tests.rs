@@ -23,6 +23,7 @@
 
     fn consumer_slot(runtime: Arc<Mutex<Runtime>>, pins: Vec<PinDefinition>, types: Vec<TypeDefinition>) -> PluginSlot {
         let definition = NodeDefinition {
+            adaptive: false,
             cost: 1,
             properties: Vec::new(),
             type_name: "consumer/node".into(),
@@ -130,6 +131,7 @@
             fn id(&self) -> NodeId { self.0 }
             fn definition(&self) -> NodeDefinition {
                 NodeDefinition {
+                    adaptive: false,
                     cost: 1,
                     type_name: "live".into(), title: "Live".into(), category: "Test".into(),
                     description: String::new(), help: String::new(), properties: Vec::new(),

@@ -3,6 +3,11 @@ use std::sync::Arc;
 use crate::{EngineError, Node, RemovedConnections, TickEngine};
 
 impl TickEngine {
+    /// Current host-delay timers, grouped by owner node.
+    pub fn delay_timers(&self) -> Vec<NodeTimer> {
+        self.host_state.delay_timers_with_tasks().into_iter().map(|(_, timer)| timer).collect()
+    }
+
     // --- Nodes ---
 
     pub fn add_node(&mut self, node: Box<dyn Node>) {
@@ -156,6 +161,20 @@ impl TickEngine {
             return Err(EngineError::PluginUnavailable(reason));
         }
         node.set_property(name, value);
+        self.finish_property_edit(node_id)
+    }
+
+    /// Adapts a node to an existing data pin and reconciles its definition, values and connections.
+    pub fn adapt_node(&mut self, node_id: NodeId, pin: PinId, data_type: &DataType) -> Result<RemovedConnections, EngineError> {
+        let node = self.nodes.get_mut(&node_id).ok_or(EngineError::NodeNotFound(node_id))?;
+        if let Some(reason) = node.unavailable() {
+            return Err(EngineError::PluginUnavailable(reason));
+        }
+        if !node.adapt_to(pin, data_type) { return Ok(RemovedConnections::default()); }
+        self.finish_property_edit(node_id)
+    }
+
+    fn finish_property_edit(&mut self, node_id: NodeId) -> Result<RemovedConnections, EngineError> {
         self.invalidate_definition(node_id);
         self.pins_edited(node_id);
         self.update_roles(node_id);

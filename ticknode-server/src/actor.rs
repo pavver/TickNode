@@ -173,7 +173,7 @@ impl Actor {
         }
         self.telemetry.add_traces(&self.engine.executed);
         self.telemetry.add_logs(std::mem::take(&mut self.engine.host_state.logs));
-        for message in self.telemetry.flush(now) {
+        for message in self.telemetry.flush(now, &self.engine) {
             self.broadcast(&message);
         }
     }
@@ -214,6 +214,7 @@ impl Actor {
             history: self.history.state(),
             wire_routes: routes::sorted(&self.routes),
             detached_connections: graph.detached_connections,
+            timers: self.engine.delay_timers(),
             nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,

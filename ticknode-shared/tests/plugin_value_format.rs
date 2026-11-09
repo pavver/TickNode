@@ -25,6 +25,7 @@ fn plugin_value_format() {
         },
     )]);
     for value in [
+        DataValue::Ticks(10),
         DataValue::Bool(true),
         DataValue::Number(NumberValue::Int(42)),
         DataValue::Number(NumberValue::Float(1.5)),

@@ -55,8 +55,8 @@ struct Clock {
     fail: bool,
 }
 impl Scheduler for Clock {
-    fn delay_ms(&mut self, ms: u64) -> Result<TaskId, String> {
-        self.calls.push(format!("delay {ms}"));
+    fn delay_for(&mut self, value: &DataValue) -> Result<TaskId, String> {
+        self.calls.push(format!("delay {value:?}"));
         if self.fail {
             Err("failed".into())
         } else {
@@ -73,16 +73,16 @@ impl Scheduler for Clock {
 #[test]
 fn scheduling_preserves_retrigger_modes_cancellation_and_failure() {
     for (mode, base, expected) in [
-        (Mode::Queue, 0, vec!["delay 12"]),
+        (Mode::Queue, 0, vec!["delay Ticks(12)"]),
         (Mode::Ignore, 10, vec![]),
-        (Mode::Reset, 20, vec!["cancel 7", "delay 12"]),
+        (Mode::Reset, 20, vec!["cancel 7", "delay Ticks(12)"]),
     ] {
         let mut node = DelayNode {
             mode,
             active: Some(7),
         };
         let mut clock = Clock::default();
-        let inputs = [(PinId(base + 2), 12.9.into())].into_iter().collect();
+        let inputs = [(PinId(base + 2), DataValue::Ticks(12))].into_iter().collect();
         assert!(
             node.execute_with(Trigger::Pin(PinId(base)), &inputs, &mut clock)
                 .is_empty()
@@ -105,11 +105,30 @@ fn scheduling_preserves_retrigger_modes_cancellation_and_failure() {
         fail: true,
         ..Clock::default()
     };
-    let inputs = [(PinId(22), (-1.0).into())].into_iter().collect();
+    let inputs = [(PinId(22), DataValue::Duration(std::time::Duration::ZERO))].into_iter().collect();
     assert!(
         node.execute_with(Trigger::Pin(PinId(20)), &inputs, &mut clock)
             .is_empty()
     );
-    assert_eq!(clock.calls, ["cancel 7", "delay 0", "error failed"]);
+    assert_eq!(clock.calls, ["cancel 7", "delay Duration(0ns)", "error failed"]);
     assert_eq!(node.active, None);
+}
+
+#[test]
+fn duration_inputs_and_missing_value_reach_the_scheduler() {
+    for (value, expected) in [
+        (Some(DataValue::Ticks(10)), "delay Ticks(10)"),
+        (Some(DataValue::Duration(std::time::Duration::from_millis(250))), "delay Duration(250ms)"),
+        (None, "delay Ticks(1)"),
+    ] {
+        let mut node = DelayNode { mode: Mode::Queue, active: None };
+        let definition = node.definition();
+        let delay = definition.pins.iter().find(|p| p.id == PinId(2)).unwrap();
+        assert_eq!(delay.name, "Delay");
+        assert_eq!(delay.pin_type, PinType::Data(DataType::Duration));
+        let inputs = value.into_iter().map(|value| (PinId(2), value)).collect();
+        let mut clock = Clock::default();
+        node.execute_with(Trigger::Pin(PinId(0)), &inputs, &mut clock);
+        assert_eq!(clock.calls, [expected]);
+    }
 }

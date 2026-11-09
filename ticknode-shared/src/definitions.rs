@@ -51,6 +51,9 @@ pub struct NodeDefinition {
     /// Relative work per call; native logic costs one unit.
     #[serde(default = "default_cost")]
     pub cost: u32,
+    /// Can adapt its pin type when created from an existing data pin.
+    #[serde(default)]
+    pub adaptive: bool,
 }
 
 fn default_cost() -> u32 { 1 }

@@ -3,7 +3,7 @@
 //!
 //! - time — `HH:MM` or `HH:MM:SS`;
 //! - date-time — `YYYY-MM-DD HH:MM[:SS]` (UTC) or RFC 3339 with offset;
-//! - duration — seconds (`90`, `1.5`) or with units: `1h 30m`, `45s`, `500ms` (including localized unit suffixes);
+//! - duration — seconds (`90`, `1.5`) or with units: `1h 30m`, `45s`, `500ms`, or ticks: `10t` (including localized unit suffixes);
 //! - color — `#rrggbb` or `#rrggbbaa`.
 
 use std::time::Duration;
@@ -56,6 +56,19 @@ pub fn parse_duration(text: &str) -> Option<Duration> {
         return None;
     }
     Duration::try_from_secs_f64(total).ok()
+}
+
+/// Parses a tick count with an English or Ukrainian suffix, or a wall-clock duration.
+pub fn parse_duration_value(text: &str) -> Option<DataValue> {
+    let lower = text.trim().to_lowercase();
+    for suffix in ["ticks", "tick", "t", "тактів", "такти", "такт"] {
+        if let Some(number) = lower.strip_suffix(suffix) {
+            let number = number.trim();
+            return (!number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
+                .then(|| number.parse().ok()).flatten().map(DataValue::Ticks);
+        }
+    }
+    parse_duration(text).map(DataValue::Duration)
 }
 
 fn duration_part(chars: &[char], position: &mut usize) -> Option<f64> {
@@ -148,6 +161,7 @@ fn format_scalar(value: &DataValue) -> Option<String> {
         DataValue::Time(t) => format_time(*t),
         DataValue::DateTime(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
         DataValue::Duration(d) => format_duration(*d),
+        DataValue::Ticks(n) => format!("{n}t"),
         DataValue::Color(c) => format_color(*c),
         _ => return None,
     })
@@ -205,7 +219,7 @@ pub fn type_hint(t: &DataType) -> &'static str {
     match t {
         DataType::Time => "HH:MM",
         DataType::DateTime => "YYYY-MM-DD HH:MM",
-        DataType::Duration => "1h 30m / 45s",
+        DataType::Duration => "10t / 1h 30m / 45s",
         DataType::Color => "#rrggbb",
         _ => "—",
     }
@@ -218,7 +232,7 @@ pub fn default_of(t: &DataType) -> DataValue {
         DataType::Bool => DataValue::Bool(true),
         DataType::Time => DataValue::Time(NaiveTime::MIN),
         DataType::DateTime => DataValue::DateTime(DateTime::<Utc>::UNIX_EPOCH),
-        DataType::Duration => DataValue::Duration(Duration::from_secs(60)),
+        DataType::Duration => DataValue::Duration(Duration::from_secs(1)),
         DataType::Color => DataValue::Color(Color { r: 255, g: 255, b: 255, a: 255 }),
         DataType::List(inner) => DataValue::List { element_type: (**inner).clone(), elements: Vec::new() },
         DataType::Object | DataType::Named(_) => DataValue::Object { fields: Default::default(), type_name: None },
@@ -243,7 +257,7 @@ fn parse_typed_text(text: &str, t: &DataType) -> Result<DataValue, String> {
         (DataType::Bool, parse_bool, "true/false"),
         (DataType::Time, |s| parse_time(s).map(DataValue::Time), "a time (HH:MM or HH:MM:SS)"),
         (DataType::DateTime, |s| parse_datetime(s).map(DataValue::DateTime), "a date-time (YYYY-MM-DD HH:MM)"),
-        (DataType::Duration, |s| parse_duration(s).map(DataValue::Duration), "a duration (90, 1h 30m, 500ms)"),
+        (DataType::Duration, parse_duration_value, "a duration (10t, 90, 1h 30m, 500ms)"),
         (DataType::Color, |s| parse_color(s).map(DataValue::Color), "a color (#rrggbb)"),
     ];
     let Some((_, parser, description)) = PARSERS.iter().find(|(ty, _, _)| ty == t) else {

@@ -34,6 +34,15 @@ pub fn delay_ms(ms: u64) -> Result<TaskId, String> {
     delay_ticks(ms.div_ceil(tick))
 }
 
+/// Starts a delay in ticks or wall-clock time (rounded up to milliseconds, then ticks).
+pub fn delay_for(value: &DataValue) -> Result<TaskId, String> {
+    match value {
+        DataValue::Ticks(n) => delay_ticks(*n),
+        DataValue::Duration(d) => delay_ms(d.as_nanos().div_ceil(1_000_000).min(u128::from(u64::MAX)) as u64),
+        _ => Err("Delay must be a duration in ticks or time".into()),
+    }
+}
+
 pub fn http(request: HttpRequest) -> Result<TaskId, String> {
     wit_host::start_http(&wit::HttpRequest {
         method: request.method,

@@ -71,6 +71,7 @@ impl Drop for Entity {
 impl PluginNode for Entity {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
+            adaptive: false,
             cost: 2,
             type_name: "ha/entity".into(), title: "Entity".into(), category: CATEGORY.into(),
             description: "Keeps the latest state of a Home Assistant entity available as data".into(),

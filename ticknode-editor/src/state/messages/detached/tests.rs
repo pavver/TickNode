@@ -42,7 +42,7 @@ fn reconnect_snapshot_replaces_detached_wires_including_empty_snapshots() {
     let init = |detached_connections| ServerMessage::Init {
         definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![],
         traces: vec![], types: vec![], plugins: vec![], translations: vec![], property_options: vec![],
-        history: HistoryState::default(), wire_routes: vec![], detached_connections,
+        history: HistoryState::default(), wire_routes: vec![], detached_connections, timers: vec![],
     };
     let mut all = vec![wire()];
     twice(&mut all, init(vec![d, d]));

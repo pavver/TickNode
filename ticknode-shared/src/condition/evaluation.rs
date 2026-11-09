@@ -16,6 +16,7 @@ impl Operand {
 impl Condition {
     /// An input without a value (unconnected and without an inline value on the node) does not satisfy
     /// the condition (except `NoValue`). An operator inapplicable to the value's type also evaluates to false.
+    /// Tick and wall-clock durations cannot be compared: all equality/ordering operators, including `Ne`, return false.
     pub fn holds(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> bool {
         let a = self.left.resolve(value_of);
         // Resolve the right operand only for binary operators with a present left value.
@@ -34,7 +35,10 @@ impl Condition {
             IsTrue => a == Some(DataValue::Bool(true)),
             IsFalse => a == Some(DataValue::Bool(false)),
             Eq => operands().is_some_and(|(a, b)| loosely_equal(a, &b)),
-            Ne => operands().is_some_and(|(a, b)| !loosely_equal(a, &b)),
+            Ne => operands().is_some_and(|(a, b)| {
+                let b = coerce_to(b, &a.get_type());
+                !mixed_durations(a, &b) && !loosely_equal(a, &b)
+            }),
             Lt => ordered() == Some(Ordering::Less),
             Le => ordered().is_some_and(|ord| ord != Ordering::Greater),
             Gt => ordered() == Some(Ordering::Greater),
@@ -76,8 +80,13 @@ fn ordering(a: &DataValue, b: &DataValue) -> Option<Ordering> {
         (DataValue::Time(x), DataValue::Time(y)) => Some(x.cmp(y)),
         (DataValue::DateTime(x), DataValue::DateTime(y)) => Some(x.cmp(y)),
         (DataValue::Duration(x), DataValue::Duration(y)) => Some(x.cmp(y)),
+        (DataValue::Ticks(x), DataValue::Ticks(y)) => Some(x.cmp(y)),
         _ => None,
     }
+}
+
+fn mixed_durations(a: &DataValue, b: &DataValue) -> bool {
+    matches!((a, b), (DataValue::Ticks(_), DataValue::Duration(_)) | (DataValue::Duration(_), DataValue::Ticks(_)))
 }
 
 /// Equality after coercing `b` to the type of `a` (`1` = `1.0`, `"07:30"` = time 07:30).

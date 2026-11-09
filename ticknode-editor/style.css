@@ -1316,3 +1316,109 @@ body:has(.palette-ghost) { cursor: copy; }
 .wire-value { pointer-events: none; font-family: var(--font); font-size: 11px; }
 .wire-value rect { fill: var(--surface); stroke: var(--border); stroke-width: var(--border-w); }
 .wire-value text { fill: var(--text-primary); pointer-events: all; cursor: help; }
+
+/* --- Canvas Frames (Comment Boxes) --- */
+.frame-gray { --frame-color: var(--text-secondary); }
+.frame-red { --frame-color: var(--error); }
+.frame-orange { --frame-color: #F08A24; }
+.frame-yellow { --frame-color: #D97706; }
+:root[data-theme="dark"] .frame-yellow { --frame-color: #E6A700; }
+.frame-green { --frame-color: var(--success); }
+.frame-teal { --frame-color: var(--accent); }
+.frame-blue { --frame-color: var(--info); }
+.frame-purple { --frame-color: var(--magenta); }
+
+.canvas-frame {
+    position: absolute;
+    border: 1px solid var(--frame-color);
+    background: color-mix(in srgb, var(--frame-color) 10%, transparent);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.canvas-frame.selected {
+    outline: var(--border-thick) solid var(--accent);
+}
+
+.canvas-frame-header {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 calc(var(--du) * 2);
+    pointer-events: all;
+    background: color-mix(in srgb, var(--frame-color) 20%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--frame-color) 30%, transparent);
+    user-select: none;
+    cursor: default;
+    box-sizing: border-box;
+}
+
+.canvas-frame-title {
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+    flex: 1;
+    min-width: 0;
+    margin-right: calc(var(--du) * 2);
+}
+
+.canvas-frame-title-input {
+    flex: 1;
+    min-width: 0;
+    height: calc(var(--du) * 5);
+    margin-right: calc(var(--du) * 2);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+.canvas-frame-color-btn {
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    flex: none;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    background: var(--frame-color);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.canvas-frame-color-btn:hover {
+    filter: brightness(1.2);
+}
+
+.canvas-frame-color-popup {
+    position: absolute;
+    top: calc(var(--du) * 6);
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(4, calc(var(--du) * 5));
+    gap: calc(var(--du) * 1);
+    padding: calc(var(--du) * 1.5);
+    background: var(--surface);
+    border: var(--border-w) solid var(--border-strong);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 20;
+    pointer-events: all;
+}
+
+.canvas-frame-color-swatch {
+    width: calc(var(--du) * 5);
+    height: calc(var(--du) * 5);
+    padding: 0;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--frame-color);
+    box-sizing: border-box;
+}
+
+.canvas-frame-color-swatch:hover {
+    border-color: var(--text-primary);
+    filter: brightness(1.2);
+}

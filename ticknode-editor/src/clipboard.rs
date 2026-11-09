@@ -134,6 +134,7 @@ pub fn delete_selection(ed: Editor) {
         Some(Selection::Exec(c)) => ed.send(ClientMessage::DisconnectExec(c)),
         Some(Selection::Data(c)) => ed.send(ClientMessage::DisconnectData { dst_node: c.dst_node, dst_pin: c.dst_pin }),
         Some(Selection::Detached(d)) => ed.send(ClientMessage::RemoveDetached(d)),
+        Some(Selection::Frame(id)) => ed.send(ClientMessage::RemoveFrame(id)),
         None => {}
     }
 }

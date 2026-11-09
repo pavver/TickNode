@@ -51,6 +51,7 @@ pub enum Selection {
     Exec(ConnectionModel),
     Data(ConnectionModel),
     Detached(DetachedConnection),
+    Frame(FrameId),
 }
 
 /// Dragging a node or resource onto the canvas.
@@ -226,6 +227,7 @@ pub struct Editor {
     pub exec: RwSignal<Vec<ConnectionModel>>,
     pub data: RwSignal<Vec<ConnectionModel>>,
     pub detached: RwSignal<Vec<DetachedConnection>>,
+    pub frames: RwSignal<BTreeMap<FrameId, Frame>>,
     pub wire_routes: RwSignal<WireRoutes>,
     pub wire_context: RwSignal<Option<WireContext>>,
     /// Route point last pressed on the selected wire: Delete removes it instead of the wire.
@@ -262,6 +264,7 @@ pub struct Editor {
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
     pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
     pub recent_nodes: RwSignal<Vec<String>>,
+    pub pending_frame_select: StoredValue<Option<FrameId>>,
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
@@ -297,6 +300,7 @@ impl Editor {
             exec: RwSignal::new(Vec::new()),
             data: RwSignal::new(Vec::new()),
             detached: RwSignal::new(Vec::new()),
+            frames: RwSignal::new(BTreeMap::new()),
             wire_routes: RwSignal::new(HashMap::new()),
             wire_context: RwSignal::new(None),
             selected_point: RwSignal::new(None),
@@ -324,6 +328,7 @@ impl Editor {
             quick_add: RwSignal::new(None),
             resource_menu: RwSignal::new(None),
             recent_nodes: RwSignal::new(Vec::new()),
+            pending_frame_select: StoredValue::new(None),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),

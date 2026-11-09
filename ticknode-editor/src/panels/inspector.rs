@@ -39,7 +39,7 @@ pub fn Inspector() -> impl IntoView {
                             danger=true full=true on_click=Callback::new(move |_| ed.send(ClientMessage::RemoveDetached(d))) />
                     </div>
                 }.into_any(),
-                None => view! { <GraphOverview /> }.into_any(),
+                Some(Selection::Frame(_)) | None => view! { <GraphOverview /> }.into_any(),
             }}
         </aside>
     }
@@ -69,6 +69,7 @@ fn GraphOverview() -> impl IntoView {
             <span class="t-body-small">{move || t!("overview-hint-9")}</span>
             <span class="t-body-small">{move || t!("overview-hint-resize")}</span>
             <span class="t-body-small">{move || t!("overview-hint-quick-add")}</span>
+            <span class="t-body-small">{move || t!("overview-hint-frame")}</span>
         </div>
     }
 }

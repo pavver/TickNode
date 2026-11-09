@@ -6,6 +6,7 @@ fn shortcuts_keep_both_keyboard_layouts_and_default_handling() {
         (false, &["Delete", "Backspace"][..], Shortcut::Delete),
         (false, &["Escape"][..], Shortcut::Escape),
         (false, &["f", "F", "а", "А"][..], Shortcut::Fit),
+        (false, &["c", "C", "с", "С"][..], Shortcut::CreateFrame),
         (true, &["z", "Z", "я", "Я"][..], Shortcut::Undo),
         (true, &["y", "Y", "н", "Н"][..], Shortcut::Redo),
         (true, &["a", "A", "ф", "Ф"][..], Shortcut::SelectAll),
@@ -31,5 +32,7 @@ fn paste_blocks_history_but_leaves_other_shortcuts_available() {
     }
     assert_eq!(shortcut(true, false, "d", true), Some(Shortcut::Duplicate));
     assert_eq!(shortcut(false, false, "Escape", true), Some(Shortcut::Escape));
+    assert_eq!(shortcut(false, false, "c", true), None);
     assert_eq!(shortcut(false, true, "f", false), Some(Shortcut::Fit));
+    assert_eq!(shortcut(false, true, "c", false), Some(Shortcut::CreateFrame));
 }

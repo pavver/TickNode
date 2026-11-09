@@ -8,6 +8,7 @@ toolbar-redo = Повторити (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)
 toolbar-palette = Палітра нод
 toolbar-plugins = Плагіни
 toolbar-fit = Показати весь граф (F)
+toolbar-add-frame = Додати рамку
 toolbar-console = Консоль
 toolbar-theme = Світла / темна тема
 toolbar-language = Мова: Українська / English
@@ -399,6 +400,7 @@ wire-detached-remove = Видалити дріт
 
 node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
 overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір вузла; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
+overview-hint-frame = C — додати рамку навколо виділених нод; подвійний клік по заголовку — перейменувати
 error-node-size = Розміри вузла мають бути скінченними числами
 
 # Runtime node errors and trace values on the canvas
@@ -428,3 +430,12 @@ resources-loading = Поки що порожньо
 
 error-frame-invalid = Позиція і розмір рамки мають бути скінченними числами
 error-frame-limit = Забагато рамок
+frame-default-title = Коментар
+frame-color-gray = Сірий
+frame-color-red = Червоний
+frame-color-orange = Помаранчевий
+frame-color-yellow = Жовтий
+frame-color-green = Зелений
+frame-color-teal = Бірюзовий
+frame-color-blue = Синій
+frame-color-purple = Фіолетовий

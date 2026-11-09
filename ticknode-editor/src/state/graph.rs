@@ -32,6 +32,7 @@ impl Editor {
             Some(Selection::Exec(c)) if !self.exec.with_untracked(|e| e.contains(&c)) => None,
             Some(Selection::Data(c)) if !self.data.with_untracked(|d| d.contains(&c)) => None,
             Some(Selection::Detached(d)) if !self.detached.with_untracked(|all| all.contains(&d)) => None,
+            Some(Selection::Frame(id)) if !self.frames.with_untracked(|f| f.contains_key(&id)) => None,
             _ => return,
         };
         self.selection.set(next);

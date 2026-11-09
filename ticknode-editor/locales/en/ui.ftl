@@ -12,6 +12,7 @@ toolbar-redo = Redo (Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y)
 toolbar-palette = Node palette
 toolbar-plugins = Plugins
 toolbar-fit = Fit graph to view (F)
+toolbar-add-frame = Add frame
 toolbar-console = Console
 toolbar-theme = Light / dark theme
 toolbar-language = Language: English / Українська
@@ -399,6 +400,7 @@ wire-detached-remove = Remove wire
 
 node-resize-title = Drag to resize, double-click to reset
 overview-hint-resize = Drag the bottom-right corner to resize a node; double-click it to reset. Esc cancels. In multiline fields, Ctrl/Cmd+Enter saves.
+overview-hint-frame = C — add a frame around the selected nodes; double-click the title to rename
 error-node-size = Node dimensions must be finite
 
 # Runtime node errors and trace values on the canvas
@@ -423,3 +425,12 @@ resources-loading = No items yet
 
 error-frame-invalid = Frame position and size must be finite
 error-frame-limit = Too many frames
+frame-default-title = Comment
+frame-color-gray = Gray
+frame-color-red = Red
+frame-color-orange = Orange
+frame-color-yellow = Yellow
+frame-color-green = Green
+frame-color-teal = Teal
+frame-color-blue = Blue
+frame-color-purple = Purple

@@ -68,6 +68,14 @@ pub fn Header() -> impl IntoView {
                     title=Signal::derive(move || t!("toolbar-fit"))
                     on_click=Callback::new(move |_| fit_view(ed))
                 />
+                <button
+                    class="icon-btn ctl"
+                    title=move || t!("toolbar-add-frame")
+                    aria-label=move || t!("toolbar-add-frame")
+                    on:click=move |_| crate::canvas::create_frame(ed)
+                >
+                    <span class="mdi mdi-selection-drag" aria-hidden="true"></span>
+                </button>
                 <IconButton
                     icon=icons::TERMINAL
                     title=Signal::derive(move || t!("toolbar-console"))

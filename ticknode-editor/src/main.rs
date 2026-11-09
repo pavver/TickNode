@@ -110,6 +110,7 @@ fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
         Shortcut::Redo => editor.send(ClientMessage::Redo),
         Shortcut::SelectAll => editor.select_nodes(editor.nodes.with_untracked(|n| n.keys().copied().collect::<Vec<_>>())),
         Shortcut::Duplicate => clipboard::duplicate(editor),
+        Shortcut::CreateFrame => crate::canvas::create_frame(editor),
     }
 }
 

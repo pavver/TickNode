@@ -6,6 +6,7 @@ mod connections;
 mod snapshot;
 mod routes;
 mod detached;
+mod frames;
 
 impl Editor {
     pub fn apply(&self, msg: ServerMessage) {
@@ -13,6 +14,7 @@ impl Editor {
         if timers::applies(&msg) { self.timers.update(|all| timers::apply(all, &msg, now_ms())); }
         if routes::applies(&msg) { self.wire_routes.update(|all| routes::apply(all, &msg)); }
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
+        if frames::applies(&msg) { self.frames.update(|all| frames::apply(all, &msg)); }
         match msg {
             ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, .. } => {
                 self.history.set(history);
@@ -48,7 +50,14 @@ impl Editor {
                 let key = (route.exec, route.connection);
                 if self.selected_point.get_untracked().is_some_and(|(k, i)| k == key && i >= route.points.len()) { self.selected_point.set(None); }
             }
-            ServerMessage::Detached(_) | ServerMessage::Timers(_) | ServerMessage::NodeErrors { .. } | ServerMessage::FrameSet(_) | ServerMessage::FrameRemoved(_) => {},
+            ServerMessage::Detached(_) | ServerMessage::Timers(_) | ServerMessage::NodeErrors { .. } => {},
+            ServerMessage::FrameSet(frame) => {
+                if self.pending_frame_select.get_value() == Some(frame.id) {
+                    self.pending_frame_select.set_value(None);
+                    self.selection.set(Some(Selection::Frame(frame.id)));
+                }
+            }
+            ServerMessage::FrameRemoved(_) => self.prune_selection(),
             ServerMessage::DetachedRemoved(_) => self.prune_selection(),
             ServerMessage::Executed(traces) => self.apply_traces(traces),
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),

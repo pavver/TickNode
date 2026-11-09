@@ -18,8 +18,10 @@ mod paste;
 mod pins;
 mod selection;
 mod wires;
+mod frame;
 
 pub use camera::{fit_view, view_center};
+pub use frame::{FrameView, create_frame};
 pub use node::trigger_pin;
 pub use pins::*;
 
@@ -64,6 +66,7 @@ pub fn Canvas() -> impl IntoView {
         format!("transform:translate({}px,{}px) scale({})", v.x, v.y, v.zoom)
     };
     let node_ids = move || ed.nodes.with(|n| n.keys().copied().collect::<Vec<_>>());
+    let frame_ids = move || ed.frames.with(|f| f.keys().copied().collect::<Vec<_>>());
 
     view! {
         <div
@@ -96,6 +99,9 @@ pub fn Canvas() -> impl IntoView {
                 class:multi-select=move || ed.selection.with(|s| matches!(s, Some(Selection::Nodes(set)) if set.len() > 1))
                 style=viewport_style
             >
+                <For each=frame_ids key=|id| *id let:id>
+                    <FrameView id=id />
+                </For>
                 <svg class="wires">
                     <For each=move || ed.exec.get() key=|c| *c let:c>
                         <Wire conn=c exec=true />

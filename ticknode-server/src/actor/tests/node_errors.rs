@@ -11,7 +11,7 @@ fn snapshot_carries_current_node_errors_with_ages_and_roundtrips() {
     let (events, _) = broadcast::channel(16);
     let actor = Actor {
         engine, positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), storage: Storage::new(dir.path().join("graph.json")),
-        plugins: Plugins::new(dir.path()), events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::super::telemetry::Telemetry::new(Instant::now()),
+        plugins: Plugins::new(dir.path()), events, dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: super::super::telemetry::Telemetry::new(Instant::now()), frames: Default::default(),
     };
     let snapshot = actor.snapshot();
     let decoded: ServerMessage = postcard::from_bytes(&encode(&snapshot)).unwrap();

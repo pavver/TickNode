@@ -3,13 +3,13 @@
 //! (synchronous wasmtime-wasi) cannot be made inside an async context. Network tasks
 //! are spawned by the engine onto the server runtime via `HostState::runtime`.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::mpsc as std_mpsc;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use ticknode_core::{EngineError, RemovedConnections, TickEngine};
-use ticknode_shared::{ClientMessage, NodeId, NodeInstance, NodeTrace, NodeSize, Position, ServerMessage, UiMessage};
+use ticknode_shared::{ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeTrace, NodeSize, Position, ServerMessage, UiMessage};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
 
@@ -69,12 +69,12 @@ pub fn spawn(
     plugins: Plugins,
     tick: Duration,
 ) -> std::io::Result<EngineHandle> {
-    let (positions, sizes, routes) = layout;
+    let (positions, sizes, routes, frames) = layout;
     let (commands, rx) = std_mpsc::channel();
     let (events, _) = broadcast::channel(1024);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    let actor = Actor { engine, positions, sizes, routes, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
+    let actor = Actor { engine, positions, sizes, routes, frames, storage, plugins, events: events.clone(), dirty_since: None, traces: HashMap::new(), history: Default::default(), telemetry: telemetry::Telemetry::new(Instant::now()) };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
         .spawn(move || actor.run(rx, tick))?;
@@ -87,6 +87,7 @@ struct Actor {
     positions: HashMap<NodeId, Position>,
     sizes: HashMap<NodeId, NodeSize>,
     routes: routes::Routes,
+    frames: BTreeMap<FrameId, Frame>,
     storage: Storage,
     plugins: Plugins,
     events: broadcast::Sender<Bytes>,
@@ -189,7 +190,7 @@ impl Actor {
         if self.dirty_since.is_none() {
             return;
         }
-        match self.storage.save(&self.engine, &self.positions, &self.sizes, &self.routes) {
+        match self.storage.save(&self.engine, &self.positions, &self.sizes, &self.routes, &self.frames) {
             Ok(()) => self.dirty_since = None,
             Err(e) => {
                 error!("Failed to save the graph: {:#}", e);
@@ -225,6 +226,7 @@ impl Actor {
             traces: self.traces.values()
                 .map(|(trace, at)| (trace.clone(), at.elapsed().as_millis() as u64))
                 .collect(),
+            frames: self.frames.values().cloned().collect(),
         }
     }
 
@@ -247,6 +249,7 @@ mod history;
 mod telemetry;
 mod settings;
 mod resize;
+mod frames;
 
 #[cfg(test)]
 mod tests;

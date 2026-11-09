@@ -421,3 +421,5 @@ resources-more = and { $count } more — refine the search
 resources-empty = Enabled plugins offer no resources
 resources-loading = No items yet
 
+error-frame-invalid = Frame position and size must be finite
+error-frame-limit = Too many frames

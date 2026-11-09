@@ -42,6 +42,7 @@ impl Actor {
             node.size = self.sizes.get(&node.id).copied();
         }
         graph.wire_routes = super::routes::sorted(&self.routes);
+        graph.frames = self.frames.values().cloned().collect();
         graph
     }
 
@@ -148,6 +149,7 @@ impl Actor {
         events.extend(result.connected_data.into_iter().filter(|c| !data_before.contains(c)).map(ServerMessage::DataConnected));
         events.extend(detached_added.into_iter().map(ServerMessage::Detached));
         events.extend(self.restore_routes(&target.wire_routes));
+        events.extend(self.restore_frames(&target.frames));
         self.dirty_since.get_or_insert_with(Instant::now);
         events
     }

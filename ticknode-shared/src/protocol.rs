@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage};
+use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -40,6 +40,8 @@ pub enum ClientMessage {
     /// Sets layout dimensions; None restores automatic sizing.
     ResizeNode { id: NodeId, size: Option<NodeSize> },
     AddNodeWith { type_name: String, position: Position, properties: Vec<(String, DataValue)> },
+    SetFrame(Frame),
+    RemoveFrame(FrameId),
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -115,6 +117,8 @@ pub enum ServerMessage {
         timers: Vec<NodeTimer>,
         #[serde(default)]
         node_errors: Vec<NodeError>,
+        #[serde(default)]
+        frames: Vec<Frame>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -149,4 +153,6 @@ pub enum ServerMessage {
     NodeResized { id: NodeId, size: Option<NodeSize> },
     /// Runtime error changes accumulated since the previous telemetry interval.
     NodeErrors { set: Vec<NodeError>, cleared: Vec<NodeId> },
+    FrameSet(Frame),
+    FrameRemoved(FrameId),
 }

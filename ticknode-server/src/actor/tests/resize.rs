@@ -3,7 +3,7 @@ use super::*;
 fn actor(dir: &std::path::Path) -> Actor {
     let (events, _) = broadcast::channel(32);
     Actor {
-        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(),
+        engine: TickEngine::new(), positions: HashMap::new(), sizes: HashMap::new(), routes: HashMap::new(), frames: BTreeMap::new(),
         storage: Storage::new(dir.join("graph.json")), plugins: Plugins::new(dir), events,
         dirty_since: None, traces: HashMap::new(), history: Default::default(),
         telemetry: super::super::telemetry::Telemetry::new(Instant::now()),
@@ -44,9 +44,9 @@ fn resize_persists_in_init_and_json_without_changing_the_engine() {
     let graph: GraphModel = serde_json::from_str(&first).unwrap();
     assert_eq!(graph.nodes[0].size, dimensions);
     let mut engine = TickEngine::new();
-    let (positions, sizes, routes) = actor.storage.load(&mut engine).unwrap();
+    let (positions, sizes, routes, frames) = actor.storage.load(&mut engine).unwrap();
     assert_eq!(sizes[&id], dimensions.unwrap());
-    actor.storage.save(&engine, &positions, &sizes, &routes).unwrap();
+    actor.storage.save(&engine, &positions, &sizes, &routes, &frames).unwrap();
     assert_eq!(std::fs::read_to_string(dir.path().join("graph.json")).unwrap(), first);
 }
 

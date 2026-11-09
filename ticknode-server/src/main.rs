@@ -56,8 +56,8 @@ async fn main() -> anyhow::Result<()> {
     plugins.load_all(&mut engine);
 
     let storage = Storage::new(config.data_dir.join("graph.json"));
-    let (positions, sizes, routes) = storage.load(&mut engine)?;
-    let handle = actor::spawn(engine, (positions, sizes, routes), storage, plugins, config.tick)?;
+    let (positions, sizes, routes, frames) = storage.load(&mut engine)?;
+    let handle = actor::spawn(engine, (positions, sizes, routes, frames), storage, plugins, config.tick)?;
 
     let app = router(handle.clone(), &config.web_dir);
 
@@ -202,7 +202,7 @@ mod tests {
             nodes: vec![updated.model.clone(), dbg.model.clone()],
             exec_connections: vec![],
             data_connections: vec![conn],
-            wire_routes: Vec::new(), detached_connections: Vec::new(),
+            wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new(),
         };
         snippet.nodes[0].position = Position { x: 100.0, y: 200.0 };
         send(&mut ws, ClientMessage::Paste(snippet)).await;
@@ -264,8 +264,8 @@ mod tests {
         let mut plugins = plugins::Plugins::new(dir);
         plugins.load_all(&mut engine);
         let storage = Storage::new(dir.join("graph.json"));
-        let (positions, sizes, routes) = storage.load(&mut engine).unwrap();
-        let handle = actor::spawn(engine, (positions, sizes, routes), storage, plugins, Duration::from_millis(10)).unwrap();
+        let (positions, sizes, routes, frames) = storage.load(&mut engine).unwrap();
+        let handle = actor::spawn(engine, (positions, sizes, routes, frames), storage, plugins, Duration::from_millis(10)).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());

@@ -25,6 +25,8 @@ impl Actor {
             ClientMessage::SetWireRoute(route) => only(self.set_wire_route(route)?),
             ClientMessage::MoveNode { id, position } => only(self.move_node(id, position)?),
             ClientMessage::ResizeNode { id, size } => only(self.resize_node(id, size)?),
+            ClientMessage::SetFrame(frame) => only(self.set_frame(frame)?),
+            ClientMessage::RemoveFrame(id) => only(self.remove_frame(id)),
             ClientMessage::Paste(snippet) => self.paste(snippet, reply)?,
             ClientMessage::PasteSettings { id, type_name, properties } => only(self.paste_settings(id, &type_name, properties)?),
             ClientMessage::SetProperty { id, name, value } => only(self.set_property(id, &name, value)?),
@@ -158,6 +160,7 @@ impl Actor {
         events.extend(inner.data_connections.into_iter().map(ServerMessage::DataConnected));
         events.extend(inner.detached_connections.into_iter().map(ServerMessage::Detached));
         events.extend(self.paste_routes(&snippet.wire_routes, &imported));
+        events.extend(self.paste_frames(&snippet.frames));
         Ok((events, Some(ids)))
     }
 

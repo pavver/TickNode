@@ -24,7 +24,7 @@ impl TickEngine {
         let mut detached_connections: Vec<_> = self.detached.iter()
             .filter(|d| node_ids.contains(&d.connection.src_node) && node_ids.contains(&d.connection.dst_node)).copied().collect();
         detached_connections.sort_by_key(|d| (d.exec, sort_key(&d.connection), d.end == DetachedEnd::Target, d.row));
-        GraphModel { nodes, exec_connections, data_connections, wire_routes: Vec::new(), detached_connections }
+        GraphModel { nodes, exec_connections, data_connections, wire_routes: Vec::new(), detached_connections, frames: Vec::new() }
     }
 
     /// Replaces the current graph with the saved one. Returns warnings for elements that could not be restored.
@@ -49,6 +49,7 @@ impl TickEngine {
             data_connections: snippet.data_connections.iter().filter(inside).copied().collect(),
             wire_routes: Vec::new(),
             detached_connections: snippet.detached_connections.iter().filter(|d| inside(&&d.connection)).copied().collect(),
+            frames: Vec::new(),
         };
         let warnings = self.insert_graph(&snippet, |id| id_map[&id]);
         let created = snippet.nodes.iter().map(|n| (n.id, id_map[&n.id])).filter(|(_, new)| self.has_node(*new)).collect();

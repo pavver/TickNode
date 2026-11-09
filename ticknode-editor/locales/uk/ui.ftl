@@ -426,3 +426,5 @@ resources-more =
 resources-empty = Увімкнені плагіни не пропонують ресурсів
 resources-loading = Поки що порожньо
 
+error-frame-invalid = Позиція і розмір рамки мають бути скінченними числами
+error-frame-limit = Забагато рамок

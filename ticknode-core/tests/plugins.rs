@@ -882,7 +882,7 @@ fn enabling_detaches_connections_that_became_invalid() {
         // Pin 9 was inferred by the stub from the connection, but the real counter node has no such pin
         exec_connections: vec![ghost_link],
         data_connections: vec![ConnectionModel { src_node: counter, src_pin: PinId(1), dst_node: debug, dst_pin: PinId(1) }],
-        wire_routes: Vec::new(), detached_connections: Vec::new(),
+        wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new(),
     };
     let mut graph = graph;
     graph.nodes.sort_by_key(|n| n.id.0);
@@ -919,7 +919,7 @@ fn unknown_node_type_survives_load_and_save() {
             ConnectionModel { src_node: a, src_pin: PinId(1), dst_node: b, dst_pin: PinId(1) },
             ConnectionModel { src_node: a, src_pin: PinId(2), dst_node: c, dst_pin: PinId(5) },
         ],
-        wire_routes: Vec::new(), detached_connections: Vec::new(),
+        wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new(),
     };
     let mut engine = TickEngine::new();
     assert!(engine.load_graph(&graph).is_empty());

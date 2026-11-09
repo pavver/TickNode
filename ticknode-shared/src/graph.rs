@@ -10,6 +10,57 @@ impl NodeId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct FrameId(pub Uuid);
+
+impl FrameId {
+    pub fn generate() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl std::fmt::Display for FrameId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum FrameColor { #[default] Gray, Red, Orange, Yellow, Green, Teal, Blue, Purple }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Frame {
+    pub id: FrameId,
+    pub title: String,
+    pub color: FrameColor,
+    pub position: Position,
+    pub size: NodeSize,
+}
+
+pub const MIN_FRAME_W: f64 = 120.0;
+pub const MIN_FRAME_H: f64 = 80.0;
+pub const MAX_FRAME_SIZE: f64 = 8000.0;
+pub const MAX_FRAME_TITLE: usize = 200;
+pub const MAX_FRAMES: usize = 500;
+
+impl Frame {
+    pub fn validated(mut self) -> Option<Self> {
+        if !self.position.x.is_finite()
+            || !self.position.y.is_finite()
+            || !self.size.width.is_finite()
+            || !self.size.height.is_finite()
+        {
+            return None;
+        }
+        self.size.width = self.size.width.clamp(MIN_FRAME_W, MAX_FRAME_SIZE);
+        self.size.height = self.size.height.clamp(MIN_FRAME_H, MAX_FRAME_SIZE);
+        if let Some((idx, _)) = self.title.char_indices().nth(MAX_FRAME_TITLE) {
+            self.title.truncate(idx);
+        }
+        Some(self)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ConnectionModel {
     pub src_node: NodeId,
@@ -78,6 +129,8 @@ pub struct GraphModel {
     pub wire_routes: Vec<WireRoute>,
     #[serde(default)]
     pub detached_connections: Vec<DetachedConnection>,
+    #[serde(default)]
+    pub frames: Vec<Frame>,
 }
 
 /// A node paired with its current definition (pins may depend on properties).

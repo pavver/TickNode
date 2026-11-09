@@ -42,7 +42,7 @@ fn diff_connections_between_kept_nodes_and_idempotence() {
     let nodes = [a, b].into_iter().map(|id| NodeModel {
         id, type_name: "for_loop".into(), properties: vec![], position: Position::default(),
      pins: None, size: None }).collect();
-    let current = GraphModel { nodes, exec_connections: vec![c], data_connections: vec![], wire_routes: Vec::new(), detached_connections: Vec::new() };
+    let current = GraphModel { nodes, exec_connections: vec![c], data_connections: vec![], wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new() };
     let target = GraphModel { exec_connections: vec![], data_connections: vec![c], ..current.clone() };
     let plan = diff(&current, &target);
     assert!(plan.removed_nodes.is_empty());

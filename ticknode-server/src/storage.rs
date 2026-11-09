@@ -1,14 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use ticknode_core::TickEngine;
-use ticknode_shared::{GraphModel, NodeId, NodeSize, Position};
+use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position};
 use tracing::{info, warn};
 use crate::actor::routes::{self, Routes};
 
 /// Layout metadata owned by the server, outside the execution engine.
-pub type Layout = (HashMap<NodeId, Position>, HashMap<NodeId, NodeSize>, Routes);
+pub type Layout = (HashMap<NodeId, Position>, HashMap<NodeId, NodeSize>, Routes, BTreeMap<FrameId, Frame>);
 
 /// The graph is stored as pretty-printed JSON with deterministic ordering so it diffs cleanly in git.
 pub struct Storage {
@@ -20,12 +20,12 @@ impl Storage {
         Self { path }
     }
 
-    /// Loads the graph into the engine and returns node positions, sizes and wire routes. A missing file starts with an empty graph;
+    /// Loads the graph into the engine and returns node positions, sizes, wire routes and frames. A missing file starts with an empty graph;
     /// a corrupted file returns an error rather than overwriting it with an empty graph.
     pub fn load(&self, engine: &mut TickEngine) -> anyhow::Result<Layout> {
         if !self.path.exists() {
             info!(path = %self.path.display(), "Graph file not found, starting with an empty graph");
-            return Ok((HashMap::new(), HashMap::new(), Routes::new()));
+            return Ok((HashMap::new(), HashMap::new(), Routes::new(), BTreeMap::new()));
         }
         let text = std::fs::read_to_string(&self.path)
             .with_context(|| format!("failed to read {}", self.path.display()))?;
@@ -35,17 +35,39 @@ impl Storage {
         for warning in engine.load_graph(&graph) {
             warn!("{}", warning);
         }
-        info!(nodes = graph.nodes.len(), path = %self.path.display(), "Graph loaded");
-        Ok((graph.nodes.iter().map(|n| (n.id, n.position)).collect(), graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect(), routes::from_routes(engine, &graph.wire_routes)))
+        let mut frames = BTreeMap::new();
+        for frame in graph.frames {
+            let id = frame.id;
+            if let Some(valid) = frame.validated() {
+                frames.insert(valid.id, valid);
+            } else {
+                warn!("Dropping invalid frame {}: non-finite position or size", id.0);
+            }
+        }
+        info!(nodes = graph.nodes.len(), frames = frames.len(), path = %self.path.display(), "Graph loaded");
+        Ok((
+            graph.nodes.iter().map(|n| (n.id, n.position)).collect(),
+            graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect(),
+            routes::from_routes(engine, &graph.wire_routes),
+            frames,
+        ))
     }
 
-    pub fn save(&self, engine: &TickEngine, positions: &HashMap<NodeId, Position>, sizes: &HashMap<NodeId, NodeSize>, routes: &Routes) -> anyhow::Result<()> {
+    pub fn save(
+        &self,
+        engine: &TickEngine,
+        positions: &HashMap<NodeId, Position>,
+        sizes: &HashMap<NodeId, NodeSize>,
+        routes: &Routes,
+        frames: &BTreeMap<FrameId, Frame>,
+    ) -> anyhow::Result<()> {
         let mut graph = engine.export_graph();
         for node in &mut graph.nodes {
             node.position = positions.get(&node.id).copied().unwrap_or_default();
             node.size = sizes.get(&node.id).copied();
         }
         graph.wire_routes = routes::sorted(routes);
+        graph.frames = frames.values().cloned().collect();
         write_atomic(&self.path, &(serde_json::to_string_pretty(&graph)? + "\n"))
     }
 }
@@ -77,17 +99,26 @@ mod tests {
         let positions = HashMap::from([(c, Position { x: 10.0, y: 20.0 })]);
         let connection = engine.data_connections()[0];
         let routes = Routes::from([((false, connection), vec![Position { x: 48.0, y: -80.0 }])]);
-        storage.save(&engine, &positions, &HashMap::new(), &routes).unwrap();
+        let frame = Frame {
+            id: FrameId::generate(),
+            title: "Test Group".into(),
+            color: ticknode_shared::FrameColor::Blue,
+            position: Position { x: 5.0, y: 15.0 },
+            size: NodeSize { width: 300.0, height: 200.0 },
+        };
+        let frames = BTreeMap::from([(frame.id, frame.clone())]);
+        storage.save(&engine, &positions, &HashMap::new(), &routes, &frames).unwrap();
 
         let mut restored = TickEngine::new();
-        let (restored_positions, restored_sizes, restored_routes) = storage.load(&mut restored).unwrap();
+        let (restored_positions, restored_sizes, restored_routes, restored_frames) = storage.load(&mut restored).unwrap();
         assert_eq!(restored_positions[&c], Position { x: 10.0, y: 20.0 });
         assert_eq!(restored.export_graph(), engine.export_graph());
         assert_eq!(restored_routes, routes);
+        assert_eq!(restored_frames, frames);
 
         // Saving again without changes produces an identical file (stable diff)
         let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
-        storage.save(&restored, &restored_positions, &restored_sizes, &restored_routes).unwrap();
+        storage.save(&restored, &restored_positions, &restored_sizes, &restored_routes, &restored_frames).unwrap();
         let second = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
         assert_eq!(first, second);
     }
@@ -131,13 +162,13 @@ mod tests {
         engine.connect_exec(b, PinId(4), a, PinId(0)).unwrap();
         engine.connect_data(a, PinId(5), b, PinId(1)).unwrap();
         let routes: Routes = routes::connections(&engine).into_iter().map(|key| (key, vec![Position::default()])).collect();
-        storage.save(&engine, &HashMap::new(), &HashMap::new(), &routes).unwrap();
+        storage.save(&engine, &HashMap::new(), &HashMap::new(), &routes, &BTreeMap::new()).unwrap();
         let first = std::fs::read_to_string(dir.path().join("graph.json")).unwrap();
         let graph: GraphModel = serde_json::from_str(&first).unwrap();
         assert!(!graph.wire_routes[0].exec);
         assert!(graph.wire_routes[1].connection.src_node < graph.wire_routes[2].connection.src_node);
         let reordered: Routes = routes.iter().map(|(key, points)| (*key, points.clone())).collect();
-        storage.save(&engine, &HashMap::new(), &HashMap::new(), &reordered).unwrap();
+        storage.save(&engine, &HashMap::new(), &HashMap::new(), &reordered, &BTreeMap::new()).unwrap();
         assert_eq!(first, std::fs::read_to_string(dir.path().join("graph.json")).unwrap());
     }
 }

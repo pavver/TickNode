@@ -8,7 +8,7 @@ fn snippets_roundtrip_positions_properties_and_connections() {
     let graph = GraphModel {
         nodes: vec![NodeModel { id: a, type_name: "constant".into(), position: Position { x: 12.0, y: -8.0 }, properties: vec![("value".into(), DataValue::String("hello".into()))], pins: None, size: Some(NodeSize { width: 384.0, height: 240.0 }) }],
         exec_connections: vec![connection], data_connections: vec![connection],
-        wire_routes: Vec::new(), detached_connections: Vec::new(),
+        wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new(),
     };
     assert_eq!(from_text(&format!(" \n{}\n ", to_text(graph.clone()))), Some(graph));
     assert_eq!(from_text("garbage"), None);

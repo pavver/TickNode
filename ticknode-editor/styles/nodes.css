@@ -1,0 +1,396 @@
+/* --- Canvas --- */
+.canvas-wrap { flex: 1; position: relative; min-width: 0; display: flex; flex-direction: column; }
+.canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--background);
+    background-image:
+        linear-gradient(var(--grid) var(--border-w), transparent var(--border-w)),
+        linear-gradient(90deg, var(--grid) var(--border-w), transparent var(--border-w));
+    touch-action: none;
+    cursor: default;
+    user-select: none;
+}
+.canvas.panning { cursor: grabbing; }
+.viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+.wire { fill: none; stroke-width: calc(var(--du) * 0.5); }
+.wire.exec { stroke: var(--text-secondary); }
+.wire.selected { stroke: var(--accent); stroke-width: calc(var(--du) * 0.75); }
+.wire.converting { stroke-dasharray: 6 4; }
+.pin.connectable .socket { border-color: var(--accent); box-shadow: 0 0 0 var(--du) var(--accent); }
+.wire.pending { stroke: var(--accent); stroke-dasharray: 6 4; }
+.wire-hit { fill: none; stroke: transparent; stroke-width: calc(var(--du) * 3); cursor: pointer; pointer-events: stroke; }
+
+.canvas-hint {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-secondary);
+    pointer-events: none;
+    max-width: calc(var(--du) * 90);
+}
+
+.zoom-badge {
+    position: absolute;
+    right: calc(var(--du) * 3);
+    bottom: calc(var(--du) * 3);
+    background: var(--surface);
+    padding: calc(var(--du) * 1) calc(var(--du) * 2);
+    font-size: 12px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+/* --- Node --- */
+.node {
+    position: absolute;
+    background: var(--surface);
+    cursor: grab;
+}
+.node::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: var(--border-w) solid var(--sb-color, var(--border));
+    pointer-events: none;
+    transition: border-color 500ms cubic-bezier(.4, 0, .2, 1);
+}
+/* Node border indicates execution state only. Selection is shown differently:
+   accented title and left bar, plus a dashed CAD-style bounding box with corner grips (`.selection-bounds`). */
+.node.selected { z-index: 2; }
+.node.selected .node-header { box-shadow: inset calc(var(--du) * 1) 0 0 var(--accent); }
+.node.selected .node-title { color: var(--accent); }
+/* In a group, each selected node gets its own dashed outline (a single selection is framed by `.selection-bounds`) */
+.viewport.multi-select .node.selected::before {
+    content: "";
+    position: absolute;
+    inset: calc(var(--du) * -1.5);
+    pointer-events: none;
+    border: var(--border-w) dashed var(--accent);
+}
+.node.active::after { --sb-color: var(--success); border-width: var(--border-thick); transition: none; }
+.node-timer { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; pointer-events: none; }
+.node-timer-fill { width: 100%; height: 100%; background: var(--accent); transform-origin: left; animation: node-timer-shrink linear forwards; }
+@keyframes node-timer-shrink {
+    from { transform: scaleX(var(--timer-fraction)); }
+    to { transform: scaleX(0); }
+}
+.node-timer-count { position: absolute; right: 2px; bottom: 5px; padding: 0 2px; font-size: 9px; line-height: 11px; color: var(--text-secondary); background: var(--surface); }
+.node-header {
+    height: calc(var(--du) * 8);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1.5);
+    padding: 0 calc(var(--du) * 2.5);
+    background: var(--surface-alt);
+    border-bottom: var(--border-w) solid var(--divider);
+}
+.node-title { font-size: 13px; line-height: 16px; font-weight: 700; flex: 1; }
+.node-cat { font-size: 11px; line-height: 14px; font-weight: 700; color: var(--cat-color, var(--text-secondary)); flex: none; max-width: 40%; }
+.pins { position: absolute; top: calc(var(--du) * 9); display: flex; flex-direction: column; }
+/* Property rows between header and pins: row height = ROW_H (geometry.rs) */
+.node-props { position: absolute; top: calc(var(--du) * 9); left: 0; right: 0; display: flex; flex-direction: column; }
+.prop-row {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: 0 calc(var(--du) * 2.5);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.prop-row > .prop-label { flex: 1 1 auto; max-width: 45%; }
+.prop-row .inline-value { flex: 1 1 0; width: 0; max-width: none; }
+.prop-row .inline-value.select { flex: 0 1 auto; width: auto; min-width: calc(var(--du) * 18); }
+.prop-row .switch { margin-left: auto; }
+.inline-value.select { cursor: pointer; padding: 0 calc(var(--du) * 0.5); }
+.pins.in { left: 0; align-items: flex-start; }
+.pins.out { right: 0; align-items: flex-end; }
+.pin {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1.5);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: crosshair;
+    max-width: calc(var(--du) * 32);
+}
+.pin.in { padding-right: calc(var(--du) * 1); max-width: calc(var(--du) * 30); }
+.pin.out { flex-direction: row-reverse; padding-left: calc(var(--du) * 1); }
+.socket {
+    width: calc(var(--du) * 2.5);
+    height: calc(var(--du) * 2.5);
+    flex: none;
+    border: var(--border-thick) solid var(--pin-color);
+    background: var(--surface);
+}
+.pin.in .socket { margin-left: calc(var(--du) * -1.25); }
+.pin.out .socket { margin-right: calc(var(--du) * -1.25); }
+.socket.connected { background: var(--pin-color); }
+/* Unset required input — Error state: red pin label and warning badge on the node */
+.pin.missing { color: var(--error); }
+.pin.missing .socket { border-color: var(--error); outline: var(--border-w) solid var(--error); outline-offset: var(--border-w); }
+.node.missing .node-header { box-shadow: inset 0 calc(var(--du) * -0.5) 0 var(--error); }
+.node-warn { margin-left: auto; padding: 0 calc(var(--du) * 1); color: var(--error); font-weight: 700; }
+.socket.exec { clip-path: polygon(0 0, 100% 50%, 0 100%); border: 0; background: var(--pin-color); opacity: .45; }
+.socket.exec.connected { opacity: 1; }
+.pin:hover .socket { outline: var(--border-w) solid var(--accent); outline-offset: var(--border-w); }
+
+/* Inline value directly on a node (property or unconnected input) */
+.inline-value {
+    height: calc(var(--du) * 4.5);
+    width: calc(var(--du) * 13);
+    max-width: calc(var(--du) * 13);
+    flex: none;
+    padding: 0 calc(var(--du) * 1);
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    outline: none;
+    cursor: text;
+    text-overflow: ellipsis;
+}
+.inline-value:hover { border-color: var(--border-strong); }
+.inline-value:focus { border-color: var(--accent); }
+.inline-value::placeholder { color: var(--text-disabled); }
+.inline-value.st-error { border-color: var(--error); }
+.inline-value.bool { cursor: pointer; text-align: left; color: var(--text-secondary); }
+.inline-value.bool.on { color: var(--success); border-color: color-mix(in srgb, var(--success) 50%, var(--divider)); }
+.inline-value.bool.unset { color: var(--text-disabled); }
+.pin .inline-value { margin-left: auto; }
+.duration-value { display: flex; gap: 2px; flex: 0 0 80px; min-width: 0; height: calc(var(--du) * 4.5); }
+.pin .duration-value { margin-left: auto; flex-basis: 104px; }
+/* A duration field needs more room than the default input pin width or a property row's label. */
+.pin.in:has(.duration-value) { max-width: calc(var(--du) * 42); }
+.prop-row:has(.duration-value) > .prop-label, .prop-row:has(.duration-value) > .inline-value.select { flex: 0 1 auto; min-width: 0; }
+.prop-row .duration-value { flex: 1 0 104px; }
+.input-row .duration-value, .cond-row .duration-value { flex: 1 1 80px; }
+.duration-value > .inline-value.duration-number { flex: 1 1 0; min-width: 0; width: 0; max-width: none; margin-left: 0; padding: 0 2px; }
+.duration-value > .inline-value.duration-unit { flex: 0 0 48px; min-width: 0; width: 48px; max-width: 48px; margin-left: 0; padding: 0; }
+
+/* --- Match cases on a node (like a decider combinator window); row height = ROW_H --- */
+.match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
+.case-row {
+    height: calc(var(--du) * 6);
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 1);
+    padding: 0 0 0 calc(var(--du) * 2);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.case-head { border-top: var(--border-w) solid var(--divider); background: color-mix(in srgb, var(--cat-color) 6%, transparent); }
+.case-head .pin, .case-foot .pin { margin-left: auto; min-width: 0; }
+.case-foot { border-top: var(--border-w) solid var(--divider); }
+.cond-row { padding-right: calc(var(--du) * 2); }
+.cond-row.always { padding-left: calc(var(--du) * 9); font-style: italic; color: var(--text-disabled); }
+.case-index {
+    min-width: calc(var(--du) * 4.5);
+    height: calc(var(--du) * 4.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cat-color, var(--accent));
+    border: var(--border-w) solid var(--cat-color, var(--accent));
+}
+.mini-btn, .join-btn {
+    height: calc(var(--du) * 4.5);
+    flex: none;
+    padding: 0 calc(var(--du) * 1.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.mini-btn.icon { width: calc(var(--du) * 4.5); padding: 0; border-color: transparent; background: transparent; }
+.mini-btn .icon { width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); }
+.mini-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+.mini-btn.danger:hover { color: var(--error); }
+.mini-btn:disabled { opacity: .3; cursor: default; }
+.join-label, .join-btn { width: calc(var(--du) * 9); flex: none; padding: 0; }
+.join-label { font-size: 11px; color: var(--text-disabled); text-align: center; }
+.join-btn { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--divider)); }
+.join-btn.or { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--divider)); }
+.operand, .op-select {
+    height: calc(var(--du) * 4.5);
+    min-width: 0;
+    font-size: 12px;
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    outline: none;
+    color: var(--text-primary);
+}
+.operand { flex: 1 1 0; width: 0; padding: 0 calc(var(--du) * 1); }
+.operand.input-ref { color: var(--accent); font-weight: 700; }
+.operand:focus, .op-select:focus { border-color: var(--accent); }
+.operand.st-error { border-color: var(--error); }
+.op-select { flex: none; width: calc(var(--du) * 9); padding: 0; text-align: center; font-weight: 700; cursor: pointer; }
+
+/* Match inputs: socket on edge, name, type, value */
+.match-in, .input-row { padding-left: 0; }
+.match-in .pin { flex: none; }
+.input-row { padding-right: calc(var(--du) * 1); background: color-mix(in srgb, var(--surface-alt) 50%, transparent); }
+.input-foot { padding-right: calc(var(--du) * 2); }
+.match-section {
+    margin-left: auto;
+    padding-right: calc(var(--du) * 2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-disabled);
+}
+.input-foot .match-section { padding-right: 0; }
+.match-socket { flex: none; padding-right: calc(var(--du) * 1); }
+.input-name { flex: 0 0 calc(var(--du) * 22); width: calc(var(--du) * 22); color: var(--accent); font-weight: 700; }
+.type-select { width: calc(var(--du) * 20); text-align: left; padding: 0 calc(var(--du) * 0.5); font-weight: 400; }
+.input-row .inline-value { flex: 1 1 0; width: 0; max-width: none; margin-left: 0; }
+.input-src { flex: 1 1 0; width: 0; font-size: 11px; color: var(--text-disabled); }
+
+/* Cases: left bar visually groups a case header with its conditions */
+.case-head, .cond-row { box-shadow: inset calc(var(--du) * 0.75) 0 0 color-mix(in srgb, var(--cat-color, var(--accent)) 55%, transparent); }
+.case-head .pin { font-weight: 700; color: var(--text-primary); }
+.case-foot .pin { font-style: italic; }
+.cond-left, .cond-src {
+    height: calc(var(--du) * 4.5);
+    flex: none;
+    width: calc(var(--du) * 18);
+    min-width: 0;
+    padding: 0 calc(var(--du) * 0.5);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--surface-alt);
+    border: var(--border-w) solid var(--divider);
+    border-left: calc(var(--du) * 0.75) solid var(--pin-color, var(--divider));
+    border-radius: 0;
+    outline: none;
+    cursor: pointer;
+}
+.cond-src { flex: 1 1 0; width: 0; border-left-width: var(--border-w); }
+.cond-src.value { flex: none; width: calc(var(--du) * 9); color: var(--text-secondary); font-weight: 400; }
+.cond-op { width: calc(var(--du) * 24); text-align: left; padding: 0 calc(var(--du) * 0.5); }
+.cond-row .inline-value { flex: 1 1 0; width: 0; max-width: none; }
+.cond-fill { flex: 1 1 0; }
+.cond-left:focus, .cond-src:focus { border-color: var(--accent); }
+
+/* Run node from header */
+.node-run {
+    width: calc(var(--du) * 5);
+    height: calc(var(--du) * 5);
+    flex: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: var(--border-w) solid var(--divider);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--success);
+    cursor: pointer;
+}
+.node-run .icon { width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); }
+.node-run.always, .node:hover .node-run, .node.selected .node-run { display: inline-flex; }
+.node-run:hover { border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--surface)); }
+.node-run:active { background: color-mix(in srgb, var(--success) 25%, var(--surface)); }
+
+/* --- OperatorConsoleTerminal --- */
+.console {
+    flex: none;
+    height: calc(var(--du) * 40);
+    display: flex;
+    flex-direction: column;
+    border-top: var(--border-w) solid var(--border);
+    background: var(--surface);
+}
+.console-bar {
+    height: calc(var(--du) * 8);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--du) * 2);
+    padding: 0 calc(var(--du) * 1) 0 calc(var(--du) * 3);
+    border-bottom: var(--border-w) solid var(--divider);
+}
+.console-bar .icon-btn { width: calc(var(--du) * 7); height: calc(var(--du) * 7); }
+.terminal {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--terminal-background);
+    color: var(--terminal-foreground);
+    font-size: 12px;
+    line-height: 16px;
+    padding: calc(var(--du) * 2);
+    user-select: text;
+}
+.terminal-line { white-space: pre-wrap; word-break: break-word; }
+.terminal-line .ts { color: var(--terminal-bright-black); }
+.terminal-line.error { color: var(--terminal-bright-red); }
+.terminal-line.system { color: var(--terminal-bright-cyan); }
+.terminal-line.success { color: var(--terminal-bright-green); }
+
+/* --- Selection box (CAD-style): window is solid, crossing is dashed --- */
+.select-box {
+    position: absolute;
+    pointer-events: none;
+    border: var(--border-w) solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* Paste ghost awaiting placement */
+.paste-ghost { pointer-events: none; opacity: .6; }
+.node.paste-ghost::after { --sb-color: var(--accent); border-style: dashed; }
+.canvas.placing { cursor: copy; }
+.canvas.placing .node { cursor: copy; }
+
+/* Dashed bounding box around a selected node or group */
+.selection-bounds {
+    position: absolute;
+    pointer-events: none;
+    border: var(--border-w) dashed var(--accent);
+}
+.selection-bounds::before {
+    --grip: calc(var(--du) * 2);
+    content: "";
+    position: absolute;
+    /* Grip center is on the bounding box corner */
+    inset: calc(var(--grip) / -2 - var(--border-w) / 2);
+    background:
+        linear-gradient(var(--accent), var(--accent)) left top / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) right top / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) left bottom / var(--grip) var(--grip) no-repeat,
+        linear-gradient(var(--accent), var(--accent)) right bottom / var(--grip) var(--grip) no-repeat;
+}
+.selection-count {
+    position: absolute;
+    left: calc(var(--du) * 2);
+    bottom: 100%;
+    padding: 0 calc(var(--du) * 1.5);
+    font-size: 11px;
+    line-height: calc(var(--du) * 5);
+    font-weight: 700;
+    color: var(--background);
+    background: var(--accent);
+}
+.select-box.crossing {
+    border-style: dashed;
+    border-color: var(--success);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+

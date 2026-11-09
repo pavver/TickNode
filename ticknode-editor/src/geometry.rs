@@ -1,4 +1,4 @@
-//! Node geometry in world coordinates. Values must match `style.css`
+//! Node geometry in world coordinates. Values must match `styles/nodes.css`
 //! (`.node-header`, `.node-props`, `.pins`, `.pin`) because wires are routed using computed
 //! rather than DOM-measured pin positions.
 

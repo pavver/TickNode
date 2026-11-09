@@ -42,7 +42,7 @@ use crate::state::{Editor, LogKind, Theme, now_ms};
 use crate::toolbar::Header;
 use ticknode_shared::ClientMessage;
 
-/// Viewport width below which panels become slide-over overlays (see `@media` in `style.css`).
+/// Viewport width below which panels become slide-over overlays (see `@media` in `styles/panels.css`).
 const NARROW_WIDTH: f64 = 900.0;
 const THEME_KEY: &str = "ticknode.theme";
 /// A `paste` event within this window after a middle-click is treated as a primary-selection paste.

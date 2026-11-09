@@ -1,0 +1,212 @@
+/* Node extras (split fields, route points, frozen contracts, resizing, runtime status) and canvas frames. */
+
+/* Split fields retain socket coordinates and row height; only their labels are indented. */
+.pin.split-field > .ellipsis { padding-inline-start: var(--du); border-inline-start: var(--border-w) solid var(--border); }
+.pin .pin-split { flex: none; padding: 0; width: calc(var(--du) * 4); min-width: 0; }
+.node.unavailable .pin-split { pointer-events: none; }
+
+/* Layout points follow their wire's type color and Operator selection state. */
+.wire-point { fill: var(--wire-color); stroke: var(--surface); stroke-width: 1px; cursor: move; pointer-events: all; }
+.wire-group:hover .wire-point, .wire-group.selected .wire-point { fill: var(--accent); stroke: var(--text-primary); }
+.wire-group.selected .wire-point.current { fill: var(--text-primary); stroke: var(--accent); }
+.wire-context { padding: var(--du); }
+.wire-context button { width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+.wire-context button:hover, .wire-context button:focus-visible { background: var(--selection); }
+
+/* Frozen contracts retain the existing header and pin geometry. */
+.node.frozen::after { border-color: var(--warning); border-width: var(--border-thick); }
+.node.frozen .node-header { background: color-mix(in srgb, var(--warning) 14%, var(--surface-alt)); }
+.node-frozen-warning { color: var(--warning); flex: none; }
+.node-confirm { display: inline-flex; align-items: center; justify-content: center; flex: none; width: calc(var(--du) * 6); height: calc(var(--du) * 6); padding: 0; border: var(--border-w) solid var(--warning); background: var(--surface); color: var(--warning); cursor: pointer; }
+.node-confirm:hover, .node-confirm:focus-visible { background: color-mix(in srgb, var(--warning) 20%, var(--surface)); }
+.frozen-info ul { margin: 0; padding-left: calc(var(--du) * 4); }
+.wire.detached { stroke: var(--error); stroke-dasharray: 6 4; }
+.wire.detached.selected { stroke: var(--error); stroke-width: calc(var(--du) * 1); }
+.detached-square { fill: var(--surface); stroke: var(--error); stroke-width: calc(var(--du) * 0.5); pointer-events: none; }
+.detached-group.selected .detached-square { stroke-width: var(--du); }
+.detached-end-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
+
+/* Resize dimensions and row heights come from NodeLayout. Column sockets stay on their first line. */
+.node-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    padding: 0;
+    border: 0;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-secondary) 3px 4px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    cursor: nwse-resize;
+    touch-action: none;
+    opacity: 0;
+}
+.node:hover .node-resize, .node.selected .node-resize, .node-resize:focus-visible { opacity: .7; }
+.node-resize:hover, .node-resize:active { opacity: 1; }
+.node > .pins.in { width: max(40%, calc(120px + (var(--node-width) - var(--default-node-width)) * .6)); }
+.node > .pins.out { max-width: 45%; }
+.node > .pins.in > .pin { width: 100%; max-width: none; min-width: 0; }
+.node > .pins.out > .pin { max-width: 100%; }
+.node > .pins.in > .pin > .inline-value { flex: 1 1 52px; min-width: 20px; max-width: none; }
+.node > .pins.in > .pin > .duration-value { flex-shrink: 1; min-width: 0; }
+.node > .pins.in > .pin > .ellipsis { flex: 0 1 auto; min-width: 0; }
+.prop-row.grown, .pin.grown { align-items: flex-start; }
+.prop-row.grown > .prop-label, .pin.grown > .ellipsis { line-height: calc(var(--du) * 6); }
+.prop-row.grown > .inline-value.select { margin-top: calc(var(--du) * .75); min-width: 0; }
+.pin.grown > .socket { margin-top: calc(var(--du) * 1.75); }
+.pin.grown > .pin-split { margin-top: calc(var(--du) * .75); }
+.inline-value.multiline { height: calc(100% - var(--du) * 1.5); margin-top: calc(var(--du) * .75); resize: none; overflow: auto; line-height: 16px; white-space: pre-wrap; text-overflow: clip; }
+.prop-row > .prop-label { min-width: 0; }
+.prop-row > .inline-value.select { min-width: 0; }
+
+/* Runtime status overlays keep the node and wire geometry unchanged. */
+.node.ctl.st-error::after { --sb-color: var(--error); }
+.node-error { border: 0; padding: 0; background: transparent; color: var(--error); cursor: help; flex: none; }
+.node-error .mdi { font-size: calc(var(--du) * 4); }
+.wire-value { pointer-events: none; font-family: var(--font); font-size: 11px; }
+.wire-value rect { fill: var(--surface); stroke: var(--border); stroke-width: var(--border-w); }
+.wire-value text { fill: var(--text-primary); pointer-events: all; cursor: help; }
+
+/* --- Canvas Frames (Comment Boxes) --- */
+.frame-gray { --frame-color: var(--text-secondary); }
+.frame-red { --frame-color: var(--error); }
+.frame-orange { --frame-color: #F08A24; }
+.frame-yellow { --frame-color: #D97706; }
+:root[data-theme="dark"] .frame-yellow { --frame-color: #E6A700; }
+.frame-green { --frame-color: var(--success); }
+.frame-teal { --frame-color: var(--accent); }
+.frame-blue { --frame-color: var(--info); }
+.frame-purple { --frame-color: var(--magenta); }
+
+.canvas-frame {
+    position: absolute;
+    border: 1px solid var(--frame-color);
+    background: color-mix(in srgb, var(--frame-color) 10%, transparent);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.canvas-frame.selected {
+    outline: var(--border-thick) solid var(--accent);
+}
+
+.canvas-frame-header {
+    height: calc(var(--du) * 6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 calc(var(--du) * 2);
+    pointer-events: all;
+    background: color-mix(in srgb, var(--frame-color) 20%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--frame-color) 30%, transparent);
+    user-select: none;
+    cursor: grab;
+    box-sizing: border-box;
+}
+
+.canvas-frame-header:active {
+    cursor: grabbing;
+}
+
+.canvas-frame-title {
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+    flex: 1;
+    min-width: 0;
+    margin-right: calc(var(--du) * 2);
+}
+
+.canvas-frame-title-input {
+    flex: 1;
+    min-width: 0;
+    height: calc(var(--du) * 5);
+    margin-right: calc(var(--du) * 2);
+    font-size: 13px;
+    line-height: 16px;
+}
+
+.canvas-frame-color-btn {
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    flex: none;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    background: var(--frame-color);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.canvas-frame-color-btn:hover {
+    filter: brightness(1.2);
+}
+
+.canvas-frame-color-popup {
+    position: absolute;
+    top: calc(var(--du) * 6);
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(4, calc(var(--du) * 5));
+    gap: calc(var(--du) * 1);
+    padding: calc(var(--du) * 1.5);
+    background: var(--surface);
+    border: var(--border-w) solid var(--border-strong);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 20;
+    pointer-events: all;
+}
+
+.canvas-frame-color-swatch {
+    width: calc(var(--du) * 5);
+    height: calc(var(--du) * 5);
+    padding: 0;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--frame-color);
+    box-sizing: border-box;
+}
+
+.canvas-frame-color-swatch:hover {
+    border-color: var(--text-primary);
+    filter: brightness(1.2);
+}
+
+.canvas-frame-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    width: calc(var(--du) * 4);
+    height: calc(var(--du) * 4);
+    padding: 0;
+    border: 0;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-secondary) 3px 4px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    cursor: nwse-resize;
+    touch-action: none;
+    pointer-events: all;
+    opacity: 0;
+}
+
+.canvas-frame:hover .canvas-frame-resize,
+.canvas-frame.selected .canvas-frame-resize,
+.canvas-frame-resize:focus-visible {
+    opacity: .7;
+}
+
+.canvas-frame-resize:hover,
+.canvas-frame-resize:active {
+    opacity: 1;
+}
+
+.canvas-frame.paste-ghost {
+    border-style: dashed;
+}
+

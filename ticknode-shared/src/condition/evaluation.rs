@@ -4,20 +4,6 @@ use crate::text::{coerce_to, format_value};
 use super::{CompareOp, Condition, Operand, MatchCase, Join};
 use CompareOp::*;
 
-impl CompareOp {
-    fn holds(self, ord: Ordering) -> bool {
-        match self {
-            Eq | LenEq => ord == Ordering::Equal,
-            Ne => ord != Ordering::Equal,
-            Lt | LenLt => ord == Ordering::Less,
-            Le => ord != Ordering::Greater,
-            Gt | LenGt => ord == Ordering::Greater,
-            Ge => ord != Ordering::Less,
-            _ => false,
-        }
-    }
-}
-
 impl Operand {
     fn resolve(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> Option<DataValue> {
         match self {
@@ -32,18 +18,42 @@ impl Condition {
     /// the condition (except `NoValue`). An operator inapplicable to the value's type also evaluates to false.
     pub fn holds(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> bool {
         let a = self.left.resolve(value_of);
+        // Resolve the right operand only for binary operators with a present left value.
+        let operands = || {
+            let a = a.as_ref()?;
+            let b = self.right.as_ref()?.resolve(value_of)?;
+            Some((a, b))
+        };
+        let ordered = || operands().and_then(|(a, b)| ordering(a, &coerce_to(b, &a.get_type())));
+        let length_order = || operands().and_then(|(a, b)| length_ordering(a, b));
         match self.op {
-            HasValue => return a.is_some(),
-            NoValue => return a.is_none(),
-            _ => {}
-        }
-        let Some(a) = a else { return false };
-        if self.op.is_unary() {
-            return unary(self.op, &a);
-        }
-        match self.right.as_ref().and_then(|r| r.resolve(value_of)) {
-            Some(b) => binary(self.op, &a, b),
-            None => false,
+            HasValue => a.is_some(),
+            NoValue => a.is_none(),
+            IsEmpty => a.as_ref().and_then(length) == Some(0),
+            NotEmpty => a.as_ref().and_then(length).is_some_and(|n| n > 0),
+            IsTrue => a == Some(DataValue::Bool(true)),
+            IsFalse => a == Some(DataValue::Bool(false)),
+            Eq => operands().is_some_and(|(a, b)| loosely_equal(a, &b)),
+            Ne => operands().is_some_and(|(a, b)| !loosely_equal(a, &b)),
+            Lt => ordered() == Some(Ordering::Less),
+            Le => ordered().is_some_and(|ord| ord != Ordering::Greater),
+            Gt => ordered() == Some(Ordering::Greater),
+            Ge => ordered().is_some_and(|ord| ord != Ordering::Less),
+            Contains | NotContains => operands().is_some_and(|(a, b)| {
+                contains(a, &b).is_some_and(|found| found == (self.op == Contains))
+            }),
+            StartsWith => operands().is_some_and(|(a, b)| {
+                matches!(a, DataValue::String(s) if s.starts_with(&format_value(&b)))
+            }),
+            EndsWith => operands().is_some_and(|(a, b)| {
+                matches!(a, DataValue::String(s) if s.ends_with(&format_value(&b)))
+            }),
+            HasField | NoField => operands().is_some_and(|(a, b)| {
+                has_field(a, &b).is_some_and(|found| found == (self.op == HasField))
+            }),
+            LenEq => length_order() == Some(Ordering::Equal),
+            LenGt => length_order() == Some(Ordering::Greater),
+            LenLt => length_order() == Some(Ordering::Less),
         }
     }
 }
@@ -54,16 +64,6 @@ fn length(v: &DataValue) -> Option<usize> {
         DataValue::List { elements, .. } => Some(elements.len()),
         DataValue::Object { fields, .. } => Some(fields.len()),
         _ => None,
-    }
-}
-
-fn unary(op: CompareOp, a: &DataValue) -> bool {
-    match op {
-        IsEmpty => length(a) == Some(0),
-        NotEmpty => length(a).is_some_and(|n| n > 0),
-        IsTrue => *a == DataValue::Bool(true),
-        IsFalse => *a == DataValue::Bool(false),
-        _ => false,
     }
 }
 
@@ -89,31 +89,6 @@ pub fn loosely_equal(a: &DataValue, b: &DataValue) -> bool {
     }
 }
 
-fn binary(op: CompareOp, a: &DataValue, b: DataValue) -> bool {
-    match op {
-        Eq => loosely_equal(a, &b),
-        Ne => !loosely_equal(a, &b),
-        Lt | Le | Gt | Ge => ordering(a, &coerce_to(b, &a.get_type())).is_some_and(|ord| op.holds(ord)),
-        Contains | NotContains => {
-            let found = contains(a, &b);
-            found.is_some_and(|f| f == (op == Contains))
-        }
-        StartsWith | EndsWith => string_boundary(op, a, &b),
-        HasField | NoField => has_field(a, &b).is_some_and(|found| found == (op == HasField)),
-        LenEq | LenGt | LenLt => compare_length(op, a, b),
-        _ => false,
-    }
-}
-
-fn string_boundary(op: CompareOp, a: &DataValue, b: &DataValue) -> bool {
-    let DataValue::String(s) = a else { return false };
-    match op {
-        StartsWith => s.starts_with(&format_value(b)),
-        EndsWith => s.ends_with(&format_value(b)),
-        _ => false,
-    }
-}
-
 fn contains(a: &DataValue, b: &DataValue) -> Option<bool> {
     match a {
         DataValue::String(s) => Some(s.contains(&format_value(b))),
@@ -130,11 +105,10 @@ fn has_field(a: &DataValue, b: &DataValue) -> Option<bool> {
     }
 }
 
-fn compare_length(op: CompareOp, a: &DataValue, b: DataValue) -> bool {
-    match (length(a), coerce_to(b, &DataType::Number)) {
-        (Some(n), DataValue::Number(m)) => (n as f64).partial_cmp(&m.to_f64()).is_some_and(|ord| op.holds(ord)),
-        _ => false,
-    }
+fn length_ordering(a: &DataValue, b: DataValue) -> Option<Ordering> {
+    let n = length(a)?;
+    let DataValue::Number(m) = coerce_to(b, &DataType::Number) else { return None };
+    (n as f64).partial_cmp(&m.to_f64())
 }
 
 impl MatchCase {

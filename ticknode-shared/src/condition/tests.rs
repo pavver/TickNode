@@ -101,3 +101,118 @@ fn ops_follow_type() {
     assert_eq!(IsEmpty.right_type(&DataType::String), None);
     assert_eq!(Lt.label_for(&DataType::Time), "< earlier");
 }
+
+#[test]
+fn underscore_input_names_parse_and_resolve() {
+    let input = MatchInput::parse("7:_sensor_1:number").unwrap();
+    assert_eq!(input.name, "_sensor_1");
+    let case = MatchCase::parse("1:_sensor_1 = 12").unwrap();
+    assert!(case.matches(|name| if name == input.name { num(12) } else { None }));
+    assert!(!case.matches(|name| if name == input.name { num(13) } else { None }));
+}
+
+#[test]
+fn inclusive_comparisons_accept_equality_and_reject_the_other_side() {
+    for (op, a, b, expected) in [
+        (Le, 4, 5, true), (Le, 5, 5, true), (Le, 6, 5, false),
+        (Ge, 4, 5, false), (Ge, 5, 5, true), (Ge, 6, 5, true),
+    ] {
+        let case = MatchCase::parse(&format!("1:a {} {b}", op.text())).unwrap();
+        assert_eq!(case.matches(|_| num(a)), expected, "{a} {op:?} {b}");
+    }
+}
+
+#[test]
+fn missing_right_operand_never_satisfies_a_binary_condition() {
+    let mut case = MatchCase::parse("1:a != missing").unwrap();
+    let values = |name: &str| if name == "a" { num(5) } else { None };
+    assert!(!case.matches(values));
+    case.conditions[0].right = None;
+    assert!(!case.matches(values));
+}
+
+#[test]
+fn empty_and_single_element_collections_have_opposite_emptiness() {
+    for (empty, single) in [
+        (DataValue::from(""), DataValue::from("я")),
+        (
+            DataValue::List { element_type: DataType::Number, elements: vec![] },
+            DataValue::List { element_type: DataType::Number, elements: vec![1i64.into()] },
+        ),
+        (
+            DataValue::Object { fields: BTreeMap::new(), type_name: None },
+            DataValue::Object {
+                fields: [("x".into(), ObjectField { name: "x".into(), description: String::new(), value: 1i64.into() })].into(),
+                type_name: None,
+            },
+        ),
+    ] {
+        for (text, empty_matches, single_matches) in [("1:a is_empty", true, false), ("1:a not_empty", false, true)] {
+            let case = MatchCase::parse(text).unwrap();
+            assert_eq!(case.matches(|_| Some(empty.clone())), empty_matches, "{text}: {empty:?}");
+            assert_eq!(case.matches(|_| Some(single.clone())), single_matches, "{text}: {single:?}");
+        }
+    }
+}
+
+#[test]
+fn structural_equality_compares_collection_contents() {
+    let list = |n| DataValue::List { element_type: DataType::Number, elements: vec![DataValue::from(n)] };
+    let case = MatchCase::parse("1:a = b").unwrap();
+    assert!(case.matches(|_| Some(list(1i64))));
+    assert!(!case.matches(|name| Some(list(if name == "a" { 1i64 } else { 2i64 }))));
+}
+
+#[test]
+fn empty_case_matches_without_resolving_inputs() {
+    assert!(MatchCase::parse("7:").unwrap().matches(|_| panic!("an empty case has no inputs")));
+}
+
+#[test]
+fn first_join_is_ignored_even_when_constructed_as_or() {
+    let mut case = MatchCase::parse("1:a > 5").unwrap();
+    case.conditions[0].join = Join::Or;
+    assert!(!case.matches(|_| num(4)));
+    assert!(case.matches(|_| num(6)));
+}
+
+#[test]
+fn compact_negative_literal_and_false_are_evaluated() {
+    let case = MatchCase::parse("1:a=-12 and flag=false").unwrap();
+    assert_eq!(case.to_text(), "1: a = -12 and flag = false");
+    assert!(case.matches(|name| if name == "a" { num(-12) } else { Some(DataValue::Bool(false)) }));
+    assert!(!case.matches(|name| if name == "a" { num(-12) } else { Some(DataValue::Bool(true)) }));
+    assert_eq!(MatchCase::parse("1:a=-"), Err(ConditionError::UnexpectedChar('-')));
+}
+
+#[test]
+fn operators_preserve_results_and_lazy_operand_resolution() {
+    use std::cell::RefCell;
+
+    for (op, expected) in [
+        (Eq, false), (Ne, true), (Lt, true), (Le, true), (Gt, false), (Ge, false),
+        (Contains, false), (NotContains, false), (StartsWith, false), (EndsWith, false),
+        (IsEmpty, false), (NotEmpty, false), (IsTrue, false), (IsFalse, false),
+        (HasField, false), (NoField, false), (LenEq, false), (LenGt, false), (LenLt, false),
+        (HasValue, true), (NoValue, false),
+    ] {
+        let condition = Condition {
+            join: Join::And, left: Operand::Input("left".into()), op,
+            right: Some(Operand::Input("right".into())),
+        };
+        let reads = RefCell::new(Vec::new());
+        assert_eq!(condition.holds(&|name| {
+            reads.borrow_mut().push(name.to_string());
+            num(if name == "left" { 1 } else { 2 })
+        }), expected, "{op:?}");
+        let expected_reads = if op.is_unary() { vec!["left"] } else { vec!["left", "right"] };
+        assert_eq!(*reads.borrow(), expected_reads, "{op:?}");
+
+        reads.borrow_mut().clear();
+        assert_eq!(condition.holds(&|name| {
+            reads.borrow_mut().push(name.to_string());
+            None
+        }), op == NoValue, "missing left: {op:?}");
+        assert_eq!(*reads.borrow(), ["left"], "missing left: {op:?}");
+    }
+}

@@ -199,3 +199,116 @@ fn invalid_colors_and_duration_parts_are_rejected() {
     assert_eq!(parse_duration("1 H 2 min 3 sec 4 MS"), Some(Duration::from_millis(3_723_004)));
     assert_eq!(parse_duration("1д 2год 3хв 4с 5мс"), Some(Duration::from_millis(93_784_005)));
 }
+
+#[test]
+fn setting_builders_preserve_optional_and_required_schema_flags() {
+    for setting in [
+        SettingDefinition::text("label", "Label"),
+        SettingDefinition::number("limit", "Limit"),
+        SettingDefinition::bool("enabled", "Enabled"),
+    ] {
+        assert!(!setting.required);
+        assert_eq!(setting.default, None);
+        let required = setting.clone().required();
+        assert_eq!(required, SettingDefinition { required: true, ..setting });
+    }
+}
+
+#[test]
+fn text_and_numeric_settings_accept_their_values_and_reject_mismatches() {
+    for (setting, value) in [
+        (SettingDefinition::text("name", "Name"), DataValue::from("Kitchen")),
+        (SettingDefinition::secret("token", "Token"), DataValue::from("secret")),
+        (SettingDefinition::number("limit", "Limit"), DataValue::from(12i64)),
+        (SettingDefinition::number("ratio", "Ratio"), DataValue::from(0.5)),
+    ] {
+        assert_eq!(setting.check("sample", &value), Ok(()));
+        let error = setting.check("sample", &DataValue::Bool(false)).unwrap_err();
+        assert_eq!(error.key, "error-setting-invalid");
+        assert!(error.args.contains(&("key".into(), setting.key.clone())));
+        assert!(error.args.contains(&("plugin".into(), "sample".into())));
+    }
+}
+
+#[test]
+fn date_only_input_means_midnight_utc() {
+    assert_eq!(parse_value("2026-10-29", &DataType::DateTime),
+        Ok(DataValue::DateTime(chrono::DateTime::parse_from_rfc3339("2026-10-29T00:00:00Z").unwrap().to_utc())));
+    assert_eq!(format_value(&parse_value("2026-10-29", &DataType::DateTime).unwrap()), "2026-10-29 00:00:00");
+}
+
+#[test]
+fn duration_formatting_handles_zero_milliseconds_and_whole_seconds() {
+    for (millis, expected) in [(0, "0s"), (1, "1ms"), (999, "999ms"), (1000, "1s"), (1001, "1.001s"), (60_000, "1m"), (60_001, "1m 0.001s")] {
+        let duration = Duration::from_millis(millis);
+        assert_eq!(format_duration(duration), expected);
+        assert_eq!(parse_duration(expected), Some(duration));
+    }
+}
+
+#[test]
+fn any_input_distinguishes_booleans_from_quoted_strings() {
+    for (text, value) in [(" true ", DataValue::Bool(true)), ("false", DataValue::Bool(false)), ("\"true\"", DataValue::from("true")), ("\"false\"", DataValue::from("false"))] {
+        assert_eq!(parse_value(text, &DataType::Any), Ok(value));
+    }
+}
+
+#[test]
+fn field_builders_preserve_required_and_optional_schema_flags() {
+    let field = FieldDefinition::new("x", "X", DataType::Number);
+    assert!(!field.optional);
+    assert_eq!(field.clone().optional(), FieldDefinition { optional: true, ..field.clone() });
+    let definition = TypeDefinition::new_struct("t.point", "Point", vec![field.clone(), field.optional()]);
+    assert!(!definition.fields()[0].optional);
+    assert!(definition.fields()[1].optional);
+}
+
+#[test]
+fn custom_type_names_accept_digits_underscores_and_hyphens_but_reject_invalid_segments() {
+    for name in ["t1.field_2", "t1.field-2", "1.2", "_.-", "plugin.record"] {
+        let mut types = TypeRegistry::new();
+        let definition = TypeDefinition::new_enum(name, "Mode", &[("a", "A")]);
+        types.insert_all(std::slice::from_ref(&definition)).unwrap();
+        assert_eq!(types.get(name), Some(&definition));
+        assert_eq!(parse_data_type(name), Some(DataType::Named(name.into())));
+    }
+    for name in [".record", "plugin.", "plugin..record", "plugin.Record", "plugin.rec?ord", "plugin.rec ord", "plugin.é"] {
+        let mut types = TypeRegistry::new();
+        assert_eq!(types.insert_all(&[TypeDefinition::new_enum(name, "Mode", &[("a", "A")])]),
+            Err(format!("Invalid type name {name:?}: expected something like \"plugin.type\"")));
+        assert!(types.is_empty());
+    }
+}
+
+#[test]
+fn empty_and_duplicate_struct_fields_fail_registration_atomically() {
+    for names in [vec![""], vec!["x", "x"]] {
+        let mut types = TypeRegistry::new();
+        let before = types.definitions();
+        let fields = names.iter().map(|name| FieldDefinition::new(name, "Field", DataType::Number)).collect();
+        let result = types.insert_all(&[TypeDefinition::new_struct("t.bad", "Bad", fields)]);
+        assert_eq!(result, Err(format!("Type t.bad: empty or duplicate field name {:?}", names.last().unwrap())));
+        assert_eq!(types.definitions(), before);
+    }
+}
+
+#[test]
+fn normalization_includes_both_integer_boundaries() {
+    use NumberValue::{Float, Int};
+    assert_eq!(Float(i64::MIN as f64).normalize(), Int(i64::MIN));
+    // i64::MAX rounds to 2^63 as f64; normalization uses Rust's saturating cast.
+    assert_eq!(Float(i64::MAX as f64).normalize(), Int(i64::MAX));
+    assert_eq!(Float((i64::MAX as f64) * 2.0).normalize(), Float((i64::MAX as f64) * 2.0));
+    assert_eq!(Float((i64::MIN as f64) * 2.0).normalize(), Float((i64::MIN as f64) * 2.0));
+}
+
+#[test]
+fn addition_and_division_preserve_numeric_results() {
+    use NumberValue::{Float, Int};
+    assert_eq!(Int(7) + Int(2), Int(9));
+    assert_eq!(Int(7) + Float(0.5), Float(7.5));
+    assert_eq!(Float(0.5) + Float(1.5), Int(2));
+    assert_eq!(Int(9) / Int(3), Int(3));
+    assert_eq!(Int(7) / Int(2), Float(3.5));
+    assert_eq!(Float(1.5) / Float(0.5), Int(3));
+}

@@ -47,6 +47,10 @@ impl Actor {
 
         // Global plugin commands
         match msg {
+            ClientMessage::SetServerSettings(settings) => {
+                let events = self.set_server_settings(settings)?;
+                return Ok((events, None));
+            }
             ClientMessage::SetPluginEnabled { name, enabled } => {
                 let events = self.set_plugin_enabled(&name, enabled, reply)?;
                 return Ok((events, None));

@@ -1,5 +1,5 @@
 use super::*;
-use ticknode_shared::{HistoryState, UiMessage};
+use ticknode_shared::{HistoryState, ServerSettings, UiMessage};
 
 fn error(node: NodeId, count: u32) -> NodeError {
     NodeError { node, message: UiMessage::plain("Failed"), age_ms: 200, count }
@@ -32,7 +32,7 @@ fn reconnect_snapshots_replace_all_errors() {
     let init = |node_errors| ServerMessage::Init {
         definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![], traces: vec![],
         types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(),
-        wire_routes: vec![], detached_connections: vec![], timers: vec![], node_errors, frames: vec![], sheets: vec![], open_sheet: None, variables: vec![],
+        wire_routes: vec![], detached_connections: vec![], timers: vec![], node_errors, frames: vec![], sheets: vec![], open_sheet: None, variables: vec![], server_settings: ServerSettings::default(),
     };
     apply(&mut all, &init(vec![error(a, 2)]), 100.0);
     apply(&mut all, &init(vec![error(b, 3)]), 300.0);

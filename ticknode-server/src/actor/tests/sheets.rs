@@ -184,7 +184,7 @@ async fn event_filtering_by_session_sheet_over_websocket() {
     let loaded = storage.load(&mut engine).unwrap();
     let sheet1 = loaded.sheets[0].id;
 
-    let handle = spawn(engine, loaded, storage, Plugins::new(dir.path()), Duration::from_millis(10)).unwrap();
+    let handle = spawn(engine, loaded, storage, Plugins::new(dir.path()), ServerSettings { tick_ms: 10, tick_budget: 0 }).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(axum::serve(listener, crate::router(handle.clone(), dir.path())).into_future());

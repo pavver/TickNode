@@ -169,3 +169,71 @@ fn corrupt_variables_file_fails_load() {
     let mut engine = TickEngine::new();
     assert!(storage.load(&mut engine).is_err());
 }
+
+#[test]
+fn settings_fallback_to_env_and_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+
+    let no_env = Storage::load_settings_from(&path, &|_| None).unwrap();
+    assert_eq!(no_env, ServerSettings { tick_ms: 100, tick_budget: 0 });
+
+    let env = |k: &str| match k {
+        "TICKNODE_TICK_MS" => Some("50".into()),
+        "TICKNODE_TICK_BUDGET" => Some("1000".into()),
+        _ => None,
+    };
+    let with_env = Storage::load_settings_from(&path, &env).unwrap();
+    assert_eq!(with_env, ServerSettings { tick_ms: 50, tick_budget: 1000 });
+}
+
+#[test]
+fn settings_file_precedence_over_env() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().to_path_buf());
+    let path = storage.settings_json_path();
+
+    storage.save_settings(&ServerSettings { tick_ms: 250, tick_budget: 2000 }).unwrap();
+
+    let env = |k: &str| match k {
+        "TICKNODE_TICK_MS" => Some("50".into()),
+        "TICKNODE_TICK_BUDGET" => Some("1000".into()),
+        _ => None,
+    };
+    let loaded = Storage::load_settings_from(&path, &env).unwrap();
+    assert_eq!(loaded, ServerSettings { tick_ms: 250, tick_budget: 2000 });
+}
+
+#[test]
+fn settings_partial_file_uses_env_fallback() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"tick_ms": 300}"#).unwrap();
+
+    let env = |k: &str| match k {
+        "TICKNODE_TICK_BUDGET" => Some("500".into()),
+        _ => None,
+    };
+    let loaded = Storage::load_settings_from(&path, &env).unwrap();
+    assert_eq!(loaded, ServerSettings { tick_ms: 300, tick_budget: 500 });
+}
+
+#[test]
+fn settings_validation_clamp() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"tick_ms": 0, "tick_budget": 5000000}"#).unwrap();
+
+    let loaded = Storage::load_settings_from(&path, &|_| None).unwrap();
+    assert_eq!(loaded, ServerSettings { tick_ms: 1, tick_budget: 1_000_000 });
+}
+
+#[test]
+fn corrupt_settings_file_fails_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, "corrupt json {").unwrap();
+
+    let res = Storage::load_settings_from(&path, &|_| None);
+    assert!(res.is_err());
+}

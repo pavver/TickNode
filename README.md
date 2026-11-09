@@ -30,6 +30,7 @@ Its first target is **Home Assistant**: TickNode is being developed into an add-
 - **Safe updates.** Plugins carry a fingerprint of the plugin API, and an incompatible plugin is reported instead of crashing. When an update changes a node's pins, the node is frozen until you confirm it, and wires that no longer fit stay visible as detached wires instead of disappearing.
 - **Scenario sheets.** Organize complex automations into independent scenario sheets. Each sheet has its own canvas, lifecycle (enable/disable), and undo/redo history, while all enabled sheets run concurrently on the same engine.
 - **Scoped runtime variables.** Share runtime data between nodes and the user across three scopes: sheet-local, global (transient), and persistent (saved to disk). Variables are typed, support shadowing, and come with dedicated nodes to create, get, set, delete, and react to changes.
+- **Centralized settings.** Configure language, theme, live wire values, tick duration and per-tick work budget in the dedicated Settings section on the home page.
 - **Git-friendly storage.** Graphs are stored as pretty-printed JSON in `data/sheets/<id>.json` with metadata in `data/sheets.json`.
 - **English and Ukrainian UI**, localized with Mozilla Fluent.
 - **Rust end to end.** Engine, server, editor (Leptos → WebAssembly) and plugins share one set of types.

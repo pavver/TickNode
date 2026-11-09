@@ -8,10 +8,10 @@ use std::sync::mpsc as std_mpsc;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use ticknode_core::{EngineError, RemovedConnections, TickEngine};
+use ticknode_core::{EngineError, RemovedConnections, TickBudget, TickEngine};
 use ticknode_shared::{
     ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeTrace, NodeSize,
-    Position, ServerMessage, SheetId, SheetInfo, SheetSummary, UiMessage,
+    Position, ServerMessage, ServerSettings, SheetId, SheetInfo, SheetSummary, UiMessage,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
@@ -89,14 +89,17 @@ pub fn spawn(
     loaded: LoadedSheets,
     storage: Storage,
     plugins: Plugins,
-    tick: Duration,
+    server_settings: ServerSettings,
 ) -> std::io::Result<EngineHandle> {
     let (commands, rx) = std_mpsc::channel();
     let (events, _) = broadcast::channel(1024);
+    let tick = Duration::from_millis(server_settings.tick_ms as u64);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
+    engine.budget = TickBudget { limit: (server_settings.tick_budget != 0).then_some(server_settings.tick_budget) };
     let actor = Actor {
         engine,
+        server_settings,
         sheets: loaded.sheets,
         node_sheet: loaded.node_sheet,
         frame_sheet: loaded.frame_sheet,
@@ -118,12 +121,13 @@ pub fn spawn(
     };
     std::thread::Builder::new()
         .name("ticknode-engine".into())
-        .spawn(move || actor.run(rx, tick))?;
+        .spawn(move || actor.run(rx))?;
     Ok(EngineHandle { commands, events })
 }
 
 pub(super) struct Actor {
     pub(super) engine: TickEngine,
+    pub(super) server_settings: ServerSettings,
     pub(super) sheets: Vec<SheetInfo>,
     pub(super) node_sheet: HashMap<NodeId, SheetId>,
     pub(super) frame_sheet: HashMap<FrameId, SheetId>,
@@ -148,12 +152,21 @@ pub(super) struct Actor {
 }
 
 impl Actor {
-    fn run(mut self, rx: std_mpsc::Receiver<Command>, tick: Duration) {
-        let mut next_tick = Instant::now() + tick;
+    fn tick_duration(&self) -> Duration {
+        Duration::from_millis(self.server_settings.tick_ms as u64)
+    }
+
+    fn run(mut self, rx: std_mpsc::Receiver<Command>) {
+        let mut next_tick = Instant::now() + self.tick_duration();
         loop {
             let now = Instant::now();
+            let tick = self.tick_duration();
+            if next_tick > now + tick {
+                next_tick = now + tick;
+            }
             if now >= next_tick {
                 self.tick();
+                let tick = self.tick_duration();
                 next_tick += tick;
                 // Do not catch up on missed ticks (if the engine was busy longer than a tick).
                 if next_tick <= now {
@@ -348,6 +361,7 @@ impl Actor {
             sheets: summaries,
             open_sheet: active_sheet,
             variables,
+            server_settings: self.server_settings,
         }
     }
 
@@ -366,6 +380,7 @@ mod commands;
 mod history;
 mod telemetry;
 mod settings;
+mod server_settings;
 mod resize;
 mod frames;
 

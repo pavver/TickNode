@@ -12,12 +12,14 @@ pub mod property;
 pub mod types;
 pub mod ui_message;
 pub mod sheets;
+pub mod settings;
 
 pub use plugin::*;
 pub use property::*;
 pub use types::*;
 pub use ui_message::*;
 pub use sheets::*;
+pub use settings::*;
 
 pub mod variables;
 pub use variables::*;

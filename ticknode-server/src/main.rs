@@ -20,8 +20,6 @@ struct Config {
     data_dir: PathBuf,
     web_dir: PathBuf,
     bundled_plugins_dir: Option<PathBuf>,
-    tick: Duration,
-    budget: TickBudget,
 }
 
 impl Config {
@@ -32,8 +30,6 @@ impl Config {
             data_dir: var("TICKNODE_DATA_DIR", "data").into(),
             web_dir: var("TICKNODE_WEB_DIR", "ticknode-editor/dist").into(),
             bundled_plugins_dir: std::env::var("TICKNODE_BUNDLED_PLUGINS_DIR").ok().filter(|v| !v.is_empty()).map(PathBuf::from),
-            tick: Duration::from_millis(var("TICKNODE_TICK_MS", "100").parse().unwrap_or(100)),
-            budget: TickBudget { limit: var("TICKNODE_TICK_BUDGET", "").trim().parse::<u32>().ok().filter(|v| *v != 0) },
         }
     }
 }
@@ -47,17 +43,20 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env();
     std::fs::create_dir_all(&config.data_dir)?;
 
+    let storage = Storage::new(config.data_dir.clone());
+    let server_settings = storage.load_settings()?;
+
     let mut engine = TickEngine::new();
-    engine.budget = config.budget;
+    engine.budget = TickBudget { limit: (server_settings.tick_budget != 0).then_some(server_settings.tick_budget) };
     // Plugins may open connections already in `configure` while loading
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
+    engine.host_state.tick_duration = Duration::from_millis(server_settings.tick_ms as u64);
     // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
     let mut plugins = plugins::Plugins::new(&config.data_dir).with_bundled_dir(config.bundled_plugins_dir.clone());
     plugins.load_all(&mut engine);
 
-    let storage = Storage::new(config.data_dir.clone());
     let loaded = storage.load(&mut engine)?;
-    let handle = actor::spawn(engine, loaded, storage, plugins, config.tick)?;
+    let handle = actor::spawn(engine, loaded, storage, plugins, server_settings)?;
 
     let app = router(handle.clone(), &config.web_dir);
 
@@ -106,7 +105,7 @@ async fn shutdown_signal() {
 mod tests {
     use super::*;
     use futures::{SinkExt, StreamExt};
-    use ticknode_shared::{ClientMessage, ConnectionModel, DataValue, PinId, Position, ServerMessage};
+    use ticknode_shared::{ClientMessage, ConnectionModel, DataValue, PinId, Position, ServerMessage, ServerSettings};
     use std::path::PathBuf;
     use tokio_tungstenite::tungstenite::Message;
 
@@ -143,7 +142,7 @@ mod tests {
     async fn editor_session_over_websocket_persists_graph() {
         let dir = tempfile::tempdir().unwrap();
         let graph_path = dir.path().join("graph.json");
-        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), Duration::from_millis(10)).unwrap();
+        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), ServerSettings { tick_ms: 10, tick_budget: 0 }).unwrap();
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -273,7 +272,7 @@ mod tests {
         plugins.load_all(&mut engine);
         let storage = Storage::new(dir);
         let loaded = storage.load(&mut engine).unwrap();
-        let handle = actor::spawn(engine, loaded, storage, plugins, Duration::from_millis(10)).unwrap();
+        let handle = actor::spawn(engine, loaded, storage, plugins, ServerSettings { tick_ms: 10, tick_budget: 0 }).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());

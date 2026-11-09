@@ -2,6 +2,7 @@
 
 pub mod logic;
 mod sheets;
+mod settings;
 
 use leptos::prelude::*;
 use crate::i18n::t;
@@ -9,6 +10,7 @@ use crate::plugins_panel::PluginCard;
 use crate::state::use_editor;
 use crate::ui::{IconButton, Terminal, icons};
 use sheets::SheetsSection;
+use settings::SettingsSection;
 
 const HOME_SECTION_KEY: &str = "ticknode.home-section";
 
@@ -19,6 +21,7 @@ pub enum HomeSection {
     Variables,
     Plugins,
     Log,
+    Settings,
 }
 
 fn load_home_section() -> HomeSection {
@@ -32,6 +35,7 @@ fn load_home_section() -> HomeSection {
         Some("variables") => HomeSection::Variables,
         Some("plugins") => HomeSection::Plugins,
         Some("log") => HomeSection::Log,
+        Some("settings") => HomeSection::Settings,
         _ => HomeSection::Sheets,
     }
 }
@@ -43,6 +47,7 @@ fn save_home_section(sec: HomeSection) {
             HomeSection::Variables => "variables",
             HomeSection::Plugins => "plugins",
             HomeSection::Log => "log",
+            HomeSection::Settings => "settings",
         };
         let _ = storage.set_item(HOME_SECTION_KEY, val);
     }
@@ -97,6 +102,15 @@ pub fn HomePage() -> impl IntoView {
                     <span class="mdi mdi-console" aria-hidden="true"></span>
                     <span>{move || t!("home-log")}</span>
                 </button>
+                <button
+                    class="home-nav-item ctl"
+                    class:st-selected=move || section.get() == HomeSection::Settings
+                    title=move || t!("home-settings")
+                    on:click=move |_| select_section(HomeSection::Settings)
+                >
+                    <span class="mdi mdi-cog-outline" aria-hidden="true"></span>
+                    <span>{move || t!("home-settings")}</span>
+                </button>
             </nav>
             <div class="home-content">
                 {move || match section.get() {
@@ -104,6 +118,7 @@ pub fn HomePage() -> impl IntoView {
                     HomeSection::Variables => view! { <HomeVariables /> }.into_any(),
                     HomeSection::Plugins => view! { <HomePlugins /> }.into_any(),
                     HomeSection::Log => view! { <HomeLog /> }.into_any(),
+                    HomeSection::Settings => view! { <SettingsSection /> }.into_any(),
                 }}
             </div>
         </div>

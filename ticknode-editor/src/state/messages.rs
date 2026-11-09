@@ -16,10 +16,11 @@ impl Editor {
         if detached::applies(&msg) { self.detached.update(|all| detached::apply(all, &msg)); }
         if frames::applies(&msg) { self.frames.update(|all| frames::apply(all, &msg)); }
         match msg {
-            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, variables, .. } => {
+            ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, variables, server_settings, .. } => {
                 self.sheets.set(sheets.clone());
                 self.sheets_received_at.set(now_ms());
                 self.open_sheet.set(open_sheet);
+                self.server_settings.set(server_settings);
                 self.variables.set(variables.into_iter().map(|v| (v.key.clone(), v)).collect());
                 self.history.set(history);
                 let gone = self.remove_absent_nodes(&nodes);
@@ -113,6 +114,9 @@ impl Editor {
                         vars.insert(var.key.clone(), var);
                     }
                 });
+            }
+            ServerMessage::ServerSettingsChanged(settings) => {
+                self.server_settings.set(settings);
             }
             ServerMessage::Error(message) => {
                 self.pending_create_tracker.update(|t| t.clear());

@@ -31,6 +31,7 @@ pub(super) fn undoable(msg: &ClientMessage) -> bool {
         ClientMessage::TriggerNode { .. }
             | ClientMessage::SetPluginEnabled { .. }
             | ClientMessage::ConfigurePlugin { .. }
+            | ClientMessage::SetServerSettings(_)
             | ClientMessage::Undo
             | ClientMessage::Redo
             | ClientMessage::OpenSheet(_)

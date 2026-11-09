@@ -4,13 +4,19 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use ticknode_core::TickEngine;
-use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, SheetId, SheetInfo, Variable, VariableScope};
+use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, ServerSettings, SheetId, SheetInfo, Variable, VariableScope};
 use tracing::{info, warn};
 use crate::actor::routes::{self, Routes};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VariablesFile {
     pub variables: Vec<Variable>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SettingsFile {
+    tick_ms: Option<u32>,
+    tick_budget: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,6 +84,40 @@ impl Storage {
 
     pub fn variables_json_path(&self) -> PathBuf {
         self.data_dir.join("variables.json")
+    }
+
+    pub fn settings_json_path(&self) -> PathBuf {
+        self.data_dir.join("settings.json")
+    }
+
+    pub fn load_settings(&self) -> anyhow::Result<ServerSettings> {
+        Self::load_settings_from(&self.settings_json_path(), &|k| std::env::var(k).ok())
+    }
+
+    pub fn load_settings_from(path: &Path, env: &dyn Fn(&str) -> Option<String>) -> anyhow::Result<ServerSettings> {
+        let (file_tick_ms, file_tick_budget) = if path.exists() {
+            let text = std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read {}", path.display()))?;
+            let file: SettingsFile = serde_json::from_str(&text)
+                .with_context(|| format!("invalid settings JSON in {}", path.display()))?;
+            (file.tick_ms, file.tick_budget)
+        } else {
+            (None, None)
+        };
+
+        let tick_ms = file_tick_ms
+            .or_else(|| env("TICKNODE_TICK_MS").and_then(|v| v.parse().ok()))
+            .unwrap_or(ticknode_shared::DEFAULT_TICK_MS);
+
+        let tick_budget = file_tick_budget
+            .or_else(|| env("TICKNODE_TICK_BUDGET").and_then(|v| v.trim().parse().ok()))
+            .unwrap_or(ticknode_shared::DEFAULT_TICK_BUDGET);
+
+        Ok(ServerSettings { tick_ms, tick_budget }.validated())
+    }
+
+    pub fn save_settings(&self, settings: &ServerSettings) -> anyhow::Result<()> {
+        write_atomic(&self.settings_json_path(), &(serde_json::to_string_pretty(settings)? + "\n"))
     }
 
     pub fn load_variables(&self) -> anyhow::Result<Vec<Variable>> {

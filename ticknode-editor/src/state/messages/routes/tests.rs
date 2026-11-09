@@ -48,7 +48,7 @@ fn init_replaces_all_routes_including_an_empty_snapshot() {
     let snapshot = |wire_routes| ServerMessage::Init {
         node_errors: vec![],
         definitions: vec![], nodes: vec![], exec_connections: vec![c], data_connections: vec![], traces: vec![],
-        types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(), wire_routes, detached_connections: Vec::new(), timers: vec![], frames: vec![], sheets: vec![], open_sheet: None, variables: vec![],
+        types: vec![], plugins: vec![], translations: vec![], property_options: vec![], history: HistoryState::default(), wire_routes, detached_connections: Vec::new(), timers: vec![], frames: vec![], sheets: vec![], open_sheet: None, variables: vec![], server_settings: ServerSettings::default(),
     };
     let mut all = WireRoutes::new();
     apply_twice(&mut all, ServerMessage::WireRouted(route(false, c)));

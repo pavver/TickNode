@@ -203,7 +203,7 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
     };
     let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
-        Plugins::new(dir.path()), Duration::from_millis(5)).unwrap();
+        Plugins::new(dir.path()), ServerSettings { tick_ms: 5, tick_budget: 0 }).unwrap();
     let mut events = handle.subscribe();
     let (reply, _) = mpsc::unbounded_channel();
     handle.send(ClientMessage::TriggerNode { id, pin: PinId(0) }, None, reply);
@@ -301,7 +301,7 @@ async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
     let loaded = storage.load(&mut engine).unwrap();
     let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
-        Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
+        Plugins::new(dir.path()), ServerSettings { tick_ms: 10_000, tick_budget: 0 }).unwrap();
     let mut first = handle.subscribe();
     let mut second = handle.subscribe();
     let (reply, mut replies) = mpsc::unbounded_channel();
@@ -325,7 +325,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
     let loaded = storage.load(&mut engine).unwrap();
     let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
-        Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
+        Plugins::new(dir.path()), ServerSettings { tick_ms: 10_000, tick_budget: 0 }).unwrap();
     let (reply, mut replies) = mpsc::unbounded_channel();
     let pos = Position { x: 42.0, y: 84.0 };
     handle.send(ClientMessage::AddNodeWith {

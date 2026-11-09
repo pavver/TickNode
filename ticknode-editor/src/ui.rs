@@ -116,11 +116,13 @@ pub fn ActionButton(
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
     /// Action without server confirmation: immediately flash Success.
     #[prop(optional)] flash_on_click: bool,
+    #[prop(optional, into)] disabled: Option<Signal<bool>>,
 ) -> impl IntoView {
     let local = RwSignal::new(ControlState::Idle);
     let state = effective(state, local);
+    let is_disabled = move || disabled.is_some_and(|d| d.get());
     let click = move |_| {
-        if state.get_untracked() == ControlState::Pending {
+        if is_disabled() || state.get_untracked() == ControlState::Pending {
             return;
         }
         on_click.run(());
@@ -132,11 +134,13 @@ pub fn ActionButton(
         <button
             // Single-string class attribute: separate `class:` bindings would be wiped on state change
             class=move || format!(
-                "btn ctl {}{}{}",
+                "btn ctl {}{}{}{}",
                 state.get().class(),
                 if danger { " danger" } else { "" },
                 if full { " full" } else { "" },
+                if is_disabled() { " st-disabled" } else { "" },
             )
+            disabled=is_disabled
             on:click=click
         >
             <span class="btn-content">{icon.map(|p| view! { <Icon path=p /> })}<span>{move || text.get()}</span></span>

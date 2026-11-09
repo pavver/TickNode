@@ -13,13 +13,16 @@ pub fn load_show_values() -> bool {
         .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten()).as_deref() == Some("true")
 }
 
-pub fn toggle_show_values(ed: Editor) {
-    let show = !ed.show_values.get_untracked();
+pub fn set_show_values(ed: Editor, show: bool) {
     ed.show_values.set(show);
     // The web-sys bindings catch exceptions from both storage access and writes.
     if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.set_item(STORAGE_KEY, if show { "true" } else { "false" });
     }
+}
+
+pub fn toggle_show_values(ed: Editor) {
+    set_show_values(ed, !ed.show_values.get_untracked());
 }
 
 pub fn trace_value(trace: &NodeTrace, pin: PinId, dir: PinDirection) -> Option<&DataValue> {

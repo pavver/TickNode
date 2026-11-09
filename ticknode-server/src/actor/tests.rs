@@ -6,6 +6,7 @@ pub(super) fn test_actor(dir: &std::path::Path) -> Actor {
     let sheet = SheetInfo::new(SheetId::generate(), "Main");
     Actor {
         engine: TickEngine::new(),
+        server_settings: ServerSettings::default(),
         sheets: vec![sheet],
         node_sheet: HashMap::new(),
         frame_sheet: HashMap::new(),
@@ -43,6 +44,7 @@ mod node_errors;
 mod frames;
 mod sheets;
 mod variables;
+mod server_settings;
 
 #[test]
 fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {

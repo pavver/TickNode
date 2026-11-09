@@ -24,8 +24,9 @@ Plugins panel; saved values win over the automatic ones.
 
 ## Data and plugins
 
-- `/data` is persistent and part of Home Assistant backups: the graph (`graph.json`), plugin
-  settings (`plugin-config/`) and plugin files (`plugin-data/`).
+- `/data` is persistent and part of Home Assistant backups: scenario sheets (`sheets/`),
+  engine settings (`settings.json`), plugin settings (`plugin-config/`) and plugin files (`plugin-data/`).
+  Tick length and work budget are configured directly on the Settings page in the editor.
 - Bundled plugins ship with the add-on image and are updated together with it. Your own plugins
   (`*.wasm`) can be placed in `/data/plugins`; a file there with the same name as a bundled plugin
   replaces it.

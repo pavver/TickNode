@@ -1,5 +1,5 @@
 use super::*;
-use ticknode_shared::HistoryState;
+use ticknode_shared::{HistoryState, ServerSettings};
 
 fn timer(node: NodeId, remaining_ms: u64, count: u32) -> NodeTimer {
     NodeTimer { node, total_ms: 1000, remaining_ms, count }
@@ -10,7 +10,7 @@ fn init(timers: Vec<NodeTimer>) -> ServerMessage {
         node_errors: vec![],
         definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![],
         traces: vec![], types: vec![], plugins: vec![], translations: vec![], property_options: vec![],
-        history: HistoryState::default(), wire_routes: vec![], detached_connections: vec![], timers, frames: vec![], sheets: vec![], open_sheet: None, variables: vec![],
+        history: HistoryState::default(), wire_routes: vec![], detached_connections: vec![], timers, frames: vec![], sheets: vec![], open_sheet: None, variables: vec![], server_settings: ServerSettings::default(),
     }
 }
 

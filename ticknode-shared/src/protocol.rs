@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId, SheetId, SheetInfo, SheetSummary, Variable, VariableKey};
+use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId, SheetId, SheetInfo, SheetSummary, Variable, VariableKey, ServerSettings};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
@@ -51,6 +51,7 @@ pub enum ClientMessage {
     CreateVariable(Variable),
     SetVariable { key: VariableKey, value: DataValue },
     DeleteVariable(VariableKey),
+    SetServerSettings(ServerSettings),
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -134,6 +135,8 @@ pub enum ServerMessage {
         open_sheet: Option<SheetId>,
         #[serde(default)]
         variables: Vec<Variable>,
+        #[serde(default)]
+        server_settings: ServerSettings,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -173,4 +176,5 @@ pub enum ServerMessage {
     Sheets(Vec<SheetSummary>),
     SheetCreated(SheetId),
     VariablesChanged { set: Vec<Variable>, removed: Vec<VariableKey> },
+    ServerSettingsChanged(ServerSettings),
 }

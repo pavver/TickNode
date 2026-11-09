@@ -85,6 +85,7 @@ fn init_replaces_all_frames_including_empty_snapshot() {
         sheets: vec![],
         open_sheet: None,
         variables: vec![],
+        server_settings: ServerSettings::default(),
     };
 
     apply_twice(&mut all, snapshot(vec![test_frame(id1, "One"), test_frame(id2, "Two")]));

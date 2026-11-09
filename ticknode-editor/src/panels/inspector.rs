@@ -21,7 +21,7 @@ use super::tooltip::InfoButton;
 pub fn Inspector() -> impl IntoView {
     let ed = use_editor();
     // The plugins panel takes the inspector's slot
-    let hidden = move || ed.show_plugins.get() || (ed.narrow.get() && ed.selection.get().is_none());
+    let hidden = move || ed.narrow.get() && ed.selection.get().is_none();
     view! {
         <aside class="panel right" class:hidden=hidden>
             {move || match ed.selection.get() {

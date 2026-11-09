@@ -47,27 +47,7 @@ fn capability_text(c: &Capability) -> String {
 }
 
 #[component]
-pub fn PluginsPanel() -> impl IntoView {
-    let ed = use_editor();
-    let names = Memo::new(move |_| ed.plugins.with(|p| p.iter().map(|i| i.name.clone()).collect::<Vec<_>>()));
-    view! {
-        <aside class="panel right plugins" class:hidden=move || !ed.show_plugins.get()>
-            <div class="console-bar">
-                <span class="t-section" style="flex:1">{move || t!("plugins-title")}</span>
-                <IconButton icon=icons::CLOSE title=Signal::derive(move || t!("plugins-hide")) on_click=Callback::new(move |_| ed.show_plugins.set(false)) />
-            </div>
-            {move || names.with(Vec::is_empty).then(|| view! {
-                <div class="empty">{move || t!("plugins-empty")}</div>
-            })}
-            <For each=move || names.get() key=|n| n.clone() let:name>
-                <PluginCard name=name />
-            </For>
-        </aside>
-    }
-}
-
-#[component]
-fn PluginCard(name: String) -> impl IntoView {
+pub fn PluginCard(name: String) -> impl IntoView {
     let ed = use_editor();
     let lookup = name.clone();
     let info = Memo::new(move |_| ed.plugins.with(|p| p.iter().find(|i| i.name == lookup).cloned()));

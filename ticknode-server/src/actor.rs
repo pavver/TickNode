@@ -287,7 +287,7 @@ impl Actor {
     }
 
     pub(crate) fn snapshot(&self, open_sheet: Option<SheetId>) -> ServerMessage {
-        let active_sheet = open_sheet.or_else(|| self.sheets.first().map(|s| s.id));
+        let active_sheet = open_sheet;
         let summaries = self.sheet_summaries();
         let (graph, traces, history, timers, node_errors) = match active_sheet {
             Some(sheet_id) => {

@@ -1,5 +1,16 @@
 # Connection status and editor header
-status-online = підключено · { $count } нод
+status-online =
+    { $count ->
+        [one] підключено · { $count } нода
+        [few] підключено · { $count } ноди
+       *[other] підключено · { $count } нод
+    }
+status-online-home =
+    { $count ->
+        [one] підключено · { $count } аркуш
+        [few] підключено · { $count } аркуші
+       *[other] підключено · { $count } аркушів
+    }
 status-connecting = підключення…
 status-offline = немає з'єднання з сервером
 
@@ -444,3 +455,38 @@ frame-color-green = Зелений
 frame-color-teal = Бірюзовий
 frame-color-blue = Синій
 frame-color-purple = Фіолетовий
+
+# Аркуші та головна сторінка
+sheets-back = Усі аркуші
+sheet-disabled = Вимкнено
+home-sheets = Аркуші сценаріїв
+home-log = Журнал
+sheet-new = Новий аркуш
+sheet-new-title = Новий аркуш
+sheet-no-caption = Без опису
+sheet-nodes =
+    { $count ->
+        [one] { $count } нода
+        [few] { $count } ноди
+        [many] { $count } нод
+       *[other] { $count } нод
+    }
+sheet-errors =
+    { $count ->
+        [one] { $count } помилка
+        [few] { $count } помилки
+        [many] { $count } помилок
+       *[other] { $count } помилок
+    }
+sheet-last-run = Останній запуск { $time }
+sheet-never-run = Ще не запускався
+sheet-enabled = Увімкнено
+sheet-edit = Редагувати
+sheet-duplicate = Дублювати
+sheet-move-up = Вгору
+sheet-move-down = Вниз
+sheet-delete = Видалити
+sheet-save = Зберегти
+sheet-cancel = Скасувати
+sheet-delete-confirm = Видалити аркуш «{ $title }»? Його буде перенесено в теку кошика на сервері.
+sheets-empty = Аркушів ще немає — створіть перший

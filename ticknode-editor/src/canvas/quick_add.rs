@@ -14,6 +14,9 @@ pub(super) fn can_open(paste: bool, dragging: bool, popup: bool) -> bool {
 impl Interaction {
     fn can_quick_add(self) -> bool {
         let ed = self.ed;
+        if ed.open_sheet.get_untracked().is_none() {
+            return false;
+        }
         can_open(
             ed.pending_paste.with_untracked(|p| p.is_some()),
             self.drag.with_value(|d| !matches!(d, Drag::Idle))

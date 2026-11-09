@@ -4,6 +4,11 @@ status-online =
         [one] connected · { $count } node
        *[other] connected · { $count } nodes
     }
+status-online-home =
+    { $count ->
+        [one] connected · { $count } sheet
+       *[other] connected · { $count } sheets
+    }
 status-connecting = connecting…
 status-offline = disconnected from server
 
@@ -439,3 +444,34 @@ frame-color-green = Green
 frame-color-teal = Teal
 frame-color-blue = Blue
 frame-color-purple = Purple
+
+# Sheets and home page
+sheets-back = All sheets
+sheet-disabled = Disabled
+home-sheets = Scenario sheets
+home-log = Log
+sheet-new = New sheet
+sheet-new-title = New sheet
+sheet-no-caption = No description
+sheet-nodes =
+    { $count ->
+        [one] { $count } node
+       *[other] { $count } nodes
+    }
+sheet-errors =
+    { $count ->
+        [one] { $count } error
+       *[other] { $count } errors
+    }
+sheet-last-run = Last run { $time }
+sheet-never-run = Not run yet
+sheet-enabled = Enabled
+sheet-edit = Edit
+sheet-duplicate = Duplicate
+sheet-move-up = Move up
+sheet-move-down = Move down
+sheet-delete = Delete
+sheet-save = Save
+sheet-cancel = Cancel
+sheet-delete-confirm = Delete sheet «{ $title }»? It is moved to the trash folder on the server.
+sheets-empty = No sheets yet — create the first one

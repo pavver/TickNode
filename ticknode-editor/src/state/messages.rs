@@ -18,6 +18,7 @@ impl Editor {
         match msg {
             ServerMessage::Init { definitions, nodes, exec_connections, data_connections, traces, types, plugins, translations, property_options, history, sheets, open_sheet, .. } => {
                 self.sheets.set(sheets.clone());
+                self.sheets_received_at.set(now_ms());
                 self.open_sheet.set(open_sheet);
                 self.history.set(history);
                 let gone = self.remove_absent_nodes(&nodes);
@@ -28,10 +29,16 @@ impl Editor {
                 self.frame_size_previews.set(std::collections::HashMap::new());
                 self.replace_graph(nodes, exec_connections, data_connections, traces, gone);
                 if open_sheet.is_none() {
-                    if let Some(first) = sheets.first() {
-                        self.send(ClientMessage::OpenSheet(Some(first.info.id)));
-                    } else {
-                        self.send(ClientMessage::CreateSheet { title: "Main".into(), caption: String::new() });
+                    let route = crate::route::current_route();
+                    match route {
+                        crate::route::Route::Sheet(id) => {
+                            if sheets.iter().any(|s| s.info.id == id) {
+                                self.send(ClientMessage::OpenSheet(Some(id)));
+                            } else {
+                                crate::route::navigate(&crate::route::Route::Home);
+                            }
+                        }
+                        crate::route::Route::Home => {}
                     }
                 }
             }
@@ -85,13 +92,19 @@ impl Editor {
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => self.node_log(node_id, message),
             ServerMessage::History(history) => self.history.set(history),
-            ServerMessage::Sheets(sheets) => self.sheets.set(sheets),
+            ServerMessage::Sheets(sheets) => {
+                self.sheets.set(sheets);
+                self.sheets_received_at.set(now_ms());
+            }
             ServerMessage::SheetCreated(id) => {
-                if self.open_sheet.get_untracked().is_none() {
-                    self.send(ClientMessage::OpenSheet(Some(id)));
+                let mut should_navigate = false;
+                self.pending_create_tracker.update(|t| should_navigate = t.on_created());
+                if should_navigate {
+                    crate::route::navigate(&crate::route::Route::Sheet(id));
                 }
             }
             ServerMessage::Error(message) => {
+                self.pending_create_tracker.update(|t| t.clear());
                 self.error_seq.update(|n| *n += 1);
                 // The answer to the user's action: translated, unlike technical log lines.
                 self.log(LogKind::Error, format!("[ERROR] {}", i18n::ui_text(&message)));

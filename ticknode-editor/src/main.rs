@@ -8,6 +8,7 @@ mod connection;
 mod geometry;
 mod frozen;
 mod events;
+mod home;
 pub mod i18n;
 mod inline;
 mod match_editor;
@@ -15,7 +16,8 @@ mod panels;
 mod picker;
 mod node_menu;
 mod quick_add;
-mod plugins_panel;
+pub mod plugins_panel;
+mod route;
 mod shortcuts;
 mod state;
 mod ui;
@@ -35,7 +37,6 @@ use wasm_bindgen::JsCast;
 use crate::canvas::{Canvas, fit_view};
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
 use crate::picker::PickerLayer;
-use crate::plugins_panel::PluginsPanel;
 use crate::state::{Editor, LogKind, Theme, now_ms};
 use crate::toolbar::Header;
 use ticknode_shared::ClientMessage;
@@ -72,7 +73,7 @@ fn typing_in_field(ev: &web_sys::Event) -> bool {
 }
 
 fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
-    if typing_in_field(ev) {
+    if ed.open_sheet.get_untracked().is_none() || typing_in_field(ev) {
         return;
     }
     let (Some(graph), Some(data)) = (clipboard::selection_snippet(ed), ev.clipboard_data()) else { return };
@@ -171,6 +172,14 @@ fn App() -> impl IntoView {
     // The property picker popup closes on a press anywhere outside it and outside its field
     let hide_picker = window_event_listener(ev::pointerdown, move |ev| events::hide_picker(editor, ev));
     let paste = window_event_listener(ev::paste, move |ev| events::paste(editor, ev));
+    let hashchange = window_event_listener(ev::hashchange, move |_| {
+        let route = route::current_route();
+        match route {
+            route::Route::Home => editor.send(ClientMessage::OpenSheet(None)),
+            route::Route::Sheet(id) => editor.send(ClientMessage::OpenSheet(Some(id))),
+        }
+    });
+
     on_cleanup(move || {
         resize.remove();
         keys.remove();
@@ -181,6 +190,7 @@ fn App() -> impl IntoView {
         hide_picker.remove();
         middle_down.remove();
         middle_up.remove();
+        hashchange.remove();
     });
 
     connection::connect(editor);
@@ -188,20 +198,27 @@ fn App() -> impl IntoView {
     view! {
         <div class="app">
             <Header />
-            <div class="workspace">
-                <Palette />
-                <div class="canvas-wrap"><Canvas /></div>
-                <Inspector />
-                <PluginsPanel />
-            </div>
-            <ConsolePanel />
-            <PaletteGhost />
-            <TooltipLayer />
-            <PickerLayer />
-            <wire_menu::WireMenuLayer />
-            <quick_add::QuickAddLayer />
-            <wire_context::WireContextLayer />
-            <resource_menu::ResourceMenuLayer />
+            {move || if editor.open_sheet.get().is_some() {
+                view! {
+                    <div class="workspace">
+                        <Palette />
+                        <div class="canvas-wrap"><Canvas /></div>
+                        <Inspector />
+                    </div>
+                    <ConsolePanel />
+                    <PaletteGhost />
+                    <TooltipLayer />
+                    <PickerLayer />
+                    <wire_menu::WireMenuLayer />
+                    <quick_add::QuickAddLayer />
+                    <wire_context::WireContextLayer />
+                    <resource_menu::ResourceMenuLayer />
+                }.into_any()
+            } else {
+                view! {
+                    <home::HomePage />
+                }.into_any()
+            }}
         </div>
     }
 }

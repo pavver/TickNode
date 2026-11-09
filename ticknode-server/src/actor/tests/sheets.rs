@@ -189,8 +189,11 @@ async fn event_filtering_by_session_sheet_over_websocket() {
     let addr = listener.local_addr().unwrap();
     tokio::spawn(axum::serve(listener, crate::router(handle.clone(), dir.path())).into_future());
 
-    // Client 1 connects (defaults to sheet1)
+    // Client 1 connects on the home page, then opens sheet1
     let (mut ws1, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws")).await.unwrap();
+    let ServerMessage::Init { open_sheet: s1_open, .. } = recv(&mut ws1).await else { panic!() };
+    assert_eq!(s1_open, None);
+    send(&mut ws1, ClientMessage::OpenSheet(Some(sheet1))).await;
     let ServerMessage::Init { open_sheet: s1_open, .. } = recv(&mut ws1).await else { panic!() };
     assert_eq!(s1_open, Some(sheet1));
 

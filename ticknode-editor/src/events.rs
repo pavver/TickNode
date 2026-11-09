@@ -8,7 +8,7 @@ use crate::state::{Editor, now_ms};
 use crate::clipboard;
 
 pub fn keydown(editor: Editor, ev: web_sys::KeyboardEvent) {
-    if typing_in_field(&ev) {
+    if editor.open_sheet.get_untracked().is_none() || typing_in_field(&ev) {
         return;
     }
     let ctrl = ev.ctrl_key() || ev.meta_key();
@@ -44,7 +44,7 @@ pub fn hide_picker(editor: Editor, ev: web_sys::PointerEvent) {
 }
 
 pub fn paste(editor: Editor, ev: web_sys::ClipboardEvent) {
-    if typing_in_field(&ev) {
+    if editor.open_sheet.get_untracked().is_none() || typing_in_field(&ev) {
         return;
     }
     if now_ms() - editor.middle_button_at.get_value() < MIDDLE_PASTE_WINDOW_MS {

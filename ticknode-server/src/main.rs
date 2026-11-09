@@ -150,8 +150,12 @@ mod tests {
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir.path())).into_future());
 
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
+        let ServerMessage::Init { open_sheet, sheets, .. } = recv(&mut ws).await else { panic!("expected Init") };
+        assert_eq!(open_sheet, None, "a new session starts on the home page");
+        let sheet_id = sheets[0].info.id;
+        send(&mut ws, ClientMessage::OpenSheet(Some(sheet_id))).await;
         let ServerMessage::Init { definitions, nodes, open_sheet, .. } = recv(&mut ws).await else { panic!("expected Init") };
-        let sheet_id = open_sheet.expect("open_sheet is set");
+        assert_eq!(open_sheet, Some(sheet_id));
         assert!(definitions.iter().any(|d| d.type_name == "const"));
         assert!(nodes.is_empty());
 
@@ -195,6 +199,8 @@ mod tests {
 
         // A newly connected editor receives the latest execution traces in its snapshot
         let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", addr)).await.unwrap();
+        let ServerMessage::Init { .. } = recv(&mut ws2).await else { panic!("expected Init") };
+        send(&mut ws2, ClientMessage::OpenSheet(Some(sheet_id))).await;
         let ServerMessage::Init { traces, .. } = recv(&mut ws2).await else { panic!("expected Init") };
         assert!(traces.iter().any(|(t, _)| t.node_id == dbg.model.id));
 
@@ -300,8 +306,10 @@ mod tests {
         let mut seen = Vec::new();
 
         // Init: plugin is enabled, but configure rejected the empty token
-        let ServerMessage::Init { plugins, definitions, translations, open_sheet, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
-        let sheet_id = open_sheet.expect("open_sheet is set");
+        let ServerMessage::Init { sheets, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
+        let sheet_id = sheets[0].info.id;
+        send(&mut ws, ClientMessage::OpenSheet(Some(sheet_id))).await;
+        let ServerMessage::Init { plugins, definitions, translations, .. } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Init") };
         let info = plugin_of(&plugins);
         assert_eq!((info.state, info.file.as_str()), (PluginState::Enabled, "test_plugin.wasm"));
         assert_eq!(info.settings_error.as_ref().map(|e| e.key.as_str()), Some("test-plugin-error-no-token"));
@@ -396,6 +404,8 @@ mod tests {
         assert_eq!(on_disk.nodes[0].position, Position { x: 3.0, y: 4.0 });
         let server = start(dir.path()).await;
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", server.addr)).await.unwrap();
+        let ServerMessage::Init { .. } = recv_logged(&mut ws, &mut seen).await else { panic!() };
+        send(&mut ws, ClientMessage::OpenSheet(Some(sheet_id))).await;
         let ServerMessage::Init { plugins, nodes, .. } = recv_logged(&mut ws, &mut seen).await else { panic!() };
         assert_eq!(plugin_of(&plugins).state, PluginState::Disabled);
         assert_eq!(nodes.len(), 1);

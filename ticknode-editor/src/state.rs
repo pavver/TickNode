@@ -217,7 +217,9 @@ impl ClientNode {
 pub struct Editor {
     pub status: RwSignal<ConnStatus>,
     pub sheets: RwSignal<Vec<SheetSummary>>,
+    pub sheets_received_at: RwSignal<f64>,
     pub open_sheet: RwSignal<Option<SheetId>>,
+    pub pending_create_tracker: RwSignal<crate::home::logic::PendingCreateTracker>,
     pub history: RwSignal<HistoryState>,
     pub timers: RwSignal<timers::NodeTimers>,
     pub node_errors: RwSignal<errors::NodeErrors>,
@@ -247,8 +249,6 @@ pub struct Editor {
     pub locale: RwSignal<Locale>,
     pub show_palette: RwSignal<bool>,
     pub show_console: RwSignal<bool>,
-    /// Plugins panel (replaces the inspector slot).
-    pub show_plugins: RwSignal<bool>,
     /// Plugins with their state and settings (secrets only indicate whether they are set).
     pub plugins: RwSignal<Vec<PluginInfo>>,
     /// Narrow screen: panels become slide-over drawers above the canvas.
@@ -295,7 +295,9 @@ impl Editor {
         Self {
             status: RwSignal::new(ConnStatus::Connecting),
             sheets: RwSignal::new(Vec::new()),
+            sheets_received_at: RwSignal::new(now_ms()),
             open_sheet: RwSignal::new(None),
+            pending_create_tracker: RwSignal::new(crate::home::logic::PendingCreateTracker::new()),
             history: RwSignal::new(HistoryState::default()),
             timers: RwSignal::new(BTreeMap::new()),
             node_errors: RwSignal::new(BTreeMap::new()),
@@ -321,7 +323,6 @@ impl Editor {
             locale,
             show_palette: RwSignal::new(wide_screen),
             show_console: RwSignal::new(wide_screen),
-            show_plugins: RwSignal::new(false),
             plugins: RwSignal::new(Vec::new()),
             narrow: RwSignal::new(!wide_screen),
             socket: StoredValue::new_local(None),

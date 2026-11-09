@@ -201,6 +201,7 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
         routes: HashMap::new(),
         frames: BTreeMap::new(),
     };
+    let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_millis(5)).unwrap();
     let mut events = handle.subscribe();
@@ -222,7 +223,7 @@ async fn actor_ticks_broadcast_logs_and_keep_traces_in_snapshots() {
             _ => {},
         }
     }
-    let Some(ServerMessage::Init { traces, .. }) = handle.snapshot(None).await else { panic!("missing snapshot") };
+    let Some(ServerMessage::Init { traces, .. }) = handle.snapshot(first_sheet).await else { panic!("missing snapshot") };
     assert!(traces.iter().any(|(trace, _)| trace.node_id == id));
     handle.shutdown().await;
 }
@@ -298,6 +299,7 @@ async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
     let mut engine = TickEngine::new();
     let storage = Storage::new(dir.path());
     let loaded = storage.load(&mut engine).unwrap();
+    let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
     let mut first = handle.subscribe();
@@ -311,7 +313,7 @@ async fn history_is_broadcast_to_all_editors_and_in_new_snapshots() {
         assert_eq!(postcard::from_bytes::<ServerMessage>(&history).unwrap(), ServerMessage::History(HistoryState { can_undo: true, can_redo: false }));
     }
     assert!(matches!(replies.recv().await, Some(ServerMessage::Created(_))));
-    assert!(matches!(handle.snapshot(None).await, Some(ServerMessage::Init { history: HistoryState { can_undo: true, can_redo: false }, .. })));
+    assert!(matches!(handle.snapshot(first_sheet).await, Some(ServerMessage::Init { history: HistoryState { can_undo: true, can_redo: false }, .. })));
     handle.shutdown().await;
 }
 
@@ -321,6 +323,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
     let mut engine = TickEngine::new();
     let storage = Storage::new(dir.path());
     let loaded = storage.load(&mut engine).unwrap();
+    let first_sheet = loaded.sheets.first().map(|s| s.id);
     let handle = spawn(engine, loaded, storage,
         Plugins::new(dir.path()), Duration::from_secs(10)).unwrap();
     let (reply, mut replies) = mpsc::unbounded_channel();
@@ -339,7 +342,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
         other => panic!("Expected Created, got {other:?}"),
     };
 
-    let snapshot = handle.snapshot(None).await.unwrap();
+    let snapshot = handle.snapshot(first_sheet).await.unwrap();
     let ServerMessage::Init { nodes, .. } = snapshot else { panic!("Expected Init") };
     let node = nodes.iter().find(|n| n.model.id == created_id).expect("node exists");
     assert_eq!(node.model.position, pos);
@@ -350,7 +353,7 @@ async fn add_node_with_creates_node_with_properties_replies_created_and_supports
     handle.send(ClientMessage::Undo, None, undo_reply);
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let snapshot = handle.snapshot(None).await.unwrap();
+    let snapshot = handle.snapshot(first_sheet).await.unwrap();
     let ServerMessage::Init { nodes, .. } = snapshot else { panic!("Expected Init") };
     assert!(!nodes.iter().any(|n| n.model.id == created_id));
 

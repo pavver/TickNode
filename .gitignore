@@ -14,3 +14,6 @@ pkg/
 # Local dev server data (dev.sh)
 /.dev-data/
 .metrics/
+
+# Local Claude Code settings
+.claude/

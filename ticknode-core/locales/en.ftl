@@ -195,7 +195,9 @@ node-variable-changed-prop-lookup-option-global = Global
 node-match-title = Match
 node-match-description = Selects an output by conditions, like a decider combinator
 node-match-help =
-    On a signal at In, checks cases from top to bottom and passes execution to the output of the first matching case. If none match — to Else. With "All matches" enabled, all matching cases fire.
+    On a signal at In, checks cases from top to bottom and passes execution to the output of the first matching case. If none match — to Else.
+
+    Mode: "First match" fires only the first matching case; "All matches" fires every matching case; "Only on change" fires the first matching case only when it differs from the case that fired last time. When no case matches in that mode, Else fires once and the last case is remembered, so a gap between thresholds works as hysteresis: with cases "v > 230" and "v < 200", values between 200 and 230 do not let "v > 230" fire again until "v < 200" has fired. The memory resets when cases, inputs or the mode change and after a restart.
 
     Inputs: "+ input" adds an input pin. The input name can be renamed (conditions update automatically) and its type selected; "auto" accepts anything, picking operators based on the connected source type. An unconnected input can be given a value directly on the node.
 
@@ -211,6 +213,11 @@ node-match-help =
     Conditions are joined with "and" / "or"; "and" binds tighter: "a > 1 and b > 1 or c" = "(a > 1 and b > 1) or c". A case with no conditions always matches. An input without a value does not satisfy a condition (except "no value").
 node-match-pin-In = In
 node-match-pin-Else = Else
+node-match-prop-mode-title = Mode
+node-match-prop-mode-description = Which matching cases fire: the first one, all of them, or the first one only when it changes
+node-match-prop-mode-option-first = First match
+node-match-prop-mode-option-all = All matches
+node-match-prop-mode-option-on-change = Only on change
 
 # clock
 node-clock-title = Clock

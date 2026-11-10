@@ -235,7 +235,6 @@ prop-value-type = Тип
 prop-field-type = Тип поля
 prop-fields-list = Поля (name:type, …)
 prop-interval-ticks = Інтервал, тактів
-prop-all-matches = Усі збіги
 prop-cases = Випадки
 
 # Relative execution time

@@ -230,7 +230,6 @@ prop-value-type = Type
 prop-field-type = Field type
 prop-fields-list = Fields (name:type, …)
 prop-interval-ticks = Interval, ticks
-prop-all-matches = All matches
 prop-cases = Cases
 
 # Relative execution time

@@ -32,7 +32,7 @@ fn property_labels_fall_back_without_changing_unknown_names() {
             ("value", "Value"), ("var_name", "Variable"), ("expression", "Formula"),
             ("prefix", "Prefix"), ("label", "Label"), ("element_type", "Element type"),
             ("field_type", "Field type"), ("fields_list", "Fields (name:type, …)"),
-            ("interval_ticks", "Interval, ticks"), ("all_matches", "All matches"), ("cases", "Cases"),
+            ("interval_ticks", "Interval, ticks"), ("cases", "Cases"),
             ("custom_name", "custom_name"),
         ] {
             assert_eq!(property_label(name), label);

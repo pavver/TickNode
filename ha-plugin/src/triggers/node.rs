@@ -1,10 +1,10 @@
 //! Trigger node properties, lifecycle and error polling.
 
+use super::{Platform, build};
+use crate::{text_property, try_with_hub, with_hub};
 use std::collections::BTreeMap;
 use std::time::Instant;
 use ticknode_plugin_sdk::{Trigger as NodeTrigger, *};
-use crate::{text_property, try_with_hub, with_hub};
-use super::{Platform, build};
 
 pub struct TriggerNode {
     node: NodeId,
@@ -19,23 +19,29 @@ impl TriggerNode {
         let properties = platform.defaults();
         let serial = (!node.0.is_nil()).then(|| {
             with_hub(|hub, env| {
-                if platform == Platform::State {
-                    hub.set_state_node_entity(node, "", env);
-                }
                 let serial = hub.add_trigger(node, Instant::now());
-                hub.set_trigger(node, serial, build(platform, &properties).ok().flatten(), Instant::now(), env);
+                hub.set_trigger(
+                    node,
+                    serial,
+                    build(platform, &properties).ok().flatten(),
+                    Instant::now(),
+                    env,
+                );
                 serial
             })
         });
-        Self { node, serial, platform, properties, local_error: None }
+        Self {
+            node,
+            serial,
+            platform,
+            properties,
+            local_error: None,
+        }
     }
 }
 
 impl Drop for TriggerNode {
     fn drop(&mut self) {
-        if self.platform == Platform::State {
-            try_with_hub(|hub, env| hub.remove_state_node(self.node, env));
-        }
         if let Some(serial) = self.serial {
             try_with_hub(|hub, env| hub.remove_trigger(self.node, serial, Instant::now(), env));
         }
@@ -44,27 +50,21 @@ impl Drop for TriggerNode {
 
 impl PluginNode for TriggerNode {
     fn definition(&self) -> NodeDefinition {
-        let mut def = self.platform.definition();
-        if self.platform == Platform::State {
-            let entity = self.properties.get("entity_id").map(String::as_str).unwrap_or("");
-            let state_src = crate::states::state_source(entity);
-            let attr_src = crate::states::attribute_source(entity);
-            for prop in &mut def.properties {
-                match prop.name.as_str() {
-                    "from" | "to" => prop.kind = PropertyKind::Dynamic { source: state_src.clone(), plugin: String::new() },
-                    "attribute" => prop.kind = PropertyKind::Dynamic { source: attr_src.clone(), plugin: String::new() },
-                    _ => {}
-                }
-            }
-        }
-        def
+        self.platform.definition()
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.properties.iter().map(|(k, v)| (k.clone(), DataValue::from(v.as_str()))).collect()
+        self.properties
+            .iter()
+            .map(|(k, v)| (k.clone(), DataValue::from(v.as_str())))
+            .collect()
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        let Some(text) = text_property(value) else { return };
-        let Some(current) = self.properties.get(name) else { return };
+        let Some(text) = text_property(value) else {
+            return;
+        };
+        let Some(current) = self.properties.get(name) else {
+            return;
+        };
         if current == &text {
             return;
         }
@@ -75,9 +75,6 @@ impl PluginNode for TriggerNode {
             return;
         }
         self.properties.insert(name.into(), text.clone());
-        if self.platform == Platform::State && self.serial.is_some() && name == "entity_id" {
-            with_hub(|hub, env| hub.set_state_node_entity(self.node, &text, env));
-        }
         self.local_error = None;
         let config = match build(self.platform, &self.properties) {
             Ok(config) => config,

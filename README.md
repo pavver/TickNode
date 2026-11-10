@@ -170,7 +170,7 @@ How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).
 - [x] English and Ukrainian UI
 - [x] Translations shipped by plugins; translatable UI errors
 - [x] WebSocket capability for plugins
-- [x] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client)): triggers, conditions, actions and entity values
+- [x] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client)): triggers, conditions, actions and typed entity change events
 - [x] Home Assistant add-on: install by adding this repository to the add-on store (built locally on install)
 - [x] Undo/redo, settings copy, wire suggestions and route points
 - [x] Plugin API fingerprint; frozen nodes and detached wires after pin changes

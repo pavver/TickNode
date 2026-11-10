@@ -8,18 +8,16 @@ pub use config::{TriggerConfig, build, duration};
 pub use node::TriggerNode;
 pub use outputs::outputs;
 
+use crate::CATEGORY;
+use crate::convert::STATE_TYPE;
 use std::collections::BTreeMap;
 use ticknode_plugin_sdk::*;
-use crate::convert::STATE_TYPE;
-use crate::CATEGORY;
 
 pub const TRIGGERED: PinId = PinId(0);
 pub const INFO: PinId = PinId(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
-    State,
-    NumericState,
     Time,
     TimePattern,
     Sun,
@@ -35,8 +33,6 @@ pub enum Platform {
 }
 
 pub const PLATFORMS: &[Platform] = &[
-    Platform::State,
-    Platform::NumericState,
     Platform::Time,
     Platform::TimePattern,
     Platform::Sun,
@@ -54,8 +50,6 @@ pub const PLATFORMS: &[Platform] = &[
 impl Platform {
     pub fn type_name(self) -> &'static str {
         match self {
-            Self::State => "ha/trigger_state",
-            Self::NumericState => "ha/trigger_numeric_state",
             Self::Time => "ha/trigger_time",
             Self::TimePattern => "ha/trigger_time_pattern",
             Self::Sun => "ha/trigger_sun",
@@ -73,16 +67,6 @@ impl Platform {
 
     fn texts(self) -> (&'static str, &'static str, &'static str) {
         match self {
-            Self::State => (
-                "State",
-                "Fires when an entity matches a state transition",
-                "Choose an entity and optionally an attribute, From and To values. Empty From/To fields impose no filter (attribute-only changes can fire too). For holds the matching state for a duration such as 90, 1h 30m or 00:05:00. From and To outputs contain ha.state values; an absent state clears the corresponding output.",
-            ),
-            Self::NumericState => (
-                "Numeric state",
-                "Fires when an entity crosses a numeric threshold",
-                "Choose an entity and Above and/or Below thresholds (exclusive). Each threshold is a number or a numeric entity id. Home Assistant fires when the value enters the range, rather than on every update inside it. Attribute selects a numeric attribute; Value template can transform the value in Home Assistant. For requires the range to hold for a duration. Value outputs the numeric To state or selected attribute; it does not evaluate Value template locally and is cleared when nonnumeric. Missing From/To states clear their corresponding outputs.",
-            ),
             Self::Time => (
                 "Time",
                 "Fires at a time or an entity-provided timestamp",
@@ -147,71 +131,123 @@ impl Platform {
     }
 
     pub fn properties(self) -> Vec<PropertyDefinition> {
-        let text = |name, title, description| PropertyDefinition::text(name, title).described(description);
-        let entity =
-            |source| PropertyDefinition::dynamic("entity_id", "Entity", source).described("Choose an entity or type its entity id");
-        let attribute = || text("attribute", "Attribute", "Optional attribute to watch instead of the state");
+        let text =
+            |name, title, description| PropertyDefinition::text(name, title).described(description);
+        let entity = |source| {
+            PropertyDefinition::dynamic("entity_id", "Entity", source)
+                .described("Choose an entity or type its entity id")
+        };
         let duration = || text("for", "For", "Optional duration: 90, 1h 30m or 00:05:00");
-        let offset = || text("offset", "Offset", "Optional signed duration: 30m, -00:30:00 or 0");
-        let select =
-            |name, title, options: &[(&str, &str)], description| PropertyDefinition::select(name, title, options).described(description);
+        let offset = || {
+            text(
+                "offset",
+                "Offset",
+                "Optional signed duration: 30m, -00:30:00 or 0",
+            )
+        };
+        let select = |name, title, options: &[(&str, &str)], description| {
+            PropertyDefinition::select(name, title, options).described(description)
+        };
         match self {
-            Self::State => vec![
-                entity("entities"),
-                PropertyDefinition::dynamic("attribute", "Attribute", crate::states::ATTRIBUTES_SOURCE)
-                    .described("Optional attribute to watch instead of the state"),
-                PropertyDefinition::dynamic("from", "From", crate::states::STATES_SOURCE)
-                    .described("Optional previous state or attribute value"),
-                PropertyDefinition::dynamic("to", "To", crate::states::STATES_SOURCE)
-                    .described("Optional new state or attribute value"),
-                duration(),
-            ],
-            Self::NumericState => vec![
-                entity("entities"),
-                attribute(),
-                text("above", "Above", "Exclusive lower bound: a number or numeric entity id"),
-                text("below", "Below", "Exclusive upper bound: a number or numeric entity id"),
-                text("value_template", "Value template", "Optional Home Assistant template to transform the value"),
-                duration(),
-            ],
-            Self::Time => vec![text("at", "At", "HH:MM[:SS], an input_datetime entity or a timestamp sensor entity")],
+            Self::Time => vec![text(
+                "at",
+                "At",
+                "HH:MM[:SS], an input_datetime entity or a timestamp sensor entity",
+            )],
             Self::TimePattern => vec![
                 text("hours", "Hours", "0–23, * or a step such as /2"),
                 text("minutes", "Minutes", "0–59, * or a step such as /5"),
                 text("seconds", "Seconds", "0–59, * or a step such as /10"),
             ],
             Self::Sun => {
-                vec![select("event", "Event", &[("sunrise", "Sunrise"), ("sunset", "Sunset")], "The sun event to wait for"), offset()]
+                vec![
+                    select(
+                        "event",
+                        "Event",
+                        &[("sunrise", "Sunrise"), ("sunset", "Sunset")],
+                        "The sun event to wait for",
+                    ),
+                    offset(),
+                ]
             }
             Self::Zone => vec![
                 entity("persons"),
-                PropertyDefinition::dynamic("zone", "Zone", "zones").described("The zone to enter or leave"),
-                select("event", "Event", &[("enter", "Enter"), ("leave", "Leave")], "The zone crossing to wait for"),
+                PropertyDefinition::dynamic("zone", "Zone", "zones")
+                    .described("The zone to enter or leave"),
+                select(
+                    "event",
+                    "Event",
+                    &[("enter", "Enter"), ("leave", "Leave")],
+                    "The zone crossing to wait for",
+                ),
             ],
             Self::Event => vec![
                 text("event_type", "Event type", "Home Assistant bus event name"),
-                text("event_data", "Event data", "Optional JSON object used to filter event fields"),
+                text(
+                    "event_data",
+                    "Event data",
+                    "Optional JSON object used to filter event fields",
+                ),
             ],
             Self::HomeAssistant => {
-                vec![select("event", "Event", &[("start", "Start"), ("shutdown", "Shutdown")], "The Home Assistant lifecycle event")]
+                vec![select(
+                    "event",
+                    "Event",
+                    &[("start", "Start"), ("shutdown", "Shutdown")],
+                    "The Home Assistant lifecycle event",
+                )]
             }
             Self::Mqtt => vec![
                 text("topic", "Topic", "MQTT topic, including optional wildcards"),
                 text("payload", "Payload", "Optional exact payload filter"),
-                select("qos", "QoS", &[("0", "0"), ("1", "1"), ("2", "2")], "MQTT quality of service"),
+                select(
+                    "qos",
+                    "QoS",
+                    &[("0", "0"), ("1", "1"), ("2", "2")],
+                    "MQTT quality of service",
+                ),
             ],
             Self::Webhook => vec![
-                text("webhook_id", "Webhook ID", "Unique identifier for /api/webhook/<id>"),
-                select("local_only", "Local only", &[("yes", "Yes"), ("no", "No")], "Only accept requests from the local network"),
+                text(
+                    "webhook_id",
+                    "Webhook ID",
+                    "Unique identifier for /api/webhook/<id>",
+                ),
+                select(
+                    "local_only",
+                    "Local only",
+                    &[("yes", "Yes"), ("no", "No")],
+                    "Only accept requests from the local network",
+                ),
             ],
             Self::Calendar => vec![
                 entity("calendars"),
-                select("event", "Event", &[("start", "Start"), ("end", "End")], "The calendar event boundary"),
+                select(
+                    "event",
+                    "Event",
+                    &[("start", "Start"), ("end", "End")],
+                    "The calendar event boundary",
+                ),
                 offset(),
             ],
-            Self::Tag => vec![text("tag_id", "Tag ID", "The Home Assistant tag identifier")],
-            Self::Conversation => vec![text("command", "Sentence", "Sentence patterns separated by semicolons or newlines")],
-            Self::Template => vec![text("value_template", "Value template", "Home Assistant Jinja template that becomes true"), duration()],
+            Self::Tag => vec![text(
+                "tag_id",
+                "Tag ID",
+                "The Home Assistant tag identifier",
+            )],
+            Self::Conversation => vec![text(
+                "command",
+                "Sentence",
+                "Sentence patterns separated by semicolons or newlines",
+            )],
+            Self::Template => vec![
+                text(
+                    "value_template",
+                    "Value template",
+                    "Home Assistant Jinja template that becomes true",
+                ),
+                duration(),
+            ],
         }
     }
 
@@ -220,7 +256,9 @@ impl Platform {
             .into_iter()
             .map(|p| {
                 let value = match &p.kind {
-                    PropertyKind::Select(options) => options.first().map(|(v, _)| v.clone()).unwrap_or_default(),
+                    PropertyKind::Select(options) => {
+                        options.first().map(|(v, _)| v.clone()).unwrap_or_default()
+                    }
                     _ => String::new(),
                 };
                 (p.name, value)
@@ -230,28 +268,36 @@ impl Platform {
 
     pub fn definition(self) -> NodeDefinition {
         let (title, description, help) = self.texts();
-        let mut pins = vec![exec_out(0, "Triggered"), data_out(1, "Info", DataType::Object)];
+        let mut pins = vec![
+            exec_out(0, "Triggered"),
+            data_out(1, "Info", DataType::Object),
+        ];
         let extra: Vec<(&str, DataType)> = match self {
-            Self::State | Self::NumericState | Self::Zone => {
-                let mut pins = vec![
-                    ("Entity", DataType::String),
-                    ("From", DataType::Named(STATE_TYPE.into())),
-                    ("To", DataType::Named(STATE_TYPE.into())),
-                ];
-                if self == Self::NumericState {
-                    pins.push(("Value", DataType::Number));
-                }
-                pins
-            }
-            Self::Event => vec![("Event data", DataType::Object), ("Event type", DataType::String)],
+            Self::Zone => vec![
+                ("Entity", DataType::String),
+                ("From", DataType::Named(STATE_TYPE.into())),
+                ("To", DataType::Named(STATE_TYPE.into())),
+            ],
+            Self::Event => vec![
+                ("Event data", DataType::Object),
+                ("Event type", DataType::String),
+            ],
             Self::Mqtt => vec![("Topic", DataType::String), ("Payload", DataType::String)],
             Self::Webhook => vec![("Data", DataType::Object), ("Query", DataType::Object)],
             Self::Calendar => vec![("Event", DataType::Object)],
-            Self::Tag => vec![("Tag id", DataType::String), ("Device id", DataType::String)],
+            Self::Tag => vec![
+                ("Tag id", DataType::String),
+                ("Device id", DataType::String),
+            ],
             Self::Conversation => vec![("Sentence", DataType::String), ("Slots", DataType::Object)],
             _ => vec![("Description", DataType::String)],
         };
-        pins.extend(extra.into_iter().enumerate().map(|(i, (name, ty))| data_out(i as u32 + 2, name, ty)));
+        pins.extend(
+            extra
+                .into_iter()
+                .enumerate()
+                .map(|(i, (name, ty))| data_out(i as u32 + 2, name, ty)),
+        );
         NodeDefinition {
             adaptive: false,
             cost: 2,

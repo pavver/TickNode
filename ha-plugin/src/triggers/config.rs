@@ -46,13 +46,11 @@ pub(super) fn signed_duration(text: &str) -> Option<TimeDelta> {
 pub struct TriggerConfig {
     pub platform: Platform,
     pub trigger: ha_core_client::triggers::Trigger,
-    pub attribute: String,
 }
 
 impl PartialEq for TriggerConfig {
     fn eq(&self, other: &Self) -> bool {
         self.platform == other.platform
-            && self.attribute == other.attribute
             && serde_json::to_value(&self.trigger).ok() == serde_json::to_value(&other.trigger).ok()
     }
 }
@@ -104,8 +102,6 @@ pub fn build(
     let p = Properties(properties);
     let event_data = event_data(platform, &p)?;
     let trigger = match platform {
-        Platform::State => platforms::state(&p),
-        Platform::NumericState => platforms::numeric_state(&p),
         Platform::Time => platforms::time(&p),
         Platform::TimePattern => platforms::time_pattern(&p),
         Platform::Sun => platforms::sun(&p),
@@ -119,11 +115,7 @@ pub fn build(
         Platform::Conversation => platforms::conversation(&p),
         Platform::Template => platforms::template(&p),
     };
-    Ok(trigger.map(|trigger| TriggerConfig {
-        platform,
-        trigger,
-        attribute: p.get("attribute").into(),
-    }))
+    Ok(trigger.map(|trigger| TriggerConfig { platform, trigger }))
 }
 
 fn clock_hours(text: &str) -> Option<u64> {

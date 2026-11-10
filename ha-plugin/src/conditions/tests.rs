@@ -1,7 +1,7 @@
 use super::*;
+use crate::live::Live;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use crate::live::Live;
 use serde_json::json;
 
 fn now(text: &str) -> DateTime<Utc> {
@@ -47,84 +47,6 @@ fn eval(kind: Kind, properties: &[(&str, &str)], at: &str, live: &Live) -> Resul
         now(at),
     )
 }
-#[test]
-fn state_alternatives_attribute_and_duration() {
-    let live = live();
-    let at = "2026-10-30T10:05:00Z";
-    for (props, expected) in [
-        (vec![("state", "off, on")], true),
-        (vec![("state", "off")], false),
-        (vec![("attribute", "mode"), ("state", "eco")], true),
-        (vec![("attribute", "brightness"), ("state", "120")], true),
-        (vec![("state", "on"), ("for", "00:05:00")], true),
-        (vec![("state", "on"), ("for", "301")], false),
-    ] {
-        let mut props = props;
-        props.push(("entity_id", "light.test"));
-        assert_eq!(eval(Kind::State, &props, at, &live).unwrap(), expected);
-    }
-    assert!(
-        eval(
-            Kind::State,
-            &[("entity_id", "light.test"), ("for", "-1")],
-            at,
-            &live
-        )
-        .is_err()
-    );
-}
-#[test]
-fn numeric_exclusive_bounds_and_attributes() {
-    let live = live();
-    let at = "2026-10-30T12:00:00Z";
-    for (above, below, expected) in [
-        ("20", "22", true),
-        ("21", "22", false),
-        ("20", "21", false),
-        ("input_number.lower", "input_number.upper", true),
-        ("", "20", false),
-    ] {
-        assert_eq!(
-            eval(
-                Kind::NumericState,
-                &[
-                    ("entity_id", "sensor.temp"),
-                    ("above", above),
-                    ("below", below)
-                ],
-                at,
-                &live
-            )
-            .unwrap(),
-            expected
-        );
-    }
-    assert!(
-        eval(
-            Kind::NumericState,
-            &[
-                ("entity_id", "sensor.temp"),
-                ("attribute", "temperature"),
-                ("above", "22")
-            ],
-            at,
-            &live
-        )
-        .unwrap()
-    );
-    for bound in ["NaN", "inf", "sensor.missing", "sensor.bad"] {
-        assert!(
-            eval(
-                Kind::NumericState,
-                &[("entity_id", "sensor.temp"), ("above", bound)],
-                at,
-                &live
-            )
-            .is_err()
-        );
-    }
-}
-
 
 #[test]
 fn local_time_windows_midnight_weekdays_and_boundaries() {
@@ -231,8 +153,8 @@ fn missing_unavailable_and_disconnected_fail_closed() {
     let mut live = live();
     for entity in ["sensor.missing", "sensor.bad"] {
         let result = eval(
-            Kind::State,
-            &[("entity_id", entity), ("state", "on")],
+            Kind::Zone,
+            &[("entity_id", entity), ("zone", "zone.home")],
             "2026-10-30T10:00:00Z",
             &live,
         );
@@ -246,8 +168,8 @@ fn missing_unavailable_and_disconnected_fail_closed() {
     live.reset();
     assert!(
         eval(
-            Kind::State,
-            &[("entity_id", "light.test"), ("state", "on")],
+            Kind::Zone,
+            &[("entity_id", "light.test"), ("zone", "zone.home")],
             "2026-10-30T10:00:00Z",
             &live
         )
@@ -320,22 +242,4 @@ fn equal_time_boundaries_cover_a_full_day() {
             .unwrap()
         );
     }
-}
-
-#[test]
-fn state_condition_definition_uses_entity_specific_option_sources() {
-    let node = NodeId(ticknode_shared::Uuid::nil());
-    let mut cond = ConditionNode::new(Kind::State, node);
-    let def = cond.definition();
-    let state_prop = def.properties.iter().find(|p| p.name == "state").unwrap();
-    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
-    assert_eq!(state_prop.kind, PropertyKind::Dynamic { source: "states".into(), plugin: String::new() });
-    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes".into(), plugin: String::new() });
-
-    cond.set_property("entity_id", DataValue::from("light.kitchen"));
-    let def = cond.definition();
-    let state_prop = def.properties.iter().find(|p| p.name == "state").unwrap();
-    let attr_prop = def.properties.iter().find(|p| p.name == "attribute").unwrap();
-    assert_eq!(state_prop.kind, PropertyKind::Dynamic { source: "states:light.kitchen".into(), plugin: String::new() });
-    assert_eq!(attr_prop.kind, PropertyKind::Dynamic { source: "attributes:light.kitchen".into(), plugin: String::new() });
 }

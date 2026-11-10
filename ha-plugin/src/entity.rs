@@ -1,54 +1,86 @@
-//! An entity reference whose data outputs are updated by subscriptions, without execution signals.
+//! Typed entity event source, fed by the hub's ordered subscription emissions.
 
-use ha_core_client::State;
+mod value;
+pub use value::{ValueType, infer_value_type, typed_value};
+
+use ha_core_client::{State, StateChange};
 use std::time::Instant;
 use ticknode_plugin_sdk::*;
 
 use crate::convert::{STATE_TYPE, state_value};
 use crate::{CATEGORY, text_property, with_hub};
 
-pub fn outputs(state: Option<&State>) -> Vec<Output> {
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FireOn {
+    #[default]
+    State,
+    Any,
+}
+
+impl FireOn {
+    fn parse(text: &str) -> Option<Self> {
+        match text {
+            "state" => Some(Self::State),
+            "any" => Some(Self::Any),
+            _ => None,
+        }
+    }
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::State => "state",
+            Self::Any => "any",
+        }
+    }
+}
+
+fn value_output(pin: u32, state: Option<&State>, value_type: ValueType) -> Output {
+    let pin = PinId(pin);
+    state
+        .and_then(|s| typed_value(s, value_type))
+        .map_or(Output::Clear(pin), |value| Output::Data(pin, value))
+}
+
+/// Baselines update current data, preserving Previous and never firing Changed.
+pub fn outputs(state: Option<&State>, value_type: ValueType) -> Vec<Output> {
     let Some(state) = state else {
-        return (0..6).map(|pin| Output::Clear(PinId(pin))).collect();
+        return [1, 3, 4, 5]
+            .into_iter()
+            .map(|pin| Output::Clear(PinId(pin)))
+            .collect();
     };
     let value = state_value(state);
-    let text = state.state.as_str();
     let attrs = field(&value, "attributes")
         .expect("ha.state has attributes")
         .clone();
     let unit = field_string(&attrs, "unit_of_measurement").unwrap_or("");
-    let mut outputs = vec![
-        Output::Data(PinId(0), text.into()),
+    vec![
+        value_output(1, Some(state), value_type),
         Output::Data(PinId(3), unit.into()),
         Output::Data(PinId(4), attrs),
         Output::Data(PinId(5), value),
-    ];
-    if let Ok(number) = text.parse::<f64>()
-        && number.is_finite()
+    ]
+}
+
+pub fn change_outputs(change: &StateChange, value_type: ValueType, fire_on: FireOn) -> Vec<Output> {
+    let mut out = outputs(change.new_state.as_ref(), value_type);
+    out.push(value_output(2, change.old_state.as_ref(), value_type));
+    if fire_on == FireOn::Any
+        || match (&change.old_state, &change.new_state) {
+            (Some(old), Some(new)) => old.state != new.state,
+            _ => true,
+        }
     {
-        outputs.push(Output::Data(PinId(1), number.into()));
-    } else {
-        outputs.push(Output::Clear(PinId(1)));
+        out.push(Output::Exec(PinId(0)));
     }
-    let on = match text {
-        "on" | "open" | "home" | "true" | "playing" | "locked" | "detected" | "active"
-        | "occupied" | "connected" => Some(true),
-        "off" | "closed" | "not_home" | "false" | "paused" | "unlocked" | "clear" | "inactive"
-        | "unoccupied" | "disconnected" => Some(false),
-        _ => None,
-    };
-    if let Some(on) = on {
-        outputs.push(Output::Data(PinId(2), on.into()));
-    } else {
-        outputs.push(Output::Clear(PinId(2)));
-    }
-    outputs
+    out
 }
 
 pub struct Entity {
     node: NodeId,
     serial: Option<u64>,
     entity: String,
+    value_type: ValueType,
+    fire_on: FireOn,
 }
 
 impl Entity {
@@ -58,6 +90,8 @@ impl Entity {
             node,
             serial,
             entity: String::new(),
+            value_type: ValueType::Text,
+            fire_on: FireOn::State,
         }
     }
 }
@@ -74,31 +108,64 @@ impl PluginNode for Entity {
             adaptive: false,
             cost: 2,
             type_name: "ha/entity".into(), title: "Entity".into(), category: CATEGORY.into(),
-            description: "Keeps the latest state of a Home Assistant entity available as data".into(),
-            help: "Choose an entity. Its current state is read on subscription and reconnection; changes update the data outputs without firing an execution signal. Downstream actions can pull the latest values at any time. Number is emitted only for finite numeric states; On only for on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied and connected/disconnected. Other states clear the corresponding outputs. Unit comes from unit_of_measurement. A removed entity clears all outputs. While disconnected the last values remain available; a missing entity is retried every 30 seconds.".into(),
-            properties: vec![PropertyDefinition::dynamic("entity_id", "Entity", "entities").described("The Home Assistant entity whose latest state to expose")],
+            description: "Fires when a Home Assistant entity changes and exposes its typed value".into(),
+            help: "Choose an entity. Changed fires on state text changes by default; Any update also fires on attribute-only updates. Each event updates Value and Previous (the value before the change), in order, at most one per tick. Value type is auto-detected when choosing a known entity; you can override it with Number, On/Off, Text or Date and time (RFC 3339). Unknown, unavailable or non-convertible values clear the corresponding pin. Unit comes from unit_of_measurement. Attributes and Entity state expose the full current state. Subscription and reconnect snapshots update current data without firing Changed or changing Previous. A removed entity clears current data. While offline the last values remain available; missed events are not replayed. A missing entity subscription is retried every 30 seconds.".into(),
+            properties: vec![
+                PropertyDefinition::dynamic("entity_id", "Entity", "entities")
+                    .described("The Home Assistant entity to watch"),
+                PropertyDefinition::select("value_type", "Value type", &[("number", "Number"), ("bool", "On/Off"), ("text", "Text"), ("datetime", "Date and time")])
+                    .described("Auto-detected when choosing a known entity; can be overridden"),
+                PropertyDefinition::select("fire_on", "Fire on", &[("state", "State changes"), ("any", "Any update")])
+                    .described("When Changed fires; data outputs update on every event"),
+            ],
             pins: vec![
-                data_out(0, "State", DataType::String), data_out(1, "Number", DataType::Number),
-                data_out(2, "On", DataType::Bool), data_out(3, "Unit", DataType::String),
+                exec_out(0, "Changed"), data_out(1, "Value", self.value_type.data_type()),
+                data_out(2, "Previous", self.value_type.data_type()), data_out(3, "Unit", DataType::String),
                 data_out(4, "Attributes", DataType::Object), data_out(5, "Entity state", DataType::Named(STATE_TYPE.into())),
             ],
         }
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("entity_id".into(), self.entity.clone().into())]
+        vec![
+            ("entity_id".into(), self.entity.clone().into()),
+            ("value_type".into(), self.value_type.as_str().into()),
+            ("fire_on".into(), self.fire_on.as_str().into()),
+        ]
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "entity_id"
-            && let Some(entity) = text_property(value)
-        {
-            if let Some(serial) = self.serial {
-                with_hub(|hub, env| {
-                    hub.set_entity(self.node, serial, &entity, Instant::now(), env)
-                });
+        let Some(text) = text_property(value) else {
+            return;
+        };
+        match name {
+            "entity_id" => {
+                self.entity = text;
+                if let Some(inferred) =
+                    with_hub(|hub, _| hub.live.get(&self.entity).map(infer_value_type))
+                {
+                    self.value_type = inferred;
+                }
             }
-            self.entity = entity;
+            "value_type" => {
+                let Some(value_type) = ValueType::parse(&text) else {
+                    return;
+                };
+                self.value_type = value_type;
+            }
+            "fire_on" => {
+                let Some(fire_on) = FireOn::parse(&text) else {
+                    return;
+                };
+                self.fire_on = fire_on;
+            }
+            _ => return,
+        }
+        if let Some(serial) = self.serial {
+            with_hub(|hub, env| {
+                hub.set_entity_options(self.node, serial, self.value_type, self.fire_on);
+                hub.set_entity(self.node, serial, &self.entity, Instant::now(), env);
+            });
         }
     }
 
@@ -108,61 +175,4 @@ impl PluginNode for Entity {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::entities::test_state;
-    use serde_json::json;
-
-    fn data(outputs: &[Output], pin: u32) -> Option<&DataValue> {
-        outputs.iter().find_map(|o| match o {
-            Output::Data(p, v) if p.0 == pin => Some(v),
-            _ => None,
-        })
-    }
-
-    #[test]
-    fn numeric_boolean_and_text_states_have_only_applicable_outputs() {
-        let state = test_state(
-            "sensor.temp",
-            "21.0",
-            json!({"unit_of_measurement":"°C", "custom":42}),
-        );
-        let out = outputs(Some(&state));
-        assert_eq!(data(&out, 1), Some(&DataValue::from(21.0)));
-        assert_eq!(data(&out, 2), None);
-        assert_eq!(data(&out, 3), Some(&DataValue::from("°C")));
-        assert_eq!(field_number(data(&out, 4).unwrap(), "custom"), Some(42.0));
-        assert_eq!(
-            data(&out, 5).unwrap().get_type(),
-            DataType::Named(STATE_TYPE.into())
-        );
-        for (state, on) in [
-            ("on", true),
-            ("off", false),
-            ("open", true),
-            ("closed", false),
-            ("home", true),
-            ("not_home", false),
-            ("true", true),
-            ("false", false),
-            ("playing", true),
-            ("paused", false),
-            ("locked", true),
-            ("unlocked", false),
-            ("detected", true),
-            ("clear", false),
-        ] {
-            let out = outputs(Some(&test_state("light.a", state, json!({}))));
-            assert_eq!(data(&out, 2), Some(&DataValue::Bool(on)), "{state}");
-            assert!(data(&out, 1).is_none());
-            assert!(out.contains(&Output::Clear(PinId(1))));
-        }
-        for state in ["hello", "unavailable", "NaN", "inf", "On"] {
-            let out = outputs(Some(&test_state("sensor.x", state, json!({}))));
-            assert_eq!(data(&out, 0), Some(&DataValue::from(state)));
-            assert!(out.contains(&Output::Clear(PinId(1))) && out.contains(&Output::Clear(PinId(2))));
-        }
-        let out = outputs(None);
-        assert_eq!(out, (0..6).map(|pin| Output::Clear(PinId(pin))).collect::<Vec<_>>());
-    }
-}
+mod tests;

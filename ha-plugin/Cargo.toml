@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 publish = false
-description = "Home Assistant integration plugin: automation triggers and conditions, entity state changes, state reads and service calls over a WebSocket"
+description = "Home Assistant integration plugin: typed entity changes, automation triggers and conditions, and actions over a WebSocket"
 
 [lib]
 crate-type = ["cdylib"]

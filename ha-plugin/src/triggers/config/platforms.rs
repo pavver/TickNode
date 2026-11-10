@@ -3,41 +3,6 @@ use super::Properties;
 use ha_core_client::triggers::*;
 use serde_json::Value;
 
-pub(super) fn state(p: &Properties<'_>) -> Option<ha_core_client::triggers::Trigger> {
-    Some({
-        let mut t = StateTrigger::new(p.required("entity_id")?);
-        if !p.get("attribute").is_empty() {
-            t = t.attribute(p.get("attribute"));
-        }
-        if !p.get("from").is_empty() {
-            t = t.from(p.get("from"));
-        }
-        if !p.get("to").is_empty() {
-            t = t.to(p.get("to"));
-        }
-        if let Some(d) = p.hold()? {
-            t = t.for_duration(d);
-        }
-        t.into()
-    })
-}
-
-pub(super) fn numeric_state(p: &Properties<'_>) -> Option<ha_core_client::triggers::Trigger> {
-    Some({
-        let mut t = numeric_thresholds(p)?;
-        if !p.get("attribute").is_empty() {
-            t = t.attribute(p.get("attribute"));
-        }
-        if !p.get("value_template").is_empty() {
-            t = t.value_template(p.get("value_template"));
-        }
-        if let Some(d) = p.hold()? {
-            t = t.for_duration(d);
-        }
-        t.into()
-    })
-}
-
 pub(super) fn time(p: &Properties<'_>) -> Option<ha_core_client::triggers::Trigger> {
     Some({
         let at = p.required("at")?;
@@ -205,31 +170,10 @@ pub(super) fn template(p: &Properties<'_>) -> Option<ha_core_client::triggers::T
     })
 }
 
-fn threshold(text: &str) -> Option<Option<Threshold>> {
-    if text.is_empty() {
-        return Some(None);
-    }
-    match text.parse::<f64>() {
-        Ok(n) if n.is_finite() => Some(Some(Threshold::Value(n))),
-        Ok(_) => None,
-        Err(_) => Some(Some(Threshold::Entity(text.into()))),
-    }
-}
-
 fn valid_pattern(value: &str, max: u32) -> bool {
     value == "*"
         || value.strip_prefix('/').map_or_else(
             || value.parse::<u32>().is_ok_and(|n| n <= max),
             |step| step.parse::<u32>().is_ok_and(|n| n > 0 && n <= max + 1),
         )
-}
-
-fn numeric_thresholds(p: &Properties<'_>) -> Option<NumericStateTrigger> {
-    let mut t = NumericStateTrigger::new(p.required("entity_id")?);
-    if p.get("above").is_empty() && p.get("below").is_empty() {
-        return None;
-    }
-    t.above = threshold(p.get("above"))?;
-    t.below = threshold(p.get("below"))?;
-    Some(t)
 }

@@ -1,10 +1,9 @@
 //! Home Assistant integration.
 //!
 //! One WebSocket connection per plugin, driven from [`Plugin::tick`] by the sans-IO `Session` of
-//! `ha-core-client` (see [`hub`]). Nodes are thin: `ha/state_changed` is an event source fed by emissions,
-//! `ha/entity` exposes live data, `ha/action` builds a typed action form, `ha/trigger_*` expose automation
-//! triggers, and `ha/condition_*` gate execution using cached states (or async Jinja). `ha/get_state`
-//! and `ha/call_service` start a request whose answer arrives in a later tick, also as an emission.
+//! `ha-core-client` (see [`hub`]). `ha/entity` emits typed values and change pulses, `ha/action`
+//! builds a typed action form, `ha/trigger_*` expose automation triggers, and `ha/condition_*`
+//! gate execution using cached states, local time or asynchronous Jinja evaluation.
 
 mod actions;
 mod conditions;
@@ -16,16 +15,11 @@ mod icons;
 mod live;
 mod options;
 mod queue;
-mod requests;
 mod runtime;
-mod state_changed;
-mod states;
 mod triggers;
 
 use convert::STATE_TYPE;
-use requests::{CallService, GetState};
 use runtime::{install_core_logger, try_with_hub, with_hub};
-use state_changed::StateChanged;
 use std::time::Instant;
 use ticknode_plugin_sdk::*;
 
@@ -42,17 +36,13 @@ fn text_property(value: DataValue) -> Option<String> {
 
 // --- The plugin ---
 
-struct HomeAssistant;
+/// Plugin entry point; native builds omit the WASM ABI exports.
+pub struct HomeAssistant;
 
 impl Plugin for HomeAssistant {
     const NODE_TYPES: &'static [&'static str] = &[
         "ha/action",
         "ha/entity",
-        "ha/call_service",
-        "ha/get_state",
-        "ha/state_changed",
-        "ha/trigger_state",
-        "ha/trigger_numeric_state",
         "ha/trigger_time",
         "ha/trigger_time_pattern",
         "ha/trigger_sun",
@@ -65,8 +55,6 @@ impl Plugin for HomeAssistant {
         "ha/trigger_tag",
         "ha/trigger_conversation",
         "ha/trigger_template",
-        "ha/condition_state",
-        "ha/condition_numeric_state",
         "ha/condition_time",
         "ha/condition_sun",
         "ha/condition_zone",
@@ -91,10 +79,7 @@ impl Plugin for HomeAssistant {
             .resource(
                 ResourceCollection::new("entities", "Entities", entities::ENTITIES_SOURCE)
                     .icon("mdi:home-assistant")
-                    .action(ResourceAction::new("State trigger", "ha/trigger_state", "entity_id"))
-                    .action(ResourceAction::new("Value", "ha/entity", "entity_id"))
-                    .action(ResourceAction::new("State changed", "ha/state_changed", "entity_id"))
-                    .action(ResourceAction::new("State condition", "ha/condition_state", "entity_id"))
+                    .action(ResourceAction::new("When it changes", "ha/entity", "entity_id"))
                     .action(ResourceAction::new("Action", "ha/action", "target").requires_source(entities::ACTION_TARGETS_SOURCE)),
             )
             .resource(
@@ -133,9 +118,6 @@ impl Plugin for HomeAssistant {
         Some(match type_name {
             "ha/action" => Box::new(actions::ActionNode::new(node)),
             "ha/entity" => Box::new(entity::Entity::new(node)),
-            "ha/state_changed" => Box::new(StateChanged::new(node)),
-            "ha/get_state" => Box::new(GetState { node }),
-            "ha/call_service" => Box::new(CallService { node }),
             _ => {
                 if let Some(kind) = conditions::KINDS
                     .iter()
@@ -192,6 +174,7 @@ fn validate_connection(url: &str, token: &str) -> Result<(), UiError> {
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
 export_plugin!(HomeAssistant);
 
 #[cfg(test)]

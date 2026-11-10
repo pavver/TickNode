@@ -6,13 +6,11 @@ mod collection;
 mod connection;
 mod env;
 mod options;
-mod outputs;
 mod requests;
 mod subscriptions;
 mod templates;
 
 pub use env::Env;
-pub use outputs::*;
 
 use crate::queue::ChangeQueue;
 use crate::triggers::TriggerConfig;
@@ -60,21 +58,9 @@ struct Watch<T, C> {
     snapshot_due: bool,
 }
 
-enum Call {
-    Get {
-        reply: Reply<State>,
-    },
-    Service {
-        reply: Reply<()>,
-    },
-    Action {
-        reply: Reply<Box<serde_json::value::RawValue>>,
-    },
-}
-
 struct InFlight {
     node: NodeId,
-    call: Call,
+    reply: Reply<Box<serde_json::value::RawValue>>,
 }
 
 struct TemplateCall {
@@ -82,6 +68,12 @@ struct TemplateCall {
     serial: u64,
     sub: Sub<TemplateUpdate<serde_json::Value>>,
     deadline: Instant,
+}
+
+struct EntityWatch {
+    reply: Option<Reply<State>>,
+    value_type: crate::entity::ValueType,
+    fire_on: crate::entity::FireOn,
 }
 
 #[derive(Default)]
@@ -106,10 +98,8 @@ pub struct Hub {
     entity_options: Vec<PropertyOption>,
     domain_sources: BTreeSet<String>,
     action_targets: HashMap<NodeId, String>,
-    state_nodes: HashMap<NodeId, String>,
-    state_sources: BTreeSet<String>,
     /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
-    entities: HashMap<NodeId, Option<Reply<State>>>,
+    entities: HashMap<NodeId, EntityWatch>,
 }
 
 const NOT_CONFIGURED: &str =

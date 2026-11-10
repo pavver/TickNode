@@ -54,7 +54,6 @@ impl Hub {
         }
         self.publish_action_targets(env);
         self.publish_action_sources(env);
-        self.publish_state_sources(env);
     }
 
     pub(super) fn refresh_services(&mut self, now: Instant, env: &mut impl Env) {
@@ -164,88 +163,6 @@ impl Hub {
             {
                 self.domain_sources.remove(&source);
                 env.set_options(&source, &[]);
-            }
-        }
-    }
-
-    /// Publishes generic state/attribute fallback options and entity-specific options for active trigger/condition nodes.
-    pub fn publish_state_sources(&mut self, env: &mut impl Env) {
-        env.set_options(
-            crate::states::STATES_SOURCE,
-            &crate::states::state_options("", None, true),
-        );
-        env.set_options(
-            crate::states::ATTRIBUTES_SOURCE,
-            &crate::states::attribute_options("", None),
-        );
-        let mut sources = BTreeSet::new();
-        for entity in self.state_nodes.values().filter(|e| !e.trim().is_empty()) {
-            let state_src = crate::states::state_source(entity);
-            let attr_src = crate::states::attribute_source(entity);
-            let state = self.live.get(entity);
-            env.set_options(
-                &state_src,
-                &crate::states::state_options(entity, state, true),
-            );
-            env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
-            sources.insert(state_src);
-            sources.insert(attr_src);
-        }
-        for old in self.state_sources.difference(&sources) {
-            env.set_options(old, &[]);
-        }
-        self.state_sources = sources;
-    }
-
-    pub fn set_state_node_entity(&mut self, node: NodeId, entity: &str, env: &mut impl Env) {
-        let entity = entity.trim();
-        let old = self.state_nodes.insert(node, entity.to_string());
-        if let Some(old_entity) = old {
-            if !old_entity.is_empty()
-                && old_entity != entity
-                && !self.state_nodes.values().any(|e| e == &old_entity)
-            {
-                let old_state_src = crate::states::state_source(&old_entity);
-                let old_attr_src = crate::states::attribute_source(&old_entity);
-                self.state_sources.remove(&old_state_src);
-                self.state_sources.remove(&old_attr_src);
-                env.set_options(&old_state_src, &[]);
-                env.set_options(&old_attr_src, &[]);
-            }
-        }
-        if entity.is_empty() {
-            self.state_nodes.remove(&node);
-            env.set_options(
-                crate::states::STATES_SOURCE,
-                &crate::states::state_options("", None, true),
-            );
-            env.set_options(
-                crate::states::ATTRIBUTES_SOURCE,
-                &crate::states::attribute_options("", None),
-            );
-            return;
-        }
-        let state_src = crate::states::state_source(entity);
-        let attr_src = crate::states::attribute_source(entity);
-        let state = self.live.get(entity);
-        self.state_sources.insert(state_src.clone());
-        self.state_sources.insert(attr_src.clone());
-        env.set_options(
-            &state_src,
-            &crate::states::state_options(entity, state, true),
-        );
-        env.set_options(&attr_src, &crate::states::attribute_options(entity, state));
-    }
-
-    pub fn remove_state_node(&mut self, node: NodeId, env: &mut impl Env) {
-        if let Some(entity) = self.state_nodes.remove(&node) {
-            if !entity.is_empty() && !self.state_nodes.values().any(|e| e == &entity) {
-                let state_src = crate::states::state_source(&entity);
-                let attr_src = crate::states::attribute_source(&entity);
-                self.state_sources.remove(&state_src);
-                self.state_sources.remove(&attr_src);
-                env.set_options(&state_src, &[]);
-                env.set_options(&attr_src, &[]);
             }
         }
     }

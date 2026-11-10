@@ -8,7 +8,7 @@ use ticknode_plugin_sdk::PropertyOption;
 use crate::actions::{Service, service_matches};
 use crate::icons::entity_icon;
 
-/// Name of the option source used by the `entity_id` property of `ha/state_changed`.
+/// Name of the option source used by the `entity_id` property of `ha/entity`.
 pub const ENTITIES_SOURCE: &str = "entities";
 
 /// Name of the option source used by the `target` property of `ha/action` (filtered to entities with actions).

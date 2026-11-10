@@ -2,57 +2,6 @@
 
 category-home-assistant = Home Assistant
 
-# ha/state_changed
-node-ha-state-changed-title = HA: зміна стану
-node-ha-state-changed-description = Спрацьовує, коли сутність Home Assistant змінюється
-node-ha-state-changed-help =
-    Джерело подій: надсилає сигнал на Changed щоразу, коли сутність із властивості entity_id змінює стан або атрибути в Home Assistant. New — стан після зміни, Old — стан до неї. Якщо сутності раніше не було (або її видалено), відповідний вихід очищається.
-
-    Властивість mode визначає, що робити, коли за один такт приходить кілька змін: "every" (типово) — один сигнал на кожну зміну, по порядку, по одному за такт; "latest" — лише найновіша зміна такту.
-
-    Потрібне підключення до Home Assistant у налаштуваннях плагіна. Поки зв'язку немає, зміни не видно, а після відновлення зміна, що сталася за цей час, приходить одним сигналом. Неіснуюча сутність перепідписується кожні 30 секунд.
-node-ha-state-changed-prop-entity_id-title = Сутність
-node-ha-state-changed-prop-entity_id-description = Сутність Home Assistant, за якою стежити. Оберіть зі списку або введіть ідентифікатор сутності
-node-ha-state-changed-prop-mode-title = Режим
-node-ha-state-changed-prop-mode-description = Що робити, коли за один такт приходить кілька змін
-node-ha-state-changed-prop-mode-option-every = Кожна зміна
-node-ha-state-changed-prop-mode-option-latest = Лише остання
-node-ha-state-changed-pin-Changed = Зміна
-node-ha-state-changed-pin-New = Новий
-node-ha-state-changed-pin-Old = Старий
-
-# ha/get_state
-node-ha-get-state-title = HA: отримати стан
-node-ha-get-state-description = Зчитує поточний стан сутності Home Assistant
-node-ha-get-state-help =
-    За сигналом на In питає Home Assistant про поточний стан сутності Entity ID. Відповідь приходить трохи пізніше (за кілька тактів): у разі успіху на State буде сутність, а сигнал піде на Done; у разі невдачі (немає зв'язку, немає такої сутності, тайм-аут) на Error буде причина, а сигнал піде на Failed. Після невдачі State очищається.
-
-    Запит одразу завершується невдачею, якщо зв'язку з Home Assistant немає.
-node-ha-get-state-pin-In = Вхід
-node-ha-get-state-pin-entity-id = Сутність
-node-ha-get-state-pin-Done = Готово
-node-ha-get-state-pin-Failed = Невдача
-node-ha-get-state-pin-State = Стан
-node-ha-get-state-pin-Error = Помилка
-
-# ha/call_service
-node-ha-call-service-title = HA: викликати сервіс
-node-ha-call-service-description = Викликає сервіс Home Assistant
-node-ha-call-service-help =
-    Низькорівневий варіант ноди «Дія». Для вибору дії зі списку та типізованих полів використовуйте ha/action.
-
-    За сигналом на In викликає сервіс Home Assistant Domain.Service (наприклад, домен light і сервіс turn_on). Entity ID — необов'язкова цільова сутність; Data — необов'язковий об'єкт із даними сервісу (наприклад, з полем brightness).
-
-    Коли Home Assistant підтвердить виклик, сигнал піде на Done; інакше (немає зв'язку, відхилено, тайм-аут) на Error буде причина, а сигнал піде на Failed. Відповідь приходить трохи пізніше (за кілька тактів); запит одразу завершується невдачею, якщо зв'язку немає.
-node-ha-call-service-pin-In = Вхід
-node-ha-call-service-pin-Domain = Домен
-node-ha-call-service-pin-Service = Сервіс
-node-ha-call-service-pin-entity-id = Сутність
-node-ha-call-service-pin-Data = Дані
-node-ha-call-service-pin-Done = Готово
-node-ha-call-service-pin-Failed = Невдача
-node-ha-call-service-pin-Error = Помилка
-
 # ha.state
 type-ha-state-title = Стан HA
 type-ha-state-description = Стан сутності Home Assistant
@@ -72,55 +21,6 @@ setting-home-assistant-token-description = Довгоживучий токен �
 home-assistant-error-no-token = Токен доступу не задано
 home-assistant-error-bad-url = Адреса має починатися з ws:// або wss://, а не "{ $url }"
 
-
-# ha/trigger_state
-node-ha-trigger-state-title = Стан
-node-ha-trigger-state-description = Спрацьовує, коли сутність відповідає переходу стану
-node-ha-trigger-state-help =
-    Оберіть сутність і, за потреби, атрибут та значення «Зі стану» й «У стан». Порожні поля не обмежують перехід, тому зміна лише атрибутів також може спричинити спрацювання. «Протягом» задає тривалість утримання стану: 90, 1h 30m або 00:05:00. Виходи «До» та «Після» містять ha.state; відсутній стан очищає відповідний вихід.
-
-    Спрацювання надходять по порядку, не більше одного за такт. «Інформація» містить усі змінні тригера. Налаштуйте підключення до Home Assistant у параметрах плагіна. Неповні налаштування не створюють підписки. Зміна налаштувань замінює підписку та очищує чергу. Відхилена підписка повторюється через 30 секунд. Пропущені під час розриву зв’язку події не відтворюються; таймери «Протягом» починаються заново після відновлення підписки.
-node-ha-trigger-state-pin-Triggered = Спрацювання
-node-ha-trigger-state-pin-Info = Інформація
-node-ha-trigger-state-pin-Entity = Сутність
-node-ha-trigger-state-pin-From = До
-node-ha-trigger-state-pin-To = Після
-node-ha-trigger-state-prop-entity_id-title = Сутність
-node-ha-trigger-state-prop-entity_id-description = Оберіть сутність або введіть її ідентифікатор
-node-ha-trigger-state-prop-attribute-title = Атрибут
-node-ha-trigger-state-prop-attribute-description = Необов’язковий атрибут замість стану
-node-ha-trigger-state-prop-from-title = Зі стану
-node-ha-trigger-state-prop-from-description = Необов’язкове попереднє значення стану або атрибута
-node-ha-trigger-state-prop-to-title = У стан
-node-ha-trigger-state-prop-to-description = Необов’язкове нове значення стану або атрибута
-node-ha-trigger-state-prop-for-title = Протягом
-node-ha-trigger-state-prop-for-description = Необов’язкова тривалість: 90, 1h 30m або 00:05:00
-
-# ha/trigger_numeric_state
-node-ha-trigger-numeric-state-title = Числовий стан
-node-ha-trigger-numeric-state-description = Спрацьовує, коли значення сутності перетинає числову межу
-node-ha-trigger-numeric-state-help =
-    Оберіть сутність та нижню і/або верхню межу без включення граничних значень. Межа — число або ідентифікатор числової сутності. Home Assistant реагує на входження в діапазон, а не на кожну зміну всередині нього. Атрибут обирає числовий атрибут, шаблон значення перетворює його в Home Assistant. «Протягом» задає тривалість утримання в діапазоні. Вихід «Значення» містить число зі стану після зміни або обраного атрибута; локально шаблон не обчислюється. Якщо значення не є числом, вихід очищається. Відсутні стани «До» та «Після» очищають відповідні виходи.
-
-    Спрацювання надходять по порядку, не більше одного за такт. «Інформація» містить усі змінні тригера. Налаштуйте підключення до Home Assistant у параметрах плагіна. Неповні налаштування не створюють підписки. Зміна налаштувань замінює підписку та очищує чергу. Відхилена підписка повторюється через 30 секунд. Пропущені під час розриву зв’язку події не відтворюються; таймери «Протягом» починаються заново після відновлення підписки.
-node-ha-trigger-numeric-state-pin-Triggered = Спрацювання
-node-ha-trigger-numeric-state-pin-Info = Інформація
-node-ha-trigger-numeric-state-pin-Entity = Сутність
-node-ha-trigger-numeric-state-pin-From = До
-node-ha-trigger-numeric-state-pin-To = Після
-node-ha-trigger-numeric-state-pin-Value = Значення
-node-ha-trigger-numeric-state-prop-entity_id-title = Сутність
-node-ha-trigger-numeric-state-prop-entity_id-description = Оберіть сутність або введіть її ідентифікатор
-node-ha-trigger-numeric-state-prop-attribute-title = Атрибут
-node-ha-trigger-numeric-state-prop-attribute-description = Необов’язковий атрибут замість стану
-node-ha-trigger-numeric-state-prop-above-title = Вище
-node-ha-trigger-numeric-state-prop-above-description = Нижня межа без включення: число або ідентифікатор числової сутності
-node-ha-trigger-numeric-state-prop-below-title = Нижче
-node-ha-trigger-numeric-state-prop-below-description = Верхня межа без включення: число або ідентифікатор числової сутності
-node-ha-trigger-numeric-state-prop-value_template-title = Шаблон значення
-node-ha-trigger-numeric-state-prop-value_template-description = Необов’язковий шаблон Home Assistant для перетворення значення
-node-ha-trigger-numeric-state-prop-for-title = Протягом
-node-ha-trigger-numeric-state-prop-for-description = Необов’язкова тривалість: 90, 1h 30m або 00:05:00
 
 # ha/trigger_time
 node-ha-trigger-time-title = Час
@@ -340,55 +240,7 @@ node-ha-action-pin-Failed = Невдача
 node-ha-action-pin-Error = Помилка
 node-ha-action-pin-Response = Відповідь
 
-# ha/entity
-node-ha-entity-title = Сутність
-node-ha-entity-description = Надає останній стан сутності Home Assistant як дані
-node-ha-entity-help =
-    Оберіть сутність. Поточний стан зчитується під час підписки та відновлення зв'язку; зміни оновлюють вихідні дані без сигналів виконання. Наступні ноди можуть зчитати останні значення будь-коли.
-
-    Number оновлюється лише для скінченних числових станів; On — для пар on/off, open/closed, home/not_home, true/false, playing/paused, locked/unlocked, detected/clear, active/inactive, occupied/unoccupied та connected/disconnected. Інші стани очищають відповідні виходи. Unit містить unit_of_measurement. Видалена сутність очищає всі виходи. Без зв'язку останні значення залишаються доступними; неіснуюча сутність перевіряється кожні 30 секунд.
-node-ha-entity-prop-entity_id-title = Сутність
-node-ha-entity-prop-entity_id-description = Сутність Home Assistant, останній стан якої потрібно надавати
-node-ha-entity-pin-State = Стан
-node-ha-entity-pin-Number = Число
-node-ha-entity-pin-On = Увімкнено
-node-ha-entity-pin-Unit = Одиниця
-node-ha-entity-pin-Attributes = Атрибути
-node-ha-entity-pin-entity-state = Стан сутності
-
 # Automation conditions
-node-ha-condition-state-title = Умова: Стан
-node-ha-condition-state-description = Перевіряє стан або атрибут сутності
-node-ha-condition-state-help = Поле «Стан» приймає значення через кому: достатньо будь-якого збігу. Необов’язковий атрибут вибирає значення атрибута. «Протягом» приймає 90, 1h 30m або 00:05:00 та перевіряє last_changed сутності, також для атрибута; окрема тривалість зміни атрибута не відстежується. Вхід перевіряє умову; логічний результат надходить на «Результат» і спрацьовує рівно один вихід: «Так» або «Ні». Локальні умови не роблять запитів під час виконання. Невідомий, недоступний або ще не завантажений стан чи розрив зв’язку дає «Ні» з одноразовим попередженням до зміни ситуації.
-node-ha-condition-state-pin-In = Вхід
-node-ha-condition-state-pin-Yes = Так
-node-ha-condition-state-pin-No = Ні
-node-ha-condition-state-pin-Result = Результат
-node-ha-condition-state-prop-entity_id-title = Сутність
-node-ha-condition-state-prop-entity_id-description = Сутність для перевірки за живим кешем станів
-node-ha-condition-state-prop-attribute-title = Атрибут
-node-ha-condition-state-prop-attribute-description = Необов’язковий атрибут; порожнє поле перевіряє стан сутності
-node-ha-condition-state-prop-state-title = Стан
-node-ha-condition-state-prop-state-description = Очікуваний стан або кілька варіантів через кому
-node-ha-condition-state-prop-for-title = Протягом
-node-ha-condition-state-prop-for-description = Необов’язкова мінімальна тривалість за last_changed
-
-node-ha-condition-numeric-state-title = Умова: Числовий стан
-node-ha-condition-numeric-state-description = Перевіряє числові межі без включення меж
-node-ha-condition-numeric-state-help = Перевіряє числовий стан сутності або вибраний атрибут. «Вище» та «Нижче» — строгі межі: число або ID сутності з числовим станом. Потрібна хоча б одна межа. Локальна перевірка не підтримує шаблон значення. Вхід перевіряє умову; логічний результат надходить на «Результат» і спрацьовує рівно один вихід: «Так» або «Ні». Локальні умови не роблять запитів під час виконання. Невідомий, недоступний або ще не завантажений стан чи розрив зв’язку дає «Ні» з одноразовим попередженням до зміни ситуації.
-node-ha-condition-numeric-state-pin-In = Вхід
-node-ha-condition-numeric-state-pin-Yes = Так
-node-ha-condition-numeric-state-pin-No = Ні
-node-ha-condition-numeric-state-pin-Result = Результат
-node-ha-condition-numeric-state-prop-entity_id-title = Сутність
-node-ha-condition-numeric-state-prop-entity_id-description = Сутність для перевірки за живим кешем станів
-node-ha-condition-numeric-state-prop-attribute-title = Атрибут
-node-ha-condition-numeric-state-prop-attribute-description = Необов’язковий атрибут; порожнє поле перевіряє стан сутності
-node-ha-condition-numeric-state-prop-above-title = Вище
-node-ha-condition-numeric-state-prop-above-description = Необов’язкова строга нижня межа: число або ID числової сутності
-node-ha-condition-numeric-state-prop-below-title = Нижче
-node-ha-condition-numeric-state-prop-below-description = Необов’язкова строга верхня межа: число або ID числової сутності
-
 node-ha-condition-time-title = Умова: Час
 node-ha-condition-time-description = Перевіряє місцевий час і день тижня Home Assistant
 node-ha-condition-time-help = «Після» включає межу, «До» — ні. Однакові «Після» та «До» означають цілу добу. Інтервал може перетинати північ; день тижня завжди стосується поточного місцевого дня. Дні: mon,tue,wed,thu,fri,sat,sun. Порожні поля не обмежують перевірку. Часова зона надходить із get_config, живий зсув UTC обчислює HA. WASI не використовує часову зону хоста. Під час зміни зони або літнього часу зсув може затриматися до хвилини плюс доставка події. До отримання даних результат — «Ні». Вхід перевіряє умову; логічний результат надходить на «Результат» і спрацьовує рівно один вихід: «Так» або «Ні». Локальні умови не роблять запитів під час виконання. Невідомий, недоступний або ще не завантажений стан чи розрив зв’язку дає «Ні» з одноразовим попередженням до зміни ситуації.
@@ -449,10 +301,7 @@ node-ha-condition-template-prop-value_template-description = Шаблон Jinja 
 
 # Resource collections and actions
 home-assistant-resource-entities-title = Сутності
-home-assistant-resource-entities-action-ha-trigger-state = Тригер стану
-home-assistant-resource-entities-action-ha-entity = Значення
-home-assistant-resource-entities-action-ha-state-changed = Зміна стану
-home-assistant-resource-entities-action-ha-condition-state = Умова стану
+home-assistant-resource-entities-action-ha-entity = Коли змінюється
 home-assistant-resource-entities-action-ha-action = Дія
 
 home-assistant-resource-zones-title = Зони
@@ -461,3 +310,28 @@ home-assistant-resource-zones-action-ha-condition-zone = Умова зони
 
 home-assistant-resource-persons-title = Люди
 home-assistant-resource-persons-action-ha-condition-zone = Умова зони
+
+node-ha-entity-title = Сутність
+node-ha-entity-description = Спрацьовує при зміні сутності Home Assistant і надає її типізоване значення
+node-ha-entity-help =
+    Оберіть сутність. «Зміна» за замовчуванням спрацьовує лише при зміні тексту стану; «Будь-яке оновлення» враховує також зміни атрибутів. Кожна подія оновлює «Значення» та «Попереднє» (значення до зміни), у порядку надходження, не більше однієї події за такт.
+    Тип значення визначається автоматично при виборі відомої сутності. Його можна змінити на число, увімк/вимк, текст або дату й час (RFC 3339). Невідомий, недоступний або неперетворюваний стан очищає відповідний вихід. Одиниця береться з unit_of_measurement; «Атрибути» й «Стан сутності» надають повний поточний стан.
+    Початковий знімок і знімок після відновлення зв’язку оновлюють поточні дані без імпульсу «Зміна» та без зміни «Попереднє». Видалення сутності очищає поточні дані. Без зв’язку останні значення зберігаються, пропущені події не відтворюються. Невдалу підписку повторюють через 30 секунд.
+node-ha-entity-pin-Changed = Зміна
+node-ha-entity-pin-Value = Значення
+node-ha-entity-pin-Previous = Попереднє
+node-ha-entity-pin-Unit = Одиниця
+node-ha-entity-pin-Attributes = Атрибути
+node-ha-entity-pin-entity-state = Стан сутності
+node-ha-entity-prop-entity_id-title = Сутність
+node-ha-entity-prop-entity_id-description = Сутність Home Assistant, за якою стежити
+node-ha-entity-prop-value_type-title = Тип значення
+node-ha-entity-prop-value_type-description = Визначається автоматично при виборі відомої сутності; можна змінити вручну
+node-ha-entity-prop-value_type-option-number = Число
+node-ha-entity-prop-value_type-option-bool = Увімк/Вимк
+node-ha-entity-prop-value_type-option-text = Текст
+node-ha-entity-prop-value_type-option-datetime = Дата й час
+node-ha-entity-prop-fire_on-title = Спрацьовувати на
+node-ha-entity-prop-fire_on-description = Коли надсилати імпульс «Зміна»; дані оновлюються при кожній події
+node-ha-entity-prop-fire_on-option-state = Зміна стану
+node-ha-entity-prop-fire_on-option-any = Будь-яке оновлення

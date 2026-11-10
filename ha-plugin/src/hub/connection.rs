@@ -36,19 +36,13 @@ impl Hub {
         self.services.clear();
         self.entity_options.clear();
         self.action_targets.clear();
-        self.state_nodes.clear();
         env.set_options("actions", &[]);
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &[]);
-        env.set_options(crate::states::STATES_SOURCE, &[]);
-        env.set_options(crate::states::ATTRIBUTES_SOURCE, &[]);
         for source in std::mem::take(&mut self.domain_sources) {
             env.set_options(&source, &[]);
         }
-        for source in std::mem::take(&mut self.state_sources) {
-            env.set_options(&source, &[]);
-        }
-        for reply in self.entities.values_mut() {
-            *reply = None;
+        for entity in self.entities.values_mut() {
+            entity.reply = None;
         }
     }
 

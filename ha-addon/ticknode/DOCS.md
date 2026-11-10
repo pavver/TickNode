@@ -9,9 +9,9 @@ TickNode server together with its web editor and plugs it into Home Assistant.
 2. Open **TickNode** in the Home Assistant sidebar (or use **Open web UI**). The editor is served
    through Home Assistant ingress, so Home Assistant authentication protects it; no port is exposed.
 3. Build graphs from the palette. Nodes of the `Home Assistant` plugin are available right away:
-   triggers for every Home Assistant trigger platform (state, numeric state, time, sun, zone,
-   event, MQTT, webhook, template and others), condition gates, an **Action** node with fields
-   from the service catalog, **Entity** value nodes, and lower-level state/service nodes. Entities
+   typed **Entity** change events, triggers for time, sun, zone,
+   event, MQTT, webhook, template and others, condition gates, an **Action** node with fields
+   from the service catalog. Entity values can feed Match comparisons directly. Entities
    and actions are chosen in searchable pickers.
 
 ## How the Home Assistant connection works

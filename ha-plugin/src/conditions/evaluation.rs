@@ -6,18 +6,6 @@ use chrono::{DateTime, Datelike, NaiveTime, TimeDelta, Utc};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-fn number(value: &Value) -> Option<f64> {
-    value
-        .as_f64()
-        .or_else(|| value.as_str()?.parse().ok())
-        .filter(|v| v.is_finite())
-}
-fn scalar(value: &Value) -> String {
-    value
-        .as_str()
-        .map(str::to_owned)
-        .unwrap_or_else(|| value.to_string())
-}
 fn offset(text: &str) -> Result<TimeDelta, String> {
     if text.is_empty() {
         return Ok(TimeDelta::zero());
@@ -52,8 +40,6 @@ pub fn evaluate(
         now,
     };
     match kind {
-        Kind::State => evaluation.state(),
-        Kind::NumericState => evaluation.numeric_state(),
         Kind::Time => evaluation.time(),
         Kind::Sun => evaluation.sun(),
         Kind::Zone => evaluation.zone(),
@@ -84,54 +70,6 @@ impl Evaluation<'_> {
                 .ok_or_else(|| format!("Entity {entity} has no attribute {attr}"))
         }
     }
-    fn state(&self) -> Result<bool, String> {
-        let actual = scalar(&self.value(self.p("entity_id"), self.p("attribute"))?);
-        let held = if self.p("for").is_empty() {
-            true
-        } else {
-            if self.p("for").starts_with('-') {
-                return Err("For must not be negative".into());
-            }
-            let hold = offset(self.p("for"))?;
-            self.now
-                .signed_duration_since(self.live.state(self.p("entity_id"))?.last_changed)
-                >= hold
-        };
-        Ok(held
-            && self
-                .p("state")
-                .split(',')
-                .map(str::trim)
-                .any(|expected| expected == actual))
-    }
-
-    fn numeric_state(&self) -> Result<bool, String> {
-        let actual = number(&self.value(self.p("entity_id"), self.p("attribute"))?)
-            .ok_or("Condition value is not a finite number")?;
-
-        let above = self.bound(self.p("above"))?;
-        let below = self.bound(self.p("below"))?;
-        if above.is_none() && below.is_none() {
-            return Err("Numeric condition needs Above or Below".into());
-        }
-        Ok(above.is_none_or(|n| actual > n) && below.is_none_or(|n| actual < n))
-    }
-
-    fn bound(&self, text: &str) -> Result<Option<f64>, String> {
-        if text.is_empty() {
-            return Ok(None);
-        }
-        if let Ok(n) = text.parse::<f64>() {
-            return n
-                .is_finite()
-                .then_some(Some(n))
-                .ok_or_else(|| "Numeric bound must be finite".into());
-        }
-        number(&self.value(text, "")?)
-            .map(Some)
-            .ok_or_else(|| format!("Bound entity {text} is not numeric"))
-    }
-
     fn time(&self) -> Result<bool, String> {
         let local = self.now.with_timezone(&self.live.offset()?);
         let after = clock(self.p("after"))?;

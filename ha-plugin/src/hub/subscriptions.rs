@@ -1,7 +1,7 @@
 //! Subscription registration, cancellation, retry and ordered event queues.
 
-use super::{Env, Hub, RESUBSCRIBE_DELAY, Sub, Watch};
-use crate::queue::{ChangeQueue, Mode};
+use super::{EntityWatch, Env, Hub, RESUBSCRIBE_DELAY, Sub, Watch};
+use crate::queue::ChangeQueue;
 use crate::triggers::TriggerConfig;
 use ha_core_client::{Session, Source, SubscriptionStatus, Update};
 use std::time::Instant;
@@ -38,20 +38,27 @@ impl<T, C> Watch<T, C> {
                 match update {
                     Update::Event(change) => {
                         let dropped = self.queue.push(change);
-                        if dropped > 0 && self.queue.mode() == Mode::Every {
+                        if dropped > 0 {
                             env.warn(&format!(
                                 "{label}: too many unprocessed changes, the oldest was dropped"
                             ));
                         }
                     }
-                    Update::Status { status, .. } => collect_status(
-                        status,
-                        &mut self.snapshot_due,
-                        &mut self.errors,
-                        label,
-                        node_errors,
-                        env,
-                    ),
+                    Update::Status { status, .. } => {
+                        if !node_errors && matches!(status, SubscriptionStatus::Restored) {
+                            // Entity subscriptions synthesize missed changes before Restored.
+                            // The fresh baseline replaces those; only later live events may fire.
+                            self.queue.clear();
+                        }
+                        collect_status(
+                            status,
+                            &mut self.snapshot_due,
+                            &mut self.errors,
+                            label,
+                            node_errors,
+                            env,
+                        );
+                    }
                     _ => {}
                 }
             }
@@ -96,8 +103,8 @@ impl<T, C> Watch<T, C> {
 impl Hub {
     // --- Nodes ---
 
-    /// Registers a `ha/state_changed` node; returns its serial.
-    pub fn add_watch(&mut self, node: NodeId, mode: Mode) -> u64 {
+    /// Registers an entity node; returns its serial.
+    pub fn add_entity(&mut self, node: NodeId) -> u64 {
         self.next_serial += 1;
         let serial = self.next_serial;
         self.watches.insert(
@@ -105,18 +112,20 @@ impl Hub {
             Watch {
                 serial,
                 config: String::new(),
-                queue: ChangeQueue::new(mode),
+                queue: ChangeQueue::new(),
                 sub: Sub::Idle,
                 errors: Vec::new(),
                 snapshot_due: false,
             },
         );
-        serial
-    }
-
-    pub fn add_entity(&mut self, node: NodeId) -> u64 {
-        let serial = self.add_watch(node, Mode::Latest);
-        self.entities.insert(node, None);
+        self.entities.insert(
+            node,
+            EntityWatch {
+                reply: None,
+                value_type: Default::default(),
+                fire_on: Default::default(),
+            },
+        );
         serial
     }
 
@@ -148,8 +157,8 @@ impl Hub {
         watch.config = entity.to_string();
         watch.queue.clear();
         watch.snapshot_due = false;
-        if let Some(reply) = self.entities.get_mut(&node) {
-            *reply = None;
+        if let Some(entity) = self.entities.get_mut(&node) {
+            entity.reply = None;
         }
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
@@ -157,9 +166,23 @@ impl Hub {
         self.flush(now, env);
     }
 
-    pub fn set_mode(&mut self, node: NodeId, serial: u64, mode: Mode) {
-        if let Some(watch) = self.watches.get_mut(&node).filter(|w| w.serial == serial) {
-            watch.queue.set_mode(mode);
+    pub fn set_entity_options(
+        &mut self,
+        node: NodeId,
+        serial: u64,
+        value_type: crate::entity::ValueType,
+        fire_on: crate::entity::FireOn,
+    ) {
+        let Some(watch) = self.watches.get_mut(&node).filter(|w| w.serial == serial) else {
+            return;
+        };
+        if let Some(entity) = self.entities.get_mut(&node) {
+            // A new type re-reads the current state, so Value is not left in the old type until the next change.
+            if entity.value_type != value_type && matches!(watch.sub, Sub::Active(_)) {
+                watch.snapshot_due = true;
+            }
+            entity.value_type = value_type;
+            entity.fire_on = fire_on;
         }
     }
 
@@ -187,7 +210,7 @@ impl Hub {
             Watch {
                 serial,
                 config: None,
-                queue: ChangeQueue::new(Mode::Every),
+                queue: ChangeQueue::new(),
                 sub: Sub::Idle,
                 errors: Vec::new(),
                 snapshot_due: false,
@@ -274,8 +297,7 @@ fn collect_status(
             env.info(&format!("Subscription to {label} restored"));
         }
         SubscriptionStatus::Lagged { dropped } => env.warn(&format!(
-            "{label}: {dropped} change(s) were {} because the plugin fell behind",
-            if node_errors { "dropped" } else { "merged" }
+            "{label}: {dropped} change(s) were dropped because the plugin fell behind"
         )),
         SubscriptionStatus::Rejected { code, message } => {
             let message =

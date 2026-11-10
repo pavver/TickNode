@@ -3,6 +3,24 @@
 The plugin runs `ha-core-client::Session` through the host WebSocket capability. Configure its URL
 and access token in the Plugins panel; the Home Assistant add-on supplies the Supervisor settings.
 
+## Entity changes and typed values
+
+Choose an entity in Resources and select **When it changes** to create `ha/entity`. Its outputs are
+**Changed** (exec 0), **Value** (1), **Previous** (2), **Unit** (3), **Attributes** (4), and
+**Entity state** (`ha.state`, 5). Value and Previous share the selected `value_type`: Number,
+On/Off, Text (default), or Date and time (RFC 3339). Choosing an entity known to the live cache
+infers its type; manual edits and stored types override inference. Unknown entities retain the
+current type. Unknown, unavailable and non-convertible values clear the corresponding typed pin.
+
+`fire_on=state` fires Changed only when state text differs (including absent states); `any` also
+fires on attribute-only updates. Data outputs update for every event. Events are queued in order,
+one per tick. Initial and reconnect snapshots update current data without firing Changed or
+changing Previous. Removal clears current data; offline values remain cached, while missed events
+are not replayed. Failed subscriptions retry after 30 seconds.
+
+For example, connect a voltage sensor's Changed and Number Value to Match, use an auto input `v`
+and cases `v > 230` and `v < 200`, then connect each case to `ha/action`.
+
 ## Automation conditions
 
 Every `ha/condition_<kind>` node has exec **In** (0), **Yes** (1), **No** (2), and boolean data
@@ -11,8 +29,6 @@ Definitions and logs are English, with Ukrainian Fluent translations for all edi
 
 | Kind | Properties |
 | --- | --- |
-| `state` | `entity_id` (entity picker), `attribute`, `state` (comma-separated alternatives), `for` |
-| `numeric_state` | `entity_id` (entity picker), `attribute`, `above`, `below` (exclusive number/entity bounds) |
 | `time` | `after` (inclusive), `before` (exclusive), `weekday` (`mon,tue,...`) |
 | `sun` | `after`, `before` (`none`/`sunrise`/`sunset`), `after_offset`, `before_offset` |
 | `zone` | `entity_id` (person/tracker picker), `zone` (zone picker) |
@@ -23,7 +39,7 @@ snapshot. The existing five-minute entity-picker refresh also refreshes this cac
 a snapshot are retained; timestamps prevent an older update from replacing a newer state. Disconnects,
 subscription restoration and lost events invalidate the baseline and require a fresh snapshot.
 Missing/unknown/unavailable states produce No, with an English warning once per unchanged failure
-situation. `ha/entity` and `ha/get_state` retain their existing behavior.
+situation.
 
 WASI supplies a UTC wall clock, without access to HA's timezone database. `get_config` supplies
 `time_zone`, but does **not** supply a UTC offset. A shared `render_template` subscription asks HA for
@@ -39,7 +55,6 @@ AND. This approximates today's solar time when the next event is tomorrow; daily
 cause a few minutes of difference. Events more than two days away fail closed (polar day/night).
 Zone compares the reported person/tracker state with the zone's friendly name, or `home` for
 `zone.home`; it does not independently compute GPS/radius containment for overlapping zones.
-State's For uses the entity's `last_changed`, including when testing an attribute.
 
 Template starts a `render_template` subscription on each In, uses the first result, and unsubscribes.
 Result and the selected branch arrive a few ticks later. Only boolean true or rendered text `true`

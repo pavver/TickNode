@@ -63,7 +63,9 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
         let node = HomeAssistant::create(kind, NodeId(ticknode_shared::Uuid::nil())).unwrap();
         let def = node.definition();
         let prefix = format!("node-{}", fluent_slug(kind));
-        let mut keys: Vec<_> = ["title", "description", "help"].map(|suffix| format!("{prefix}-{suffix}")).into();
+        let mut keys: Vec<_> = ["title", "description", "help"]
+            .map(|suffix| format!("{prefix}-{suffix}"))
+            .into();
         for p in &def.pins {
             let key_raw = format!("{prefix}-pin-{}", p.name);
             let key_slug = format!("{prefix}-pin-{}", fluent_slug(&p.name));
@@ -76,7 +78,8 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
             for suffix in ["title", "description"] {
                 let key_raw = format!("{prefix}-prop-{p_name}-{suffix}");
                 let key_slug = format!("{prefix}-prop-{}-{suffix}", fluent_slug(p_name));
-                if !ftl.contains(&format!("{key_raw} =")) && !ftl.contains(&format!("{key_slug} =")) {
+                if !ftl.contains(&format!("{key_raw} =")) && !ftl.contains(&format!("{key_slug} ="))
+                {
                     keys.push(key_raw);
                 }
             }
@@ -84,8 +87,11 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
                 for (value, _) in options {
                     let opt_slug = fluent_slug(value);
                     let key_raw = format!("{prefix}-prop-{p_name}-option-{opt_slug}");
-                    let key_slug = format!("{prefix}-prop-{}-option-{opt_slug}", fluent_slug(p_name));
-                    if !ftl.contains(&format!("{key_raw} =")) && !ftl.contains(&format!("{key_slug} =")) {
+                    let key_slug =
+                        format!("{prefix}-prop-{}-option-{opt_slug}", fluent_slug(p_name));
+                    if !ftl.contains(&format!("{key_raw} ="))
+                        && !ftl.contains(&format!("{key_slug} ="))
+                    {
                         keys.push(key_raw);
                     }
                 }
@@ -98,30 +104,6 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
         }
     }
     assert!(missing.is_empty(), "missing keys: {:#?}", missing);
-}
-
-#[test]
-fn state_nodes_save_trimmed_properties_and_ignore_unrelated_values() {
-    let nil = NodeId(ticknode_shared::Uuid::nil());
-    for kind in ["ha/entity", "ha/state_changed"] {
-        let mut node = HomeAssistant::create(kind, nil).unwrap();
-        node.set_property("entity_id", " light.hall ".into());
-        node.set_property("entity_id", false.into());
-        node.set_property("unrelated", "ignored".into());
-        assert!(
-            node.properties()
-                .contains(&("entity_id".into(), "light.hall".into()))
-        );
-        if kind == "ha/state_changed" {
-            node.set_property("mode", " LATEST ".into());
-            assert!(
-                node.properties()
-                    .contains(&("mode".into(), "latest".into()))
-            );
-            node.set_property("mode", "every".into());
-            assert!(node.properties().contains(&("mode".into(), "every".into())));
-        }
-    }
 }
 
 #[test]
@@ -144,35 +126,13 @@ fn invalid_action_names_return_the_visible_error_and_failed_signal() {
 }
 
 #[test]
-fn condition_node_emits_yes_or_no_and_result_from_live_states() {
-    let nil = NodeId(ticknode_shared::Uuid::nil());
-    let mut node = HomeAssistant::create("ha/condition_state", nil).unwrap();
-    with_hub(|hub, _| {
-        hub.live.snapshot(&[entities::test_state(
-            "light.hall",
-            "on",
-            serde_json::json!({}),
-        )])
-    });
-    node.set_property("entity_id", "light.hall".into());
-    for (expected, result) in [("on", true), ("off", false)] {
-        node.set_property("state", expected.into());
-        assert_eq!(
-            node.execute(Trigger::Pin(PinId(0)), &Inputs::default()),
-            conditions::outputs(result)
-        );
-    }
-    with_hub(|hub, _| hub.live.reset());
-}
-
-#[test]
 fn connection_validation_returns_translatable_errors() {
     let error = validate_connection(DEFAULT_URL, "").unwrap_err();
-    assert_eq!(error.key,"home-assistant-error-no-token");
-    assert_eq!(error.fallback,"The access token is not set");
+    assert_eq!(error.key, "home-assistant-error-no-token");
+    assert_eq!(error.fallback, "The access token is not set");
     let error = validate_connection("https://ha.local", "secret").unwrap_err();
-    assert_eq!(error.key,"home-assistant-error-bad-url");
-    assert_eq!(error.args,vec![("url".into(),"https://ha.local".into())]);
+    assert_eq!(error.key, "home-assistant-error-bad-url");
+    assert_eq!(error.args, vec![("url".into(), "https://ha.local".into())]);
     assert!(validate_connection("ws://ha.local", "secret").is_ok());
     assert!(validate_connection("wss://ha.local", "secret").is_ok());
 }
@@ -196,25 +156,40 @@ fn ha_manifest_exposes_collections_and_actions() {
     let manifest = HomeAssistant::manifest();
     assert_eq!(manifest.resources.len(), 3);
 
-    let entities = manifest.resources.iter().find(|r| r.id == "entities").expect("entities collection");
+    let entities = manifest
+        .resources
+        .iter()
+        .find(|r| r.id == "entities")
+        .expect("entities collection");
     assert_eq!(entities.title, "Entities");
     assert_eq!(entities.icon, "mdi:home-assistant");
     assert_eq!(entities.source, entities::ENTITIES_SOURCE);
-    assert_eq!(entities.actions.len(), 5);
-    assert_eq!(entities.actions[0].type_name, "ha/trigger_state");
+    assert_eq!(entities.actions.len(), 2);
+    assert_eq!(entities.actions[0].type_name, "ha/entity");
     assert_eq!(entities.actions[0].property, "entity_id");
     assert_eq!(entities.actions[0].requires_source, None);
-    assert_eq!(entities.actions[4].type_name, "ha/action");
-    assert_eq!(entities.actions[4].property, "target");
-    assert_eq!(entities.actions[4].requires_source.as_deref(), Some(entities::ACTION_TARGETS_SOURCE));
+    assert_eq!(entities.actions[1].type_name, "ha/action");
+    assert_eq!(entities.actions[1].property, "target");
+    assert_eq!(
+        entities.actions[1].requires_source.as_deref(),
+        Some(entities::ACTION_TARGETS_SOURCE)
+    );
 
-    let zones = manifest.resources.iter().find(|r| r.id == "zones").expect("zones collection");
+    let zones = manifest
+        .resources
+        .iter()
+        .find(|r| r.id == "zones")
+        .expect("zones collection");
     assert_eq!(zones.title, "Zones");
     assert_eq!(zones.icon, "mdi:map-marker-radius");
     assert_eq!(zones.source, "zones");
     assert_eq!(zones.actions.len(), 2);
 
-    let persons = manifest.resources.iter().find(|r| r.id == "persons").expect("persons collection");
+    let persons = manifest
+        .resources
+        .iter()
+        .find(|r| r.id == "persons")
+        .expect("persons collection");
     assert_eq!(persons.title, "People");
     assert_eq!(persons.icon, "mdi:account");
     assert_eq!(persons.source, "persons");

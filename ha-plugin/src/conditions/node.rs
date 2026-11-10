@@ -1,11 +1,11 @@
 //! Condition node properties, lifecycle and execution.
 
+use super::{Kind, evaluate, outputs};
+use crate::{text_property, try_with_hub, with_hub};
+use chrono::Utc;
 use std::collections::BTreeMap;
 use std::time::Instant;
-use chrono::Utc;
 use ticknode_plugin_sdk::*;
-use crate::{text_property, try_with_hub, with_hub};
-use super::{Kind, evaluate, outputs};
 
 pub struct ConditionNode {
     node: NodeId,
@@ -31,14 +31,7 @@ impl ConditionNode {
                 )
             })
             .collect();
-        let serial = (!node.0.is_nil()).then(|| {
-            with_hub(|hub, env| {
-                if kind == Kind::State {
-                    hub.set_state_node_entity(node, "", env);
-                }
-                hub.add_condition(node)
-            })
-        });
+        let serial = (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_condition(node)));
         Self {
             node,
             serial,
@@ -61,9 +54,6 @@ impl ConditionNode {
 }
 impl Drop for ConditionNode {
     fn drop(&mut self) {
-        if self.kind == Kind::State {
-            try_with_hub(|hub, env| hub.remove_state_node(self.node, env));
-        }
         if let Some(serial) = self.serial {
             try_with_hub(|hub, env| hub.remove_condition(self.node, serial, Instant::now(), env));
         }
@@ -71,20 +61,7 @@ impl Drop for ConditionNode {
 }
 impl PluginNode for ConditionNode {
     fn definition(&self) -> NodeDefinition {
-        let mut def = self.kind.definition();
-        if self.kind == Kind::State {
-            let entity = self.properties.get("entity_id").map(String::as_str).unwrap_or("");
-            let state_src = crate::states::state_source(entity);
-            let attr_src = crate::states::attribute_source(entity);
-            for prop in &mut def.properties {
-                match prop.name.as_str() {
-                    "state" => prop.kind = PropertyKind::Dynamic { source: state_src.clone(), plugin: String::new() },
-                    "attribute" => prop.kind = PropertyKind::Dynamic { source: attr_src.clone(), plugin: String::new() },
-                    _ => {}
-                }
-            }
-        }
-        def
+        self.kind.definition()
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         self.properties
@@ -114,9 +91,6 @@ impl PluginNode for ConditionNode {
             return;
         }
         self.properties.insert(name.into(), text.clone());
-        if self.kind == Kind::State && self.serial.is_some() && name == "entity_id" {
-            with_hub(|hub, env| hub.set_state_node_entity(self.node, &text, env));
-        }
         self.warning = None;
         if let Some(serial) = self.serial {
             with_hub(|hub, env| hub.cancel_templates(self.node, serial, Instant::now(), env));

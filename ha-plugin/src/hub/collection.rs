@@ -1,8 +1,8 @@
 //! Collects watched states, automation triggers and one-shot replies in order.
 use super::requests::action_result;
-use super::{Call, Env, Hub, Link, Watch, change_outputs, get_state_outputs, service_outputs};
+use super::{EntityWatch, Env, Hub, Link, Watch};
 use crate::triggers::outputs as trigger_outputs;
-use ha_core_client::{Reply, State, StateChange};
+use ha_core_client::StateChange;
 use std::time::Instant;
 use ticknode_plugin_sdk::{Emission, Output};
 impl Hub {
@@ -22,8 +22,6 @@ impl Hub {
                 {
                     emissions.push(Emission::new(*node, outputs));
                 }
-            } else if let Some(change) = change {
-                emissions.push(Emission::new(*node, change_outputs(&change)));
             }
         }
     }
@@ -45,15 +43,7 @@ impl Hub {
     fn collect_requests(&mut self, emissions: &mut Vec<Emission>) {
         let requests = std::mem::take(&mut self.requests);
         for mut request in requests {
-            let outputs = match &mut request.call {
-                Call::Get { reply } => reply
-                    .poll()
-                    .map(|r| get_state_outputs(r.map_err(|e| e.to_string()))),
-                Call::Service { reply } => reply
-                    .poll()
-                    .map(|r| service_outputs(r.map_err(|e| e.to_string()))),
-                Call::Action { reply } => reply.poll().map(action_result),
-            };
+            let outputs = request.reply.poll().map(action_result);
             match outputs {
                 Some(outputs) => emissions.push(Emission::new(request.node, outputs)),
                 None => self.requests.push(request),
@@ -63,7 +53,7 @@ impl Hub {
 }
 fn entity_outputs(
     watch: &mut Watch<StateChange, String>,
-    reply: &mut Option<Reply<State>>,
+    entity: &mut EntityWatch,
     change: Option<StateChange>,
     link: &mut Option<Link>,
     now: Instant,
@@ -71,28 +61,32 @@ fn entity_outputs(
 ) -> Option<Vec<Output>> {
     if let Some(change) = change {
         // A newer event wins over an outstanding baseline request.
-        *reply = None;
+        entity.reply = None;
         watch.snapshot_due = false;
-        return Some(crate::entity::outputs(change.new_state.as_ref()));
+        return Some(crate::entity::change_outputs(
+            &change,
+            entity.value_type,
+            entity.fire_on,
+        ));
     }
 
     if watch.snapshot_due {
         watch.snapshot_due = false;
         if let Some(link) = link {
-            *reply = Some(link.session.get_state(now, &watch.config));
+            entity.reply = Some(link.session.get_state(now, &watch.config));
         }
     }
-    if let Some(pending) = reply
+    if let Some(pending) = &mut entity.reply
         && let Some(result) = pending.poll()
     {
         let output = match result {
-            Ok(state) => Some(crate::entity::outputs(Some(&state))),
+            Ok(state) => Some(crate::entity::outputs(Some(&state), entity.value_type)),
             Err(e) => {
                 env.warn(&format!("Could not read entity {}: {e}", watch.config));
                 None
             }
         };
-        *reply = None;
+        entity.reply = None;
         return output;
     }
     None

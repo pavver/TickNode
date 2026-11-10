@@ -6,8 +6,8 @@ mod node;
 pub use evaluation::{evaluate, template_bool};
 pub use node::ConditionNode;
 
-use ticknode_plugin_sdk::*;
 use crate::CATEGORY;
+use ticknode_plugin_sdk::*;
 
 pub const YES: PinId = PinId(1);
 pub const NO: PinId = PinId(2);
@@ -22,26 +22,15 @@ pub fn outputs(value: bool) -> Vec<Output> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    State,
-    NumericState,
     Time,
     Sun,
     Zone,
     Template,
 }
-pub const KINDS: &[Kind] = &[
-    Kind::State,
-    Kind::NumericState,
-    Kind::Time,
-    Kind::Sun,
-    Kind::Zone,
-    Kind::Template,
-];
+pub const KINDS: &[Kind] = &[Kind::Time, Kind::Sun, Kind::Zone, Kind::Template];
 impl Kind {
     pub fn type_name(self) -> &'static str {
         match self {
-            Self::State => "ha/condition_state",
-            Self::NumericState => "ha/condition_numeric_state",
             Self::Time => "ha/condition_time",
             Self::Sun => "ha/condition_sun",
             Self::Zone => "ha/condition_zone",
@@ -51,17 +40,6 @@ impl Kind {
     pub fn definition(self) -> NodeDefinition {
         let text =
             |name, title, description| PropertyDefinition::text(name, title).described(description);
-        let entity = || {
-            PropertyDefinition::dynamic("entity_id", "Entity", "entities")
-                .described("Entity to test using the live state cache")
-        };
-        let attribute = || {
-            text(
-                "attribute",
-                "Attribute",
-                "Optional attribute; empty tests the entity state",
-            )
-        };
         let sun = |name, title| {
             PropertyDefinition::select(
                 name,
@@ -75,42 +53,6 @@ impl Kind {
             .described("Optional solar event boundary")
         };
         let (title, description, help, properties) = match self {
-            Self::State => (
-                "State condition",
-                "Checks an entity state or attribute",
-                "State accepts comma-separated alternatives (any of). Attribute optionally selects an attribute. For accepts 90, 1h 30m or 00:05:00 and checks the entity's last_changed, also when testing an attribute; it does not track attribute-only duration. An empty State matches an empty string.",
-                vec![
-                    entity(),
-                    PropertyDefinition::dynamic("attribute", "Attribute", crate::states::ATTRIBUTES_SOURCE)
-                        .described("Optional attribute; empty tests the entity state"),
-                    PropertyDefinition::dynamic("state", "State", crate::states::STATES_SOURCE)
-                        .described("Expected state or comma-separated alternatives"),
-                    text(
-                        "for",
-                        "For",
-                        "Optional minimum duration based on last_changed",
-                    ),
-                ],
-            ),
-            Self::NumericState => (
-                "Numeric state condition",
-                "Checks exclusive numeric thresholds",
-                "Tests the entity state or selected numeric attribute. Above and Below are exclusive bounds, each a finite number or an entity id whose current state is numeric. At least one bound is required. Value templates are not evaluated locally.",
-                vec![
-                    entity(),
-                    attribute(),
-                    text(
-                        "above",
-                        "Above",
-                        "Optional exclusive lower bound: number or numeric entity id",
-                    ),
-                    text(
-                        "below",
-                        "Below",
-                        "Optional exclusive upper bound: number or numeric entity id",
-                    ),
-                ],
-            ),
             Self::Time => (
                 "Time condition",
                 "Checks local time and weekdays in Home Assistant",

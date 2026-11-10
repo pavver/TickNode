@@ -3,6 +3,7 @@
     mod definitions;
     mod builtin_contracts;
     mod variables;
+    mod match_modes;
     use super::*;
     use std::collections::VecDeque;
     use ticknode_shared::*;
@@ -170,7 +171,7 @@
         engine.set_input_value(id, PinId(2), Some(num(30))).unwrap();
         assert_eq!(fire(&mut engine, id), [PinId(1)], "only the first match");
 
-        engine.set_node_property(id, "all_matches", DataValue::Bool(true)).unwrap();
+        engine.set_node_property(id, "mode", DataValue::from("all")).unwrap();
         engine.set_input_value(id, PinId(1), Some(DataValue::String("auto".into()))).unwrap();
         engine.set_input_value(id, PinId(2), Some(num(120))).unwrap();
         assert_eq!(fire(&mut engine, id), [PinId(1), PinId(2), PinId(3)]);

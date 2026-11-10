@@ -19,7 +19,6 @@ pub fn property_label(name: &str) -> String {
         ("field_type", "prop-field-type"),
         ("fields_list", "prop-fields-list"),
         ("interval_ticks", "prop-interval-ticks"),
-        ("all_matches", "prop-all-matches"),
         ("cases", "prop-cases"),
     ];
     LABELS.iter().find(|(value, _)| *value == name)

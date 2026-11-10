@@ -62,11 +62,12 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
         path.get().map(|d| {
             view! {
                 <g class=move || if selected.get() { "wire-group selected" } else { "wire-group" }
-                    style=move || format!("--wire-color:{}", if exec { "var(--text-secondary)".to_string() } else { color.get() })>
-                    <title>{move || {
+                    style=move || format!("--wire-color:{}", if exec { "var(--text-secondary)".to_string() } else { color.get() })
+                    on:pointerenter=move |ev| crate::node_status::capture_title(&ev, || {
                         let value = crate::node_status::pin_status(ed, conn.src_node, conn.src_pin, PinDirection::Output, exec);
                         match conversion.get() { Some(conversion) => format!("{conversion}\n{value}"), None => value }
-                    }}</title>
+                    })>
+                    <title></title>
                     <path
                         class="wire"
                         class:converting=move || conversion.get().is_some()
@@ -91,8 +92,9 @@ pub(super) fn Wire(conn: ConnectionModel, exec: bool) -> impl IntoView {
                         let width = value.chars().count() as f64 * 7.0 + 16.0;
                         Some(view! {
                             <g class="wire-value" transform=format!("translate({x},{y})")
-                                on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()>
-                                <title>{move || crate::node_status::pin_status(ed, conn.src_node, conn.src_pin, PinDirection::Output, false)}</title>
+                                on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
+                                on:pointerenter=move |ev| crate::node_status::capture_title(&ev, || crate::node_status::pin_status(ed, conn.src_node, conn.src_pin, PinDirection::Output, false))>
+                                <title></title>
                                 <rect x=-width / 2.0 y=-10 width=width height=20 />
                                 <text text-anchor="middle" dominant-baseline="central">{value}</text>
                             </g>

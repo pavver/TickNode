@@ -56,6 +56,21 @@ pub fn pin_status(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection, exec: b
     })
 }
 
+/// A native tooltip disappears whenever its text changes, and status texts age every second, so the text is
+/// captured once when the pointer enters (`title` on HTML elements, the child `<title>` on SVG groups).
+pub fn capture_title(ev: &web_sys::PointerEvent, text: impl Fn() -> String) {
+    use wasm_bindgen::JsCast;
+    let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else { return };
+    let text = untrack(text);
+    if el.namespace_uri().as_deref() == Some("http://www.w3.org/2000/svg") {
+        if let Ok(Some(title)) = el.query_selector(":scope > title") {
+            title.set_text_content(Some(&text));
+        }
+    } else {
+        let _ = el.set_attribute("title", &text);
+    }
+}
+
 pub fn wire_value(ed: Editor, conn: ConnectionModel) -> Option<String> {
     let node = ed.node_tracked(conn.src_node)?;
     node.trace.with(|trace| {

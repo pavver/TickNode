@@ -74,7 +74,8 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                     <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}
                 <Show when=move || !frozen.get() && ed.node_errors.with(|errors| errors.contains_key(&id))>
-                    <button class="node-error" title=move || crate::node_status::error_text(ed, id)
+                    <button class="node-error"
+                        on:pointerenter=move |ev| crate::node_status::capture_title(&ev, || crate::node_status::error_text(ed, id))
                         aria-label=move || crate::node_status::error_text(ed, id)
                         on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
                         on:click=|ev| ev.stop_propagation()>

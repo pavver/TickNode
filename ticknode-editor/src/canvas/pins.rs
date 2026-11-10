@@ -80,7 +80,7 @@ pub fn Pin(
                 format!("{}{}", pin_class(is_input, is_field, is_input && missing(), allowed_target().is_some()), if row_height.get() > ROW_H { " grown" } else { "" })
             }
             style=move || format!("height:{}px", row_height.get())
-            title=pin_title
+            on:pointerenter=move |ev| crate::node_status::capture_title(&ev, &pin_title)
             data-pin=pin_id.0.to_string()
             data-node=node.0.to_string()
             data-dir=if is_input { "in" } else { "out" }

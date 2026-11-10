@@ -29,8 +29,10 @@ COPY --from=fetch /src /
 FROM rust:1-bookworm AS build
 ARG TRUNK_VERSION
 RUN rustup target add wasm32-unknown-unknown wasm32-wasip2 \
-    && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates binaryen && rm -rf /var/lib/apt/lists/*
-# Prebuilt trunk; it downloads the wasm-bindgen-cli matching Cargo.lock by itself.
+    && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Prebuilt trunk; it downloads the wasm-bindgen-cli matching Cargo.lock and the wasm-opt pinned in
+# ticknode-editor/Trunk.toml. Do not install Debian's binaryen: its old wasm-opt (108) breaks the
+# externref table and the editor fails to start with "WebAssembly.Table.grow(): failed to grow table".
 RUN set -eu; arch="$(uname -m)"; \
     curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-${arch}-unknown-linux-gnu.tar.gz" \
     | tar -xz -C /usr/local/bin trunk

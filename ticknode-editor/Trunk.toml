@@ -4,6 +4,11 @@ dist = "dist"
 # Relative paths: the editor is opened via HA ingress under an arbitrary prefix
 public_url = "./"
 
+[tools]
+# Pinned so a system wasm-opt (e.g. Debian's old binaryen) is never used: old versions break the
+# externref table and the editor fails to start in release builds.
+wasm_opt = "version_123"
+
 [serve]
 port = 8080
 

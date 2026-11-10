@@ -258,6 +258,8 @@ pub struct Editor {
     pub view: RwSignal<Camera>,
     /// Current timestamp (ms), updated by a timer — used to fade out execution highlights.
     pub now: RwSignal<f64>,
+    /// Local time (ms) the engine was last seen running nodes; drives the header logo.
+    pub activity_at: RwSignal<f64>,
     pub theme: RwSignal<Theme>,
     pub locale: RwSignal<Locale>,
     pub show_palette: RwSignal<bool>,
@@ -337,6 +339,7 @@ impl Editor {
             error_seq: RwSignal::new(0),
             view: RwSignal::new(Camera::default()),
             now: RwSignal::new(now_ms()),
+            activity_at: RwSignal::new(f64::NEG_INFINITY),
             theme: RwSignal::new(theme),
             locale,
             show_palette: RwSignal::new(wide_screen),

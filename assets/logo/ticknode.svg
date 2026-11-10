@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>TickNode</title>
+  <!-- The 1 px outline takes the theme's text color: dark on light backgrounds, light on dark ones. -->
+  <style>
+    .outline { stroke: #1B1F24 }
+    @media (prefers-color-scheme: dark) { .outline { stroke: #E6EDF3 } }
+  </style>
+  <defs>
+    <clipPath id="tn-wire"><path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z"/></clipPath>
+    <clipPath id="tn-src"><path d="M0 28h16v24H0Z"/></clipPath>
+    <clipPath id="tn-dst"><path d="M48 40h16v24H48Z"/></clipPath>
+  </defs>
+  <path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z" fill="#1E7F88"/>
+  <rect x="4" y="32" width="8" height="16" fill="#3B4859"/>
+  <path d="M0 28h16v24H0Z M4 32v16h8V32Z" fill="#FFB020"/>
+  <rect x="52" y="44" width="8" height="16" fill="#2C3746"/>
+  <path d="M48 40h16v24H48Z M52 44v16h8V44Z" fill="#E6EDF3"/>
+  <g class="outline" fill="none" stroke-width="2" vector-effect="non-scaling-stroke">
+    <path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z" clip-path="url(#tn-wire)" vector-effect="non-scaling-stroke"/>
+    <path d="M0 28h16v24H0Z" clip-path="url(#tn-src)" vector-effect="non-scaling-stroke"/>
+    <path d="M48 40h16v24H48Z" clip-path="url(#tn-dst)" vector-effect="non-scaling-stroke"/>
+  </g>
+</svg>

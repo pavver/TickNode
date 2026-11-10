@@ -95,8 +95,10 @@ impl Editor {
             ServerMessage::Log { node_id, message } => self.node_log(node_id, message),
             ServerMessage::History(history) => self.history.set(history),
             ServerMessage::Sheets(sheets) => {
+                let now = now_ms();
+                if let Some(at) = crate::logo::summary_activity(&sheets, now) { self.activity_at.set(at); }
                 self.sheets.set(sheets);
-                self.sheets_received_at.set(now_ms());
+                self.sheets_received_at.set(now);
             }
             ServerMessage::SheetCreated(id) => {
                 let mut should_navigate = false;
@@ -164,6 +166,7 @@ impl Editor {
 
     fn apply_traces(&self, traces: Vec<NodeTrace>) {
         let now = now_ms();
+        if !traces.is_empty() { self.activity_at.set(now); }
         for trace in traces {
             if let Some(node) = self.node(trace.node_id) { node.set_trace(trace, now); }
         }

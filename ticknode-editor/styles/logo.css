@@ -1,0 +1,19 @@
+/* --- Header logo (src/logo.rs). One 4 s cycle: the source node pulses, the signal leaves it as
+   its last flash fades, and the target pulses from the moment the signal's head touches it. --- */
+.logo { flex: none; width: calc(var(--du) * 8); height: calc(var(--du) * 8); color: var(--text-primary); }
+.logo .logo-run { stroke-dasharray: 30 200; stroke-dashoffset: 30; }
+.logo .logo-src-base, .logo .logo-src, .logo .logo-dst { opacity: 0; }
+.logo.playing .logo-src-idle { opacity: 0; }
+.logo.playing .logo-src-base { opacity: 1; }
+.logo.playing .logo-src { animation: logo-src 4s ease-in-out infinite; }
+.logo.playing .logo-dst { animation: logo-dst 4s ease-in-out infinite; }
+.logo.playing .logo-run { animation: logo-run 4s linear infinite; }
+@keyframes logo-src { 0% { opacity: 1 } 8% { opacity: 0.55 } 16% { opacity: 1 } 24% { opacity: 0.55 } 34%, 100% { opacity: 0 } }
+@keyframes logo-dst { 0%, 57.2% { opacity: 0 } 57.3% { opacity: 1 } 64% { opacity: 0.55 } 71% { opacity: 1 } 78% { opacity: 0.55 } 85% { opacity: 1 } 95%, 100% { opacity: 0 } }
+@keyframes logo-run { 0%, 24% { stroke-dashoffset: 30 } 34% { stroke-dashoffset: 0 } 67.3%, 100% { stroke-dashoffset: -100 } }
+/* Reduced motion: the mark stays still. */
+@media (prefers-reduced-motion: reduce) {
+    .logo.playing .logo-src-idle { opacity: 1; }
+    .logo.playing .logo-src-base { opacity: 0; }
+    .logo.playing .logo-src, .logo.playing .logo-dst, .logo.playing .logo-run { animation: none; }
+}

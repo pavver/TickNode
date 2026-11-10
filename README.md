@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo/ticknode.svg" width="96" height="96" alt="TickNode logo">
+
 # TickNode
 
 **Visual, node-based automation that runs on a server and is edited in the browser.**

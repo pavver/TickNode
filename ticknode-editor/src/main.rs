@@ -11,6 +11,7 @@ mod events;
 mod home;
 pub mod i18n;
 mod inline;
+mod logo;
 mod match_editor;
 mod panels;
 mod picker;

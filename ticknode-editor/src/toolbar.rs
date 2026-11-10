@@ -4,6 +4,7 @@ use leptos::prelude::*;
 use ticknode_shared::ClientMessage;
 use crate::canvas::fit_view;
 use crate::i18n::t;
+use crate::logo::Logo;
 use crate::route::{Route, navigate};
 use crate::state::{ConnStatus, Theme, use_editor};
 use crate::ui::{IconButton, StatusDot, icons};
@@ -46,6 +47,7 @@ pub fn Header() -> impl IntoView {
                     <span class="mdi mdi-arrow-left" aria-hidden="true"></span>
                 </button>
             })}
+            <Logo />
             <div class="titles">
                 <div class="header-title-row">
                     <span class="t-app-title ellipsis">

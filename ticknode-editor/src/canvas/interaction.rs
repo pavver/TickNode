@@ -20,7 +20,7 @@ mod decisions;
 mod start;
 mod points;
 pub(crate) use points::edit_route;
-pub(crate) use decisions::PointEdit;
+pub(crate) use decisions::{group_routes, PointEdit};
 
 use decisions::{Press, Gesture, press, gesture};
 
@@ -135,6 +135,7 @@ impl Interaction {
 
     pub(super) fn pointer_down(self, ev: PointerEvent) {
         let Self { ed, canvas, drag, panning, pending_wire, pointers, .. } = self;
+        crate::canvas::flush_nudge(ed);
         let p = self.local_point(&ev);
         match press(ed.pending_paste.with_untracked(|p| p.is_some()), &ev.pointer_type(), ev.button()) {
             Press::Place => { move_paste(ed, p); clipboard::place_paste(ed); return; }

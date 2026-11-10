@@ -98,6 +98,28 @@ pub fn frames_fully_inside(
         .collect()
 }
 
+/// The frame's own position followed by the frames and nodes fully inside it: what moves with it.
+pub fn frame_contents(ed: Editor, id: FrameId) -> Option<(Vec<(FrameId, Position)>, Vec<(NodeId, Position)>)> {
+    let frame = ed.frames.with_untracked(|all| all.get(&id).cloned())?;
+    let rect = (frame.position.x as f64, frame.position.y as f64, frame.size.width, frame.size.height);
+    let nodes = ed.nodes.with_untracked(|nodes| {
+        nodes.iter().map(|(n_id, node)| {
+            let layout = ed.layout_of(*node);
+            (*n_id, node.pos.get_untracked(), layout.width, layout.height)
+        }).collect::<Vec<_>>()
+    });
+    let node_origins = nodes_fully_inside(rect, nodes).into_iter()
+        .filter_map(|n_id| ed.node(n_id).map(|node| (n_id, node.pos.get_untracked())))
+        .collect();
+    let (frames, mut frame_origins) = ed.frames.with_untracked(|all| {
+        (all.iter().map(|(f_id, f)| (*f_id, f.position, f.size)).collect::<Vec<_>>(), vec![(id, frame.position)])
+    });
+    frame_origins.extend(frames_fully_inside(rect, Some(id), frames).into_iter().filter_map(|f_id| {
+        ed.frames.with_untracked(|all| all.get(&f_id).map(|f| (f_id, f.position)))
+    }));
+    Some((frame_origins, node_origins))
+}
+
 /// Clamps and snaps a frame resize delta to valid bounds.
 pub fn resize_frame_size(origin: NodeSize, delta: (f64, f64)) -> NodeSize {
     let snap = |v: f64| (v / DU).round() * DU;

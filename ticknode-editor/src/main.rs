@@ -104,6 +104,8 @@ fn copy_selection(ed: Editor, ev: &web_sys::ClipboardEvent, cut: bool) {
 
 fn execute_shortcut(editor: Editor, action: shortcuts::Shortcut) {
     use shortcuts::Shortcut;
+    // Pending arrow-key moves land before anything that edits or reads the graph.
+    crate::canvas::flush_nudge(editor);
     match action {
         Shortcut::Delete => clipboard::delete_selection(editor),
         Shortcut::Escape => {

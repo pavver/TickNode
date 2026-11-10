@@ -16,6 +16,13 @@ pub fn keydown(editor: Editor, ev: web_sys::KeyboardEvent) {
         // Keyboard paste is not a primary selection paste, even if a middle-button release was missed
         editor.middle_button_at.set_value(f64::NEG_INFINITY);
     }
+    if !ctrl && editor.pending_paste.with_untracked(|p| p.is_none()) {
+        if let Some(step) = crate::canvas::nudge_step(&ev.key(), ev.alt_key(), ev.shift_key()) {
+            // Alt+Left/Right would otherwise navigate the browser history.
+            if crate::canvas::nudge(editor, step) { ev.prevent_default(); }
+            return;
+        }
+    }
     let action = shortcuts::shortcut(ctrl, ev.shift_key(), &ev.key(), editor.pending_paste.with_untracked(|p| p.is_some()));
     if let Some(action) = action {
         if action.prevents_default() { ev.prevent_default(); }

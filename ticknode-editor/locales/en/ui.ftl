@@ -408,6 +408,7 @@ wire-detached-remove = Remove wire
 node-resize-title = Drag to resize, double-click to reset
 overview-hint-resize = Drag the bottom-right corner to resize a node; double-click it to reset. Esc cancels. In multiline fields, Ctrl/Cmd+Enter saves.
 overview-hint-frame = C — add a frame around the selected nodes; drag the title to move it with the nodes inside; corner to resize; double-click the title to rename
+overview-hint-nudge = Arrow keys move the selected nodes or frame by one grid cell, with Alt by a fine step, with Shift by five cells
 error-node-size = Node dimensions must be finite
 
 # Runtime node errors and trace values on the canvas

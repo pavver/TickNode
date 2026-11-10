@@ -73,30 +73,7 @@ impl Interaction {
 
     pub(super) fn start_frame_drag(self, id: FrameId, start: (f64, f64), start_world: (f64, f64)) {
         let ed = self.ed;
-        let Some(frame) = ed.frames.with_untracked(|all| all.get(&id).cloned()) else { return };
-        let rect = (frame.position.x as f64, frame.position.y as f64, frame.size.width, frame.size.height);
-
-        let nodes = ed.nodes.with_untracked(|nodes| {
-            nodes.iter().map(|(n_id, node)| {
-                let pos = node.pos.get_untracked();
-                let layout = ed.layout_of(*node);
-                (*n_id, pos, layout.width, layout.height)
-            }).collect::<Vec<_>>()
-        });
-        let node_ids = crate::canvas::nodes_fully_inside(rect, nodes);
-        let node_origins: Vec<(NodeId, Position)> = node_ids.into_iter().filter_map(|n_id| {
-            ed.node(n_id).map(|node| (n_id, node.pos.get_untracked()))
-        }).collect();
-
-        let frames = ed.frames.with_untracked(|all| {
-            all.iter().map(|(f_id, f)| (*f_id, f.position, f.size)).collect::<Vec<_>>()
-        });
-        let inside_frame_ids = crate::canvas::frames_fully_inside(rect, Some(id), frames);
-        let mut frame_origins = vec![(frame.id, frame.position)];
-        frame_origins.extend(inside_frame_ids.into_iter().filter_map(|f_id| {
-            ed.frames.with_untracked(|all| all.get(&f_id).map(|f| (f_id, f.position)))
-        }));
-
+        let Some((frame_origins, node_origins)) = crate::canvas::frame_contents(ed, id) else { return };
         let routes = ed.wire_routes.with_untracked(|all| decisions::group_routes(all, &node_origins));
 
         self.drag.set_value(Drag::Frame {

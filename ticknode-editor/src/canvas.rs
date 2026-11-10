@@ -19,10 +19,11 @@ mod pins;
 mod selection;
 mod wires;
 mod frame;
+mod nudge;
 
 pub use camera::{fit_view, view_center};
 pub use frame::{
-    build_frame_move_batch, create_frame, frame_color_class, frames_fully_inside,
+    build_frame_move_batch, create_frame, frame_color_class, frame_contents, frames_fully_inside,
     nodes_fully_inside, FrameView,
 };
 pub use node::trigger_pin;
@@ -35,6 +36,7 @@ use selection::{SelectBox, SelectionBounds};
 use wires::{PendingConnection, PendingWire, Wire};
 pub(crate) use wires::WireEnd;
 pub(crate) use interaction::{edit_route, PointEdit};
+pub(crate) use nudge::{flush_nudge, nudge, nudge_step, NudgeState};
 
 pub const CANVAS_ID: &str = "ticknode-canvas";
 const GRID: f64 = 5.0 * DU;

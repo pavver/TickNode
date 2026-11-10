@@ -110,7 +110,7 @@ pub(super) fn edit_points(points: &[super::Position], a: (f64, f64), b: (f64, f6
     (result != points).then_some(result)
 }
 
-pub(super) fn group_routes(all: &super::WireRoutes, origins: &[(NodeId, super::Position)]) -> super::WireRoutes {
+pub(crate) fn group_routes(all: &super::WireRoutes, origins: &[(NodeId, super::Position)]) -> super::WireRoutes {
     let ids: std::collections::HashSet<_> = origins.iter().map(|(id, _)| *id).collect();
     all.iter().filter(|((_, c), _)| ids.contains(&c.src_node) && ids.contains(&c.dst_node))
         .map(|(key, points)| (*key, points.clone())).collect()

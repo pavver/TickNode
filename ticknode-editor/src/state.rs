@@ -149,7 +149,7 @@ pub struct PickerState {
 /// A connection awaiting a new node, anchored at the background release point.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WireMenu {
-    pub from: crate::canvas::WireEnd,
+    pub(crate) from: crate::canvas::WireEnd,
     pub position: Position,
     pub screen: (f64, f64),
 }
@@ -286,6 +286,8 @@ pub struct Editor {
     /// Timestamp of the last middle-button press/release (`INFINITY` while held). On Linux,
     /// middle-click pastes the primary selection via a `paste` event — we ignore such pastes.
     pub middle_button_at: StoredValue<f64>,
+    /// Arrow-key moves waiting to be sent as one history entry.
+    pub nudge: StoredValue<crate::canvas::NudgeState>,
     /// Fit camera to the graph only after the first Init, not on every reconnect.
     fitted: StoredValue<bool>,
     next_log_id: StoredValue<u64>,
@@ -356,6 +358,7 @@ impl Editor {
             recent_nodes: RwSignal::new(Vec::new()),
             pending_frame_select: StoredValue::new(None),
             middle_button_at: StoredValue::new(f64::NEG_INFINITY),
+            nudge: StoredValue::new(Default::default()),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),
         }

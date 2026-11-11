@@ -42,6 +42,9 @@ pub trait Node: Send + Sync {
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
     /// Adapts a pin contract through persisted properties; returns whether it changed.
     fn adapt_to(&mut self, _pin: PinId, _data_type: &DataType) -> bool { false }
+    /// Connecting a data wire to this input adapts the node to the source type (only while the node's
+    /// other data inputs are unconnected, so an existing wire is never invalidated).
+    fn adapts_on_connect(&self, _pin: PinId) -> bool { false }
     /// Properties needed to reconstruct the node (graph persistence, editor).
     fn properties(&self) -> Vec<(String, DataValue)> { Vec::new() }
     /// The node has been restored: properties from `create_node` have been applied. Subsequent

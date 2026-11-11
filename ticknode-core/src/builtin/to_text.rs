@@ -176,6 +176,9 @@ impl Node for ToTextNode {
             _ => {}
         }
     }
+    fn adapts_on_connect(&self, pin: PinId) -> bool {
+        pin == PinId(1)
+    }
     fn adapt_to(&mut self, pin: PinId, t: &DataType) -> bool {
         if pin != PinId(1) || *t == self.value_type {
             return false;

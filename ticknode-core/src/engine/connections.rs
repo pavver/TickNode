@@ -80,14 +80,17 @@ impl TickEngine {
         let ConnectionModel { src_node, src_pin, dst_node, dst_pin } = c;
         let source = self.find_pin(src_node, src_pin, PinDirection::Output)?;
         let target = self.find_pin(dst_node, dst_pin, PinDirection::Input)?;
-        let adapts = adapt && self.nodes.get(&dst_node).is_some_and(|n| n.definition().type_name == "text/to_text")
-            && dst_pin == PinId(1) && matches!((&source, &target), (PinType::Data(_), PinType::Data(_)));
+        let other_inputs = self.connections.data().iter().any(|d| d.dst_node == dst_node && d.dst_pin != dst_pin);
+        let adapts = adapt && !other_inputs && self.nodes.get(&dst_node).is_some_and(|n| n.adapts_on_connect(dst_pin))
+            && matches!((&source, &target), (PinType::Data(_), PinType::Data(_)));
         if !adapts { self.validate_data_types(&c)?; }
         if self.has_data_path(src_node, dst_node) {
             return Err(EngineError::CycleDetected(dst_node, src_node));
         }
         if adapts && let PinType::Data(t) = source {
             self.adapt_node(dst_node, dst_pin, &t)?;
+            // A node may decline the type (math accepts only numbers): the ordinary rules then apply.
+            self.validate_data_types(&c)?;
         }
         self.connections.set_data(c);
         self.pure_cache.clear();

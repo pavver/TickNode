@@ -73,9 +73,10 @@ pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
         && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 
-/// Constant's declared quantity type shares the Value row instead of adding a separate row.
+/// Constant's declared quantity type shares the Value row; math nodes' adapted type is shown by their pins.
 pub fn is_node_property(node_type: &str, name: &str, value: &DataValue) -> bool {
-    is_inline_property(name, value) && !(node_type == "const" && name == "value_type")
+    is_inline_property(name, value)
+        && !(matches!(node_type, "const" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
 }
 
 pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, properties: &[(String, DataValue)]) -> bool {

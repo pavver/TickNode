@@ -81,7 +81,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(ConsoleNode { id })));
         self.register(Box::new(|id| Box::new(ConstNode { id, value: DataValue::Number(NumberValue::Int(0)), value_type: None })));
         for op in [MathOp::Add, MathOp::Sub, MathOp::Mul, MathOp::Div] {
-            self.register(Box::new(move |id| Box::new(PureMathNode { id, op })));
+            self.register(Box::new(move |id| Box::new(PureMathNode::new(id, op))));
         }
         self.register(Box::new(|id| Box::new(MathExpressionNode {
             id,

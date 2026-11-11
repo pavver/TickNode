@@ -15,6 +15,8 @@ node-math-add-description = Arithmetic operation on two numbers
 node-math-add-help =
     Res = A + B.
 
+    Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
+
     An unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
@@ -27,6 +29,8 @@ node-math-sub-title = Math Subtract
 node-math-sub-description = Arithmetic operation on two numbers
 node-math-sub-help =
     Res = A − B.
+
+    Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
     An unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.
 
@@ -41,6 +45,8 @@ node-math-mul-description = Arithmetic operation on two numbers
 node-math-mul-help =
     Res = A × B.
 
+    Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
+
     An unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
@@ -53,6 +59,8 @@ node-math-div-title = Math Divide
 node-math-div-description = Arithmetic operation on two numbers
 node-math-div-help =
     Res = A ÷ B. Division by 0 yields infinity.
+
+    Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
     An unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.
 

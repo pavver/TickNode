@@ -50,6 +50,9 @@ pub fn delay_for(value: &DataValue) -> Result<TaskId, String> {
     }
 }
 
+/// Starts HTTP with the manifest's domain permissions. With no current node (`configure`, `tick`),
+/// the task belongs to this plugin instance (maximum 8 concurrent) and finishes in [`Plugin::tick`]
+/// as [`PluginEvent::HttpDone`]. Cancellation, disable and instance recreation abort the request.
 pub fn http(request: HttpRequest) -> Result<TaskId, String> {
     wit_host::start_http(&wit::HttpRequest {
         method: request.method,

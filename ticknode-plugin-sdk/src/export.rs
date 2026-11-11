@@ -104,6 +104,10 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
         let events = events
             .into_iter()
             .map(|e| match e {
+                wit::WsEvent::HttpDone(done) => match from_wit_trigger(wit::Trigger::Task(done)) {
+                    Trigger::Task { id, result } => WsEvent::HttpDone { id, result },
+                    _ => unreachable!(),
+                },
                 wit::WsEvent::Opened(id) => WsEvent::Opened(id),
                 wit::WsEvent::Message((id, text)) => WsEvent::Message(id, text),
                 wit::WsEvent::Closed((id, reason)) => WsEvent::Closed(id, reason),

@@ -1,4 +1,4 @@
-//! Engine services for nodes: asynchronous tasks (delays, HTTP), logs, and current tick number.
+//! Engine services for nodes: asynchronous tasks (delays, abortable HTTP), logs, and current tick number.
 //! Used by both built-in nodes and WASM plugins (via `plugin.rs`).
 
 use std::collections::{HashMap, HashSet};
@@ -33,12 +33,13 @@ pub enum TaskOutput {
 pub type TaskResult = Result<TaskOutput, String>;
 
 pub const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
-const MAX_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
-const MAX_HTTP_BODY: u64 = 4 * 1024 * 1024;
+pub const MAX_HTTP_TIMEOUT: Duration = Duration::from_secs(90);
+mod http;
+pub(crate) use http::spawn_http;
 
 enum TaskState {
     Delay { start_tick: u64, due_tick: u64 },
-    Spawned(tokio::task::JoinHandle<TaskResult>),
+    Spawned(HttpTask),
 }
 
 pub struct HostTask {
@@ -48,6 +49,7 @@ pub struct HostTask {
 
 pub struct HostState {
     pub locale: String,
+    pub(crate) identifier_labels: crate::plugin::identifiers::Labels,
     pub display: ticknode_shared::DisplayRules,
     /// Pending tasks. Completed tasks are removed by the engine and delivered to the node via `Node::on_task`.
     pub active_tasks: HashMap<TaskId, HostTask>,
@@ -69,6 +71,7 @@ impl Default for HostState {
     fn default() -> Self {
         Self {
             locale: "en".into(),
+            identifier_labels: Default::default(),
             display: Default::default(),
             active_tasks: HashMap::new(),
             next_task_id: 0,
@@ -155,8 +158,8 @@ impl HostState {
         let runtime = self.runtime.clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
             .ok_or("HTTP unavailable: the engine is running without a tokio runtime")?;
-        let handle = runtime.spawn_blocking(move || perform_http_request(request));
-        Ok(self.insert(node_id, TaskState::Spawned(handle)))
+        let handle = spawn_http(&runtime, request)?;
+        Ok(self.insert(node_id, TaskState::Spawned(HttpTask(Some(handle)))))
     }
 
     /// Cancels a task if it belongs to `node_id`.
@@ -184,7 +187,7 @@ impl HostState {
         let mut ready: Vec<TaskId> = self.active_tasks.iter()
             .filter(|(_, t)| match &t.state {
                 TaskState::Delay { due_tick, .. } => *due_tick <= tick,
-                TaskState::Spawned(handle) => handle.is_finished(),
+                TaskState::Spawned(task) => task.0.as_ref().is_some_and(|h| h.is_finished()),
             })
             .map(|(id, _)| *id)
             .collect();
@@ -195,7 +198,7 @@ impl HostState {
                 let result = match task.state {
                     TaskState::Delay { .. } => Ok(TaskOutput::Delay),
                     // The task has already finished, so block_on does not wait.
-                    TaskState::Spawned(handle) => futures::executor::block_on(handle)
+                    TaskState::Spawned(mut task) => futures::executor::block_on(task.0.take().expect("task handle exists"))
                         .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {}", e))),
                 };
                 (task.node_id, id, result)
@@ -204,36 +207,12 @@ impl HostState {
     }
 }
 
-fn abort(task: HostTask) {
-    if let TaskState::Spawned(handle) = task.state {
-        handle.abort();
-    }
+struct HttpTask(Option<tokio::task::JoinHandle<TaskResult>>);
+impl Drop for HttpTask {
+    fn drop(&mut self) { if let Some(task) = &self.0 { task.abort(); } }
 }
 
-fn perform_http_request(request: HttpRequest) -> TaskResult {
-    let timeout = if request.timeout.is_zero() { DEFAULT_HTTP_TIMEOUT } else { request.timeout.min(MAX_HTTP_TIMEOUT) };
-    // No automatic redirects: allowed domains are checked only for the requested URL.
-    // A 3xx response is returned to the node; to follow `Location`, it must make a new request (which is checked).
-    let agent = ureq::AgentBuilder::new().redirects(0).build();
-    let mut req = agent.request(&request.method, &request.url).timeout(timeout);
-    for (name, value) in &request.headers {
-        req = req.set(name, value);
-    }
-    let response = match req.send_bytes(&request.body) {
-        Ok(r) => r,
-        // A 4xx/5xx status code is still a valid response that the node can handle itself.
-        Err(ureq::Error::Status(_, r)) => r,
-        Err(e) => return Err(e.to_string()),
-    };
-    let status = response.status();
-    let headers = response.headers_names().into_iter()
-        .filter_map(|name| response.header(&name).map(|v| (name.clone(), v.to_string())))
-        .collect();
-    let mut body = Vec::new();
-    use std::io::Read;
-    response.into_reader().take(MAX_HTTP_BODY).read_to_end(&mut body).map_err(|e| e.to_string())?;
-    Ok(TaskOutput::Http(HttpResponse { status, headers, body }))
-}
+fn abort(task: HostTask) { drop(task); }
 
 #[cfg(test)]
 mod tests;

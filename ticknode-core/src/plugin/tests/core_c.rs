@@ -117,11 +117,11 @@ fn core_c_output_tag_validation_uses_the_selected_output_not_a_neighbor() {
         PinDefinition { id: PinId(2), name: "Point".into(), direction: PinDirection::Output, pin_type: PinType::Data(DataType::Named("mine.point".into())), required: false },
     ];
     let point = DataValue::Object { type_name: Some("mine.point".into()), fields: Default::default() };
-    let (valid, errors) = validate_emission_outputs(&definition, vec![wit::Output::Data((2, encode_value(&point)))]);
+    let (valid, errors) = validate_emission_outputs(&TypeRegistry::new(), &definition, vec![wit::Output::Data((2, encode_value(&point)))]);
     assert_eq!(valid, [NodeOutput::Data(PinId(2), point)]);
     assert!(errors.is_empty(), "{errors:?}");
     let wrong = DataValue::Object { type_name: Some("other.point".into()), fields: Default::default() };
-    let (valid, errors) = validate_emission_outputs(&definition, vec![wit::Output::Data((2, encode_value(&wrong)))]);
+    let (valid, errors) = validate_emission_outputs(&TypeRegistry::new(), &definition, vec![wit::Output::Data((2, encode_value(&wrong)))]);
     assert!(valid.is_empty());
     assert_eq!(errors.len(), 1);
 }

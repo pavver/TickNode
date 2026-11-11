@@ -73,7 +73,7 @@ pub enum Output {
 /// instance is recreated following a crash.
 pub type WsId = u64;
 
-/// Connection event delivered to [`Plugin::tick`].
+/// Plugin event delivered to [`Plugin::tick`]. The historical name also includes HTTP completions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WsEvent {
     /// The connection is established.
@@ -82,7 +82,12 @@ pub enum WsEvent {
     Message(WsId, String),
     /// The connection ended or could not be opened; carries the reason.
     Closed(WsId, String),
+    /// A task started without a current node finished; delivered only to its owning instance.
+    HttpDone { id: TaskId, result: Result<TaskOutput, String> },
 }
+
+/// Events delivered to the plugin tick (WebSocket events and plugin-owned HTTP completions).
+pub type PluginEvent = WsEvent;
 
 /// Outputs for one node produced outside of its own `execute`/`poll`: applied by the host as if the
 /// node had executed (exec pulses queue downstream nodes for the next tick, data goes to the node's outputs).

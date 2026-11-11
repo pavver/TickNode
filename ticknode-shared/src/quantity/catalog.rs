@@ -146,6 +146,7 @@ pub(super) fn quantity(
     auto: &[&str],
 ) -> TypeDefinition {
     TypeDefinition {
+        plugin: None,
         name: format!("quantity.{name}"),
         title: title.into(),
         description: format!("{title} in physical units"),

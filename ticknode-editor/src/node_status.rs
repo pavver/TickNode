@@ -44,6 +44,13 @@ fn declared_type(node: crate::state::ClientNode, pin: PinId, dir: PinDirection) 
         .and_then(|p| match &p.pin_type { PinType::Data(t) => Some(t.clone()), _ => None }).unwrap_or(DataType::Any))
 }
 
+pub(crate) fn trace_type(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection) -> DataType {
+    let declared = ed.node_tracked(id).map(|node| declared_type(node, pin, dir)).unwrap_or(DataType::Any);
+    if declared == DataType::Any && dir == PinDirection::Input {
+        ed.source_type(id, pin).unwrap_or(declared)
+    } else { declared }
+}
+
 pub fn pin_status(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection, exec: bool) -> String {
     let Some(node) = ed.node_tracked(id) else { return String::new() };
     node.trace.with(|trace| {
@@ -54,7 +61,7 @@ pub fn pin_status(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection, exec: b
             } else { String::new() }
         } else {
             match trace.as_ref().and_then(|t| trace_value(t, pin, dir)) {
-                Some(value) => format!("{}\n{}", truncate(display_value_in(value, &declared_type(node, pin, dir)), 200), age()),
+                Some(value) => format!("{}\n{}", truncate(display_value_in(value, &trace_type(ed, id, pin, dir)), 200), age()),
                 None => t!("pin-no-value"),
             }
         }

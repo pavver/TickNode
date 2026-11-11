@@ -74,6 +74,7 @@ fn length(v: &DataValue) -> Option<usize> {
 /// Ordering for values of the same type (Int/Float numbers are compared together).
 fn ordering(a: &DataValue, b: &DataValue) -> Option<Ordering> {
     match (a, b) {
+        (DataValue::Number(crate::NumberValue::Int(x)), DataValue::Number(crate::NumberValue::Int(y))) => Some(x.cmp(y)),
         (DataValue::Number(x), DataValue::Number(y)) => x.to_f64().partial_cmp(&y.to_f64()),
         (DataValue::String(x), DataValue::String(y)) => Some(x.cmp(y)),
         (DataValue::Bool(x), DataValue::Bool(y)) => Some(x.cmp(y)),
@@ -144,7 +145,8 @@ impl MatchCase {
                         .definition_of(t)
                         .is_some_and(|d| d.quantity().is_some())
                 };
-                if quantity(&a) && quantity(&b) && !types.compatible(&a, &b) {
+                let identifier = |t: &DataType| types.definition_of(t).is_some_and(|d| d.is_identifier());
+                if ((quantity(&a) && quantity(&b)) || identifier(&a) || identifier(&b)) && !types.compatible(&a, &b) {
                     return false;
                 }
             }
@@ -163,6 +165,14 @@ impl MatchCase {
                     *v = parsed;
                 } else {
                     *v = crate::text::coerce_to_in(types, v.clone(), &t);
+                }
+            }
+            if let Operand::Input(name) = &c.left {
+                let t = type_of(name);
+                if types.definition_of(&t).is_some_and(|d| d.is_identifier()) {
+                    if !super::ops_in(types, &t).contains(&c.op) { return false; }
+                    if let Some(Operand::Value(v)) = &c.right
+                        && !matches!(v, DataValue::Number(crate::NumberValue::Int(_))) { return false; }
                 }
             }
             c.holds(&value_of)

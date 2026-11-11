@@ -8,7 +8,7 @@
     #[test]
     fn pushed_clear_validates_pin_kind_and_direction() {
         let def = crate::CompareNode::new(NodeId::generate()).definition();
-        let (valid, errors) = validate_emission_outputs(&def, vec![wit::Output::Clear(0), wit::Output::Clear(2), wit::Output::Clear(99)]);
+        let (valid, errors) = validate_emission_outputs(&TypeRegistry::new(), &def, vec![wit::Output::Clear(0), wit::Output::Clear(2), wit::Output::Clear(99)]);
         assert_eq!(valid, vec![NodeOutput::Clear(PinId(2))]);
         assert_eq!(errors.len(), 2);
     }

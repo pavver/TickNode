@@ -39,7 +39,7 @@ pub fn CreateVariableForm(
         let val = event_target_value(&ev);
         selected_type_name.set(val.clone());
         if let Some(parsed_ty) = parse_data_type(&val) {
-            value.set(text::default_of(&parsed_ty));
+            value.set(ed.types.with_untracked(|types| types.default_value(&parsed_ty)));
             data_type.set(parsed_ty);
         }
     };

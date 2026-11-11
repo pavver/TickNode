@@ -32,7 +32,8 @@ impl QuantityLabels for UiQuantityLabels {
 /// browser time zone (wire value labels).
 pub fn value_as_text(value: &DataValue, declared: &DataType) -> String {
     let rules = display_rules();
-    TYPES.with(|types| to_text::to_text_in(value, declared, &Default::default(), &rules, &UiQuantityLabels, &types.borrow()))
+    TYPES.with(|types| to_text::to_text_with_identifiers(value, declared, &Default::default(), &rules, &UiQuantityLabels, &types.borrow(),
+        &|name: &str, id: i64| super::identifier_label(name, id).map(|label| format!("{label} ({id})"))))
 }
 pub fn unit_symbol(id: &str) -> Option<String> { lookup(&format!("unit-{}", fluent_slug(id))) }
 pub fn decimal_separator() -> String { lookup("number-decimal-separator").unwrap_or_else(|| ".".into()) }
@@ -70,7 +71,7 @@ pub fn format_match_case_in(case: &condition::MatchCase, inputs: &[condition::Ma
                 _ => None,
             };
             let canonical = TYPES.with(|types| text::coerce_to_in(&types.borrow(), v.clone(), t));
-            if let Some(label) = literal.or_else(|| quantity_text(&canonical, t)) {
+            if let Some(label) = literal.or_else(|| quantity_text(&canonical, t)).or_else(|| super::identifier_text(&canonical, t)) {
                 // Input operands display without quotation marks; this temporary value never persists.
                 c.right = Some(Operand::Input(label));
             }

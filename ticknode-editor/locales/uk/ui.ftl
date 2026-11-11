@@ -588,3 +588,7 @@ property-from-input = Сутність із входу
 
 property-duration-placeholder = 30
 property-duration-hint = Число у вибраній одиниці, 1h 30m або ГГ:ХХ:СС
+
+parse-error-identifier = «{ $value }» не є цілим 64-бітним числом зі знаком
+identifier-clear = Очистити ідентифікатор
+error-plugin-identifier-output = Плагін повернув некоректне значення ідентифікатора

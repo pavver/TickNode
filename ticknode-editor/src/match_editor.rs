@@ -92,7 +92,7 @@ fn fit_value(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -
         Some(Operand::Value(value)) if text::is_text_type_in(reg, expected) => text::parse_value_in(reg, &text::format_value(value), expected).ok(),
         _ => None,
     };
-    converted.unwrap_or_else(|| reg.default_enum(expected).map_or_else(|| text::default_of(expected), DataValue::String))
+    converted.unwrap_or_else(|| reg.default_value(expected))
 }
 
 /// First unused name: a, b, c, … then in1, in2, …

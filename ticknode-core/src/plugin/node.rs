@@ -120,9 +120,9 @@ impl WasmNode {
         let result = self.call(Some(ctx.host_state), |store, api, node| api.node().call_execute(store, node, &trigger, &inputs));
         match result {
             Ok(outputs) => {
-                let (valid, errors) = validate_emission_outputs(&self.definition, outputs);
+                let (valid, errors) = validate_emission_outputs(ctx.types, &self.definition, outputs);
                 for error in errors {
-                    ctx.host_state.error(self.id, UiMessage::plain(error.clone()), format!("[ERROR] {error}"));
+                    ctx.host_state.error(self.id, super::outputs::ui_error(&error), format!("[ERROR] {error}"));
                 }
                 valid
             }

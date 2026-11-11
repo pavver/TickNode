@@ -1,6 +1,6 @@
 use crate::{Node, NodeContext};
 use ticknode_shared::{
-    to_text::{ToTextOptions, property_visible, to_text_in},
+    to_text::{ToTextOptions, property_visible, to_text_with_identifiers},
     *,
 };
 
@@ -88,13 +88,14 @@ impl Node for ToTextNode {
         } else {
             &self.locale
         };
-        let text = to_text_in(
+        let text = to_text_with_identifiers(
             &value,
-            &self.value_type,
+            ctx.input_types.get(&PinId(1)).filter(|_| self.value_type == DataType::Any).unwrap_or(&self.value_type),
             &self.options,
             &ctx.host_state.display,
             crate::quantity::labels(locale),
             ctx.types,
+            &ctx.host_state.identifier_labels,
         );
         vec![NodeOutput::Data(PinId(0), text.into())]
     }

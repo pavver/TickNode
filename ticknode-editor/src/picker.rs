@@ -142,6 +142,7 @@ pub fn PickerField(
         ed.wire_context.set(None);
         ed.wire_menu.set(None);
         ed.picker.set(Some(PickerState {
+            on_pick: None, value: None,
             node,
             property: prop.clone(),
             plugin: plug.clone(),

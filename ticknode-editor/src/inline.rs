@@ -11,6 +11,7 @@ use crate::ui::{ControlState, flash};
 pub(crate) mod properties;
 pub(crate) mod duration;
 mod quantity;
+mod identifier;
 mod text_field;
 mod typed_properties;
 
@@ -53,6 +54,11 @@ pub fn InlineValue(
 
     if let Some(kind) = ed.types.with_untracked(|types| types.definition_of(&value_type).and_then(|d| d.quantity()).cloned()) {
         return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal /> }.into_any();
+    }
+
+    if let Some((plugin, source)) = i18n::identifier_source(&value_type) {
+        return view! { <identifier::IdentifierValue value=value value_type=value_type plugin=plugin source=source
+            on_commit=on_commit optional=optional title=title /> }.into_any();
     }
 
     if value_type == DataType::Duration {
@@ -141,10 +147,10 @@ pub fn InlineValue(
         match parse_text(&text, &value_type) {
             Ok(None) if !optional => draft.set(saved),
             Ok(v) => on_commit.run(v),
-            Err(e) => {
+            Err(_) => {
                 draft.set(saved);
                 flash(state, ControlState::Error);
-                ed.log(LogKind::Error, format!("[ERROR] {e}"));
+                ed.log(LogKind::Error, format!("[ERROR] Invalid inline value for {}", data_type_name(&value_type)));
             }
         }
     };

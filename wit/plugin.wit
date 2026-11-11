@@ -42,6 +42,8 @@ interface types {
         structure(list<field-definition>),
         /// Enum: value is a `DataValue::String` from the enumeration.
         enumeration(list<enum-value>),
+        /// Opaque signed i64, optionally labelled by a plugin option source.
+        identifier(option<string>),
     }
 
     /// Custom plugin data type.
@@ -219,7 +221,7 @@ interface types {
     /// after a crash (instance recreated) all connections are closed and old ids are void.
     type ws-id = u64;
 
-    /// Connection event delivered to `plugin-tick`.
+    /// Plugin-level connection and HTTP events delivered to `plugin-tick`.
     variant ws-event {
         /// The connection is established.
         opened(ws-id),
@@ -227,6 +229,8 @@ interface types {
         message(tuple<ws-id, string>),
         /// The connection ended (or could not be opened); carries the reason.
         closed(tuple<ws-id, string>),
+        /// A plugin-owned HTTP task completed.
+        http-done(task-done),
     }
 
     /// Reason for calling `node.execute`.
@@ -288,10 +292,11 @@ interface host {
     /// Delay for `ticks` ticks; result is `task-output::delay`.
     delay: func(ticks: u64) -> result<task-id, string>;
 
-    /// HTTP request; requires `capability::http` for the domain.
+    /// HTTP request; requires `capability::http` for the domain. Without a current node it belongs
+    /// to the plugin instance (maximum 8 concurrent tasks) and completes via `http-done` in plugin-tick.
     start-http: func(request: http-request) -> result<task-id, string>;
 
-    /// Cancels a task belonging to this node. `false` if the task no longer exists.
+    /// Cancels a task owned by the current node, or by this plugin when no node is current.
     cancel-task: func(id: task-id) -> bool;
 
     /// Opens a WebSocket connection owned by the plugin (not by a node); usable from any plugin call.
@@ -354,7 +359,7 @@ interface nodes {
 
     /// Called by the host once per tick for every enabled plugin (even with no events, so the plugin can
     /// drive timers and keep-alives), after finished tasks are delivered and before event sources are
-    /// polled. `events` are the WebSocket events since the previous tick (at most 1000 per tick; the rest
+    /// polled. `events` are WebSocket events and plugin-owned HTTP completions (at most 1000 per tick; the rest
     /// stays queued). Returned emissions are applied as if the target node had executed; the host drops
     /// emissions for nodes that do not exist or belong to another plugin, and invalid pins or values.
     plugin-tick: func(events: list<ws-event>) -> list<emission>;

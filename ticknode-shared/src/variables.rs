@@ -102,6 +102,18 @@ pub fn valid_variable_value(value: &DataValue) -> bool {
         .unwrap_or(false)
 }
 
+pub fn fit_typed_variable_value(types: &TypeRegistry, value: DataValue, source: &DataType, target: &DataType,
+    rules: &crate::DisplayRules, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+    let opaque = |mut t: &DataType| {
+        while let DataType::List(inner) = t { t = inner; }
+        types.definition_of(t).is_some_and(|d| d.is_identifier())
+    };
+    if opaque(source) || opaque(target) {
+        return (types.compatible(source, target) && types.identifier_value_fits(target, &value)).then_some(value);
+    }
+    fit_variable_value_with_display(types, value, target, rules, labels)
+}
+
 pub fn fit_variable_value(types: &TypeRegistry, value: DataValue, target_type: &DataType) -> Option<DataValue> {
     fit_variable_value_with_labels(types, value, target_type, &crate::quantity::CanonicalLabels)
 }
@@ -112,6 +124,10 @@ pub fn fit_variable_value_with_labels(types: &TypeRegistry, value: DataValue, ta
 
 pub fn fit_variable_value_with_display(types: &TypeRegistry, value: DataValue, target_type: &DataType,
     rules: &crate::DisplayRules, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+    if types.definition_of(target_type).is_some_and(|d| d.is_identifier()) {
+        return matches!(value, DataValue::Number(crate::NumberValue::Int(_))).then_some(value);
+    }
+    if !types.identifier_value_fits(target_type, &value) { return None; }
     let src = value.get_type();
     if types.compatible(&src, target_type) {
         Some(value)

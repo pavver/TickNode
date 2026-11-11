@@ -46,6 +46,8 @@ pub enum TypeKind {
     Struct { fields: Vec<FieldDefinition> },
     Enum { values: Vec<EnumValue> },
     Quantity(crate::quantity::QuantityKind),
+    /// Opaque signed integer; labels refer to an option source of the owning plugin.
+    Identifier { labels: Option<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -57,18 +59,33 @@ pub struct TypeDefinition {
     /// `#rrggbb` — color of pins and wires; if absent, the editor derives a color from the name hash.
     pub color: Option<String>,
     pub kind: TypeKind,
+    /// Assigned by the host; never inferred from the dotted type name.
+    #[serde(default)]
+    pub plugin: Option<String>,
 }
 
 impl TypeDefinition {
     pub fn new_struct(name: &str, title: &str, fields: Vec<FieldDefinition>) -> Self {
-        Self { name: name.into(), title: title.into(), description: String::new(), color: None, kind: TypeKind::Struct { fields } }
+        Self { name: name.into(), title: title.into(), description: String::new(), color: None, plugin: None, kind: TypeKind::Struct { fields } }
     }
 
     /// `values` — (value, label) pairs.
     pub fn new_enum(name: &str, title: &str, values: &[(&str, &str)]) -> Self {
         let values = values.iter().map(|(v, t)| EnumValue { value: (*v).into(), title: (*t).into() }).collect();
-        Self { name: name.into(), title: title.into(), description: String::new(), color: None, kind: TypeKind::Enum { values } }
+        Self { name: name.into(), title: title.into(), description: String::new(), color: None, plugin: None, kind: TypeKind::Enum { values } }
     }
+
+    pub fn identifier(name: &str, title: &str, description: &str) -> Self {
+        Self { name: name.into(), title: title.into(), description: description.into(), color: None,
+            kind: TypeKind::Identifier { labels: None }, plugin: None }
+    }
+
+    pub fn labels(mut self, source: &str) -> Self {
+        if let TypeKind::Identifier { labels } = &mut self.kind { *labels = Some(source.into()); }
+        self
+    }
+
+    pub fn is_identifier(&self) -> bool { matches!(self.kind, TypeKind::Identifier { .. }) }
 
     pub fn described(mut self, description: &str) -> Self {
         self.description = description.into();
@@ -226,6 +243,9 @@ impl TypeRegistry {
             TypeKind::Struct { fields } => self.validate_fields(&def.name, fields),
             TypeKind::Enum { values } => validate_enum(&def.name, values),
             TypeKind::Quantity(_) => Ok(()),
+            TypeKind::Identifier { labels: Some(source) } if source.is_empty() || source.len() > crate::MAX_OPTION_STRING_LEN =>
+                Err(format!("Type {}: empty or oversized identifier label source", def.name)),
+            TypeKind::Identifier { .. } => Ok(()),
         }
     }
 
@@ -294,6 +314,25 @@ impl TypeRegistry {
         })
     }
 
+    /// Checks integer representations wherever a declared type contains identifiers.
+    pub fn identifier_value_fits(&self, t: &DataType, value: &DataValue) -> bool {
+        match (t, value) {
+            (DataType::Named(name), value) if self.get(name).is_some_and(TypeDefinition::is_identifier) =>
+                matches!(value, DataValue::Number(NumberValue::Int(_))),
+            (DataType::List(inner), DataValue::List { elements, .. }) =>
+                elements.iter().all(|v| self.identifier_value_fits(inner, v)),
+            (DataType::Named(name), DataValue::Object { fields, .. }) => self.get(name).is_none_or(|d|
+                d.fields().iter().all(|f| fields.get(&f.name).is_none_or(|v| self.identifier_value_fits(&f.data_type, &v.value)))),
+            _ => true,
+        }
+    }
+
+    /// Registry-aware initial value for editable named types.
+    pub fn default_value(&self, t: &DataType) -> DataValue {
+        if self.definition_of(t).is_some_and(TypeDefinition::is_identifier) { return 0i64.into(); }
+        self.default_enum(t).map(DataValue::String).unwrap_or_else(|| text::default_of(t))
+    }
+
     /// Default value for enum `t` — the first value in the enumeration.
     pub fn default_enum(&self, t: &DataType) -> Option<String> {
         self.definition_of(t).and_then(|d| d.values().first()).map(|v| v.value.clone())
@@ -341,3 +380,5 @@ fn validate_enum(name: &str, values: &[EnumValue]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod identifier_tests;

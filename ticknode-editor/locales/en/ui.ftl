@@ -573,3 +573,7 @@ property-from-input = From input
 
 property-duration-placeholder = 30
 property-duration-hint = A number in the selected unit, 1h 30m, or HH:MM:SS
+
+parse-error-identifier = "{ $value }" is not a signed 64-bit integer
+identifier-clear = Clear identifier
+error-plugin-identifier-output = The plugin returned an invalid identifier value

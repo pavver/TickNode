@@ -29,6 +29,7 @@ pub fn property_label(name: &str) -> String {
 pub fn display_value_in(value: &DataValue, declared: &DataType) -> String {
     let runtime = value.get_type();
     let declared = if *declared == DataType::Any { &runtime } else { declared };
+    if let Some(text) = i18n::identifier_text(value, declared) { return text; }
     if let Some(text) = i18n::quantity_text(value, declared) { return text; }
     if let (DataValue::List { elements, .. }, DataType::List(inner)) = (value, declared) {
         return format!("[{}]", elements.iter().map(|v| display_value_in(v, inner)).collect::<Vec<_>>().join(", "));

@@ -13,8 +13,13 @@ use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 use crate::{Color, DataType, DataValue, NumberValue, TypeRegistry};
 
 pub fn parse_number(text: &str) -> Option<NumberValue> {
-    let f: f64 = text.trim().replace(',', ".").parse().ok()?;
-    f.is_finite().then(|| NumberValue::Float(f).normalize())
+    if let Ok(n) = text.trim().parse::<i64>() { return Some(NumberValue::Int(n)); }
+    let trimmed = text.trim();
+    let f: f64 = trimmed.replace(',', ".").parse().ok()?;
+    // Out-of-range integer literals must remain floats; normalization could clamp a rounded boundary.
+    let digits = trimmed.strip_prefix(['-', '+']).unwrap_or(trimmed);
+    let out_of_range_integer = !digits.is_empty() && digits.bytes().all(|c| c.is_ascii_digit());
+    f.is_finite().then(|| if out_of_range_integer { NumberValue::Float(f) } else { NumberValue::Float(f).normalize() })
 }
 
 pub fn parse_time(text: &str) -> Option<NaiveTime> {
@@ -211,7 +216,7 @@ pub fn is_text_type(t: &DataType) -> bool {
 
 /// Registry-aware text types also include enums and physical quantities.
 pub fn is_text_type_in(types: &TypeRegistry, t: &DataType) -> bool {
-    is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum() || d.quantity().is_some())
+    is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum() || d.is_identifier() || d.quantity().is_some())
 }
 
 /// Placeholder hint for an input field of this type.
@@ -279,6 +284,8 @@ fn parse_bool(text: &str) -> Option<DataValue> {
 /// (matched by value or label), while a struct cannot be entered as text.
 pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<DataValue, String> {
     match types.definition_of(t) {
+        Some(def) if def.is_identifier() => text.trim().parse::<i64>().map(DataValue::from)
+            .map_err(|_| format!("\"{}\" is not a signed 64-bit integer", text.trim())),
         Some(def) if def.quantity().is_some() => crate::quantity::parse_quantity(text, def.quantity().unwrap())
             .map(DataValue::from).ok_or_else(|| format!("\"{}\" is not a value of {}", text.trim(), def.title)),
         Some(def) if def.is_enum() => {

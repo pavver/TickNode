@@ -1,7 +1,7 @@
 //! Pure logic for variables grouping, sorting, shadowing, and search filtering.
 
 use std::collections::HashSet;
-use ticknode_shared::{SheetId, TypeRegistry, Variable, VariableScope, data_type_name, text};
+use ticknode_shared::{SheetId, TypeRegistry, Variable, VariableScope, data_type_name};
 use crate::i18n;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +63,7 @@ pub fn group_and_filter_variables(
             let name = v.key.name.to_lowercase();
             let type_title = i18n::data_type_title(types, &v.data_type).to_lowercase();
             let type_name = data_type_name(&v.data_type).to_lowercase();
-            let val_text = text::format_value(&v.value).to_lowercase();
+            let val_text = crate::panels::display_value_in(&v.value, &v.data_type).to_lowercase();
             let haystack = format!("{name} {type_title} {type_name} {val_text}");
 
             let matches = terms.iter().all(|term| haystack.contains(term));

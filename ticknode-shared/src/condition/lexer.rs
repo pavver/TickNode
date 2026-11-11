@@ -1,4 +1,4 @@
-use crate::{DataValue, NumberValue};
+use crate::DataValue;
 use super::{CompareOp, ConditionError, Join, Operand, is_input_name};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -92,8 +92,8 @@ impl Lexer {
                 return Ok(Token::Value(DataValue::String(format!("{text} {unit}"))));
             }
         }
-        let number: f64 = text.replace(',', ".").parse().map_err(|_| ConditionError::NotNumber(text))?;
-        Ok(Token::Value(DataValue::Number(NumberValue::Float(number).normalize())))
+        let number = crate::text::parse_number(&text).ok_or_else(|| ConditionError::NotNumber(text))?;
+        Ok(Token::Value(DataValue::Number(number)))
     }
 
     fn word(&mut self) -> Token {

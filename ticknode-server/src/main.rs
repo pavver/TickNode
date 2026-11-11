@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(info.settings_error.as_ref().map(|e| e.key.as_str()), Some("test-plugin-error-no-token"));
         // Core and plugin translations arrive with Init
         assert!(translations.iter().any(|(l, t)| l == "uk" && t.contains("node-const-title") && t.contains("node-test-greeter-description")));
-        assert_eq!(info.settings.len(), 4);
+        assert_eq!(info.settings.len(), 8);
         assert!(info.values.contains(&("token".to_string(), SettingValueView::Secret { is_set: false })));
         assert!(info.values.contains(&("greeting".to_string(), SettingValueView::Value(DataValue::String("Hello".into())))));
         assert!(definitions.iter().any(|d| d.type_name == "test/greeter"));
@@ -443,7 +443,9 @@ mod tests {
         ] }).await;
         let mut got = None;
         for _ in 0..20 {
-            if let ServerMessage::PropertyOptions { plugin, source, options } = recv_any(&mut ws).await {
+            if let ServerMessage::PropertyOptions { plugin, source, options } = recv_any(&mut ws).await
+                && source == "greetings"
+            {
                 got = Some((plugin, source, options));
                 break;
             }
@@ -458,7 +460,7 @@ mod tests {
         ] }).await;
         loop {
             match recv_any(&mut ws).await {
-                ServerMessage::PropertyOptions { .. } => panic!("an unchanged list was broadcast"),
+                ServerMessage::PropertyOptions { source, .. } if source == "greetings" => panic!("an unchanged list was broadcast"),
                 ServerMessage::PluginUpdated(_) => break,
                 _ => {}
             }

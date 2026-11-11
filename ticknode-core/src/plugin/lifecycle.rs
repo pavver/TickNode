@@ -105,6 +105,7 @@ impl TickEngine {
             self.type_owners.remove(&t);
             self.types.remove(&t);
         }
+        self.refresh_identifier_labels();
         let slot = self.plugins.get_mut(name).expect("the plugin was just found");
         slot.active = false;
         slot.settings_error = None;

@@ -64,6 +64,8 @@ impl TickEngine {
                         self.host_state.error(node_id, UiMessage::new("error-node-required-conversion", format!(r#"Required input "{}" could not be converted"#, pin.name)).arg("pin", &pin.name), format!("[ERROR] Required input \"{}\" could not be converted", pin.name));
                     }
                 }
+                if let Some(PinType::Data(t)) = dst_pin.map(|p| &p.pin_type)
+                    && value.as_ref().is_some_and(|v| !self.types.identifier_value_fits(t, v)) { value = None; }
                 (c.dst_pin, value)
             })
             .collect();

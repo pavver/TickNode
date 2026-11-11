@@ -4,7 +4,7 @@ use crate::NodeContext;
 use minijinja::{Value, value::ValueKind};
 use ticknode_shared::{
     quantity::QuantityLabels,
-    to_text::{ToTextOptions, to_text_in},
+    to_text::{ToTextOptions, to_text_with_identifiers},
     *,
 };
 
@@ -26,13 +26,14 @@ pub(super) fn plain(value: &DataValue) -> Value {
 
 /// Input presentation retains the source contract independently of the Jinja value.
 pub(super) fn input_text(value: &DataValue, declared: &DataType, ctx: &NodeContext) -> Value {
-    Value::from(to_text_in(
+    Value::from(to_text_with_identifiers(
         value,
         declared,
         &ToTextOptions::default(),
         &ctx.host_state.display,
         crate::quantity::labels(&ctx.host_state.locale),
         ctx.types,
+        &ctx.host_state.identifier_labels,
     ))
 }
 
@@ -98,13 +99,14 @@ pub(super) fn text_filter(presentation: &Presentation, value: Value) -> String {
     let Some(value) = data_value(&value) else {
         return String::new();
     };
-    to_text_in(
+    to_text_with_identifiers(
         &value,
         &DataType::Any,
         &ToTextOptions::default(),
         &presentation.display,
         crate::quantity::labels(&presentation.locale),
         &TypeRegistry::new(),
+        &|_: &str, _: i64| None,
     )
 }
 

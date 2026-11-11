@@ -134,7 +134,15 @@ impl TickEngine {
             .collect();
         self.check_generated_types(&generated, nodes)?;
 
+        if let Some(owner) = owner {
+            let mut owned = types.definitions();
+            for def in &mut owned {
+                if defs.iter().any(|d| d.name == def.name) { def.plugin = Some(owner.into()); }
+            }
+            types = TypeRegistry::from_definitions(owned);
+        }
         self.types = types;
+        self.refresh_identifier_labels();
         self.clear_definitions();
         if let Some(owner) = owner {
             self.type_owners.extend(defs.iter().map(|d| (d.name.clone(), owner.to_string())));

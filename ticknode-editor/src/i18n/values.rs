@@ -101,9 +101,10 @@ pub fn parse_value_localized(input: &str, t: &DataType) -> Result<DataValue, Str
     let trimmed = input.trim();
     let parsed = match t {
         DataType::DateTime => parse_local_datetime(input).map(DataValue::DateTime).ok_or(()),
-        _ => text::parse_value(input, t).map_err(|_| ()),
+        _ => super::TYPES.with(|types| text::parse_value_in(&types.borrow(), input, t)).map_err(|_| ()),
     };
     parsed.map_err(|_| match t {
+        DataType::Named(_) if super::TYPES.with(|types| types.borrow().definition_of(t).is_some_and(TypeDefinition::is_identifier)) => t!("parse-error-identifier", value = trimmed),
         DataType::Number => t!("parse-error-number", value = trimmed),
         DataType::Bool => t!("parse-error-bool", value = trimmed),
         DataType::Time => t!("parse-error-time", value = trimmed),

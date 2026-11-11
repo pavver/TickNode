@@ -56,6 +56,7 @@ pub(crate) fn to_wit_type_definition(t: TypeDefinition) -> wit::TypeDefinition {
         description: t.description,
         color: t.color,
         kind: match t.kind {
+            TypeKind::Identifier { labels } => wit::TypeKind::Identifier(labels),
             TypeKind::Quantity(_) => panic!("Plugins cannot declare quantity types"),
             TypeKind::Struct { fields } => wit::TypeKind::Structure(
                 fields

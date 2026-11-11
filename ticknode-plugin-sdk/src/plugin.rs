@@ -1,4 +1,4 @@
-use crate::{NodeDefinition, DataValue, Trigger, Inputs, Output, PinId, PluginManifest, NodeId, TypeDefinition, UiError, WsEvent, Emission};
+use crate::{NodeDefinition, DataValue, Trigger, Inputs, Output, PinId, PluginManifest, NodeId, TypeDefinition, UiError, PluginEvent, Emission};
 
 /// A plugin node. One instance corresponds to one node in the graph.
 pub trait PluginNode: 'static {
@@ -38,9 +38,9 @@ pub trait Plugin: 'static {
     fn configure(_settings: &[(String, DataValue)]) -> Result<(), UiError> { Ok(()) }
     /// Called once per tick for the whole plugin, even without events (so it can drive timers and
     /// keep-alives), after finished tasks are delivered and before event sources are polled. `events` are
-    /// the WebSocket events since the previous tick (the host delivers at most 1000 per tick). The returned
+    /// WebSocket events and plugin-owned HTTP completions since the previous tick (at most 1000 per tick). The returned
     /// emissions are applied to the plugin's nodes. Runs under the per-call fuel limit.
-    fn tick(_events: Vec<WsEvent>) -> Vec<Emission> { Vec::new() }
+    fn tick(_events: Vec<PluginEvent>) -> Vec<Emission> { Vec::new() }
 }
 
 /// Looks up a setting value by key.

@@ -29,14 +29,17 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
     });
     let (node, property) = (state.node, state.property.clone());
     // The node may vanish (removed, plugin disabled) while the popup is open
+    let on_pick = state.on_pick;
+    let supplied_value = state.value;
     Effect::new(move |_| {
-        if ed.node_tracked(node).is_none() {
+        if on_pick.is_none() && ed.node_tracked(node).is_none() {
             ed.picker.set(None);
         }
     });
     let current = {
         let property = property.clone();
         Memo::new(move |_| {
+            if let Some(value) = supplied_value { return value.get(); }
             ed.node_tracked(node)
                 .and_then(|n| n.instance.with(|i| i.model.properties.iter().find(|(name, _)| *name == property).map(|(_, v)| v.clone())))
                 .and_then(|v| match v {
@@ -50,7 +53,7 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
     let input_property = property.clone();
     let options = Memo::new(move |_| {
         let options = options_of(ed, &plugin, &source);
-        if property_has_input(ed, node, &input_property) {
+        if on_pick.is_none() && property_has_input(ed, node, &input_property) {
             std::sync::Arc::new(input_options(&options, &t!("property-from-input")))
         } else { options }
     });
@@ -62,7 +65,9 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
     let pick = {
         let property = property.clone();
         move |value: String| {
-            if value != current.get_untracked() {
+            if let Some(callback) = on_pick {
+                callback.run(value);
+            } else if value != current.get_untracked() {
                 ed.send(ClientMessage::SetProperty { id: node, name: property.clone(), value: DataValue::String(value) });
             }
             ed.picker.set(None);

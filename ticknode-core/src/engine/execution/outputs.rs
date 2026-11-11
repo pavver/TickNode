@@ -2,6 +2,16 @@ use super::*;
 use crate::VariableError;
 
 impl TickEngine {
+    fn variable_input_type(&self, id: NodeId) -> DataType {
+        let source = self.connections.data_into(id).iter().find(|c| c.dst_pin == PinId(3));
+        source.and_then(|c| self.node_definition(c.src_node)?.pins.into_iter()
+            .find(|p| p.id == c.src_pin && p.direction == PinDirection::Output))
+            .and_then(|p| match p.pin_type { PinType::Data(t) => Some(t), _ => None })
+            .or_else(|| self.node_definition(id)?.pins.into_iter().find(|p| p.id == PinId(3) && p.direction == PinDirection::Input)
+                .and_then(|p| match p.pin_type { PinType::Data(t) => Some(t), _ => None }))
+            .unwrap_or(DataType::Any)
+    }
+
     /// Exec outputs are queued for the next tick; data and variables are applied immediately.
     pub(crate) fn apply_outputs(
         &mut self,
@@ -128,7 +138,7 @@ impl TickEngine {
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     return false;
                 }
-                let Some(converted) = fit_variable_value_with_display(&self.types, value, &data_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
+                let Some(converted) = fit_typed_variable_value(&self.types, value, &self.variable_input_type(node_id), &data_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
                     let err = VariableError::TypeMismatch(name);
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     return false;
@@ -160,7 +170,7 @@ impl TickEngine {
                     return false;
                 };
                 let var_type = self.variables.get(&key).unwrap().data_type.clone();
-                let Some(converted) = fit_variable_value_with_display(&self.types, value, &var_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
+                let Some(converted) = fit_typed_variable_value(&self.types, value, &self.variable_input_type(node_id), &var_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
                     let err = VariableError::TypeMismatch(name);
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     fired.push(PinId(2));

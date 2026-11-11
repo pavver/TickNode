@@ -136,8 +136,10 @@ pub struct Tooltip {
 
 /// The open searchable picker of a dynamic property (`PropertyKind::Dynamic`): which property it edits
 /// and the field's bounding rect (client coordinates) to anchor the popup to.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct PickerState {
+    pub on_pick: Option<Callback<String>>,
+    pub value: Option<Signal<String>>,
     pub node: NodeId,
     pub property: String,
     /// Where the options come from: the node's plugin and the source name.

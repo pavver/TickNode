@@ -35,7 +35,9 @@ pub(super) fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition
         title: t.title,
         description: t.description,
         color: t.color,
+        plugin: None,
         kind: match t.kind {
+            wit::TypeKind::Identifier(labels) => TypeKind::Identifier { labels },
             wit::TypeKind::Structure(fields) => TypeKind::Struct {
                 fields: fields.into_iter().map(|f| FieldDefinition {
                     name: f.name,

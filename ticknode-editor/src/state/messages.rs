@@ -28,6 +28,7 @@ impl Editor {
                 self.apply_catalog(definitions, types, translations);
                 self.plugins.set(plugins);
                 self.property_options.set(property_options.into_iter().map(|s| ((s.plugin, s.source), Arc::new(s.options))).collect());
+                self.property_options.with_untracked(i18n::set_identifier_options);
                 self.frame_pos_previews.set(std::collections::HashMap::new());
                 self.frame_size_previews.set(std::collections::HashMap::new());
                 self.replace_graph(nodes, exec_connections, data_connections, traces, gone);
@@ -90,7 +91,10 @@ impl Editor {
             ServerMessage::PluginUpdated(info) => self.plugins.update(|plugins| update_plugin(plugins, info)),
             // Plugin enabled or disabled: refresh palette and type colors from the updated catalog.
             ServerMessage::Catalog { definitions, types, translations } => self.apply_catalog(definitions, types, translations),
-            ServerMessage::PropertyOptions { plugin, source, options } => self.property_options.update(|all| update_options(all, plugin, source, options)),
+            ServerMessage::PropertyOptions { plugin, source, options } => {
+                self.property_options.update(|all| update_options(all, plugin, source, options));
+                self.property_options.with_untracked(i18n::set_identifier_options);
+            },
             // Created follows the NodeAdded messages for our AddNode / AddNodeConnected / Paste request.
             ServerMessage::Created(ids) => self.select_nodes(ids),
             ServerMessage::Log { node_id, message } => self.node_log(node_id, message),

@@ -33,10 +33,10 @@ impl TickEngine {
                 continue;
             };
             if self.is_disabled(id) || self.skip_frozen(id) { continue; }
-            let (outputs, errors) = validate_emission_outputs(&definition, emission.outputs);
+            let (outputs, errors) = validate_emission_outputs(&self.types, &definition, emission.outputs);
             if errors.is_empty() { self.node_succeeded(id); }
             for e in errors {
-                self.host_state.error(id, UiMessage::plain(e.clone()), format!("[ERROR] {e}"));
+                self.host_state.error(id, super::outputs::ui_error(&e), format!("[ERROR] {e}"));
             }
             if !outputs.is_empty() {
                 self.last_tick.charge(definition.cost);

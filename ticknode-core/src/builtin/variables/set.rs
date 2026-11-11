@@ -72,7 +72,7 @@ impl Node for VariableSetNode {
     }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let value = ctx.get_value(PinId(3)).unwrap_or_else(|| text::default_of(&self.value_type));
+        let value = ctx.get_value(PinId(3)).unwrap_or_else(|| ctx.types.default_value(&self.value_type));
         vec![NodeOutput::Variable(VariableCommand::Set {
             name: self.name.clone(),
             lookup: self.lookup,

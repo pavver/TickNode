@@ -64,6 +64,7 @@ impl Runtime {
                 grants: self.grants.clone(),
                 call: None,
                 ws: WsHub::new(self.tokio.clone()),
+                http: super::http::Tasks::new(self.tokio.clone()),
                 options: self.options.clone(),
             };
             let mut store = Store::new(engine(), state);
@@ -85,6 +86,7 @@ impl Runtime {
         self.instantiate()?;
         let (store, plugin) = self.instance.as_mut().expect("the instance was just created");
         store.data_mut().ws.set_runtime(self.tokio.clone());
+        store.data_mut().http.runtime = self.tokio.clone();
         store.set_fuel(FUEL_PER_CALL)?;
         Ok((store, plugin.ticknode_plugin_nodes()))
     }
@@ -121,7 +123,7 @@ impl Runtime {
         }
     }
 
-    /// Delivers connection events and collects the plugin's emissions. On a trap the instance is discarded
+    /// Delivers connection events and HTTP completions and collects the plugin's emissions. On a trap the instance is discarded
     /// (its connections close, `configure` runs again on the next instance).
     pub(super) fn plugin_tick(&mut self, host: &mut HostState) -> Result<Vec<wit::Emission>, String> {
         if host.current_tick < self.tick_backoff_until {
@@ -130,11 +132,13 @@ impl Runtime {
         self.tokio = host.runtime.clone();
         let outcome = self.api().map(|_| ()).and_then(|()| {
             let (store, plugin) = self.instance.as_mut().expect("api() creates the instance");
-            let events: Vec<wit::WsEvent> = store.data_mut().ws.drain(ws::MAX_EVENTS_PER_TICK).into_iter().map(|e| match e {
+            let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);
+            let mut events: Vec<wit::WsEvent> = store.data_mut().ws.drain(ws::MAX_EVENTS_PER_TICK.saturating_sub(http_events.len())).into_iter().map(|e| match e {
                 ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
                 ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
                 ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
             }).collect();
+            events.extend(http_events);
             store.set_fuel(FUEL_PER_CALL)?;
             // Plugin-level logs are not tied to a node: they carry the nil node id
             store.data_mut().call = Some(CallCtx { node_id: NodeId(uuid::Uuid::nil()), host: std::mem::take(host) });

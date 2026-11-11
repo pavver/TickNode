@@ -77,3 +77,5 @@ include!("plugins/quantities.rs");
 include!("plugins/properties.rs");
 
 include!("plugins/ha_properties.rs");
+include!("plugins/identifiers.rs");
+include!("plugins/plugin_http.rs");

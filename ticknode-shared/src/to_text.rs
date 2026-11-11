@@ -114,6 +114,14 @@ pub fn to_text(
     )
 }
 
+/// Resolves opaque IDs without depending on an engine or plugin runtime.
+pub trait IdentifierLabels {
+    fn label(&self, type_name: &str, id: i64) -> Option<String>;
+}
+impl<F: Fn(&str, i64) -> Option<String>> IdentifierLabels for F {
+    fn label(&self, type_name: &str, id: i64) -> Option<String> { self(type_name, id) }
+}
+
 /// The registry supplies declared field types when presenting plugin structures.
 pub fn to_text_in(
     value: &DataValue,
@@ -122,6 +130,14 @@ pub fn to_text_in(
     rules: &DisplayRules,
     labels: &dyn QuantityLabels,
     types: &TypeRegistry,
+) -> String {
+    to_text_with_identifiers(value, declared, options, rules, labels, types, &|_: &str, _: i64| None)
+}
+
+/// Typed presentation with live plugin identifier labels, recursively through lists and structures.
+pub fn to_text_with_identifiers(
+    value: &DataValue, declared: &DataType, options: &ToTextOptions, rules: &DisplayRules,
+    labels: &dyn QuantityLabels, types: &TypeRegistry, identifiers: &dyn IdentifierLabels,
 ) -> String {
     let runtime = value.get_type();
     let declared = if *declared == DataType::Any {
@@ -133,6 +149,11 @@ pub fn to_text_in(
         && let Some(q) = quantity::kind(name)
     {
         return quantity_text(n.to_f64(), name, q, options, rules, labels);
+    }
+    if let (DataValue::Number(NumberValue::Int(id)), DataType::Named(name)) = (value, declared)
+        && types.get(name).is_some_and(TypeDefinition::is_identifier)
+    {
+        return identifiers.label(name, *id).unwrap_or_else(|| id.to_string());
     }
     let number = options.effective_number(rules.number);
     let format = |default: &str| {
@@ -219,7 +240,7 @@ pub fn to_text_in(
             };
             elements
                 .iter()
-                .map(|v| to_text_in(v, element, options, rules, labels, types))
+                .map(|v| to_text_with_identifiers(v, element, options, rules, labels, types, identifiers))
                 .collect::<Vec<_>>()
                 .join(", ")
         }
@@ -231,13 +252,14 @@ pub fn to_text_in(
                     let ty = definition
                         .and_then(|d| d.fields().iter().find(|f| &f.name == name))
                         .map(|f| &f.data_type);
-                    let text = to_text_in(
+                    let text = to_text_with_identifiers(
                         &field.value,
                         ty.unwrap_or(&DataType::Any),
                         options,
                         rules,
                         labels,
                         types,
+                        identifiers,
                     );
                     let text = if matches!(field.value, DataValue::String(_)) {
                         quote(&text)

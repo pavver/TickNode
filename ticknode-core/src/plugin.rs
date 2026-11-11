@@ -13,6 +13,8 @@ use crate::RemovedConnections;
 mod api;
 mod bindings;
 mod host;
+mod http;
+pub(crate) mod identifiers;
 mod runtime;
 mod options;
 mod node;

@@ -19,7 +19,7 @@ pub(super) struct Grants {
     pub(super) storage_dir: Option<PathBuf>,
 }
 
-/// Currently executing node: owns spawned tasks and log messages.
+/// Current host call; the nil node denotes plugin-tick rather than a graph node.
 pub(super) struct CallCtx {
     pub(super) node_id: NodeId,
     pub(super) host: HostState,
@@ -33,6 +33,7 @@ pub(super) struct PluginState {
     pub(super) call: Option<CallCtx>,
     /// Plugin-owned WebSocket connections; they die with this instance.
     pub(super) ws: WsHub,
+    pub(super) http: super::http::Tasks,
     pub(super) options: Arc<Mutex<OptionStore>>,
 }
 
@@ -44,7 +45,7 @@ impl WasiView for PluginState {
 
 impl PluginState {
     fn call(&mut self) -> Result<&mut CallCtx, String> {
-        self.call.as_mut().ok_or_else(|| "Only available during execute/poll".to_string())
+        self.call.as_mut().filter(|c| !c.node_id.0.is_nil()).ok_or_else(|| "Only available during execute/poll".to_string())
     }
 }
 
@@ -107,12 +108,17 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
             body: request.body,
             timeout: std::time::Duration::from_millis(request.timeout_ms as u64),
         };
-        let c = self.call()?;
-        c.host.start_http(c.node_id, request)
+        match self.call.as_mut().filter(|c| !c.node_id.0.is_nil()) {
+            Some(c) => c.host.start_http(c.node_id, request),
+            None => self.http.start(request),
+        }
     }
 
     fn cancel_task(&mut self, id: TaskId) -> bool {
-        self.call().is_ok_and(|c| c.host.cancel_task(c.node_id, id))
+        match self.call.as_mut().filter(|c| !c.node_id.0.is_nil()) {
+            Some(c) => c.host.cancel_task(c.node_id, id),
+            None => self.http.cancel(id),
+        }
     }
 
     fn ws_connect(&mut self, url: String, headers: Vec<(String, String)>) -> Result<wit::WsId, String> {

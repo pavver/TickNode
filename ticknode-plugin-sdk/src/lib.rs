@@ -58,10 +58,12 @@
 //! A plugin can own persistent WebSocket connections (capability [`Capability::WebSocket`]):
 //! [`host::ws_connect`] / [`host::ws_send`] / [`host::ws_close`] work from any plugin call
 //! ([`Plugin::configure`], [`Plugin::tick`], node `execute`/`poll`). The host calls [`Plugin::tick`]
-//! once per tick with the connection events ([`WsEvent`]); the plugin answers with [`Emission`]s: outputs
+//! once per tick with connection events and plugin-owned HTTP completions ([`PluginEvent`]); the plugin answers with [`Emission`]s: outputs
 //! pushed to any of its own nodes, as if that node had executed. A node learns its graph id in
 //! [`Plugin::create`], so the plugin keeps a `NodeId -> state` registry (in a `thread_local!`) to address
-//! emissions. Time can be measured with `std::time::Instant` (WASI clocks).
+//! emissions. HTTP started by [`host::http`] in `configure` or `tick` belongs to the plugin instance:
+//! at most 8 concurrent requests, completed as [`PluginEvent::HttpDone`]. Disable, instance recreation,
+//! explicit cancellation and engine drop abort requests. Time uses `std::time::Instant` (WASI clocks).
 
 pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
@@ -95,8 +97,8 @@ mod plugin;
 mod export;
 mod convert;
 mod pins;
-/// Host services. Tasks (`delay_*`, `http`) can only be started during `execute`/`poll`;
-/// their result arrives in `execute` as [`Trigger::Task`].
+/// Host services. Node-owned tasks arrive in `execute` as [`Trigger::Task`]. HTTP started from
+/// `configure` or `Plugin::tick` belongs to the plugin and arrives as [`PluginEvent::HttpDone`].
 pub mod host;
 
 pub use events::*;

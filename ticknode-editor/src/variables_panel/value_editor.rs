@@ -16,7 +16,7 @@ pub fn VariableValueEditor(
     let ed = use_editor();
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
-    if ed.types.with_untracked(|types| types.definition_of(&data_type).is_some_and(|d| d.quantity().is_some())) {
+    if ed.types.with_untracked(|types| types.definition_of(&data_type).is_some_and(|d| d.quantity().is_some() || d.is_identifier())) {
         return view! {
             <crate::inline::InlineValue value=Signal::derive(move || Some(value.get())) value_type=data_type
                 on_commit=Callback::new(move |v: Option<DataValue>| { if let Some(v) = v { on_commit.run(v); } }) />

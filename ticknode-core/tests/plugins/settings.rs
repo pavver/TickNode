@@ -38,7 +38,11 @@ fn manifest_has_settings_schema() {
             ("greeting", false),
             ("token", true),
             ("mode", false),
-            ("ws_url", false)
+            ("ws_url", false),
+            ("http_url", false),
+            ("http_count", false),
+            ("http_cancel", false),
+            ("http_tick", false),
         ]
     );
     assert_eq!(

@@ -2,16 +2,14 @@
 mod formatting_tests;
 #[cfg(test)]
 mod tests;
-mod values;
 
 use crate::{Node, NodeContext};
-use minijinja::{
-    Environment, Value,
-    machinery::{Token, tokenize},
+use ticknode_shared::{
+    template,
+    to_text::{ToTextOptions, to_text_with_identifiers},
+    *,
 };
-use ticknode_shared::*;
 
-const FUEL: u64 = 10_000;
 const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: {{ name | default('—') }} supplies a fallback.
 
 Examples: Power: {{ text.power }}; {% if power > 1000 %}high{% endif %}; {{ (power / 1000) | round(1) }} kW; {% for item in items %}{{ item }} {% endfor %}; {{ name | default('—') }}.
@@ -25,22 +23,13 @@ Numbers retain integer/float precision; date-times use RFC 3339, and time, durat
 pub struct TemplateNode {
     id: NodeId,
     template: String,
+    /// Parsed once per edit; `None` while the template has a syntax error.
+    compiled: Option<template::CompiledTemplate>,
     pins: Vec<(String, PinId)>,
     next_pin: u32,
     restoring: bool,
     restoration_started: bool,
-    env: Environment<'static>,
     reported: bool,
-}
-
-fn environment() -> Environment<'static> {
-    let mut env = Environment::new();
-    env.set_fuel(Some(FUEL));
-    // The render installs its own presentation-aware filter on a cheap environment clone.
-    env.add_filter("text", |value: Value| value.to_string());
-    // Globals and filters have separate namespaces; reserve the presentation map.
-    env.add_global("text", Value::from_iter(Vec::<(String, Value)>::new()));
-    env
 }
 
 impl TemplateNode {
@@ -48,11 +37,11 @@ impl TemplateNode {
         let mut node = Self {
             id,
             template: "{{ value }}".into(),
+            compiled: None,
             pins: Vec::new(),
             next_pin: 1,
             restoring: true,
             restoration_started: false,
-            env: environment(),
             reported: false,
         };
         node.compile();
@@ -60,54 +49,10 @@ impl TemplateNode {
     }
 
     fn compile(&mut self) {
-        self.env.remove_template("template");
-        // Owned template storage avoids reparsing on every pure evaluation.
-        let Ok(()) = self
-            .env
-            .add_template_owned("template", self.template.clone())
-        else {
+        self.compiled = template::CompiledTemplate::new(&self.template).ok();
+        let Ok(ordered) = template::variables(&self.template) else {
             return;
         };
-        let template = self.env.get_template("template").unwrap();
-        let mut names = template.undeclared_variables(false);
-        // A presentation-only reference also declares its input, e.g. {{ text.power }}.
-        names.extend(
-            template
-                .undeclared_variables(true)
-                .iter()
-                .filter_map(|name| {
-                    name.strip_prefix("text.")
-                        .and_then(|path| path.split('.').next())
-                        .map(str::to_string)
-                }),
-        );
-        names.retain(|name| !self.env.globals().any(|(global, _)| global == name));
-        let mut ordered = Vec::new();
-        let mut attribute = false;
-        let mut tokens = tokenize(
-            &self.template,
-            false,
-            Default::default(),
-            Default::default(),
-        )
-        .peekable();
-        while let Some(token) = tokens.next() {
-            let Ok((token, _)) = token else { break };
-            if let Token::Ident(mut name) = token
-                && !attribute
-            {
-                if name == "text" && matches!(tokens.peek(), Some(Ok((Token::Dot, _)))) {
-                    tokens.next();
-                    if let Some(Ok((Token::Ident(field), _))) = tokens.next() {
-                        name = field;
-                    }
-                }
-                if names.remove(name) {
-                    ordered.push(name.to_string());
-                }
-            }
-            attribute = matches!(token, Token::Dot | Token::Pipe);
-        }
         let old = std::mem::take(&mut self.pins);
         self.next_pin = old
             .iter()
@@ -134,34 +79,46 @@ impl TemplateNode {
             .collect();
     }
 
-    fn render(&self, ctx: &NodeContext) -> Result<String, minijinja::Error> {
-        let context = self
+    fn render(&self, ctx: &NodeContext) -> Result<String, template::TemplateError> {
+        let inputs: Vec<(String, Option<DataValue>, DataType)> = self
             .pins
             .iter()
             .map(|(name, pin)| {
-                let value = ctx.inputs.get(pin).and_then(Option::as_ref);
-                (
-                    name.clone(),
-                    value.map(values::plain).unwrap_or(Value::UNDEFINED),
+                let value = ctx.inputs.get(pin).and_then(Option::as_ref).cloned();
+                let ty = ctx.input_types.get(pin).cloned().unwrap_or(DataType::Any);
+                (name.clone(), value, ty)
+            })
+            .collect();
+        let Some(compiled) = &self.compiled else {
+            return template::validate(&self.template).map(|()| String::new());
+        };
+        let display = ctx.host_state.display.clone();
+        let labels = crate::quantity::labels(&ctx.host_state.locale);
+        compiled.render(
+            &inputs,
+            &|value, declared| {
+                to_text_with_identifiers(
+                    value,
+                    declared,
+                    &ToTextOptions::default(),
+                    &ctx.host_state.display,
+                    labels,
+                    ctx.types,
+                    &ctx.host_state.identifier_labels,
                 )
-            })
-            .collect::<Value>();
-        let mut env = self.env.clone();
-        let text = self
-            .pins
-            .iter()
-            .filter_map(|(name, pin)| {
-                let value = ctx.inputs.get(pin)?.as_ref()?;
-                let ty = ctx.input_types.get(pin).unwrap_or(&DataType::Any);
-                Some((name.clone(), values::input_text(value, ty, ctx)))
-            })
-            .collect::<Value>();
-        env.add_global("text", text);
-        let presentation = values::presentation(ctx);
-        env.add_filter("text", move |value: Value| {
-            values::text_filter(&presentation, value)
-        });
-        env.get_template("template")?.render(context)
+            },
+            std::sync::Arc::new(move |value: &DataValue| {
+                to_text_with_identifiers(
+                    value,
+                    &DataType::Any,
+                    &ToTextOptions::default(),
+                    &display,
+                    labels,
+                    &TypeRegistry::new(),
+                    &|_: &str, _: i64| None,
+                )
+            }),
+        )
     }
 }
 
@@ -241,7 +198,7 @@ impl Node for TemplateNode {
         if name == "template"
             && let DataValue::String(source) = value
         {
-            environment().template_from_str(source).map_err(|error| {
+            template::validate(source).map_err(|error| {
                 UiMessage::new(
                     "error-template-syntax",
                     format!("Invalid template syntax: {error}"),

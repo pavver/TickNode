@@ -9,6 +9,7 @@ serde = { workspace = true }
 uuid = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }
 chrono = { workspace = true }
+minijinja = { workspace = true }
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]

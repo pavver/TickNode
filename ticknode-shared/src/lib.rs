@@ -28,6 +28,9 @@ pub use settings::*;
 pub mod variables;
 pub use variables::*;
 
+pub mod template;
+pub use template::*;
+
 mod values;
 mod definitions;
 mod graph;

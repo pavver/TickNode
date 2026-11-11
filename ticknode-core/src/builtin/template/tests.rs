@@ -166,8 +166,8 @@ fn plain_conversion_covers_every_data_value_kind() {
         inline(&mut engine, id, "x", value.clone());
         assert_eq!(render(&mut engine, id), Some(expected.into()), "{value:?}");
     }
-    assert!(values::plain(&DataValue::Number(NumberValue::Int(2))).is_integer());
-    assert!(!values::plain(&DataValue::Number(NumberValue::Float(2.0))).is_integer());
+    assert!(plain(&DataValue::Number(NumberValue::Int(2))).is_integer());
+    assert!(!plain(&DataValue::Number(NumberValue::Float(2.0))).is_integer());
 }
 
 #[test]

@@ -46,16 +46,23 @@ async fn main() -> anyhow::Result<()> {
     let storage = Storage::new(config.data_dir.clone());
     let server_settings = storage.load_settings()?;
 
-    let mut engine = TickEngine::new();
-    engine.budget = TickBudget { limit: (server_settings.tick_budget != 0).then_some(server_settings.tick_budget) };
-    // Plugins may open connections already in `configure` while loading
-    engine.host_state.runtime = Some(tokio::runtime::Handle::current());
-    engine.host_state.tick_duration = Duration::from_millis(server_settings.tick_ms as u64);
-    // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
-    let mut plugins = plugins::Plugins::new(&config.data_dir).with_bundled_dir(config.bundled_plugins_dir.clone());
-    plugins.load_all(&mut engine);
-
-    let loaded = storage.load(&mut engine)?;
+    let runtime = tokio::runtime::Handle::current();
+    let (data_dir, bundled_dir, tick_ms, tick_budget) =
+        (config.data_dir.clone(), config.bundled_plugins_dir.clone(), server_settings.tick_ms, server_settings.tick_budget);
+    // Plugin calls (configure, node creation) may use synchronous WASI (files), which panics on a
+    // tokio worker thread: build the engine on a plain OS thread, like the actor that runs it.
+    let (engine, plugins, loaded, storage) = std::thread::spawn(move || -> anyhow::Result<_> {
+        let mut engine = TickEngine::new();
+        engine.budget = TickBudget { limit: (tick_budget != 0).then_some(tick_budget) };
+        // Plugins may open connections already in `configure` while loading
+        engine.host_state.runtime = Some(runtime);
+        engine.host_state.tick_duration = Duration::from_millis(tick_ms as u64);
+        // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
+        let mut plugins = plugins::Plugins::new(&data_dir).with_bundled_dir(bundled_dir);
+        plugins.load_all(&mut engine);
+        let loaded = storage.load(&mut engine)?;
+        Ok((engine, plugins, loaded, storage))
+    }).join().map_err(|_| anyhow::anyhow!("engine initialization panicked"))??;
     let handle = actor::spawn(engine, loaded, storage, plugins, server_settings)?;
 
     let app = router(handle.clone(), &config.web_dir);

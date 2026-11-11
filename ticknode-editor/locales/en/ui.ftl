@@ -558,3 +558,5 @@ settings-display-rounding = Rounding
 settings-display-significant = Significant digits
 settings-display-decimals = Decimal places
 settings-display-numbers = Numbers
+
+error-hysteresis-thresholds = Invalid hysteresis thresholds: rising mode requires On threshold ≥ Off threshold; falling mode requires On threshold ≤ Off threshold

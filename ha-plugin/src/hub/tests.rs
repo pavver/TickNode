@@ -186,7 +186,9 @@ impl Rig {
                         self.cache_id = Some(id);
                         replies.push(ok(Value::Null));
                     }
-                    "get_config" => replies.push(ok(json!({"time_zone":"Europe/Kyiv"}))),
+                    "get_config" => replies.push(ok(
+                        json!({"time_zone":"Europe/Kyiv","unit_system":{"temperature":"°F"}}),
+                    )),
                     "render_template" => {
                         replies.push(ok(Value::Null));
                         if request["template"].as_str().unwrap().contains("utcoffset") {
@@ -282,6 +284,7 @@ fn fire(id: u64, trigger: Value) -> Value {
     json!({"id":id,"type":"event","event":{"variables":{"trigger":trigger}}})
 }
 
+mod actions;
 mod catalog;
 mod conditions;
 mod entity;

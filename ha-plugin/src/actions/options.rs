@@ -93,6 +93,7 @@ const ACTION_RANKS: &[(&[&str], u16)] = &[
     (&["press"], 5),
     (&["trigger"], 6),
     (&["activate", "apply"], 7),
+    (&["set_state"], 19),
     (&["set_value"], 20),
     (&["select_option"], 21),
     (&["set_datetime"], 22),

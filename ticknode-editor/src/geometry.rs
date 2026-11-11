@@ -76,7 +76,7 @@ pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
 /// Adaptive nodes show their declared type through pins or the existing Value row.
 pub fn is_node_property(node_type: &str, name: &str, value: &DataValue) -> bool {
     is_inline_property(name, value)
-        && !(matches!(node_type, "const" | "convert" | "compare" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
+        && !(matches!(node_type, "const" | "convert" | "compare" | "logic/hysteresis" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
 }
 
 pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, properties: &[(String, DataValue)]) -> bool {

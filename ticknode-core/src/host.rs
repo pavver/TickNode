@@ -91,6 +91,11 @@ impl HostState {
     /// Keeps the existing English log while also reporting a structured node error.
     pub fn error(&mut self, node: NodeId, message: UiMessage, log: String) {
         self.log(node, log);
+        self.report_error(node, message);
+    }
+
+    /// Reports a continuing failure independently of node-specific log throttling.
+    pub(crate) fn report_error(&mut self, node: NodeId, message: UiMessage) {
         if !node.0.is_nil() {
             self.errors.push((node, message, std::time::Instant::now()));
         }

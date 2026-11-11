@@ -56,15 +56,19 @@ impl Live {
         if let Some(reply) = &mut self.config
             && let Some(result) = reply.poll()
         {
-            self.zone = result
+            let config = result
                 .ok()
-                .and_then(|raw| serde_json::from_str::<Value>(raw.get()).ok())
-                .and_then(|v| {
-                    v["time_zone"]
-                        .as_str()
-                        .filter(|s| !s.is_empty())
-                        .map(str::to_owned)
-                });
+                .and_then(|raw| serde_json::from_str::<Value>(raw.get()).ok());
+            self.temperature_unit = config
+                .as_ref()
+                .and_then(|v| v["unit_system"]["temperature"].as_str())
+                .map(str::to_owned);
+            self.zone = config.and_then(|v| {
+                v["time_zone"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+            });
             self.config = None;
             self.config_due =
                 Some(now + Duration::from_secs(if self.zone.is_some() { 300 } else { 30 }));

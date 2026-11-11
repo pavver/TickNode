@@ -34,6 +34,7 @@ pub struct ActionNode {
     pub(super) action: String,
     target: String,
     pub(super) service: Service,
+    skip_unchanged: bool,
 }
 
 impl ActionNode {
@@ -43,6 +44,7 @@ impl ActionNode {
             action: String::new(),
             target: String::new(),
             service: Service::default(),
+            skip_unchanged: true,
         }
     }
 }
@@ -73,12 +75,14 @@ impl PluginNode for ActionNode {
             cost: 50,
             type_name: "ha/action".into(), title: "Action".into(), category: CATEGORY.into(),
             description: "Runs a Home Assistant action with fields from its form".into(),
-            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Number fields with recognized units use quantity inputs and convert canonical values back to the snapshotted HA unit. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
+            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set; comma-separated entity IDs address multiple targets. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Number fields with recognized units use quantity inputs and convert canonical values back to the snapshotted HA unit. Unitless number/input_number Value and climate Temperature selectors infer their unit from a single selected entity (or HA temperature settings). Legacy field snapshots stay unchanged. Set state actions take a required Boolean State: true turns on, locks or opens; false turns off, unlocks or closes. Skip if already set defaults to Yes, including existing graphs: recognized actions complete on Done without calling HA only when all targets are known and already satisfy the effect. Additional fields, unknown states and unresolved targets keep the normal call. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
             properties: vec![
                 PropertyDefinition::dynamic("target", "Entity", crate::entities::ACTION_TARGETS_SOURCE)
                     .described("The target entity; filters the available actions. The Entity input overrides this choice"),
                 PropertyDefinition::dynamic("action", "Action", &action_source(&self.target))
                     .described("The Home Assistant action to run on the selected entity"),
+                PropertyDefinition::select("skip_unchanged", "Skip if already set", &[("yes", "Yes"), ("no", "No")])
+                    .described("Complete successfully without calling HA when every target already has the desired state"),
             ], pins,
         }
     }
@@ -127,6 +131,10 @@ impl PluginNode for ActionNode {
                         .map(|f| f.unit.clone().unwrap_or_default()),
                 ),
             ),
+            (
+                "skip_unchanged".into(),
+                if self.skip_unchanged { "yes" } else { "no" }.into(),
+            ),
         ]
     }
 
@@ -140,11 +148,28 @@ impl PluginNode for ActionNode {
             "target_domains" => self.service.domains = read_strings(value),
             "supports_response" => self.set_supports_response(value),
             "field_units" => self.set_field_units(value),
+            "skip_unchanged" => match text_property(value).as_deref() {
+                Some("yes") => self.skip_unchanged = true,
+                Some("no") => self.skip_unchanged = false,
+                _ => {}
+            },
             _ => {}
         }
     }
 
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
+        with_hub(|hub, env| self.run(inputs, hub, env, Instant::now()))
+    }
+}
+
+impl ActionNode {
+    pub(crate) fn run(
+        &self,
+        inputs: &Inputs,
+        hub: &mut crate::hub::Hub,
+        env: &mut impl crate::hub::Env,
+        now: Instant,
+    ) -> Vec<Output> {
         let Some((domain, service)) = self
             .action
             .split_once('.')
@@ -168,30 +193,40 @@ impl PluginNode for ActionNode {
                 data.insert(field.name.clone(), value);
             }
         }
-        with_hub(|hub, env| {
-            hub.action(
-                self.node,
-                domain,
-                service,
-                target,
-                Value::Object(data),
-                self.service.response,
-                Instant::now(),
-                env,
-            )
-        })
+        hub.action(
+            self.node,
+            domain,
+            service,
+            target,
+            Value::Object(data),
+            self.service.response,
+            self.skip_unchanged,
+            now,
+            env,
+        )
         .unwrap_or_default()
     }
-}
-
-impl ActionNode {
     fn set_action(&mut self, value: DataValue) {
         if let Some(action) = text_property(value) {
             if action != self.action {
                 self.service = Service::default();
             }
             self.action = action;
-            if let Some(service) = with_hub(|hub, _| hub.services.get(&self.action).cloned()) {
+            if let Some(service) = with_hub(|hub, _| {
+                let mut service = hub.services.get(&self.action).cloned().or_else(|| {
+                    let (domain, name) = self.action.split_once('.')?;
+                    (name == "set_state")
+                        .then(|| super::effects::state_service(domain))
+                        .flatten()
+                })?;
+                super::inference::infer_units(
+                    &self.action,
+                    &mut service,
+                    hub.live.get(self.target.trim()),
+                    hub.live.temperature_unit(),
+                );
+                Some(service)
+            }) {
                 self.service = service;
             }
         }

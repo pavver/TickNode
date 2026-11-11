@@ -243,7 +243,7 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
                 .iter()
                 .map(|o| o.value.as_str())
                 .collect::<Vec<_>>()
-                == ["light.turn_on"]
+                == ["light.turn_on", "light.set_state"]
     }));
     assert!(published.iter().any(|s| {
         s.source == "action_targets"

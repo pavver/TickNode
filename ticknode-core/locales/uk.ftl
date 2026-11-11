@@ -830,3 +830,27 @@ node-convert-prop-target-option-unix-seconds = Час Unix (секунди)
 node-convert-prop-target-option-datetime = Дата й час із секунд Unix
 node-convert-prop-target-option-seconds = Секунди
 node-convert-prop-target-option-duration = Тривалість із секунд
+
+# Hysteresis
+node-logic-hysteresis-title = Гістерезис
+node-logic-hysteresis-description = Перемикає стан за окремими порогами ввімкнення та вимкнення
+node-logic-hysteresis-help =
+    За сигналом на Вхід порівнює Значення з Порогом увімкнення та Порогом вимкнення. У режимі зростання вмикається строго вище Порога увімкнення та вимикається строго нижче Порога вимкнення. Наприклад, дозволяє заряджання вище 230 В і забороняє нижче 200 В. Режим спадання змінює напрям порівнянь: опалення вмикається нижче 19 °C і вимикається вище 21 °C.
+
+    Між порогами, включно з рівністю, зберігає попередній стан. Початковий стан — вимкнено, тому перша оцінка в зоні нечутливості дає вимкнено. Стан зберігається в пам’яті та скидається до вимкнено після перезапуску або перестворення вузла.
+
+    Значення та пороги мають спільний тип: число або фізична величина, що адаптується під час підключення Значення. Непідключені пороги можна ввести біля пінів із вибором одиниці фізичної величини. Усі три входи обов’язкові.
+
+    Кожна оцінка спочатку видає Стан, потім Увімкнено або Вимкнено лише за зміни стану, а далі Вихід. У режимі зростання Поріг увімкнення має бути ≥ Порога вимкнення; у режимі спадання — ≤ Порога вимкнення. Некоректні пороги спричиняють помилку та зберігають стан, але Стан і Вихід усе одно видаються.
+node-logic-hysteresis-pin-In = Вхід
+node-logic-hysteresis-pin-Value = Значення
+node-logic-hysteresis-pin-on-threshold = Поріг увімкнення
+node-logic-hysteresis-pin-off-threshold = Поріг вимкнення
+node-logic-hysteresis-pin-turned-on = Увімкнено
+node-logic-hysteresis-pin-turned-off = Вимкнено
+node-logic-hysteresis-pin-Out = Вихід
+node-logic-hysteresis-pin-State = Стан
+node-logic-hysteresis-prop-mode-title = Режим
+node-logic-hysteresis-prop-mode-description = Увімкнення під час зростання чи спадання значення
+node-logic-hysteresis-prop-mode-option-rising = Зростання
+node-logic-hysteresis-prop-mode-option-falling = Спадання

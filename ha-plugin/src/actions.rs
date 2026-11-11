@@ -1,10 +1,13 @@
 //! Service discovery and the property-backed action form. Snapshots preserve positional pins offline.
 
 mod catalog;
+mod effects;
+mod inference;
 mod node;
 mod options;
 
 pub use catalog::*;
+pub(crate) use effects::{entity_ids, resolve_state, unchanged};
 pub use node::ActionNode;
 pub use options::*;
 
@@ -66,3 +69,9 @@ mod tests;
 
 #[cfg(test)]
 mod quantity_tests;
+
+#[cfg(test)]
+mod effect_tests;
+
+#[cfg(test)]
+mod inference_tests;

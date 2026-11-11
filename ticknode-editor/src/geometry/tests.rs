@@ -234,3 +234,12 @@ fn convert_hidden_type_and_irrelevant_units_take_no_layout_rows() {
         assert_eq!(prop_rows("convert", &props), rows, "{ty}: {target}");
     }
 }
+
+#[test]
+fn hysteresis_type_is_hidden_while_mode_keeps_its_row() {
+    let props = vec![
+        ("value_type".into(), "quantity.voltage".into()), ("mode".into(), "rising".into()),
+    ];
+    assert!(!is_node_property("logic/hysteresis", "value_type", &DataValue::from("quantity.voltage")));
+    assert_eq!(prop_rows("logic/hysteresis", &props), 1);
+}

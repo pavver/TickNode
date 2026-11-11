@@ -2,6 +2,7 @@
     mod quantities;
     mod convert;
     mod math_quantities;
+    mod hysteresis;
     mod behavior;
     mod mutation_contracts;
     mod definitions;

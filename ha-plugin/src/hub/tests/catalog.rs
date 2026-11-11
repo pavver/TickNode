@@ -120,7 +120,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
             .iter()
             .map(|o| o.value.as_str())
             .collect::<Vec<_>>(),
-        ["light.turn_on"]
+        ["light.turn_on", "light.set_state"]
     );
     assert!(
         rig.hub
@@ -131,6 +131,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
                 "light.a",
                 json!({"brightness":120}),
                 false,
+                true,
                 rig.now,
                 &mut rig.env
             )
@@ -148,6 +149,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
                 "weather.home",
                 json!({}),
                 false,
+                true,
                 rig.now,
                 &mut rig.env
             )
@@ -172,6 +174,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
             "",
             json!({}),
             false,
+            true,
             rig.now,
             &mut rig.env,
         )
@@ -197,11 +200,11 @@ fn action_picker_sources_remain_until_the_last_target_user_is_removed() {
             .iter()
             .map(|o| o.value.as_str())
             .collect::<Vec<_>>(),
-        ["light.turn_on"]
+        ["light.turn_on", "light.set_state"]
     );
     hub.set_action_target(node(2), "light.hall", &mut env);
     hub.remove_action_target(node(1), &mut env);
-    assert_eq!(env.options["actions:light.hall"].len(), 1);
+    assert_eq!(env.options["actions:light.hall"].len(), 2);
     hub.remove_action_target(node(2), &mut env);
     assert!(env.options["actions:light.hall"].is_empty());
     hub.remove_action_target(node(2), &mut env);
@@ -212,7 +215,7 @@ fn action_picker_sources_remain_until_the_last_target_user_is_removed() {
     hub.remove_action_target(node(3), &mut env);
     assert_eq!(
         env.options["actions:light.hall"].len(),
-        1,
+        2,
         "catalog still uses the source"
     );
     hub.set_action_target(node(4), "light.hall", &mut env);

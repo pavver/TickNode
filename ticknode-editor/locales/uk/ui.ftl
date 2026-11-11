@@ -573,3 +573,5 @@ settings-display-rounding = Округлення
 settings-display-significant = Значущі цифри
 settings-display-decimals = Знаки після коми
 settings-display-numbers = Числа
+
+error-hysteresis-thresholds = Некоректні пороги гістерезису: у режимі зростання Поріг увімкнення має бути ≥ Порога вимкнення; у режимі спадання — ≤ Порога вимкнення

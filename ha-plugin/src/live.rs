@@ -26,6 +26,8 @@ impl<T> Default for Stream<T> {
 #[derive(Default)]
 pub struct Live {
     states: HashMap<String, State>,
+    /// Bumped whenever an entity's cached state is replaced (events and snapshots).
+    revisions: HashMap<String, u64>,
     /// Retains changes received while a snapshot is in flight, including removals.
     overlay: HashMap<String, StateChange>,
     snapshot_pending: bool,
@@ -37,6 +39,7 @@ pub struct Live {
     config: Option<Reply<Box<serde_json::value::RawValue>>>,
     config_due: Option<Instant>,
     zone: Option<String>,
+    temperature_unit: Option<String>,
     retry: Option<Instant>,
     offset_retry: Option<Instant>,
     pub generation: u64,
@@ -65,6 +68,13 @@ impl Live {
     }
     pub fn get(&self, entity: &str) -> Option<&State> {
         self.states.get(entity)
+    }
+    /// Changes whenever the entity's cached state is replaced, even with an identical timestamp.
+    pub fn revision(&self, entity: &str) -> u64 {
+        self.revisions.get(entity).copied().unwrap_or(0)
+    }
+    pub fn temperature_unit(&self) -> Option<&str> {
+        self.temperature_unit.as_deref()
     }
     pub fn all_states(&self) -> Vec<State> {
         self.states.values().cloned().collect()
@@ -96,6 +106,9 @@ impl Live {
             .iter()
             .map(|s| (s.entity_id.clone(), s.clone()))
             .collect();
+        for id in self.states.keys() {
+            *self.revisions.entry(id.clone()).or_default() += 1;
+        }
         for (_, change) in std::mem::take(&mut self.overlay) {
             self.apply(change);
         }
@@ -115,6 +128,7 @@ impl Live {
         {
             return;
         }
+        *self.revisions.entry(change.entity_id.clone()).or_default() += 1;
         if let Some(state) = change.new_state {
             self.states.insert(change.entity_id, state);
         } else {
@@ -131,6 +145,7 @@ impl Live {
             }
             self.offset = None;
             self.zone = None;
+            self.temperature_unit = None;
             self.config = None;
             self.config_due = None;
             return true;

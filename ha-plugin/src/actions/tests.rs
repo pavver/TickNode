@@ -1,5 +1,5 @@
-use super::*;
 use super::node::strings;
+use super::*;
 
 fn catalog() -> Value {
     json!({
@@ -41,14 +41,20 @@ fn service_catalog_builds_options_fields_targets_and_response_support() {
     assert_eq!(action_source("light.kitchen"), "actions:light.kitchen");
     assert!(!light.response);
     assert!(services["weather.get_forecasts"].response);
-    assert_eq!(services["weather.get_forecasts"].domains, ["sensor", "weather"]);
+    assert_eq!(
+        services["weather.get_forecasts"].domains,
+        ["sensor", "weather"]
+    );
     assert!(services["homeassistant.turn_on"].targeted);
     assert!(services["homeassistant.turn_on"].domains.is_empty());
     assert!(!services["script.run_script"].targeted);
     let light_options = options_for(&services, Some(("light.kitchen", None)));
     assert_eq!(
-        light_options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
-        ["light.turn_on"]
+        light_options
+            .iter()
+            .map(|o| o.value.as_str())
+            .collect::<Vec<_>>(),
+        ["light.turn_on", "light.set_state"]
     );
     let light = &light_options[0];
     assert_eq!(
@@ -61,13 +67,19 @@ fn service_catalog_builds_options_fields_targets_and_response_support() {
     );
     let sensor_options = options_for(&services, Some(("sensor.temp", None)));
     assert_eq!(
-        sensor_options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+        sensor_options
+            .iter()
+            .map(|o| o.value.as_str())
+            .collect::<Vec<_>>(),
         ["weather.get_forecasts"]
     );
     assert_eq!(sensor_options[0].label, "Get forecasts");
     let targetless = options_for(&services, None);
     assert_eq!(
-        targetless.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+        targetless
+            .iter()
+            .map(|o| o.value.as_str())
+            .collect::<Vec<_>>(),
         ["script.run_script"]
     );
     assert_eq!(target_domains("switch", &json!({"target":{}})), ["switch"]);
@@ -99,18 +111,21 @@ fn entity_actions_filter_by_supported_features_and_device_class() {
         .into_iter()
         .map(|o| o.value)
         .collect();
-    assert_eq!(blind_actions, ["cover.open_cover", "cover.close_cover"]);
-    let shutter_actions: Vec<_> =
-        options_for(&services, Some(("cover.shutter", Some(&shutter))))
-            .into_iter()
-            .map(|o| o.value)
-            .collect();
+    assert_eq!(
+        blind_actions,
+        ["cover.open_cover", "cover.close_cover", "cover.set_state"]
+    );
+    let shutter_actions: Vec<_> = options_for(&services, Some(("cover.shutter", Some(&shutter))))
+        .into_iter()
+        .map(|o| o.value)
+        .collect();
     assert_eq!(
         shutter_actions,
         [
             "cover.open_cover",
             "cover.close_cover",
             "cover.open_shutter",
+            "cover.set_state",
             "cover.set_cover_tilt_position",
         ]
     );
@@ -143,6 +158,7 @@ fn actions_are_sorted_by_usage_frequency_before_alphabetical_order() {
             "light.turn_on",
             "light.turn_off",
             "light.toggle",
+            "light.set_state",
             "light.reload",
         ]
     );
@@ -157,6 +173,7 @@ fn actions_are_sorted_by_usage_frequency_before_alphabetical_order() {
             "cover.close_cover",
             "cover.stop_cover",
             "cover.toggle",
+            "cover.set_state",
             "cover.set_cover_position",
         ]
     );

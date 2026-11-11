@@ -57,6 +57,8 @@ pub struct Service {
     pub filters: Vec<EntityFilter>,
     pub targeted: bool,
     pub response: bool,
+    /// Catalog-only candidates: number selectors without their own unit. Never restored from a graph.
+    pub entity_unit_fields: Vec<String>,
 }
 
 pub fn selector_type(selector: &Value) -> DataType {
@@ -173,6 +175,7 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
         };
         for (id, service) in services {
             let mut fields = Vec::new();
+            let mut entity_unit_fields = Vec::new();
             if let Some(schema) = service["fields"].as_object() {
                 // Deterministic order, with advanced fields last. Once selected, only the snapshot defines pins.
                 let mut entries: Vec<_> = schema.iter().collect();
@@ -180,6 +183,13 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
                     (field["advanced"].as_bool().unwrap_or(false), *name)
                 });
                 for (name, field) in entries {
+                    if field["selector"].get("number").is_some()
+                        && field["selector"]["number"]
+                            .get("unit_of_measurement")
+                            .is_none()
+                    {
+                        entity_unit_fields.push(name.clone());
+                    }
                     fields.push(Field {
                         name: name.clone(),
                         label: field["name"]
@@ -212,10 +222,12 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
                     filters: entity_filters(domain, service),
                     targeted: service.get("target").is_some_and(Value::is_object),
                     response: service.get("response").is_some_and(Value::is_object),
+                    entity_unit_fields,
                 },
             );
         }
     }
+    super::effects::add_state_services(&mut result);
     result
 }
 

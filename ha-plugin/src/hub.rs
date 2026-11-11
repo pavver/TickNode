@@ -101,6 +101,8 @@ pub struct Hub {
     action_targets: HashMap<NodeId, String>,
     /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
     entities: HashMap<NodeId, EntityWatch>,
+    /// Entities targeted by a sent action whose resulting state has not arrived yet (see `requests.rs`).
+    commanded: HashMap<String, requests::Commanded>,
 }
 
 const NOT_CONFIGURED: &str =

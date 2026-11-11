@@ -830,3 +830,27 @@ node-convert-prop-target-option-unix-seconds = Unix time (seconds)
 node-convert-prop-target-option-datetime = Date and time from Unix seconds
 node-convert-prop-target-option-seconds = Seconds
 node-convert-prop-target-option-duration = Duration from seconds
+
+# Hysteresis
+node-logic-hysteresis-title = Hysteresis
+node-logic-hysteresis-description = Switches a state using separate on and off thresholds
+node-logic-hysteresis-help =
+    On In, evaluates Value against On threshold and Off threshold. Rising mode turns on strictly above On threshold and off strictly below Off threshold. For example, allow charging above 230 V and forbid it below 200 V. Falling mode reverses the comparisons: heating turns on below 19 °C and off above 21 °C.
+
+    Between thresholds, including equality, the previous state is kept. The initial state is off, so the first evaluation in the dead band yields off. State lives in memory and resets to off after a restart or node recreation.
+
+    Value and thresholds share a Number or physical quantity type, adapted when Value is connected. Unconnected thresholds can be entered next to their pins with a quantity unit control. All three inputs are required.
+
+    Every evaluation emits State first, then Turned on or Turned off only if the state changed, then Out. Rising mode requires On threshold ≥ Off threshold; falling mode requires On threshold ≤ Off threshold. Invalid thresholds report an error and keep the state, but still emit State and Out.
+node-logic-hysteresis-pin-In = In
+node-logic-hysteresis-pin-Value = Value
+node-logic-hysteresis-pin-on-threshold = On threshold
+node-logic-hysteresis-pin-off-threshold = Off threshold
+node-logic-hysteresis-pin-turned-on = Turned on
+node-logic-hysteresis-pin-turned-off = Turned off
+node-logic-hysteresis-pin-Out = Out
+node-logic-hysteresis-pin-State = State
+node-logic-hysteresis-prop-mode-title = Mode
+node-logic-hysteresis-prop-mode-description = Whether rising or falling values turn the state on
+node-logic-hysteresis-prop-mode-option-rising = Rising
+node-logic-hysteresis-prop-mode-option-falling = Falling

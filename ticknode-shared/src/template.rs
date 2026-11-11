@@ -13,6 +13,11 @@ mod values;
 #[cfg(test)]
 mod tests;
 
+pub mod complete;
+pub use complete::{
+    complete, Completion, CompletionInput, CompletionItem, CompletionKind,
+};
+
 pub use values::plain;
 
 pub const FUEL: u64 = 10_000;

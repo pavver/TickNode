@@ -41,14 +41,28 @@ fn exec_only_matches_opposite_exec_pins() {
 }
 
 #[test]
-fn input_drag_uses_outputs_and_conversion_direction() {
-    let catalog = [node("source", vec![(4, PinDirection::Output, PinType::Data(DataType::String))]),
+fn input_drag_uses_outputs_and_skips_conversion_only_pins() {
+    let catalog = [node("source", vec![(4, PinDirection::Output, PinType::Data(DataType::Number))]),
+        node("text source", vec![(2, PinDirection::Output, PinType::Data(DataType::String))]),
         node("sink", vec![(1, PinDirection::Input, PinType::Data(DataType::Number))])];
     let result = find(PinDirection::Input, PinType::Data(DataType::Number), &catalog, &TypeRegistry::new());
     assert_eq!(result.len(), 1);
-    assert_eq!((result[0].pin, result[0].rank), (PinId(4), 2));
-    let result = find(PinDirection::Output, PinType::Data(DataType::String), &catalog, &TypeRegistry::new());
-    assert_eq!(result[0].rank, 2);
+    assert_eq!((result[0].type_name.as_str(), result[0].pin, result[0].rank), ("source", PinId(4), 0));
+    assert!(find(PinDirection::Output, PinType::Data(DataType::String), &catalog, &TypeRegistry::new()).is_empty());
+}
+
+#[test]
+fn bool_output_skips_number_inputs_including_adaptive_math() {
+    use PinDirection::{Input, Output};
+    let mut math = node("math/add", vec![(1, Input, PinType::Data(DataType::Number)), (0, Output, PinType::Data(DataType::Number))]);
+    math.adaptive = true;
+    let mut text = node("text/to_text", vec![(1, Input, PinType::Data(DataType::Any))]);
+    text.adaptive = true;
+    let catalog = [math, text, node("for_loop", vec![(1, Input, PinType::Data(DataType::Number))]),
+        node("logic/and", vec![(1, Input, PinType::Data(DataType::Bool))])];
+    let result = find(Output, PinType::Data(DataType::Bool), &catalog, &TypeRegistry::new());
+    let names: Vec<_> = result.iter().map(|s| (s.type_name.as_str(), s.rank)).collect();
+    assert_eq!(names, [("logic/and", 0), ("text/to_text", 0)]);
 }
 
 #[test]
@@ -79,7 +93,7 @@ fn best_rank_then_lowest_id_and_unavailable_are_respected() {
 }
 
 #[test]
-fn adaptive_definitions_match_any_data_type_in_the_opposite_direction_only() {
+fn adaptive_definitions_match_fitting_data_types_in_the_opposite_direction_only() {
     for direction in [PinDirection::Input, PinDirection::Output] {
         let opposite = if direction == PinDirection::Input { PinDirection::Output } else { PinDirection::Input };
         let mut adaptive = node("adaptive", vec![(7, opposite, PinType::Data(DataType::Number)),

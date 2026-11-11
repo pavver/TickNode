@@ -14,6 +14,9 @@ pub struct Suggestion {
     pub rank: u8,
 }
 
+/// Rank of a connection that works only through an implicit value conversion.
+const CONVERSION: u8 = 2;
+
 fn rank(registry: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<u8> {
     match (src, dst) {
         (PinType::Exec, PinType::Exec) => Some(0),
@@ -25,7 +28,7 @@ fn rank(registry: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<u8> {
             } else if registry.compatible(src, dst) {
                 Some(1)
             } else {
-                registry.convertible(src, dst).map(|_| 2)
+                registry.convertible(src, dst).map(|_| CONVERSION)
             }
         }
         _ => None,
@@ -45,13 +48,16 @@ pub fn suggestions(
     for definition in catalog {
         if definition.category == "Unavailable" { continue; }
         let best = definition.pins.iter().filter(|p| p.direction != direction).filter_map(|p| {
-            let rank = if definition.adaptive && matches!((pin_type, &p.pin_type), (PinType::Data(_), PinType::Data(_))) {
-                Some(0)
-            } else if direction == PinDirection::Output {
+            let rank = if direction == PinDirection::Output {
                 rank(registry, pin_type, &p.pin_type)
             } else {
                 rank(registry, &p.pin_type, pin_type)
             }?;
+            // A pin that only accepts the value through an implicit conversion (Bool → Number for a
+            // loop count or math operand) is not a meaningful suggestion.
+            if rank == CONVERSION { return None; }
+            // An adaptive node takes on a fitting type exactly; it cannot adapt to an unrelated one.
+            let rank = if definition.adaptive && matches!(pin_type, PinType::Data(_)) { 0 } else { rank };
             Some((rank, p.id.0))
         }).min();
         if let Some((rank, pin)) = best {

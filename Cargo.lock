@@ -3128,15 +3128,18 @@ dependencies = [
 name = "ticknode-editor"
 version = "0.1.0"
 dependencies = [
+ "any_spawner",
  "chrono",
  "console_error_panic_hook",
  "fluent-bundle",
  "fluent-syntax",
+ "ha-plugin",
  "js-sys",
  "leptos",
  "postcard",
  "serde",
  "serde_json",
+ "ticknode-plugin-sdk",
  "ticknode-shared",
  "unic-langid",
  "uuid",

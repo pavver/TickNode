@@ -67,6 +67,17 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
         }
     }
 
+    fn node_error(&mut self, message: wit::UiError, log: bool) {
+        let allowed = crate::translations::AllowedIds::new(&self.grants.name, &[], &[]);
+        let message = crate::translations::sanitize_ui_message(UiMessage {
+            key: message.key, args: message.args, fallback: message.fallback,
+        }, &allowed);
+        if let Some(c) = &mut self.call {
+            if log { c.host.log(c.node_id, format!("[ERROR] {}", message.fallback)); }
+            c.host.report_error(c.node_id, message);
+        }
+    }
+
     fn current_tick(&mut self) -> u64 {
         self.call.as_ref().map_or(0, |c| c.host.current_tick)
     }

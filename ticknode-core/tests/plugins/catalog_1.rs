@@ -307,15 +307,24 @@ fn ha_plugin_event_trigger_fires_and_rejections_log_on_the_node() {
         output(&engine, event_node, 1).unwrap().get_type(),
         DataType::Object
     );
-    // Local JSON errors cancel the old subscription and retain the user's text for editing.
-    engine
-        .set_node_property(event_node, "event_data", "{".into())
-        .unwrap();
+    // Interactive validation rejects invalid JSON without changing the stored value.
+    let previous = engine.node_model(event_node).unwrap().properties;
+    let error = engine.set_node_property(event_node, "event_data", "{".into()).unwrap_err();
+    assert!(matches!(error, EngineError::InvalidProperty(_)));
+    assert_eq!(error.ui_message().key, "home-assistant-error-event-data");
+    assert_eq!(engine.node_model(event_node).unwrap().properties, previous);
+    // Stored configurations bypass validation and still report runtime errors on their node.
+    let mut graph = engine.export_graph();
+    let stored = graph.nodes.iter_mut().find(|n| n.id == event_node).unwrap();
+    stored.properties.iter_mut().find(|(name, _)| name == "event_data").unwrap().1 = "{".into();
+    assert!(engine.load_graph(&graph).is_empty());
     run_until(&mut engine, |e| {
         e.host_state.logs.iter().any(|(node, message)| {
-            *node == event_node && message.contains("Invalid event data JSON")
+            *node == event_node && message.contains("Event data must be a JSON object")
         })
     });
+    assert!(engine.node_errors().iter().any(|error| error.node == event_node
+        && error.message.key == "home-assistant-error-event-data"));
     run_until(&mut engine, |_| ha.unsubscribed.load(Ordering::SeqCst) >= 1);
     assert_eq!(ha.trigger_requests.lock().unwrap().len(), 1);
     engine
@@ -360,12 +369,12 @@ fn ha_plugin_invalid_trigger_json_logs_once_in_node_context_without_a_connection
             .host_state
             .logs
             .iter()
-            .any(|(owner, message)| *owner == node && message.contains("Invalid event data JSON"))
+            .any(|(owner, message)| *owner == node && message.contains("Event data must be a JSON object"))
     );
     let errors = engine.node_errors();
     assert!(errors.iter().any(|error| error.node == node
-        && error.message.key.is_empty()
-        && error.message.fallback.contains("Invalid event data JSON")));
+        && error.message.key == "home-assistant-error-event-data"
+        && error.message.fallback.contains("Event data must be a JSON object")));
     engine.host_state.logs.clear();
     for _ in 0..3 {
         engine.tick();
@@ -374,21 +383,14 @@ fn ha_plugin_invalid_trigger_json_logs_once_in_node_context_without_a_connection
                 .host_state
                 .logs
                 .iter()
-                .any(|(_, message)| message.contains("Invalid event data JSON"))
+                .any(|(_, message)| message.contains("Event data must be a JSON object"))
         );
     }
-    engine
-        .set_node_property(node, "event_data", "[]".into())
-        .unwrap();
+    assert_eq!(engine.set_node_property(node, "event_data", "[]".into())
+        .unwrap_err().ui_message().key, "home-assistant-error-event-data");
     engine.tick();
-    assert!(
-        engine
-            .host_state
-            .logs
-            .iter()
-            .any(|(owner, message)| *owner == node
-                && message.contains("Event data must be a JSON object"))
-    );
+    assert!(engine.host_state.logs.is_empty(), "a rejected edit does not restart error logging");
+    assert!(engine.node_errors().iter().any(|error| error.node == node));
     engine.host_state.logs.clear();
     engine
         .set_node_property(node, "event_data", "{}".into())

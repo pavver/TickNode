@@ -24,3 +24,11 @@ uuid = { workspace = true }
 fluent-bundle = "0.16.0"
 fluent-syntax = "0.12.0"
 unic-langid = "0.9.6"
+
+[dev-dependencies]
+any_spawner = { version = "0.3", features = ["futures-executor"] }
+
+# Native geometry tests exercise the actual plugin definitions without a WASM host or TCP.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+ha-plugin = { path = "../ha-plugin" }
+ticknode-plugin-sdk = { path = "../ticknode-plugin-sdk" }

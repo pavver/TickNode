@@ -47,7 +47,13 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
         })
     };
     let (plugin, source) = (state.plugin.clone(), state.source.clone());
-    let options = Memo::new(move |_| options_of(ed, &plugin, &source));
+    let input_property = property.clone();
+    let options = Memo::new(move |_| {
+        let options = options_of(ed, &plugin, &source);
+        if property_has_input(ed, node, &input_property) {
+            std::sync::Arc::new(input_options(&options, &t!("property-from-input")))
+        } else { options }
+    });
     let found = Memo::new(move |_| {
         let options = options.get();
         query.with(|q| filter_options(&options, q, MAX_ROWS))
@@ -170,7 +176,7 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
 }
 
 pub(super) fn option_is_current(current: &str, value: &str) -> bool {
-    !current.is_empty() && current == value
+    current == value
 }
 
 #[derive(Debug, PartialEq)]

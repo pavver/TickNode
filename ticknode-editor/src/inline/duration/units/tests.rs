@@ -57,3 +57,16 @@ fn fractional_values_remain_lossless_text() {
         assert_eq!(parse(&input, unit), Ok(Some(value)));
     }
 }
+
+#[test]
+fn property_durations_offer_only_wall_units_and_reject_explicit_ticks() {
+    assert_eq!(Unit::available(true).collect::<Vec<_>>(), [Unit::Milliseconds, Unit::Seconds, Unit::Minutes, Unit::Hours]);
+    assert_eq!(Unit::available(false).collect::<Vec<_>>(), Unit::ALL);
+    assert_eq!(presentation(None, Some(Unit::Minutes)), (String::new(), Unit::Minutes));
+    assert_eq!(parse_property("30", Unit::Minutes), Ok(Some(DataValue::Duration(Duration::from_secs(1800)))));
+    assert_eq!(parse_property("00:30:00", Unit::Minutes), Ok(Some(DataValue::Duration(Duration::from_secs(1800)))));
+    assert_eq!(parse_property("", Unit::Minutes), Ok(None));
+    for invalid in ["10t", "10 ticks", "10 тактів", "-30", "garbage"] {
+        assert_eq!(parse_property(invalid, Unit::Minutes).unwrap_err().key, "error-property-duration");
+    }
+}

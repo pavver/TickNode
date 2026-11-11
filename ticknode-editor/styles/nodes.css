@@ -89,8 +89,8 @@
     background: var(--surface-alt);
     border-bottom: var(--border-w) solid var(--divider);
 }
-.node-title { font-size: 13px; line-height: 16px; font-weight: 700; flex: 1; }
-.node-cat { font-size: 11px; line-height: 14px; font-weight: 700; color: var(--cat-color, var(--text-secondary)); flex: none; max-width: 40%; }
+.node-title { font-size: 13px; line-height: 16px; font-weight: 700; flex: 1 0 auto; min-width: 0; max-width: calc(100% - 32px); }
+.node-cat { font-size: 11px; line-height: 14px; font-weight: 700; color: var(--cat-color, var(--text-secondary)); flex: 0 1 auto; min-width: 0; }
 .pins { position: absolute; top: calc(var(--du) * 9); display: flex; flex-direction: column; }
 /* Property rows between header and pins: row height = ROW_H (geometry.rs) */
 .node-props { position: absolute; top: calc(var(--du) * 9); left: 0; right: 0; display: flex; flex-direction: column; }
@@ -103,11 +103,11 @@
     font-size: 12px;
     color: var(--text-secondary);
 }
-.prop-row > .prop-label { flex: 1 1 auto; max-width: 45%; }
-.prop-row .inline-value { flex: 1 1 0; width: 0; max-width: none; }
-.prop-row .inline-value.select { flex: 0 1 auto; width: auto; min-width: calc(var(--du) * 18); }
+.prop-row > .prop-label { flex: 0 1 auto; min-width: 0; max-width: none; }
+.prop-row .inline-value { flex: 1 0 72px; min-width: 72px; width: 0; max-width: none; }
+.prop-row .inline-value.select { flex: none; width: var(--selected-width, auto); min-width: 0; max-width: calc(var(--du) * 40); margin-left: auto; }
 .prop-row .switch { margin-left: auto; }
-.inline-value.select { cursor: pointer; padding: 0 calc(var(--du) * 0.5); }
+.inline-value.select { width: var(--selected-width, auto); max-width: calc(var(--du) * 40); cursor: pointer; padding: 0 calc(var(--du) * 0.5); }
 .pins.in { left: 0; align-items: flex-start; }
 .pins.out { right: 0; align-items: flex-end; }
 .pin {
@@ -122,6 +122,7 @@
 }
 .pin.in { padding-right: calc(var(--du) * 1); max-width: calc(var(--du) * 30); }
 .pin.out { flex-direction: row-reverse; padding-left: calc(var(--du) * 1); }
+.pin.out > .ellipsis { flex: 1 1 auto; min-width: 0; text-align: right; }
 .socket {
     width: calc(var(--du) * 2.5);
     height: calc(var(--du) * 2.5);
@@ -165,15 +166,11 @@
 .inline-value.bool.on { color: var(--success); border-color: color-mix(in srgb, var(--success) 50%, var(--divider)); }
 .inline-value.bool.unset { color: var(--text-disabled); }
 .pin .inline-value { margin-left: auto; }
-.duration-value { display: flex; gap: 2px; flex: 0 0 80px; min-width: 0; height: calc(var(--du) * 4.5); }
-.pin .duration-value { margin-left: auto; flex-basis: 104px; }
-/* A duration field needs more room than the default input pin width or a property row's label. */
-.pin.in:has(.duration-value) { max-width: calc(var(--du) * 42); }
-.prop-row:has(.duration-value) > .prop-label, .prop-row:has(.duration-value) > .inline-value.select { flex: 0 1 auto; min-width: 0; }
-.prop-row .duration-value { flex: 1 0 104px; }
-.input-row .duration-value, .cond-row .duration-value { flex: 1 1 80px; }
-.duration-value > .inline-value.duration-number { flex: 1 1 0; min-width: 0; width: 0; max-width: none; margin-left: 0; padding: 0 2px; }
-.duration-value > .inline-value.duration-unit { flex: 0 0 48px; min-width: 0; width: 48px; max-width: 48px; margin-left: 0; padding: 0; }
+.duration-value { display: flex; gap: 2px; flex: 1 0 auto; min-width: min-content; height: calc(var(--du) * 4.5); }
+.pin .duration-value { margin-left: auto; }
+.input-row .duration-value, .cond-row .duration-value { flex: 1 1 80px; min-width: 0; }
+.duration-value > .inline-value.duration-number { flex: 1 0 72px; min-width: 72px; width: 0; max-width: none; margin-left: 0; padding: 0 2px; }
+.duration-value > .inline-value.duration-unit { flex: none; min-width: 0; width: var(--selected-width, auto); max-width: calc(var(--du) * 40); margin-left: 0; padding: 0; }
 
 /* --- Match cases on a node (like a decider combinator window); row height = ROW_H --- */
 .match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
@@ -394,3 +391,21 @@
     background: color-mix(in srgb, var(--success) 10%, transparent);
 }
 
+
+/* Typed properties retain a single row; multiline fields use the resize allocation. */
+.duration-property { display: flex; flex: 1 0 auto; min-width: min-content; gap: 2px; }
+.duration-property .duration-value { flex: 1 0 auto; }
+.duration-sign { flex: 0 0 20px; width: 20px; min-width: 0; padding: 0; }
+.property-chips { display: flex; flex: 1 0 72px; min-width: 72px; gap: 2px; overflow-x: auto; height: 20px; scrollbar-width: none; }
+.property-chip { flex: none; padding: 0 4px; font-size: 11px; border: 1px solid var(--divider); background: var(--surface-alt); color: var(--text-secondary); cursor: pointer; }
+.property-chip.selected { color: var(--text-primary); border-color: var(--accent); }
+
+.property-chips::-webkit-scrollbar { display: none; }
+
+/* Native content sizing uses the selected option; measured text is the older-browser fallback. */
+@supports (field-sizing: content) {
+    .inline-value.select { field-sizing: content; }
+    .prop-row .inline-value.select,
+    .duration-value > .inline-value.duration-unit,
+    .node > .pins.in > .pin > .inline-value.select { width: auto; }
+}

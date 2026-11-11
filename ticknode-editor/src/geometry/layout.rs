@@ -9,6 +9,7 @@ use ticknode_shared::{NodeSize, PropertyKind};
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeLayout {
     pub width: f64,
+    pub(super) pin_widths: Vec<(PinId, PinDirection, f64)>,
     pub natural_height: f64,
     pub(super) properties: Vec<(String, f64)>,
     pub(super) input_heights: Vec<(PinId, f64)>,
@@ -22,7 +23,7 @@ pub struct NodeLayout {
 
 impl NodeLayout {
     pub fn new(def: &NodeDefinition, properties: &[(String, DataValue)]) -> Self {
-        let pins_top = HEADER_H + BODY_PAD + prop_rows(&def.type_name, properties) as f64 * ROW_H;
+        let pins_top = HEADER_H + BODY_PAD + property_rows(def, properties).len() as f64 * ROW_H;
         let row_y = |i: usize| pins_top + i as f64 * ROW_H + ROW_H / 2.0;
         let inputs: Vec<_> = pins(def, PinDirection::Input).enumerate().map(|(i, p)| (p.id, row_y(i))).collect();
         if def.type_name == "match" {
@@ -47,28 +48,35 @@ impl NodeLayout {
             // "+ case" row with the Else output
             outputs.push((PinId(0), y + ROW_H / 2.0));
             y += ROW_H;
-            return Self { natural_height: y + BODY_PAD, properties: vec![], input_heights: vec![], width: MATCH_WIDTH, height: y + BODY_PAD, pins_top, cases_top, inputs, outputs };
+            return Self { natural_height: y + BODY_PAD, properties: vec![], input_heights: vec![], pin_widths: vec![], width: automatic_width(def, properties, &[]), height: y + BODY_PAD, pins_top, cases_top, inputs, outputs };
         }
         let outputs: Vec<_> = pins(def, PinDirection::Output).enumerate().map(|(i, p)| (p.id, row_y(i))).collect();
         let rows = inputs.len().max(outputs.len()).max(1);
         let height = pins_top + rows as f64 * ROW_H + BODY_PAD;
-        Self { natural_height: height, properties: vec![], input_heights: vec![], width: node_width(&def.type_name), height, pins_top, cases_top: height, inputs, outputs }
+        Self { natural_height: height, properties: vec![], input_heights: vec![], pin_widths: vec![], width: automatic_width(def, properties, &[]), height, pins_top, cases_top: height, inputs, outputs }
     }
 
     /// Applies stored dimensions and distributes whole extra pixels over free text rows.
     pub fn sized(def: &NodeDefinition, properties: &[(String, DataValue)], size: Option<NodeSize>, connected: &[PinId]) -> Self {
+        // Keep non-row properties (Match cases and adaptive metadata) for specialized layouts.
+        let filtered: Vec<_> = properties.iter().filter(|(name, _)|
+            !def.properties.iter().any(|p| p.name == *name && p.input.is_some_and(|pin| connected.contains(&pin)))
+        ).cloned().collect();
+        let properties = filtered.as_slice();
         let mut layout = Self::new(def, properties);
+        layout.width = automatic_width(def, properties, connected);
         if let Some(size) = size.and_then(NodeSize::validated) {
             layout.width = size.width;
             layout.height = layout.height.max(size.height);
         }
+        layout.pin_widths = row_widths(def, connected, properties, layout.width);
         if def.type_name == "match" { return layout; }
-        let grow_props: Vec<_> = properties.iter().filter(|(name, value)| visible_node_property(&def.type_name, name, value, properties))
-            .map(|(name, value)| (name.clone(), matches!(value, DataValue::String(_)) && !name.ends_with("_type")
-                && !def.properties.iter().any(|p| p.name == *name && !matches!(p.kind, PropertyKind::Text))))
+        let grow_props: Vec<_> = property_rows(def, properties).into_iter()
+            .map(|(name, value)| (name.clone(), matches!(value, DataValue::String(_)) && !is_type_property(def, name)
+                && def.properties.iter().find(|p| p.name == *name).is_none_or(|p| matches!(p.kind, PropertyKind::Text | PropertyKind::Multiline))))
             .collect();
         let grow_inputs: Vec<_> = pins(def, PinDirection::Input).map(|p|
-            (p.id, p.pin_type == PinType::Data(DataType::String) && !connected.contains(&p.id))).collect();
+            (p.id, p.pin_type == PinType::Data(DataType::String) && !connected.contains(&p.id) && !def.properties.iter().any(|prop| prop.input == Some(p.id)))).collect();
         let count = grow_props.iter().filter(|(_, grow)| *grow).count() + grow_inputs.iter().filter(|(_, grow)| *grow).count();
         let extra = (layout.height - layout.natural_height).floor();
         let share = if count == 0 { 0.0 } else { (extra / count as f64).floor() };
@@ -93,6 +101,10 @@ impl NodeLayout {
             shift += more;
         }
         layout
+    }
+
+    pub fn pin_width(&self, pin: PinId, direction: PinDirection) -> f64 {
+        self.pin_widths.iter().find(|(p, d, _)| *p == pin && *d == direction).map_or(self.width - 16.0, |(_, _, w)| *w)
     }
 
     pub fn property_height(&self, name: &str) -> f64 {
@@ -141,3 +153,11 @@ pub fn resize_size(origin: NodeSize, delta: (f64, f64), natural_height: f64) -> 
 
 #[cfg(test)]
 mod tests;
+
+mod width;
+use width::{automatic_width, row_widths};
+
+pub(crate) use width::compact_select_width;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod ha_tests;

@@ -15,6 +15,8 @@ pub enum EngineError {
     UnknownNodeType(String),
     #[error("Node unavailable: {0}; it cannot be changed")]
     PluginUnavailable(UiMessage),
+    #[error("{0}")]
+    InvalidProperty(UiMessage),
 }
 
 impl EngineError {
@@ -29,7 +31,7 @@ impl EngineError {
             Self::NodeNotFound(id) => UiMessage::new("error-node-not-found", text).arg("node", format!("{id:?}")),
             Self::UnknownNodeType(name) => UiMessage::new("error-unknown-node-type", text).arg("type", name),
             // The stub's own message already says which plugin is missing
-            Self::PluginUnavailable(reason) => reason.clone(),
+            Self::PluginUnavailable(reason) | Self::InvalidProperty(reason) => reason.clone(),
         }
     }
 }

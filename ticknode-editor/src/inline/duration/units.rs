@@ -10,6 +10,10 @@ pub(crate) enum Unit { Ticks, Milliseconds, Seconds, Minutes, Hours }
 impl Unit {
     pub const ALL: [Self; 5] = [Self::Ticks, Self::Milliseconds, Self::Seconds, Self::Minutes, Self::Hours];
 
+    pub fn available(wall_only: bool) -> impl Iterator<Item = Self> {
+        Self::ALL.into_iter().filter(move |unit| !wall_only || *unit != Self::Ticks)
+    }
+
     pub fn id(self) -> &'static str {
         match self { Self::Ticks => "t", Self::Milliseconds => "ms", Self::Seconds => "s", Self::Minutes => "min", Self::Hours => "h" }
     }
@@ -82,3 +86,13 @@ pub(crate) fn parse(input: &str, unit: Unit) -> Result<Option<DataValue>, UiMess
 
 #[cfg(test)]
 mod tests;
+
+/// Schema duration properties accept clock text and wall-clock units only.
+pub(crate) fn parse_property(input: &str, unit: Unit) -> Result<Option<DataValue>, UiMessage> {
+    let invalid = || UiMessage::new("error-property-duration", "Invalid duration property value");
+    let parsed = if input.contains(':') {
+        ticknode_shared::property::parse_property_duration(input).map(DataValue::Duration).map(Some)
+            .ok_or_else(invalid)
+    } else { parse(input, unit).map_err(|_| invalid()) }?;
+    if matches!(parsed, Some(DataValue::Ticks(_))) { Err(invalid()) } else { Ok(parsed) }
+}

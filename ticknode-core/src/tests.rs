@@ -1,3 +1,5 @@
+    mod property_validation;
+    mod property_input;
     mod legacy_nodes;
     mod quantities;
     mod convert;

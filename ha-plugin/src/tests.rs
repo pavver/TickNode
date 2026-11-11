@@ -74,6 +74,7 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
             }
         }
         for property in def.properties {
+            if property.kind == PropertyKind::Hidden { continue; }
             let p_name = &property.name;
             for suffix in ["title", "description"] {
                 let key_raw = format!("{prefix}-prop-{p_name}-{suffix}");
@@ -83,7 +84,7 @@ fn action_entity_and_condition_static_texts_have_ukrainian_translations() {
                     keys.push(key_raw);
                 }
             }
-            if let PropertyKind::Select(options) = &property.kind {
+            if let PropertyKind::Select(options) | PropertyKind::MultiSelect(options) = &property.kind {
                 for (value, _) in options {
                     let opt_slug = fluent_slug(value);
                     let key_raw = format!("{prefix}-prop-{p_name}-option-{opt_slug}");
@@ -196,4 +197,19 @@ fn ha_manifest_exposes_collections_and_actions() {
     assert_eq!(persons.actions.len(), 1);
     assert_eq!(persons.actions[0].type_name, "ha/condition_zone");
     assert_eq!(persons.actions[0].property, "entity_id");
+}
+
+#[test]
+fn trigger_and_condition_properties_follow_the_schema_and_action_snapshot_is_hidden() {
+    for name in HomeAssistant::NODE_TYPES {
+        let node = HomeAssistant::create(name, NodeId(ticknode_shared::Uuid::nil())).unwrap();
+        let def = node.definition();
+        if name.starts_with("ha/trigger_") || name.starts_with("ha/condition_") {
+            assert_eq!(node.properties().iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(),
+                def.properties.iter().map(|p| p.name.clone()).collect::<Vec<_>>(), "{name}");
+        }
+        if *name == "ha/action" {
+            assert_eq!(def.properties.iter().find(|p| p.name == "supports_response").unwrap().kind, PropertyKind::Hidden);
+        }
+    }
 }

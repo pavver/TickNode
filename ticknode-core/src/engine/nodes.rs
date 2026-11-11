@@ -50,7 +50,7 @@ impl TickEngine {
 
     /// Creates a node via the registry and applies its properties. Input values (`in:<pin>`) are returned
     /// separately: they can only be set after properties because pins may depend on them.
-    fn build_node(&self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(Box<dyn Node>, Vec<(PinId, DataValue)>), EngineError> {
+    fn build_node(&self, id: NodeId, type_name: &str, properties: &[(String, DataValue)], validate: bool) -> Result<(Box<dyn Node>, Vec<(PinId, DataValue)>), EngineError> {
         let mut node = self.registry.create_node(type_name, id)
             .ok_or_else(|| EngineError::UnknownNodeType(type_name.to_string()))?;
         let mut inputs = Vec::new();
@@ -58,7 +58,10 @@ impl TickEngine {
             match parse_input_value_property(name) {
                 Some(pin) => inputs.push((pin, value.clone())),
                 None if parse_split_pin_property(name).is_some() => {},
-                None => node.set_property(name, value.clone()),
+                None => {
+                    let value = if validate { validated_property(node.as_ref(), name, value.clone())? } else { value.clone() };
+                    node.set_property(name, value);
+                },
             }
         }
         node.restored();
@@ -67,7 +70,16 @@ impl TickEngine {
 
     /// Creates a node via the registry and applies its properties.
     pub fn create_node(&mut self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(), EngineError> {
-        let (node, inputs) = self.build_node(id, type_name, properties)?;
+        self.create_node_impl(id, type_name, properties, false)
+    }
+
+    /// Creates an interactively configured node; validation finishes before insertion.
+    pub fn create_node_interactive(&mut self, id: NodeId, type_name: &str, properties: &[(String, DataValue)]) -> Result<(), EngineError> {
+        self.create_node_impl(id, type_name, properties, true)
+    }
+
+    fn create_node_impl(&mut self, id: NodeId, type_name: &str, properties: &[(String, DataValue)], validate: bool) -> Result<(), EngineError> {
+        let (node, inputs) = self.build_node(id, type_name, properties, validate)?;
         self.add_node(node);
         self.split_pins.remove(&id);
         for (name, value) in properties {
@@ -182,6 +194,7 @@ impl TickEngine {
         if let Some(reason) = node.unavailable() {
             return Err(EngineError::PluginUnavailable(reason));
         }
+        let value = validated_property(node.as_ref(), name, value)?;
         node.set_property(name, value);
         self.finish_property_edit(node_id)
     }
@@ -260,4 +273,14 @@ pub(crate) fn input_pin_type(definition: &NodeDefinition, pin: PinId) -> Option<
             PinType::Data(t) => Some(t.clone()),
             PinType::Exec => None,
         })
+}
+
+/// Validate before invoking the infallible setter, including property-dependent schemas.
+fn validated_property(node: &dyn Node, name: &str, value: DataValue) -> Result<DataValue, EngineError> {
+    let value = match node.definition().properties.iter().find(|p| p.name == name) {
+        Some(p) => normalize_property_value(&p.kind, &value).map_err(EngineError::InvalidProperty)?,
+        None => value,
+    };
+    node.validate_property(name, &value).map_err(EngineError::InvalidProperty)?;
+    Ok(value)
 }

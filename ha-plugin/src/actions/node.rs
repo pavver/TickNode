@@ -75,14 +75,16 @@ impl PluginNode for ActionNode {
             cost: 50,
             type_name: "ha/action".into(), title: "Action".into(), category: CATEGORY.into(),
             description: "Runs a Home Assistant action with fields from its form".into(),
-            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set; comma-separated entity IDs address multiple targets. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Number fields with recognized units use quantity inputs and convert canonical values back to the snapshotted HA unit. Unitless number/input_number Value and climate Temperature selectors infer their unit from a single selected entity (or HA temperature settings). Legacy field snapshots stay unchanged. Set state actions take a required Boolean State: true turns on, locks or opens; false turns off, unlocks or closes. Skip if already set defaults to Yes, including existing graphs: recognized actions complete on Done without calling HA only when all targets are known and already satisfy the effect. Additional fields, unknown states and unresolved targets keep the normal call. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
+            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Choose From input to expose the Entity input; connecting it hides the entity picker. Choosing an entity removes the input. Old graphs with both a selected entity and a wire preserve that wire as a visible detached connection; comma-separated entity IDs address multiple targets. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Number fields with recognized units use quantity inputs and convert canonical values back to the snapshotted HA unit. Unitless number/input_number Value and climate Temperature selectors infer their unit from a single selected entity (or HA temperature settings). Legacy field snapshots stay unchanged. Set state actions take a required Boolean State: true turns on, locks or opens; false turns off, unlocks or closes. Skip if already set defaults to Yes, including existing graphs: recognized actions complete on Done without calling HA only when all targets are known and already satisfy the effect. Additional fields, unknown states and unresolved targets keep the normal call. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
             properties: vec![
                 PropertyDefinition::dynamic("target", "Entity", crate::entities::ACTION_TARGETS_SOURCE)
-                    .described("The target entity; filters the available actions. The Entity input overrides this choice"),
+                    .or_input(1)
+                    .described("Choose a target entity or From input; a selected entity filters the available actions"),
                 PropertyDefinition::dynamic("action", "Action", &action_source(&self.target))
                     .described("The Home Assistant action to run on the selected entity"),
                 PropertyDefinition::select("skip_unchanged", "Skip if already set", &[("yes", "Yes"), ("no", "No")])
                     .described("Complete successfully without calling HA when every target already has the desired state"),
+                PropertyDefinition::hidden("supports_response"),
             ], pins,
         }
     }
@@ -136,6 +138,18 @@ impl PluginNode for ActionNode {
                 if self.skip_unchanged { "yes" } else { "no" }.into(),
             ),
         ]
+    }
+
+    fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
+        if !matches!(name, "target" | "action" | "skip_unchanged") { return Ok(()); }
+        crate::validation::schema(&self.definition(), name, value)?;
+        let DataValue::String(text) = value else { return Ok(()) };
+        let valid = match name {
+            "target" => text.is_empty() || text.split(',').all(|id| crate::validation::entity_id(id.trim())),
+            "action" => text.is_empty() || crate::validation::entity_id(text),
+            _ => true,
+        };
+        if valid { Ok(()) } else { Err(crate::validation::error("entity-id", "Enter an entity ID as domain.object_id")) }
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {

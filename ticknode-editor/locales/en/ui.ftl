@@ -560,3 +560,16 @@ settings-display-decimals = Decimal places
 settings-display-numbers = Numbers
 
 error-hysteresis-thresholds = Invalid hysteresis thresholds: rising mode requires On threshold ≥ Off threshold; falling mode requires On threshold ≤ Off threshold
+
+error-property-duration = Enter a valid duration.
+error-property-time = Enter a time as HH:MM or HH:MM:SS.
+error-property-multi-select = Choose values from the available options.
+error-property-text = Enter text.
+property-duration-earlier = Earlier (negative offset)
+property-duration-later = Later (positive offset)
+property-time-placeholder = HH:MM
+
+property-from-input = From input
+
+property-duration-placeholder = 30
+property-duration-hint = A number in the selected unit, 1h 30m, or HH:MM:SS

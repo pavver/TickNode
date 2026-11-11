@@ -17,6 +17,7 @@ mod options;
 mod queue;
 mod runtime;
 mod triggers;
+mod validation;
 mod units;
 
 use convert::STATE_TYPE;
@@ -62,7 +63,7 @@ impl Plugin for HomeAssistant {
         "ha/condition_template",
     ];
     const TRANSLATIONS: &'static [(&'static str, &'static str)] =
-        &[("uk", include_str!("../locales/uk.ftl"))];
+        &[("uk", include_str!("../locales/uk.ftl")), ("en", include_str!("../locales/en.ftl"))];
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("home_assistant", "0.1.0", "TickNode")

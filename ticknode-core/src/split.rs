@@ -11,6 +11,13 @@ impl TickEngine {
     pub(crate) fn effective_definition(&self, node: NodeId, mut def: NodeDefinition) -> NodeDefinition {
         // Stubs already retain the last effective definition, even after their types disappear.
         if self.node_unavailable(node).is_some() { return def; }
+        if def.properties.iter().any(|p| p.input.is_some()) {
+            let properties = self.nodes.get(&node).map(|n| n.properties()).unwrap_or_default();
+            let hidden: Vec<_> = def.properties.iter().filter(|p| !p.uses_input(&properties))
+                .filter_map(|p| p.input).collect();
+            def.pins.retain(|p| p.direction != PinDirection::Input
+                || !matches!(p.pin_type, PinType::Data(_)) || !hidden.contains(&p.id));
+        }
         def.pins = def.pins.into_iter().filter(|pin| !is_virtual_pin(pin.id)).flat_map(|pin| {
             if self.pin_is_split(node, pin.id) && let Some(t) = splittable_type(&self.types, &pin) {
                 return t.fields().iter().enumerate().map(|(index, field)| PinDefinition {

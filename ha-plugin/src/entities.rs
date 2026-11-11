@@ -227,10 +227,15 @@ pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption
             .cloned()
             .collect()
     };
+    let timed: Vec<_> = states.iter().filter(|state| state.entity_id.starts_with("input_datetime.")
+        || (state.entity_id.starts_with("sensor.")
+            && state.attributes.get_as::<String>("device_class").as_deref() == Some("timestamp")))
+        .cloned().collect();
     vec![
         ("persons", subset(&["person.", "device_tracker."])),
         ("zones", subset(&["zone."])),
         ("calendars", subset(&["calendar."])),
+        ("time_entities", entity_options(&timed)),
         (ENTITIES_SOURCE, all),
     ]
 }
@@ -336,5 +341,24 @@ mod tests {
             .collect();
         // sensor.temperature has no actions and is omitted; switch.fan and light.kitchen stay, sorted by name
         assert_eq!(targets, ["switch.fan", "light.kitchen"]);
+    }
+}
+
+#[cfg(test)]
+mod time_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn time_source_offers_datetime_helpers_and_only_timestamp_sensors() {
+        let states = [
+            test_state("sensor.alarm", "2026-11-11T10:00:00Z", json!({"device_class":"timestamp", "friendly_name":"Alarm"})),
+            test_state("input_datetime.wakeup", "07:30:00", json!({"friendly_name":"Wake up"})),
+            test_state("sensor.temperature", "20", json!({"device_class":"temperature"})),
+            test_state("light.hall", "on", json!({})),
+        ];
+        let sources: std::collections::HashMap<_,_> = option_sources(&states).into_iter().collect();
+        assert_eq!(sources["time_entities"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+            ["input_datetime.wakeup", "sensor.alarm"]);
+        for option in &sources["time_entities"] { assert!(sources[ENTITIES_SOURCE].contains(option)); }
     }
 }

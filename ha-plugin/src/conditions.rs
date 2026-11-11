@@ -38,8 +38,6 @@ impl Kind {
         }
     }
     pub fn definition(self) -> NodeDefinition {
-        let text =
-            |name, title, description| PropertyDefinition::text(name, title).described(description);
         let sun = |name, title| {
             PropertyDefinition::select(
                 name,
@@ -56,34 +54,27 @@ impl Kind {
             Self::Time => (
                 "Time condition",
                 "Checks local time and weekdays in Home Assistant",
-                "After is inclusive; Before is exclusive. Equal After/Before times cover the full day. A window crossing midnight uses either side of midnight; weekdays always refer to the current local day. Weekday accepts English mon,tue,wed,thu,fri,sat,sun. Empty fields impose no restriction. Uses get_config time_zone and a live HA-rendered UTC offset, never the WASI host timezone. HA refreshes the offset every minute: a timezone/DST change can lag by up to one minute plus event delivery. Until timezone data arrives the result is No.",
+                "After is inclusive; Before is exclusive. Equal After/Before times cover the full day. A window crossing midnight uses either side of midnight; weekdays always refer to the current local day. Choose weekdays with the day buttons; stored mon,tue,wed,thu,fri,sat,sun values remain supported. Empty fields impose no restriction. Uses get_config time_zone and a live HA-rendered UTC offset, never the WASI host timezone. HA refreshes the offset every minute: a timezone/DST change can lag by up to one minute plus event delivery. Until timezone data arrives the result is No.",
                 vec![
-                    text("after", "After", "Optional local HH:MM[:SS], inclusive"),
-                    text("before", "Before", "Optional local HH:MM[:SS], exclusive"),
-                    text(
-                        "weekday",
-                        "Weekday",
-                        "Optional comma-separated mon,tue,wed,thu,fri,sat,sun",
-                    ),
+                    PropertyDefinition::time("after", "After").described("Optional local HH:MM[:SS], inclusive"),
+                    PropertyDefinition::time("before", "Before").described("Optional local HH:MM[:SS], exclusive"),
+                    PropertyDefinition::multi_select("weekday", "Weekdays", &[
+                        ("mon", "Monday"), ("tue", "Tuesday"), ("wed", "Wednesday"),
+                        ("thu", "Thursday"), ("fri", "Friday"), ("sat", "Saturday"), ("sun", "Sunday"),
+                    ]).described("Optional weekdays; empty means every day"),
                 ],
             ),
             Self::Sun => (
                 "Sun condition",
                 "Checks sunrise and sunset boundaries with offsets",
-                "Uses cached sun.sun next_rising/next_setting. Each next event's HA-local wall time is projected onto today's local date, then the signed offset is added. Before and After are inclusive, independent tests combined with AND, as in HA (After sunset plus Before sunrise does not form an overnight window). Projection is an approximation after an event has passed: tomorrow's solar time may differ by a few minutes. Polar events more than two days away fail to No. Offsets accept -30m or 00:30:00. Uses the same HA UTC offset and minute refresh limitation as Time.",
+                "Uses cached sun.sun next_rising/next_setting. Each next event's HA-local wall time is projected onto today's local date, then the signed offset is added. Before and After are inclusive, independent tests combined with AND, as in HA (After sunset plus Before sunrise does not form an overnight window). Projection is an approximation after an event has passed: tomorrow's solar time may differ by a few minutes. Polar events more than two days away fail to No. Offsets accept -30m or 00:30:00; -30m means thirty minutes earlier. An offset appears only when its boundary is enabled. Uses the same HA UTC offset and minute refresh limitation as Time.",
                 vec![
                     sun("after", "After"),
-                    text(
-                        "after_offset",
-                        "After offset",
-                        "Optional signed duration added to the After event",
-                    ),
+                    PropertyDefinition::duration("after_offset", "Offset", true)
+                        .described("Optional signed duration; -30m means thirty minutes earlier"),
                     sun("before", "Before"),
-                    text(
-                        "before_offset",
-                        "Before offset",
-                        "Optional signed duration added to the Before event",
-                    ),
+                    PropertyDefinition::duration("before_offset", "Offset", true)
+                        .described("Optional signed duration; -30m means thirty minutes earlier"),
                 ],
             ),
             Self::Zone => (
@@ -101,11 +92,8 @@ impl Kind {
                 "Template condition",
                 "Evaluates a Jinja condition asynchronously in Home Assistant",
                 "On In starts a render_template subscription in Home Assistant and uses its first result, then unsubscribes. Result and Yes/No arrive a few ticks later. Only boolean true or text true (case-insensitive) is true, matching HA template conditions; other values are false. A render error, disconnected connection or 30-second timeout yields No and an English warning. Each In has its own request (up to 64 in flight per plugin); changing properties or deleting the node cancels its pending requests.",
-                vec![text(
-                    "value_template",
-                    "Value template",
-                    "Home Assistant Jinja template whose result is boolean",
-                )],
+                vec![PropertyDefinition::multiline("value_template", "Value template")
+                    .described("Home Assistant Jinja template whose result is boolean")],
             ),
         };
         NodeDefinition {
@@ -115,7 +103,7 @@ impl Kind {
             title: title.into(),
             description: description.into(),
             help: format!(
-                "{help}\n\nIn evaluates the condition. Result is boolean; exactly one of Yes or No fires. Local conditions make no request on execution. Unknown, unavailable, not yet loaded or disconnected states yield No and a warning once until that situation changes."
+                "{help}\n\nIn evaluates the condition. Result is boolean; exactly one of Yes or No fires. Local conditions make no request on execution. Invalid stored settings show a node error and log once until fixed. Unknown, unavailable, not yet loaded or disconnected states yield No and a warning once until that situation changes."
             ),
             category: CATEGORY.into(),
             properties,

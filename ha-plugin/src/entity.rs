@@ -134,6 +134,15 @@ impl PluginNode for Entity {
         ]
     }
 
+    fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
+        crate::validation::schema(&self.definition(), name, value)?;
+        if name == "entity_id" && let DataValue::String(text) = value
+            && !text.is_empty() && !crate::validation::entity_id(text) {
+            return Err(crate::validation::error("entity-id", "Enter an entity ID as domain.object_id"));
+        }
+        Ok(())
+    }
+
     fn set_property(&mut self, name: &str, value: DataValue) {
         let Some(text) = text_property(value) else {
             return;

@@ -181,7 +181,7 @@ fn insertion_uses_the_nearest_curve_segment_including_backwards_routes() {
 
 #[test]
 fn detached_anchor_uses_pin_then_clamped_directional_rows_and_outward_offset() {
-    let layout = NodeLayout { width: NODE_WIDTH, height: 180.0, pins_top: 60.0, cases_top: 160.0,
+    let layout = NodeLayout { pin_widths: vec![], width: NODE_WIDTH, height: 180.0, pins_top: 60.0, cases_top: 160.0,
         inputs: vec![(PinId(1), 72.0), (PinId(2), 96.0)],
         outputs: vec![(PinId(1), 144.0)], natural_height: 180.0, properties: vec![], input_heights: vec![],
     };

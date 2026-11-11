@@ -7,7 +7,7 @@ publish = false
 description = "Home Assistant integration plugin: typed entity changes, automation triggers and conditions, and actions over a WebSocket"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ticknode-plugin-sdk = { path = "../ticknode-plugin-sdk" }

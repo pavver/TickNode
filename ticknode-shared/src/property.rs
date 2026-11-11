@@ -1,10 +1,13 @@
 //! Node property schema and runtime property options.
 //!
-//! Node properties are stored as an untyped `Vec<(String, DataValue)>`; a node may additionally describe some
-//! of them (`NodeDefinition::properties`) so the editor can show a title, a drop-down or a searchable picker
-//! instead of a plain text field. A property that is not described keeps the default text row.
+//! Node properties are stored as an untyped `Vec<(String, DataValue)>`; optional definitions describe
+//! their controls, validation, order and visibility. Undescribed properties retain their legacy rows.
 
 use serde::{Deserialize, Serialize};
+use crate::{DataValue, PinId};
+
+mod validation;
+pub use validation::{normalize_property_value, parse_property_duration};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PropertyKind {
@@ -20,6 +23,16 @@ pub enum PropertyKind {
         #[serde(default)]
         plugin: String,
     },
+    /// Wall-clock text or HH:MM:SS; empty means unset. Signed offsets allow a leading sign.
+    Duration { signed: bool },
+    /// HH:MM or HH:MM:SS; empty means unset.
+    Time,
+    /// Comma-separated values, stored in option order.
+    MultiSelect(Vec<(String, String)>),
+    /// Free text edited in a resizable textarea row.
+    Multiline,
+    /// Persisted snapshot metadata without an editor row.
+    Hidden,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,11 +44,14 @@ pub struct PropertyDefinition {
     pub description: String,
     #[serde(default)]
     pub kind: PropertyKind,
+    /// An empty property uses this data input instead. Appended for protocol compatibility.
+    #[serde(default)]
+    pub input: Option<PinId>,
 }
 
 impl PropertyDefinition {
     fn new(name: &str, title: &str, kind: PropertyKind) -> Self {
-        Self { name: name.into(), title: title.into(), description: String::new(), kind }
+        Self { name: name.into(), title: title.into(), description: String::new(), kind, input: None }
     }
 
     pub fn text(name: &str, title: &str) -> Self {
@@ -51,6 +67,36 @@ impl PropertyDefinition {
     /// A picker over the options the plugin publishes under `source`.
     pub fn dynamic(name: &str, title: &str, source: &str) -> Self {
         Self::new(name, title, PropertyKind::Dynamic { source: source.into(), plugin: String::new() })
+    }
+
+    pub fn duration(name: &str, title: &str, signed: bool) -> Self {
+        Self::new(name, title, PropertyKind::Duration { signed })
+    }
+
+    pub fn time(name: &str, title: &str) -> Self {
+        Self::new(name, title, PropertyKind::Time)
+    }
+
+    pub fn multi_select(name: &str, title: &str, options: &[(&str, &str)]) -> Self {
+        Self::new(name, title, PropertyKind::MultiSelect(options.iter().map(|(v, l)| ((*v).into(), (*l).into())).collect()))
+    }
+
+    pub fn multiline(name: &str, title: &str) -> Self {
+        Self::new(name, title, PropertyKind::Multiline)
+    }
+
+    pub fn hidden(name: &str) -> Self {
+        Self::new(name, "", PropertyKind::Hidden)
+    }
+
+    pub fn or_input(mut self, pin: u32) -> Self {
+        self.input = Some(PinId(pin));
+        self
+    }
+
+    pub fn uses_input(&self, properties: &[(String, DataValue)]) -> bool {
+        self.input.is_some() && properties.iter().find(|(name, _)| *name == self.name)
+            .is_none_or(|(_, value)| matches!(value, DataValue::String(s) if s.is_empty()))
     }
 
     pub fn described(mut self, description: &str) -> Self {
@@ -92,6 +138,17 @@ mod tests {
     use crate::NodeDefinition;
 
     #[test]
+    fn old_property_schemas_default_to_no_replacement_input() {
+        let property: PropertyDefinition = serde_json::from_str(r#"{"name":"target","title":"Target"}"#).unwrap();
+        assert_eq!(property.input, None);
+        assert!(!property.uses_input(&[]));
+        let property = property.or_input(1);
+        assert!(property.uses_input(&[]));
+        assert!(property.uses_input(&[("target".into(), "".into())]));
+        assert!(!property.uses_input(&[("target".into(), "light.hall".into())]));
+    }
+
+    #[test]
     fn property_schema_roundtrips_through_postcard() {
         let def = NodeDefinition {
             adaptive: false,
@@ -101,7 +158,12 @@ mod tests {
             properties: vec![
                 PropertyDefinition::text("a", "A"),
                 PropertyDefinition::select("mode", "Mode", &[("every", "Every"), ("latest", "Latest")]).described("d"),
-                PropertyDefinition::dynamic("entity_id", "Entity", "entities"),
+                PropertyDefinition::dynamic("entity_id", "Entity", "entities").or_input(1),
+                PropertyDefinition::duration("offset", "Offset", true),
+                PropertyDefinition::time("at", "At"),
+                PropertyDefinition::multi_select("days", "Days", &[("mon", "Monday")]),
+                PropertyDefinition::multiline("template", "Template"),
+                PropertyDefinition::hidden("snapshot"),
             ],
         };
         let back: NodeDefinition = postcard::from_bytes(&postcard::to_allocvec(&def).unwrap()).unwrap();

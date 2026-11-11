@@ -112,10 +112,16 @@ pub(crate) fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefi
             .properties
             .into_iter()
             .map(|p| wit::PropertyDefinition {
+                input: p.input.map(|pin| pin.0),
                 name: p.name,
                 title: p.title,
                 description: p.description,
                 kind: match p.kind {
+                    PropertyKind::Duration { signed } => wit::PropertyKind::Duration(signed),
+                    PropertyKind::Time => wit::PropertyKind::Time,
+                    PropertyKind::MultiSelect(options) => wit::PropertyKind::MultiSelect(options),
+                    PropertyKind::Multiline => wit::PropertyKind::Multiline,
+                    PropertyKind::Hidden => wit::PropertyKind::Hidden,
                     PropertyKind::Text => wit::PropertyKind::Text,
                     PropertyKind::Select(options) => wit::PropertyKind::Select(options),
                     PropertyKind::Dynamic { source, .. } => wit::PropertyKind::Dynamic(source),

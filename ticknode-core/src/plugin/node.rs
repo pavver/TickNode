@@ -198,6 +198,27 @@ impl Node for WasmNode {
         }
     }
 
+    fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiMessage> {
+        let mut rt = lock(&self.runtime);
+        let generation = rt.instantiate().map_err(trap_error).map_err(|e| e.ui_message())?;
+        let (store, api) = rt.api().map_err(trap_error).map_err(|e| e.ui_message())?;
+        let existing = self.handle.filter(|(g, _)| *g == generation).map(|(_, r)| r);
+        let resource = match existing {
+            Some(resource) => resource,
+            None => create_resource(store, api, &self.type_name, self.id, &self.properties)
+                .map_err(|e| e.ui_message())?,
+        };
+        let result = api.node().call_validate_property(&mut *store, resource, name, &encode_value(value));
+        if existing.is_none() { let _ = resource.resource_drop(&mut *store); }
+        match result {
+            Ok(result) => result.map_err(|e| rt.ui_error(e)),
+            Err(e) => {
+                rt.discard();
+                Err(trap_error(e).ui_message())
+            }
+        }
+    }
+
     fn set_property(&mut self, name: &str, value: DataValue) {
         // Store the value immediately: it is used to reconstruct the node after a plugin restart.
         match self.properties.iter_mut().find(|(n, _)| n == name) {

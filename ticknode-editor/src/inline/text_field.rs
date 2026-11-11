@@ -12,6 +12,17 @@ fn text_key(key: &str, multiline: bool, modifier: bool) -> TextKey {
     }
 }
 
+/// Observe server responses directly: a rejected draft receives the same stored value again.
+fn text_draft(value: Signal<Option<DataValue>>) -> (Signal<String>, RwSignal<String>) {
+    let shown = Signal::derive(move || match value.get() {
+        Some(DataValue::String(s)) => s,
+        _ => String::new(),
+    });
+    let draft = RwSignal::new(shown.get_untracked());
+    Effect::new(move |_| draft.set(shown.get()));
+    (shown, draft)
+}
+
 #[component]
 pub(super) fn TextField(
     value: Signal<Option<DataValue>>,
@@ -19,12 +30,7 @@ pub(super) fn TextField(
     multiline: Signal<bool>,
     on_commit: Callback<Option<DataValue>>,
 ) -> impl IntoView {
-    let shown = Memo::new(move |_| match value.get() {
-        Some(DataValue::String(s)) => s,
-        _ => String::new(),
-    });
-    let draft = RwSignal::new(shown.get_untracked());
-    Effect::new(move |_| draft.set(shown.get()));
+    let (shown, draft) = text_draft(value);
     let commit = move || {
         let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked()) else { return };
         if text != saved { on_commit.run(Some(DataValue::String(text))); }
@@ -86,5 +92,30 @@ mod tests {
         assert_eq!(text_key("Enter", false, false), TextKey::Commit);
         assert_eq!(text_key("Escape", true, true), TextKey::Cancel);
         assert_eq!(text_key("a", true, false), TextKey::Insert);
+    }
+}
+
+#[cfg(test)]
+mod rejection_tests {
+    use super::*;
+    use any_spawner::Executor;
+
+    #[test]
+    fn identical_server_update_reverts_a_rejected_text_draft() {
+        let _ = Executor::init_futures_executor();
+        let owner = Owner::new();
+        owner.with(|| {
+            let stored = RwSignal::new(Some(DataValue::from("stored")));
+            let (_, draft) = text_draft(Signal::derive(move || stored.get()));
+            Executor::poll_local();
+            draft.set("rejected".into());
+            stored.set(Some(DataValue::from("stored")));
+            Executor::poll_local();
+            assert_eq!(draft.get_untracked(), "stored");
+            stored.set(Some(DataValue::from("accepted")));
+            Executor::poll_local();
+            assert_eq!(draft.get_untracked(), "accepted");
+        });
+        owner.cleanup();
     }
 }

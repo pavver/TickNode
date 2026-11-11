@@ -74,14 +74,10 @@ fn service_catalog_builds_options_fields_targets_and_response_support() {
         ["weather.get_forecasts"]
     );
     assert_eq!(sensor_options[0].label, "Get forecasts");
-    let targetless = options_for(&services, None);
-    assert_eq!(
-        targetless
-            .iter()
-            .map(|o| o.value.as_str())
-            .collect::<Vec<_>>(),
-        ["script.run_script"]
-    );
+    let input_mode = options_for(&services, None);
+    assert_eq!(input_mode.len(), services.len());
+    assert!(input_mode.iter().any(|o| o.value == "light.set_state"));
+    assert!(input_mode.iter().any(|o| o.value == "script.run_script"));
     assert_eq!(target_domains("switch", &json!({"target":{}})), ["switch"]);
     assert!(!services.is_empty());
     assert!(super::services(&Value::Null).is_empty());
@@ -257,10 +253,11 @@ fn action_snapshot_restores_the_exact_form_without_a_catalog() {
     assert!(action.service.fields.is_empty());
     action.set_property("target", "light.kitchen".into());
     action.set_property("action", "light.turn_on".into());
-    // Clearing the target entity resets an entity-targeted action while the catalog is loaded.
+    // Input mode keeps the selected action and its snapshotted fields.
     action.set_property("target", "".into());
-    assert!(action.action.is_empty());
-    assert!(action.service.fields.is_empty());
+    assert_eq!(action.action, "light.turn_on");
+    assert_eq!(action.service.fields.len(), 4);
+    assert_eq!(action.definition().properties[0].input, Some(PinId(1)));
     action.set_property("target", "light.kitchen".into());
     action.set_property("action", "light.turn_on".into());
     crate::with_hub(|hub, _| hub.services.clear());

@@ -58,10 +58,16 @@ pub(super) fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (Node
         adaptive: false,
         cost: d.cost,
         properties: d.properties.into_iter().map(|p| PropertyDefinition {
+            input: p.input.map(PinId),
             name: p.name,
             title: p.title,
             description: p.description,
             kind: match p.kind {
+                wit::PropertyKind::Duration(signed) => PropertyKind::Duration { signed },
+                wit::PropertyKind::Time => PropertyKind::Time,
+                wit::PropertyKind::MultiSelect(options) => PropertyKind::MultiSelect(options),
+                wit::PropertyKind::Multiline => PropertyKind::Multiline,
+                wit::PropertyKind::Hidden => PropertyKind::Hidden,
                 wit::PropertyKind::Text => PropertyKind::Text,
                 wit::PropertyKind::Select(options) => PropertyKind::Select(options),
                 wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic { source, plugin: plugin.to_string() },

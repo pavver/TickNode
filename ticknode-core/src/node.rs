@@ -39,6 +39,8 @@ pub trait Node: Send + Sync {
     fn definition_revision(&self) -> u64 { 0 }
     fn is_pure(&self) -> bool { false }
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput>;
+    /// Validates interactive edits; stored state restoration bypasses this hook.
+    fn validate_property(&self, _name: &str, _value: &DataValue) -> Result<(), UiMessage> { Ok(()) }
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
     /// Adapts a pin contract through persisted properties; returns whether it changed.
     fn adapt_to(&mut self, _pin: PinId, _data_type: &DataType) -> bool { false }

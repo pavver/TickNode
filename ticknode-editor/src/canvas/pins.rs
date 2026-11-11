@@ -54,7 +54,8 @@ pub fn Pin(
     // An unconnected data input can have an inline value set right here
     let value_type = ed.types.with_untracked(|types| inline_type(types, dir, &pin.pin_type));
     let row_height = Signal::derive(move || ed.layout(node).map_or(ROW_H, |l| l.pin_height(pin_id, dir)));
-    let value = value_type.map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() multiline=Signal::derive(move || row_height.get() > ROW_H) /> }));
+    let property_input = ed.node(node).is_some_and(|n| n.instance.with_untracked(|i| i.definition.properties.iter().any(|p| p.input == Some(pin_id))));
+    let value = value_type.filter(|_| !property_input).map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() multiline=Signal::derive(move || row_height.get() > ROW_H) /> }));
     let pin_name_title = pin.name.clone();
     let pin_type_title = pin.pin_type.clone();
     let pin_title = move || {
@@ -79,7 +80,14 @@ pub fn Pin(
             class=move || {
                 format!("{}{}", pin_class(is_input, is_field, is_input && missing(), allowed_target().is_some()), if row_height.get() > ROW_H { " grown" } else { "" })
             }
-            style=move || format!("height:{}px", row_height.get())
+            style=move || {
+                let mut style = format!("height:{}px", row_height.get());
+                if ed.node_tracked(node).is_some_and(|n| n.instance.with(|i| i.definition.type_name != "match")) {
+                    let width = ed.layout(node).map_or(NODE_WIDTH, |l| l.pin_width(pin_id, dir));
+                    style.push_str(&format!(";width:{width}px;max-width:{width}px"));
+                }
+                style
+            }
             on:pointerenter=move |ev| crate::node_status::capture_title(&ev, &pin_title)
             data-pin=pin_id.0.to_string()
             data-node=node.0.to_string()

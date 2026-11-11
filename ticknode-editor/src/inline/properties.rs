@@ -1,7 +1,7 @@
 //! Node property rows, including type selectors and dynamic pickers.
 
 use super::*;
-use crate::geometry::visible_node_property;
+use crate::geometry::{property_rows_connected, is_type_property};
 use crate::match_editor::stop_on_controls;
 use crate::panels::property_label;
 use crate::picker::PickerField;
@@ -49,9 +49,20 @@ fn InlineSelect(
     if !current.is_empty() && !options.iter().any(|(v, _)| *v == current) {
         options.push((current.clone(), current));
     }
+    let sizing_options = StoredValue::new(options.clone());
+    let sizing_context = StoredValue::new(localization.clone());
+    let selected_label = move || {
+        let current = selected.get();
+        sizing_options.with_value(|options| options.iter().find(|(value, _)| *value == current)
+            .map_or(current.clone(), |(value, label)| sizing_context.with_value(|context| match context {
+                Some((owner, name)) => i18n::property_option_label(owner, name, value, label),
+                None => label.clone(),
+            })))
+    };
     view! {
         <select
             class="inline-value select"
+            style=move || format!("--selected-width:{}px", crate::geometry::compact_select_width(&selected_label()))
             title=move || title.get()
             prop:value=move || selected.get()
             on:change=move |ev| {
@@ -81,14 +92,12 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
     let ed = use_editor();
     let Some(node) = ed.node(id) else { return ().into_any() };
     let names = Memo::new(move |_| node.instance.with(|i| {
-        i.model.properties.iter()
-            .filter(|(n, v)| visible_node_property(&i.model.type_name, n, v, &i.model.properties))
+        property_rows_connected(&i.definition, &i.model.properties, &ed.data.with(|cs| cs.iter().filter(|c| c.dst_node == id).map(|c| c.dst_pin).collect::<Vec<_>>())).into_iter()
             .map(|(n, v)| {
                 // Only a string property can be shown as a drop-down or picker
                 let described = matches!(v, DataValue::String(_))
                     .then(|| i.definition.properties.iter().find(|p| p.name == *n).cloned())
-                    .flatten()
-                    .filter(|p| p.kind != PropertyKind::Text || !p.title.is_empty());
+                    .flatten();
                 let declared = if i.model.type_name == "const" && n == "value" {
                     i.definition.pins.iter().find_map(|p| match &p.pin_type { PinType::Data(t) if p.id == PinId(0) => Some(t.clone()), _ => None }).unwrap_or_else(|| v.get_type())
                 } else { v.get_type() };
@@ -145,7 +154,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             />
                         }
                         .into_any()
-                    } else if name.ends_with("_type") {
+                    } else if node.instance.with_untracked(|i| is_type_property(&i.definition, &name)) {
                         view! {
                             <InlineSelect
                                 options=if type_name() == "text/to_text" { type_options(ed, &["any", "number", "string", "bool", "time", "datetime", "duration", "color", "object", "list<any>"]) } else { type_options(ed, &TYPE_OPTIONS) }
@@ -155,6 +164,8 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             />
                         }
                         .into_any()
+                    } else if let Some(kind @ (PropertyKind::Duration { .. } | PropertyKind::Time | PropertyKind::MultiSelect(_))) = described.as_ref().map(|d| d.kind.clone()) {
+                        view! { <super::typed_properties::TypedProperty kind=kind owner=type_name() name=name.clone() value=value title=label on_commit=send /> }.into_any()
                     } else if value_type == DataType::Bool {
                         view! {
                             <Switch
@@ -165,6 +176,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         }
                         .into_any()
                     } else {
+                        let forced_multiline = described.as_ref().is_some_and(|p| p.kind == PropertyKind::Multiline);
                         let type_select = (name == "value" && is_const()).then(|| view! {
                             <InlineSelect
                                 options=type_options(ed, &CONST_TYPES).into_iter().filter(|(v, _)| CONST_TYPES.contains(&v.as_str()) || ticknode_shared::quantity::kind(v).is_some()).collect()
@@ -183,7 +195,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                             <InlineValue
                                 value=value
                                 value_type=value_type
-                                multiline=Signal::derive(move || row_height.get() > crate::geometry::ROW_H)
+                                multiline=Signal::derive(move || forced_multiline || row_height.get() > crate::geometry::ROW_H)
                                 title=label
                                 on_commit=Callback::new(move |v: Option<DataValue>| {
                                     if let Some(v) = v {

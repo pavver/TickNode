@@ -41,3 +41,5 @@ node-test-picker-prop-mode-title = Режим
 node-test-picker-prop-mode-description = Статичні варіанти
 node-test-picker-prop-mode-option-a = Варіант А
 node-test-picker-prop-mode-option-b = Варіант Б
+
+test-plugin-property-rejected = Властивість { $name } відхилено

@@ -22,7 +22,7 @@
 //! |------|-----|
 //! | node title / description / help | `node-<type slug>-title`, `-description`, `-help` |
 //! | property title / description | `node-<type slug>-prop-<name>-title`, `-description` (the property name as written when it consists of `[A-Za-z0-9_-]`, otherwise its slug) |
-//! | select option label | `node-<type slug>-prop-<name>-option-<value slug>` |
+//! | select option label | `node-<type slug>-prop-<name>-option-<value slug>` (optional `-short` for MultiSelect chips) |
 //! | pin label | `node-<type slug>-pin-<pin name>`: the pin name as written when it consists of `[A-Za-z0-9_-]` (`pin-Val`), otherwise its slug (`Delay ms` -> `pin-delay-ms`) |
 //! | category | `category-<category slug>` (the first plugin that defines a category key wins) |
 //! | data type | `type-<type name slug>-title`, `-description`, `-field-<field>`, `-value-<enum value>` |

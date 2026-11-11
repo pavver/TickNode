@@ -101,6 +101,11 @@ pub(super) fn QuantityValue(
                 }
             />
             <select class="inline-value select duration-unit"
+                style=move || {
+                    let label = kind.with_value(|q| q.units.iter().find(|u| u.id == unit.get())
+                        .map(|u| i18n::unit_symbol(&u.id).unwrap_or_else(|| u.symbol.clone())).unwrap_or_default());
+                    format!("--selected-width:{}px", crate::geometry::compact_select_width(&label))
+                }
                 prop:value=move || unit.get()
                 aria-label=move || t!("quantity-unit-title")
                 title=move || t!("quantity-unit-title")

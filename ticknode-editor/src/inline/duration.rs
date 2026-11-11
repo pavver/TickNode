@@ -11,16 +11,18 @@ pub(super) fn DurationValue(
     on_commit: Callback<Option<DataValue>>,
     optional: bool,
     title: Signal<String>,
+    #[prop(optional)] wall_only: bool,
+    #[prop(optional)] default_minutes: bool,
 ) -> impl IntoView {
     let ed = use_editor();
     let initial = value.get_untracked();
-    let (initial_text, initial_unit) = presentation(initial.as_ref(), None);
+    let (initial_text, initial_unit) = presentation(initial.as_ref(), default_minutes.then_some(Unit::Minutes));
     let draft = RwSignal::new(initial_text);
     let unit = RwSignal::new(initial_unit);
     let saved = RwSignal::new(initial);
     let state = RwSignal::new(ControlState::Idle);
     let error = RwSignal::new(None::<UiMessage>);
-    let incoming = Memo::new(move |_| value.get());
+    let incoming = Signal::derive(move || value.get());
     Effect::new(move |_| {
         let current = incoming.get();
         let (text, selected) = presentation(current.as_ref(), Some(unit.get_untracked()));
@@ -38,7 +40,8 @@ pub(super) fn DurationValue(
     let commit = move || {
         // Blur can arrive after node removal or a change of the Constant's type.
         let (Some(text), Some(selected), Some(current)) = (draft.try_get_untracked(), unit.try_get_untracked(), saved.try_get_untracked()) else { return };
-        match parse(&text, selected) {
+        let parsed = if wall_only { units::parse_property(&text, selected) } else { parse(&text, selected) };
+        match parsed {
             Ok(None) if !optional => restore(),
             Ok(next) => {
                 let (text, selected) = presentation(next.as_ref(), Some(selected));
@@ -64,11 +67,11 @@ pub(super) fn DurationValue(
                 type="text"
                 inputmode="text"
                 class=move || format!("inline-value duration-number {}", state.get().class())
-                placeholder=move || t!("hint-duration")
+                placeholder=move || if wall_only { t!("property-duration-placeholder") } else { t!("hint-duration") }
                 aria-label=move || title.get()
                 aria-invalid=move || error.with(Option::is_some).to_string()
                 title=move || error.with(|e| e.as_ref().map(i18n::ui_text)).unwrap_or_else(|| {
-                    format!("{}\n{}", title.get(), t!("duration-input-hint"))
+                    format!("{}\n{}", title.get(), if wall_only { t!("property-duration-hint") } else { t!("duration-input-hint") })
                 })
                 spellcheck="false"
                 prop:value=move || draft.get()
@@ -99,6 +102,7 @@ pub(super) fn DurationValue(
             />
             <select
                 class="inline-value select duration-unit"
+                style=move || format!("--selected-width:{}px", crate::geometry::compact_select_width(&unit.get().label()))
                 aria-label=move || t!("duration-unit-title")
                 title=move || t!("duration-unit-title")
                 prop:value=move || unit.get().id()
@@ -107,7 +111,7 @@ pub(super) fn DurationValue(
                 }
                 on:blur=move |_| commit()
             >
-                {Unit::ALL.into_iter().map(|u| view! { <option value=u.id()>{move || u.label()}</option> }).collect_view()}
+                {Unit::available(wall_only).map(|u| view! { <option value=u.id()>{move || u.label()}</option> }).collect_view()}
             </select>
         </span>
     }

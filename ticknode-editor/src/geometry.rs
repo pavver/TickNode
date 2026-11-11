@@ -11,6 +11,7 @@ use ticknode_shared::{
 mod routes;
 mod layout;
 pub use layout::{NodeLayout, resize_size};
+pub(crate) use layout::compact_select_width;
 pub use routes::{route_path, route_insert_index, route_midpoint};
 
 /// Connection presentation: solid for compatible pins, dashed for conversion, absent if invalid.
@@ -95,7 +96,26 @@ pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, pro
     }
 }
 
+/// Visible rows in schema order, followed by undescribed rows in stored order.
+pub fn property_rows<'a>(def: &NodeDefinition, properties: &'a [(String, DataValue)]) -> Vec<&'a (String, DataValue)> {
+    property_rows_connected(def, properties, &[])
+}
+
+pub fn property_rows_connected<'a>(def: &NodeDefinition, properties: &'a [(String, DataValue)], connected: &[PinId]) -> Vec<&'a (String, DataValue)> {
+    let mut rows: Vec<_> = properties.iter().filter(|(name, value)| {
+        visible_node_property(&def.type_name, name, value, properties)
+            && !def.properties.iter().any(|p| p.name == *name && (p.kind == ticknode_shared::PropertyKind::Hidden || p.input.is_some_and(|pin| connected.contains(&pin))))
+    }).collect();
+    rows.sort_by_key(|(name, _)| def.properties.iter().position(|p| p.name == *name).unwrap_or(usize::MAX));
+    rows
+}
+
+pub fn is_type_property(def: &NodeDefinition, name: &str) -> bool {
+    name.ends_with("_type") && !def.properties.iter().any(|p| p.name == name)
+}
+
 /// Number of inline property rows on a node.
+#[cfg(test)]
 pub fn prop_rows(node_type: &str, properties: &[(String, DataValue)]) -> usize {
     properties.iter().filter(|(n, v)| visible_node_property(node_type, n, v, properties)).count()
 }

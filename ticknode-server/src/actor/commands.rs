@@ -135,7 +135,17 @@ impl Actor {
             ClientMessage::RemoveFrame(id) => only(self.remove_frame(id, s)),
             ClientMessage::Paste(snippet) => self.paste(snippet, s, reply)?,
             ClientMessage::PasteSettings { id, type_name, properties } => self.paste_settings_on_sheet(id, &type_name, properties, s)?,
-            ClientMessage::SetProperty { id, name, value } => only(self.set_property(id, &name, value, s)?),
+            ClientMessage::SetProperty { id, name, value } => {
+                match self.set_property(id, &name, value, s) {
+                    Ok(events) => only(events),
+                    Err(error) => {
+                        if self.node_sheet.get(&id) == Some(&s) && let Some(node) = self.instance(id) {
+                            let _ = reply.send(ServerMessage::NodeUpdated(node));
+                        }
+                        return Err(error);
+                    }
+                }
+            },
             ClientMessage::SetPinSplit { node, pin, split } => only(self.set_pin_split(node, pin, split, s)?),
             ClientMessage::SetInputValue { id, pin, value } => only(self.set_input_value(id, pin, value, s)?),
             ClientMessage::ConnectExec(c) => only(self.connect_exec(c, s)?),
@@ -172,7 +182,7 @@ impl Actor {
             }
         }
         let id = NodeId::generate();
-        self.engine.create_node(id, type_name, &properties).map_err(|e| e.ui_message())?;
+        self.engine.create_node_interactive(id, type_name, &properties).map_err(|e| e.ui_message())?;
         self.node_sheet.insert(id, sheet);
         self.engine.set_node_sheet(id, Some(sheet));
         if !self.sheet_is_enabled(sheet) {

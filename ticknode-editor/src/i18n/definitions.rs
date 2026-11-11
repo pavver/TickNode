@@ -129,6 +129,17 @@ pub fn property_option_label(type_name: &str, prop_name: &str, value: &str, labe
         .unwrap_or_else(|| label.to_string())
 }
 
+/// Compact MultiSelect text; the full option label remains available as a tooltip.
+pub fn property_option_short_label(type_name: &str, name: &str, value: &str, label: &str) -> String {
+    property_lookup(type_name, name, &format!("option-{}-short", slug(value)))
+        .unwrap_or_else(|| property_option_label(type_name, name, value, label).chars().take(3).collect())
+}
+
+/// Whether a named pin type has an expandable struct definition in the current catalog.
+pub(crate) fn pin_can_split(pin: &PinDefinition) -> bool {
+    TYPES.with(|types| splittable_type(&types.borrow(), pin).is_some())
+}
+
 /// Make/Break pins are named after the type (pin 0) and the field titles (the rest).
 fn custom_pin_label(struct_name: &str, pin_name: &str) -> Option<String> {
     TYPES.with(|types| {
@@ -156,6 +167,16 @@ pub fn type_def_title(def: &TypeDefinition) -> String {
 pub fn enum_value_title(type_name: &str, value: &EnumValue) -> String {
     lookup(&format!("type-{}-value-{}", slug(type_name), slug(&value.value)))
         .unwrap_or_else(|| if value.title.is_empty() { value.value.clone() } else { value.title.clone() })
+}
+
+/// Localized selected enum label for content-based geometry; structs have no inline control.
+pub(crate) fn enum_selected_label(name: &str, selected: &str) -> Option<String> {
+    TYPES.with(|types| {
+        let types = types.borrow();
+        let def = types.get(name).filter(|d| d.is_enum())?;
+        Some(def.values().iter().find(|value| value.value == selected)
+            .map_or_else(|| if selected.is_empty() { "—".into() } else { selected.into() }, |value| enum_value_title(name, value)))
+    })
 }
 
 /// Title of a plugin setting (`setting-<plugin slug>-<key slug>-title`).

@@ -16,6 +16,13 @@ pub fn error(message: &str) {
     wit_host::log(wit::LogLevel::Error, message);
 }
 
+/// Reports a structured runtime error. Repeat with `log=false` while the failure continues.
+pub fn node_error(message: &UiError, log: bool) {
+    wit_host::node_error(&wit::UiError {
+        key: message.key.clone(), args: message.args.clone(), fallback: message.fallback.clone(),
+    }, log);
+}
+
 pub fn current_tick() -> u64 {
     wit_host::current_tick()
 }

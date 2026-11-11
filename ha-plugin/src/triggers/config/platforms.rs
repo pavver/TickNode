@@ -6,10 +6,7 @@ use serde_json::Value;
 pub(super) fn time(p: &Properties<'_>) -> Option<ha_core_client::triggers::Trigger> {
     Some({
         let at = p.required("at")?;
-        if ticknode_shared::text::parse_time(at).is_none()
-            && !((at.starts_with("input_datetime.") || at.starts_with("sensor."))
-                && !at.ends_with('.'))
-        {
+        if ticknode_shared::text::parse_time(at).is_none() && !crate::validation::entity_id(at) {
             return None;
         }
         TimeTrigger::new(at).into()
@@ -31,7 +28,7 @@ pub(super) fn time_pattern(p: &Properties<'_>) -> Option<ha_core_client::trigger
                 continue;
             }
 
-            if !valid_pattern(v, max) {
+            if !crate::validation::pattern(v, max) {
                 return None;
             }
             t = match key {
@@ -168,12 +165,4 @@ pub(super) fn template(p: &Properties<'_>) -> Option<ha_core_client::triggers::T
         }
         t.into()
     })
-}
-
-fn valid_pattern(value: &str, max: u32) -> bool {
-    value == "*"
-        || value.strip_prefix('/').map_or_else(
-            || value.parse::<u32>().is_ok_and(|n| n <= max),
-            |step| step.parse::<u32>().is_ok_and(|n| n > 0 && n <= max + 1),
-        )
 }

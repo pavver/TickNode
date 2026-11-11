@@ -6,6 +6,8 @@ pub trait PluginNode: 'static {
     fn definition(&self) -> NodeDefinition;
     /// Properties used to reconstruct the node (graph persistence, plugin restart).
     fn properties(&self) -> Vec<(String, DataValue)> { Vec::new() }
+    /// Validates interactive edits; stored state restoration bypasses this hook.
+    fn validate_property(&self, _name: &str, _value: &DataValue) -> Result<(), UiError> { Ok(()) }
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output>;
     /// For event source nodes: called at the start of every tick when `polls()` is `true`.

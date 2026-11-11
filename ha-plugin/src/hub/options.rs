@@ -100,7 +100,7 @@ impl Hub {
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &options);
     }
 
-    /// Publishes target-less actions (`"actions"`) and per-entity action lists (`"actions:<entity>"`).
+    /// Publishes all actions for input mode (`"actions"`) and per-entity action lists (`"actions:<entity>"`).
     fn publish_action_sources(&mut self, env: &mut impl Env) {
         if self.services.is_empty() {
             return;

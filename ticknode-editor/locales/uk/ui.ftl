@@ -575,3 +575,16 @@ settings-display-decimals = Знаки після коми
 settings-display-numbers = Числа
 
 error-hysteresis-thresholds = Некоректні пороги гістерезису: у режимі зростання Поріг увімкнення має бути ≥ Порога вимкнення; у режимі спадання — ≤ Порога вимкнення
+
+error-property-duration = Введіть коректну тривалість.
+error-property-time = Введіть час у форматі ГГ:ХХ або ГГ:ХХ:СС.
+error-property-multi-select = Оберіть значення з доступних варіантів.
+error-property-text = Введіть текст.
+property-duration-earlier = Раніше (від’ємне зміщення)
+property-duration-later = Пізніше (додатне зміщення)
+property-time-placeholder = HH:MM
+
+property-from-input = Сутність із входу
+
+property-duration-placeholder = 30
+property-duration-hint = Число у вибраній одиниці, 1h 30m або ГГ:ХХ:СС

@@ -10,7 +10,7 @@ pub fn action_source(target: &str) -> String {
 }
 
 /// Whether `service` can be executed for `target` (`Some((entity_id, state))` when an entity is selected,
-/// or `None` for actions that run without an entity).
+/// or `None` for input mode, which offers every action).
 pub fn service_matches(
     service: &Service,
     target: Option<(&str, Option<&ha_core_client::State>)>,
@@ -22,7 +22,7 @@ pub fn service_matches(
                 && service.targeted
                 && service.filters.iter().any(|f| f.matches(domain, state))
         }
-        None => !service.targeted,
+        None => true,
     }
 }
 

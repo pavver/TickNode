@@ -50,7 +50,6 @@ fn ha_plugin_action_form_sends_fields_target_and_response_requests() {
             .collect::<Vec<_>>(),
         [
             "In",
-            "Entity",
             "Brightness",
             "effect",
             "rgb_color",
@@ -89,7 +88,13 @@ fn ha_plugin_action_form_sends_fields_target_and_response_requests() {
     assert!(calls[0].get("return_response").is_none());
     assert_eq!(output(&engine, action, ERROR), Some("".into()));
     assert!(output(&engine, action, RESPONSE).is_none());
-    // Both an inline value and a connected input override the property (the connection wins).
+    // Empty target exposes Entity and preserves the snapshotted action fields.
+    engine.set_node_property(action, "target", "".into()).unwrap();
+    let def = engine.node_definition(action).unwrap();
+    assert!(def.pins.iter().any(|p| p.id == PinId(1)
+        && p.direction == PinDirection::Input && p.name == "Entity"));
+    assert!(def.pins.iter().any(|p| p.id == PinId(2) && p.name == "Brightness"));
+    // Both an inline value and a connected input work in input mode (the connection wins).
     engine
         .set_input_value(action, PinId(1), Some("light.inline".into()))
         .unwrap();
@@ -280,10 +285,10 @@ fn ha_plugin_action_snapshot_restores_offline_through_wasm() {
         )
         .unwrap();
     let def = engine.node_definition(action).unwrap();
-    assert_eq!(def.pins[2].id, PinId(2));
-    assert_eq!(def.pins[2].name, "Brightness");
-    assert!(def.pins[2].required);
-    assert_eq!(def.pins[3].pin_type, PinType::Data(DataType::Color));
+    assert_eq!(def.pins[1].id, PinId(2));
+    assert_eq!(def.pins[1].name, "Brightness");
+    assert!(def.pins[1].required);
+    assert_eq!(def.pins[2].pin_type, PinType::Data(DataType::Color));
     assert_eq!(
         def.properties[0].kind,
         PropertyKind::Dynamic {

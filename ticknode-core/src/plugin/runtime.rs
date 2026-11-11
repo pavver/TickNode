@@ -151,7 +151,7 @@ impl Runtime {
     }
 
     /// A `configure` error from the plugin; its key is restricted to the plugin's own namespace.
-    fn ui_error(&self, e: wit::UiError) -> UiMessage {
+    pub(super) fn ui_error(&self, e: wit::UiError) -> UiMessage {
         let message = UiMessage { key: e.key, args: e.args, fallback: e.fallback };
         sanitize_ui_message(message, &self.allowed)
     }

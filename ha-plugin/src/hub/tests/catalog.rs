@@ -106,7 +106,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
             .iter()
             .map(|o| o.value.as_str())
             .collect::<Vec<_>>(),
-        ["weather.get_forecasts"]
+        ["light.turn_on", "light.set_state", "weather.get_forecasts"]
     );
     assert_eq!(
         rig.env.options["action_targets"]

@@ -90,6 +90,15 @@ pub(crate) fn viewport() -> (f64, f64) {
     )
 }
 
+pub(crate) fn input_options(options: &[PropertyOption], label: &str) -> Vec<PropertyOption> {
+    std::iter::once(PropertyOption { value: String::new(), label: label.into(), detail: String::new(), icon: None })
+        .chain(options.iter().filter(|o| !o.value.is_empty()).cloned()).collect()
+}
+
+fn property_has_input(ed: Editor, node: NodeId, property: &str) -> bool {
+    ed.node_tracked(node).is_some_and(|n| n.instance.with(|i| i.definition.properties.iter().any(|p| p.name == property && p.input.is_some())))
+}
+
 fn options_of(ed: Editor, plugin: &str, source: &str) -> std::sync::Arc<Vec<PropertyOption>> {
     ed.property_options.with(|all| all.get(&(plugin.to_string(), source.to_string())).cloned()).unwrap_or_default()
 }
@@ -118,6 +127,7 @@ pub fn PickerField(
         let found = options.iter().find(|o| o.value == value).cloned();
         (value, found)
     });
+    let input_property = property.clone();
     let (prop, plug, src) = (property.clone(), plugin, source);
     let toggle = move |ev: web_sys::MouseEvent| {
         let open_here = ed.picker.with_untracked(|p| p.as_ref().is_some_and(|p| p.node == node && p.property == prop));
@@ -156,7 +166,7 @@ pub fn PickerField(
             {move || {
                 let (value, found) = current.get();
                 if value.is_empty() {
-                    view! { <span class="picker-label picker-placeholder">{t!("picker-placeholder")}</span> }.into_any()
+                    view! { <span class="picker-label picker-placeholder">{if property_has_input(ed, node, &input_property) { t!("property-from-input") } else { t!("picker-placeholder") }}</span> }.into_any()
                 } else {
                     match found {
                         Some(o) => view! {

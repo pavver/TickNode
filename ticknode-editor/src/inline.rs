@@ -12,6 +12,7 @@ pub(crate) mod properties;
 pub(crate) mod duration;
 mod quantity;
 mod text_field;
+mod typed_properties;
 
 pub use properties::*;
 
@@ -91,9 +92,15 @@ pub fn InlineValue(
     // Enum: value is chosen from a dropdown rather than typed
     let enum_def = ed.types.with_untracked(|types| types.definition_of(&value_type).filter(|d| d.is_enum()).cloned());
     if let Some(def) = enum_def {
+        let sizing_name = def.name.clone();
         return view! {
             <select
                 class="inline-value select"
+                style=move || {
+                    let selected = match value.get() { Some(DataValue::String(s)) => s, _ => String::new() };
+                    let label = i18n::enum_selected_label(&sizing_name, &selected).unwrap_or(selected);
+                    format!("--selected-width:{}px", crate::geometry::compact_select_width(&label))
+                }
                 title=move || title.get()
                 prop:value=move || match value.get() {
                     Some(DataValue::String(s)) => s,
@@ -122,7 +129,7 @@ pub fn InlineValue(
 
     let hint_type = value_type.clone();
     let shown_type = value_type.clone();
-    let shown = Memo::new(move |_| value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
+    let shown = Signal::derive(move || value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
     let draft = RwSignal::new(String::new());
     Effect::new(move |_| draft.set(shown.get()));
     // The field may lose focus after it has already been removed from the DOM — in that case signals are disposed

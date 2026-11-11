@@ -115,8 +115,8 @@ fn to_text_adapts_on_connect_and_shares_live_display_rules_with_wires() {
     assert_eq!(pull(&mut e, node), Some("5 kW".into()));
     let rule = QuantityDisplay { digits: 3, steps: vec![
         UnitStep { from: 0.0, unit: "watt".into() }, UnitStep { from: 10000.0, unit: "kilowatt".into() },
-    ] };
-    e.set_display_rules(DisplayRules { quantities: [("quantity.power".into(), rule)].into() });
+    ], rounding: Default::default(), };
+    e.set_display_rules(DisplayRules { quantities: [("quantity.power".into(), rule)].into(), ..Default::default() });
     for id in [node, wire] { assert_eq!(pull(&mut e, id), Some("5000 W".into())); }
     e.set_locale("uk");
     for id in [node, wire] { assert_eq!(pull(&mut e, id), Some("5000 Вт".into())); }
@@ -151,3 +151,7 @@ fn snapshot_restoration_preserves_an_explicit_type_override_on_a_connected_to_te
     assert_eq!(restored.export_graph(), graph);
     assert_eq!(pull(&mut restored, node), Some("1970".into()));
 }
+
+
+#[path = "quantities_rounding.rs"]
+mod rounding_tests;

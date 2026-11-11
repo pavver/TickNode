@@ -32,16 +32,44 @@ impl StepDraft {
 pub struct RuleDraft {
     pub steps: Vec<StepDraft>,
     pub digits: String,
+    pub rounding: Rounding,
 }
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DisplayDraft {
     pub rules: BTreeMap<String, RuleDraft>,
+    pub number: NumberDraft,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NumberDraft {
+    pub rounding: Rounding,
+    pub digits: String,
+}
+impl Default for NumberDraft {
+    fn default() -> Self {
+        Self::new(NumberDisplay::default())
+    }
+}
+impl NumberDraft {
+    fn new(rule: NumberDisplay) -> Self {
+        Self {
+            rounding: rule.rounding,
+            digits: rule.digits.to_string(),
+        }
+    }
+    fn parse(&self) -> Option<NumberDisplay> {
+        Some(NumberDisplay {
+            rounding: self.rounding,
+            digits: self.digits.parse().ok()?,
+        })
+    }
 }
 
 impl RuleDraft {
     pub fn new(rule: &QuantityDisplay, q: &QuantityKind) -> Self {
         Self {
             digits: rule.digits.to_string(),
+            rounding: rule.rounding,
             steps: rule
                 .steps
                 .iter()
@@ -68,6 +96,7 @@ impl RuleDraft {
         Some(QuantityDisplay {
             steps,
             digits: self.digits.parse().ok()?,
+            rounding: self.rounding,
         })
     }
     pub fn change_unit(&mut self, index: usize, id: String, q: &QuantityKind) {
@@ -105,6 +134,7 @@ impl RuleDraft {
 impl DisplayDraft {
     pub fn new(rules: &DisplayRules) -> Self {
         Self {
+            number: NumberDraft::new(rules.number),
             rules: rules
                 .quantities
                 .iter()
@@ -136,7 +166,10 @@ impl DisplayDraft {
             .iter()
             .map(|(name, rule)| Some((name.clone(), rule.parse(quantity::kind(name)?)?)))
             .collect::<Option<BTreeMap<_, _>>>()?;
-        let rules = DisplayRules { quantities };
+        let rules = DisplayRules {
+            quantities,
+            number: self.number.parse()?,
+        };
         rules.validate().ok()?;
         Some(rules)
     }
@@ -176,5 +209,37 @@ mod tests {
             assert_eq!(r.steps.len(), 8);
         });
         assert!(draft.parse().is_some());
+    }
+}
+
+#[cfg(test)]
+mod rounding_tests {
+    use super::*;
+    #[test]
+    fn number_and_quantity_rounding_validate_round_trip_and_reset() {
+        let mut draft = DisplayDraft::default();
+        draft.number.digits = "0".into();
+        assert!(draft.parse().is_none());
+        draft.number.rounding = Rounding::Decimals;
+        draft.edit("quantity.power", |r, _| {
+            r.rounding = Rounding::Decimals;
+            r.digits = "0".into();
+        });
+        let rules = draft.parse().unwrap();
+        assert_eq!(rules.number.digits, 0);
+        assert_eq!(
+            rules.quantities["quantity.power"].rounding,
+            Rounding::Decimals
+        );
+        assert_eq!(DisplayDraft::new(&rules), draft);
+        draft.edit("quantity.power", |r, _| r.rounding = Rounding::Significant);
+        assert!(draft.parse().is_none());
+        draft.rules.clear();
+        for digits in ["16", "-1", "abc", ""] {
+            draft.number.digits = digits.into();
+            assert!(draft.parse().is_none());
+        }
+        draft.number = Default::default();
+        assert_eq!(draft.parse(), Some(DisplayRules::default()));
     }
 }

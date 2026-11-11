@@ -146,7 +146,8 @@ fn display_settings_apply_live_and_invalid_updates_change_nothing() {
     let (reply, _) = tokio::sync::mpsc::unbounded_channel();
     let mut settings = ServerSettings { locale: "uk".into(), display: DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
         digits: 3, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }],
-    })].into() }, ..Default::default() };
+        rounding: Default::default(),
+    })].into(), ..Default::default() }, ..Default::default() };
     actor.apply(ClientMessage::SetServerSettings(settings.clone()), None, &reply).unwrap();
     assert_eq!(actor.engine.host_state.display, settings.display);
     let saved = std::fs::read(actor.storage.settings_json_path()).unwrap();

@@ -9,7 +9,7 @@ pub mod condition;
 pub mod text;
 pub mod quantity;
 pub mod to_text;
-pub use quantity::{DisplayRules, QuantityDisplay, UnitStep};
+pub use quantity::{DisplayRules, NumberDisplay, QuantityDisplay, Rounding, UnitStep};
 pub mod plugin;
 pub mod property;
 pub mod types;

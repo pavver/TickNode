@@ -212,8 +212,8 @@ fn wire_label_midpoint_follows_routed_curves_and_handles_overlapping_pins() {
 
 #[test]
 fn to_text_hidden_properties_do_not_take_layout_rows() {
-    let names = ["value_type", "unit", "digits", "locale", "show_units", "true_text", "false_text", "datetime_format"];
-    for (ty, rows) in [("any", 2), ("quantity.power", 5), ("bool", 4), ("datetime", 3), ("number", 3), ("duration", 3)] {
+    let names = ["value_type", "unit", "rounding", "digits", "locale", "show_units", "true_text", "false_text", "datetime_format"];
+    for (ty, rows) in [("any", 2), ("quantity.power", 6), ("bool", 4), ("datetime", 3), ("number", 4), ("duration", 3)] {
         let props = names.iter().map(|n| (n.to_string(), DataValue::from(if *n == "value_type" { ty } else { "" }))).collect::<Vec<_>>();
         assert_eq!(prop_rows("text/to_text", &props), rows);
     }

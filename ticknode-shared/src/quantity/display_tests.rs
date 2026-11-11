@@ -16,9 +16,11 @@ fn custom() -> DisplayRules {
                         unit: "kilowatt".into(),
                     },
                 ],
+                rounding: Default::default(),
             },
         )]
         .into(),
+        ..Default::default()
     }
 }
 #[test]
@@ -49,6 +51,7 @@ fn default_and_custom_rules_select_after_rounding() {
             from: 10.0,
             unit: "kilowatt".into(),
         }],
+        rounding: Default::default(),
     };
     assert_eq!(below.unit(1.0, q, 3).id, "kilowatt");
     assert_eq!(

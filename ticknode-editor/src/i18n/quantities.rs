@@ -109,7 +109,8 @@ mod display_tests {
         set_known_types(&TypeRegistry::from_definitions(quantity::builtin_quantities()));
         set_display_rules(&DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
             digits: 3, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }],
-        })].into() });
+        rounding: Default::default(),
+    })].into(), ..Default::default() });
         for (locale, expected) in [(Locale::En, "5000 W"), (Locale::Uk, "5000 Вт")] {
             with_locale(locale, || {
                 assert_eq!(quantity_text(&5000i64.into(), &DataType::Named("quantity.power".into())).as_deref(), Some(expected));
@@ -141,7 +142,8 @@ mod structure_tests {
         ].into() };
         set_display_rules(&DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
             digits: 3, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }],
-        })].into() });
+        rounding: Default::default(),
+    })].into(), ..Default::default() });
         with_locale(Locale::En, || assert_eq!(crate::panels::display_value_in(&value, &DataType::Any), "{value: 5000 W}"));
         set_display_rules(&Default::default());
         set_known_types(&TypeRegistry::new());
@@ -162,6 +164,38 @@ mod text_tests {
             assert_ne!(value_as_text(&DataValue::Bool(true), &DataType::Bool), "true");
             assert_eq!(value_as_text(&DataValue::String("x".into()), &DataType::String), "x");
         });
+        set_runtime_translations(&[]);
+    }
+}
+
+#[cfg(test)]
+mod rounding_tests {
+    use super::*;
+    #[test]
+    fn decimals_reach_wire_and_inspector_labels_in_ui_locale() {
+        use crate::i18n::{Locale, with_locale, set_known_types, set_runtime_translations};
+        set_known_types(&TypeRegistry::from_definitions(quantity::builtin_quantities()));
+        set_runtime_translations(&[
+            ("en".into(), include_str!("../../../ticknode-core/locales/en.ftl").into()),
+            ("uk".into(), include_str!("../../../ticknode-core/locales/uk.ftl").into()),
+        ]);
+        let ty = DataType::Named("quantity.power".into());
+        let mut rule = QuantityDisplay::default_for(quantity::kind("quantity.power").unwrap());
+        rule.rounding = Rounding::Decimals;
+        rule.digits = 2;
+        set_display_rules(&DisplayRules {
+            quantities: [("quantity.power".into(), rule)].into(),
+            number: NumberDisplay { rounding: Rounding::Decimals, digits: 2 },
+        });
+        for (locale, quantity, number) in [(Locale::En, "999.70 W", "23.00"), (Locale::Uk, "999,70 Вт", "23,00")] {
+            with_locale(locale, || {
+                assert_eq!(value_as_text(&999.7.into(), &ty), quantity);
+                assert_eq!(crate::panels::display_value_in(&999.7.into(), &ty), quantity);
+                assert_eq!(value_as_text(&23i64.into(), &DataType::Number), number);
+            });
+        }
+        set_display_rules(&Default::default());
+        set_known_types(&TypeRegistry::new());
         set_runtime_translations(&[]);
     }
 }

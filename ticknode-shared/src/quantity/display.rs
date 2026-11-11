@@ -4,15 +4,48 @@ use crate::UiMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Rounding {
+    #[default]
+    Significant,
+    Decimals,
+}
+
+impl Rounding {
+    pub fn valid_digits(self, digits: u8) -> bool {
+        (if self == Self::Decimals { 0 } else { 1 }..=15).contains(&digits)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NumberDisplay {
+    pub rounding: Rounding,
+    pub digits: u8,
+}
+
+impl Default for NumberDisplay {
+    fn default() -> Self {
+        Self {
+            rounding: Rounding::Significant,
+            digits: 3,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DisplayRules {
     pub quantities: BTreeMap<String, QuantityDisplay>,
+    #[serde(default)]
+    pub number: NumberDisplay,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuantityDisplay {
     pub steps: Vec<UnitStep>,
     pub digits: u8,
+    #[serde(default)]
+    pub rounding: Rounding,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -40,23 +73,28 @@ impl QuantityDisplay {
             });
         }
         steps[0].from = 0.0;
-        Self { steps, digits: 3 }
+        Self {
+            steps,
+            digits: 3,
+            rounding: Rounding::Significant,
+        }
     }
 
-    /// Select using rounded magnitude, including a carry across a step boundary.
+    /// Significant rounding carries across step boundaries; decimals use raw magnitude.
     pub fn unit<'a>(&self, value: f64, kind: &'a QuantityKind, digits: u8) -> &'a UnitDefinition {
         let magnitude = value.abs();
-        let rounded = if magnitude > 0.0 && magnitude.is_finite() {
-            let scale =
-                10f64.powf(magnitude.log10().floor() - f64::from(digits.clamp(1, 15)) + 1.0);
-            if scale.is_finite() && scale > 0.0 {
-                (magnitude / scale).round() * scale
+        let rounded =
+            if self.rounding == Rounding::Significant && magnitude > 0.0 && magnitude.is_finite() {
+                let scale =
+                    10f64.powf(magnitude.log10().floor() - f64::from(digits.clamp(1, 15)) + 1.0);
+                if scale.is_finite() && scale > 0.0 {
+                    (magnitude / scale).round() * scale
+                } else {
+                    magnitude
+                }
             } else {
                 magnitude
-            }
-        } else {
-            magnitude
-        };
+            };
         self.steps
             .iter()
             .rev()
@@ -81,6 +119,13 @@ impl DisplayRules {
     }
 
     pub fn validate(&self) -> Result<(), UiMessage> {
+        if !self.number.rounding.valid_digits(self.number.digits) {
+            return Err(UiMessage::new(
+                "error-display-digits",
+                "Invalid display digits for numbers",
+            )
+            .arg("quantity", "Number"));
+        }
         for (name, rule) in &self.quantities {
             let invalid = |reason: &str| {
                 UiMessage::new(
@@ -92,7 +137,7 @@ impl DisplayRules {
             let Some(q) = kind(name) else {
                 return Err(invalid("quantity"));
             };
-            if !(1..=15).contains(&rule.digits) {
+            if !rule.rounding.valid_digits(rule.digits) {
                 return Err(invalid("digits"));
             }
             if !(1..=8).contains(&rule.steps.len()) {

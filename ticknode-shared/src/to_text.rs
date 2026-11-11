@@ -1,6 +1,8 @@
 //! Pure presentation shared by the To text node and quantity wire conversions.
 use crate::{
-    quantity::{self, QuantityFormat, QuantityLabels, format_number, format_quantity},
+    quantity::{
+        self, QuantityFormat, QuantityLabels, format_number, format_quantity, format_rounded,
+    },
     *,
 };
 use chrono::{
@@ -14,6 +16,7 @@ pub struct ToTextOptions {
     pub show_units: bool,
     pub unit: Option<String>,
     pub digits: Option<u8>,
+    pub rounding: Option<Rounding>,
     pub true_text: String,
     pub false_text: String,
     pub datetime_format: String,
@@ -25,9 +28,33 @@ impl Default for ToTextOptions {
             show_units: true,
             unit: None,
             digits: None,
+            rounding: None,
             true_text: String::new(),
             false_text: String::new(),
             datetime_format: String::new(),
+        }
+    }
+}
+
+impl ToTextOptions {
+    fn effective_number(&self, project: NumberDisplay) -> NumberDisplay {
+        let rounding = self.rounding.unwrap_or_else(|| {
+            if self.digits.is_some() {
+                Rounding::Significant
+            } else {
+                project.rounding
+            }
+        });
+        let digits = self.digits.unwrap_or_else(|| {
+            if self.rounding.is_some() {
+                if rounding == Rounding::Decimals { 2 } else { 3 }
+            } else {
+                project.digits
+            }
+        });
+        NumberDisplay {
+            rounding,
+            digits: digits.clamp(if rounding == Rounding::Decimals { 0 } else { 1 }, 15),
         }
     }
 }
@@ -40,10 +67,16 @@ pub fn quantity_text(
     rules: &DisplayRules,
     labels: &dyn QuantityLabels,
 ) -> String {
-    let rule = rules.effective(name, kind);
+    let mut rule = rules.effective(name, kind);
+    let effective = options.effective_number(NumberDisplay {
+        rounding: rule.rounding,
+        digits: rule.digits,
+    });
+    rule.rounding = effective.rounding;
     let format = QuantityFormat {
         unit: options.unit.clone(),
-        digits: options.digits.unwrap_or(rule.digits),
+        digits: effective.digits,
+        rounding: effective.rounding,
     };
     if options.show_units {
         return format_quantity(value, kind, &format, &rule, labels);
@@ -53,7 +86,12 @@ pub fn quantity_text(
         .as_ref()
         .and_then(|id| kind.units.iter().find(|u| &u.id == id))
         .unwrap_or_else(|| rule.unit(value, kind, format.digits));
-    format_number(quantity::from_canonical(value, unit), format.digits, labels)
+    format_rounded(
+        quantity::from_canonical(value, unit),
+        format.rounding,
+        format.digits,
+        labels,
+    )
 }
 
 pub fn to_text(
@@ -93,7 +131,7 @@ pub fn to_text_in(
     {
         return quantity_text(n.to_f64(), name, q, options, rules, labels);
     }
-    let digits = options.digits.unwrap_or(3);
+    let number = options.effective_number(rules.number);
     let format = |default: &str| {
         let requested = if options.datetime_format.is_empty() {
             default
@@ -107,8 +145,18 @@ pub fn to_text_in(
         }
     };
     match value {
-        DataValue::Number(NumberValue::Int(n)) => n.to_string(),
-        DataValue::Number(n) => format_number(n.to_f64(), digits, labels),
+        DataValue::Number(NumberValue::Int(n)) => {
+            if number.rounding == Rounding::Decimals && number.digits > 0 {
+                format!(
+                    "{n}{}{}",
+                    labels.decimal_separator(),
+                    "0".repeat(usize::from(number.digits))
+                )
+            } else {
+                n.to_string()
+            }
+        }
+        DataValue::Number(n) => format_rounded(n.to_f64(), number.rounding, number.digits, labels),
         DataValue::String(s) => s.clone(),
         DataValue::Bool(b) => {
             let custom = if *b {
@@ -229,7 +277,7 @@ pub fn property_visible(t: &DataType, name: &str) -> bool {
         "value_type" | "locale" => true,
         "unit" => quantity,
         "show_units" => quantity || *element == DataType::Duration,
-        "digits" => quantity || *element == DataType::Number,
+        "rounding" | "digits" => quantity || *element == DataType::Number,
         "true_text" | "false_text" => *element == DataType::Bool,
         "datetime_format" => matches!(element, DataType::DateTime | DataType::Time),
         _ => false,

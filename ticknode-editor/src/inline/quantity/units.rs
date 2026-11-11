@@ -50,7 +50,7 @@ mod rule_tests {
         let q = kind("quantity.power").unwrap();
         let rule = QuantityDisplay { digits: 3, steps: vec![
             UnitStep { from: 0.0, unit: "watt".into() }, UnitStep { from: 10000.0, unit: "kilowatt".into() },
-        ] };
+        ], rounding: Default::default(), };
         assert_eq!(presentation(Some(&5000i64.into()), q, None, ".", &rule), ("5000".into(), "watt".into()));
         assert_eq!(presentation(Some(&12000i64.into()), q, None, ".", &rule), ("12".into(), "kilowatt".into()));
     }

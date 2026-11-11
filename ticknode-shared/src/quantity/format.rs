@@ -1,15 +1,17 @@
-use super::{QuantityKind, UnitDefinition, from_canonical};
+use super::{QuantityKind, Rounding, UnitDefinition, from_canonical};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuantityFormat {
     pub unit: Option<String>,
     pub digits: u8,
+    pub rounding: Rounding,
 }
 impl Default for QuantityFormat {
     fn default() -> Self {
         Self {
             unit: None,
             digits: 3,
+            rounding: Rounding::Significant,
         }
     }
 }
@@ -61,6 +63,23 @@ pub fn format_number(value: f64, digits: u8, labels: &dyn QuantityLabels) -> Str
     number.replace('.', &labels.decimal_separator())
 }
 
+/// Fixed decimals preserve trailing zeros; significant digits retain the existing presentation.
+pub fn format_rounded(
+    value: f64,
+    rounding: Rounding,
+    digits: u8,
+    labels: &dyn QuantityLabels,
+) -> String {
+    if rounding == Rounding::Significant {
+        return format_number(value, digits, labels);
+    }
+    let mut number = format!("{:.*}", usize::from(digits.min(15)), value);
+    if number.starts_with('-') && number[1..].chars().all(|c| c == '0' || c == '.') {
+        number.remove(0);
+    }
+    number.replace('.', &labels.decimal_separator())
+}
+
 pub fn format_quantity(
     value: f64,
     kind: &QuantityKind,
@@ -68,6 +87,8 @@ pub fn format_quantity(
     rule: &super::QuantityDisplay,
     labels: &dyn QuantityLabels,
 ) -> String {
+    let mut rule = rule.clone();
+    rule.rounding = format.rounding;
     let unit = format
         .unit
         .as_ref()
@@ -78,6 +99,11 @@ pub fn format_quantity(
         .unwrap_or_else(|| unit.symbol.clone());
     format!(
         "{} {symbol}",
-        format_number(from_canonical(value, unit), format.digits, labels)
+        format_rounded(
+            from_canonical(value, unit),
+            format.rounding,
+            format.digits,
+            labels
+        )
     )
 }

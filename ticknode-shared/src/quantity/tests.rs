@@ -50,9 +50,9 @@ fn formatting_and_rounding() {
     }
     assert_eq!(format_quantity(1970.0,q,&f,&QuantityDisplay::default_for(q),&Ukrainian),"1,97 кВт");
     assert_eq!(format_quantity(57.0,q,&f,&QuantityDisplay::default_for(q),&Ukrainian),"57 Вт");
-    assert_eq!(format_quantity(12345.0,q,&QuantityFormat{unit:Some("watt".into()),digits:3},&QuantityDisplay::default_for(q),&CanonicalLabels),"12345 W");
-    assert_eq!(format_quantity(0.0,kind("quantity.temperature").unwrap(),&QuantityFormat{unit:Some("fahrenheit".into()),digits:3},&QuantityDisplay::default_for(kind("quantity.temperature").unwrap()),&CanonicalLabels),"32 °F");
-    assert_eq!(format_quantity(1970.0,q,&QuantityFormat{unit:None,digits:2},&QuantityDisplay::default_for(q),&CanonicalLabels),"2 kW");
+    assert_eq!(format_quantity(12345.0,q,&QuantityFormat{unit:Some("watt".into()),digits:3,..Default::default()},&QuantityDisplay::default_for(q),&CanonicalLabels),"12345 W");
+    assert_eq!(format_quantity(0.0,kind("quantity.temperature").unwrap(),&QuantityFormat{unit:Some("fahrenheit".into()),digits:3,..Default::default()},&QuantityDisplay::default_for(kind("quantity.temperature").unwrap()),&CanonicalLabels),"32 °F");
+    assert_eq!(format_quantity(1970.0,q,&QuantityFormat{unit:None,digits:2,..Default::default()},&QuantityDisplay::default_for(q),&CanonicalLabels),"2 kW");
 }
 #[test]
 fn quantity_type_rules_and_validation() {

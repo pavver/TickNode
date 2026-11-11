@@ -7,11 +7,11 @@ use crate::{TypeDefinition, TypeKind};
 mod catalog;
 mod catalog_extra;
 mod display;
-pub use display::{DisplayRules, QuantityDisplay, UnitStep};
+pub use display::{DisplayRules, NumberDisplay, QuantityDisplay, Rounding, UnitStep};
 mod format;
 mod parse;
 pub use catalog::builtin_quantities;
-pub use format::{CanonicalLabels,QuantityFormat, QuantityLabels, auto_unit, format_number, format_quantity};
+pub use format::{CanonicalLabels,QuantityFormat, QuantityLabels, auto_unit, format_number, format_quantity, format_rounded};
 pub use parse::{parse_quantity, unit_in};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -67,3 +67,6 @@ mod display_tests;
 
 #[cfg(test)]
 mod catalog_tests;
+
+#[cfg(test)]
+mod rounding_tests;

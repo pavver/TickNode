@@ -45,8 +45,13 @@ impl Node for ToTextNode {
                 .described("Append unit symbols; without units, durations use seconds."),
             PropertyDefinition::select("unit", "Unit", &units)
                 .described("Empty or Auto uses the project display rule."),
-            PropertyDefinition::text("digits", "Significant digits")
-                .described("1–15; empty uses the project rule, or 3 for numbers."),
+            PropertyDefinition::select("rounding", "Rounding", &[
+                ("project", "Project rule"),
+                ("significant", "Significant digits"),
+                ("decimals", "Decimal places"),
+            ]).described("Use the project rule or choose a rounding mode."),
+            PropertyDefinition::text("digits", "Digits")
+                .described("Significant digits (1–15) or decimal places (0–15); empty uses the default for the selected rounding."),
             PropertyDefinition::select(
                 "locale",
                 "Language",
@@ -66,7 +71,7 @@ impl Node for ToTextNode {
         NodeDefinition {
             type_name: "text/to_text".into(), title: "To text".into(), category: "String".into(),
             description: "Converts any value to readable text".into(),
-            help: "Converts Value to text. Connect a wire to select its type. Quantities follow project display rules: 1970 W → 1.97 kW; a fixed unit overrides the rule. Empty digits use the project rule (otherwise 3). Hide units to output a bare number; durations then use seconds. Booleans use localized words unless custom texts are set. Date/time formats use chrono strftime, e.g. %H:%M or %d.%m.%Y; date-times use the server local time zone. Lists join elements with commas; objects show their fields. Server uses the engine formatting language.".into(),
+            help: "Converts Value to text. Connect a wire to select its type. Quantities follow project display rules: 1970 W → 1.97 kW; a fixed unit overrides the rule. Numbers and quantities support significant digits or fixed decimal places. Project rounding with empty digits follows the project rule; a selected mode defaults to 3 significant digits or 2 decimal places. Hide units to output a bare number; durations then use seconds. Booleans use localized words unless custom texts are set. Date/time formats use chrono strftime, e.g. %H:%M or %d.%m.%Y; date-times use the server local time zone. Lists join elements with commas; objects show their fields. Server uses the engine formatting language.".into(),
             adaptive: true, properties,
             pins: vec![
                 PinDefinition { id: PinId(1), name: "Value".into(), pin_type: PinType::Data(self.value_type.clone()), direction: PinDirection::Input, required: true },
@@ -101,10 +106,27 @@ impl Node for ToTextNode {
                 self.options.unit.clone().unwrap_or_else(|| "auto".into()),
             ),
             (
+                "rounding",
+                match self.options.rounding {
+                    Some(Rounding::Significant) => "significant",
+                    Some(Rounding::Decimals) => "decimals",
+                    None if self.options.digits.is_some() => "significant",
+                    None => "project",
+                }
+                .into(),
+            ),
+            (
                 "digits",
                 self.options
                     .digits
-                    .map(|n| n.to_string())
+                    .map(|n| {
+                        if self.options.rounding == Some(Rounding::Decimals) {
+                            n
+                        } else {
+                            n.max(1)
+                        }
+                        .to_string()
+                    })
                     .unwrap_or_default(),
             ),
             ("locale", self.locale.clone()),
@@ -129,9 +151,18 @@ impl Node for ToTextNode {
                 }
             }
             "unit" => self.options.unit = (s != "auto").then_some(s),
+            "rounding" => {
+                self.options.rounding = match s.as_str() {
+                    "project" => None,
+                    "significant" => Some(Rounding::Significant),
+                    "decimals" => Some(Rounding::Decimals),
+                    _ => return,
+                };
+            }
             "digits" if s.is_empty() => self.options.digits = None,
             "digits" => {
-                if let Ok(n @ 1..=15) = s.parse::<u8>() {
+                // Preserve zero until the mode is known: graph properties can restore in any order.
+                if let Ok(n @ 0..=15) = s.parse::<u8>() {
                     self.options.digits = Some(n);
                 }
             }

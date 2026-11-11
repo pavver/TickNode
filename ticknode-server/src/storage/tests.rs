@@ -245,7 +245,8 @@ fn display_settings_roundtrip_and_invalid_file_is_rejected() {
     let storage = Storage::new(dir.path().join("graph.json"));
     let mut settings = ServerSettings { display: DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
         digits: 4, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }, UnitStep { from: 10000.0, unit: "kilowatt".into() }],
-    })].into() }, ..Default::default() };
+        rounding: Default::default(),
+    })].into(), ..Default::default() }, ..Default::default() };
     storage.save_settings(&settings).unwrap();
     assert_eq!(Storage::load_settings_from(&storage.settings_json_path(), &|_| None).unwrap(), settings);
     settings.display.quantities.get_mut("quantity.power").unwrap().steps[0].from = 1.0;

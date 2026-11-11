@@ -36,9 +36,16 @@ fn named_types(t: &DataType, out: &mut Vec<String>) {
 }
 
 impl TickEngine {
-    /// Error from the last `configure` call ("settings error"); the plugin remains loaded.
+    /// Settings error from configure or plugin-tick; the plugin remains loaded.
     pub fn plugin_settings_error(&self, name: &str) -> Option<UiMessage> {
         self.plugins.get(name)?.settings_error.clone()
+    }
+
+    /// Plugin names whose settings error changed asynchronously during plugin-tick.
+    pub fn take_plugin_settings_changes(&mut self) -> Vec<String> {
+        self.plugins.iter_mut().filter_map(|(name, slot)| {
+            std::mem::take(&mut slot.settings_changed).then(|| name.clone())
+        }).collect()
     }
 
     /// Enables a plugin: registers its types, applies settings (`settings` already includes defaults,

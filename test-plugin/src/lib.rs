@@ -63,6 +63,8 @@ impl Plugin for TestPlugin {
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
         CONFIG.with(|c| match c.borrow().greeting.as_str() {
             "tick-clock" => host::log(&format!("Plugin tick {}", host::current_tick())),
+            "settings-error" => host::node_error(&UiError::new("test-plugin-error-async", "Asynchronous authentication failed"), true),
+            "foreign-settings-error" => host::node_error(&UiError::new("node-math-add-title", "Foreign asynchronous error"), false),
             "trap-tick" => {
                 host::log(&format!("Plugin tick {}", host::current_tick()));
                 panic!("deliberate plugin-tick panic");

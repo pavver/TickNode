@@ -148,3 +148,43 @@ fn settings_survive_plugin_crash() {
     );
 }
 
+#[test]
+fn plugin_tick_structured_errors_update_settings_once_and_configure_clears_them() {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else {
+        return;
+    };
+    engine
+        .configure_plugin(
+            "test_plugin",
+            &[
+                ("token".into(), "good".into()),
+                ("greeting".into(), "settings-error".into()),
+            ],
+        )
+        .unwrap();
+    engine.tick();
+    assert_eq!(
+        engine.plugin_settings_error("test_plugin").unwrap().key,
+        "test-plugin-error-async"
+    );
+    assert_eq!(engine.take_plugin_settings_changes(), vec!["test_plugin"]);
+    assert!(engine.node_errors().is_empty());
+    engine.tick();
+    assert!(engine.take_plugin_settings_changes().is_empty());
+    engine
+        .configure_plugin("test_plugin", &[("token".into(), "good".into())])
+        .unwrap();
+    engine.tick();
+    assert!(engine.plugin_settings_error("test_plugin").is_none());
+    engine
+        .configure_plugin(
+            "test_plugin",
+            &[
+                ("token".into(), "good".into()),
+                ("greeting".into(), "foreign-settings-error".into()),
+            ],
+        )
+        .unwrap();
+    engine.tick();
+    assert_eq!(engine.plugin_settings_error("test_plugin").unwrap().key, "");
+}

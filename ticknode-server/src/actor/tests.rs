@@ -79,3 +79,5 @@ fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {
 }
 mod property_validation;
 mod property_input;
+
+mod plugin_settings;

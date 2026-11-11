@@ -43,8 +43,9 @@ pub(crate) struct PluginSlot {
     types: Vec<TypeDefinition>,
     runtime: Arc<Mutex<Runtime>>,
     active: bool,
-    /// Result of the last `configure` call (settings error).
+    /// Synchronous configure error or an asynchronous error reported from plugin-tick.
     settings_error: Option<UiMessage>,
+    settings_changed: bool,
     /// Validated translation resources of the plugin: `(locale, Fluent source)`.
     translations: Vec<(String, String)>,
 }

@@ -442,7 +442,7 @@ mod tests {
             ("greeting".into(), SettingUpdate::Set(DataValue::String("Hola".into()))),
         ] }).await;
         let mut got = None;
-        for _ in 0..20 {
+        for _ in 0..500 {
             if let ServerMessage::PropertyOptions { plugin, source, options } = recv_any(&mut ws).await
                 && source == "greetings"
             {

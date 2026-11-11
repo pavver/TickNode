@@ -1,5 +1,5 @@
 //! Integration tests for WASM plugins. Requires built components:
-//! `cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin`.
+//! `cargo build --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p test-plugin -p ha-plugin -p telegram-plugin`.
 //! If a binary is missing, the test is skipped with a message (or fails when `TICKNODE_REQUIRE_PLUGINS=1`).
 //!
 //! Tests are intentionally non-async: synchronous wasmtime-wasi cannot be called inside a tokio task,
@@ -79,3 +79,5 @@ include!("plugins/properties.rs");
 include!("plugins/ha_properties.rs");
 include!("plugins/identifiers.rs");
 include!("plugins/plugin_http.rs");
+
+include!("plugins/telegram.rs");

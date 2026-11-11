@@ -17,6 +17,7 @@ pub fn error(message: &str) {
 }
 
 /// Reports a structured runtime error. Repeat with `log=false` while the failure continues.
+/// From plugin-tick, reports an asynchronous settings error instead (cleared by configure).
 pub fn node_error(message: &UiError, log: bool) {
     wit_host::node_error(&wit::UiError {
         key: message.key.clone(), args: message.args.clone(), fallback: message.fallback.clone(),

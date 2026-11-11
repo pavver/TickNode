@@ -40,6 +40,7 @@
             runtime,
             active: true,
             settings_error: None,
+            settings_changed: false,
             translations: Vec::new(),
         }
     }

@@ -238,6 +238,11 @@ impl Actor {
 
     fn tick(&mut self) {
         self.engine.tick();
+        for name in self.engine.take_plugin_settings_changes() {
+            if let Some(info) = self.plugins.info(&self.engine, &name) {
+                self.broadcast(None, &ServerMessage::PluginUpdated(info));
+            }
+        }
         self.broadcast_option_changes();
         let now = Instant::now();
         for trace in &self.engine.executed {

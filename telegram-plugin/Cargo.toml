@@ -1,0 +1,25 @@
+[package]
+name = "telegram-plugin"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+publish = false
+description = "Telegram bot integration with long polling, typed identifiers and a persistent directory"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Only the separate integration-test component accepts a local fake API endpoint.
+test-api = []
+
+[dependencies]
+ticknode-plugin-sdk = { path = "../ticknode-plugin-sdk" }
+serde = { workspace = true }
+serde_json = "1.0"
+chrono = { workspace = true }
+regex = "1"
+url = "2.5.4"
+
+[dev-dependencies]
+fluent-syntax = "0.12"

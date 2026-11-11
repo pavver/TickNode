@@ -14,7 +14,19 @@ impl TickEngine {
             .map(|(name, p)| (name.clone(), p.runtime.clone()))
             .collect();
         for (name, runtime) in active {
-            let result = lock(&runtime).plugin_tick(&mut self.host_state);
+            let (result, settings_error) = {
+                let mut runtime = lock(&runtime);
+                let result = runtime.plugin_tick(&mut self.host_state);
+                let error = runtime.instance.as_mut().and_then(|(store, _)| store.data_mut().settings_error.take());
+                (result, error)
+            };
+            if let Some(error) = settings_error {
+                let slot = self.plugins.get_mut(&name).expect("the active plugin exists");
+                if slot.settings_error.as_ref() != Some(&error) {
+                    slot.settings_error = Some(error);
+                    slot.settings_changed = true;
+                }
+            }
             match result {
                 Ok(emissions) => self.apply_emissions(&name, emissions, next_tick_queue),
                 Err(reason) => self.host_state.log(NodeId(uuid::Uuid::nil()), format!("[ERROR] Plugin {name} crashed in plugin-tick: {reason}")),

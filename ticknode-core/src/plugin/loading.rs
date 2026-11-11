@@ -84,6 +84,7 @@ impl TickEngine {
             runtime: Arc::new(Mutex::new(runtime)),
             active: false,
             settings_error: None,
+            settings_changed: false,
             translations,
         });
         Ok(manifest)

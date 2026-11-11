@@ -58,6 +58,7 @@ impl Runtime {
                 wasi.preopened_dir(dir, ".", FsPerms::ReadWrite)?;
             }
             let state = PluginState {
+                settings_error: None,
                 wasi: wasi.build(),
                 table: ResourceTable::new(),
                 limits: StoreLimitsBuilder::new().memory_size(MEMORY_LIMIT).build(),
@@ -105,7 +106,10 @@ impl Runtime {
             return self.configure_error.clone().map_or(Ok(()), Err);
         }
         let outcome = match self.api() {
-            Ok((store, api)) => api.call_configure(store, &props),
+            Ok((store, api)) => {
+                store.data_mut().settings_error = None;
+                api.call_configure(store, &props)
+            },
             Err(e) => Err(e),
         };
         match outcome {

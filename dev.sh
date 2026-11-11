@@ -14,7 +14,7 @@ ROOT=$PWD
 DATA=$ROOT/.dev-data
 BUNDLED=$DATA/bundled-plugins
 PIDFILE=$DATA/server.pid
-PLUGINS=(delay-plugin string-plugin math-plugin http-weather-plugin ha-plugin)
+PLUGINS=(delay-plugin string-plugin math-plugin http-weather-plugin ha-plugin telegram-plugin)
 
 parts=("$@")
 [ ${#parts[@]} -eq 0 ] && parts=(plugins editor server)

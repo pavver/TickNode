@@ -40,7 +40,7 @@ COPY --from=source / /src
 WORKDIR /src
 ENV CARGO_TARGET_DIR=/target
 RUN cargo build --release -p ticknode-server
-RUN cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p ha-plugin
+RUN cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p ha-plugin -p telegram-plugin
 RUN cd ticknode-editor && trunk build --release
 
 FROM debian:bookworm-slim

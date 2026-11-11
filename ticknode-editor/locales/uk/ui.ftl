@@ -584,7 +584,7 @@ property-duration-earlier = Раніше (від’ємне зміщення)
 property-duration-later = Пізніше (додатне зміщення)
 property-time-placeholder = HH:MM
 
-property-from-input = Сутність із входу
+property-from-input = Із входу
 
 property-duration-placeholder = 30
 property-duration-hint = Число у вибраній одиниці, 1h 30m або ГГ:ХХ:СС

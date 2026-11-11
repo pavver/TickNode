@@ -26,6 +26,7 @@ pub(super) struct CallCtx {
 }
 
 pub(super) struct PluginState {
+    pub(super) settings_error: Option<UiMessage>,
     pub(super) wasi: WasiCtx,
     pub(super) table: ResourceTable,
     pub(super) limits: StoreLimits,
@@ -75,7 +76,8 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
         }, &allowed);
         if let Some(c) = &mut self.call {
             if log { c.host.log(c.node_id, format!("[ERROR] {}", message.fallback)); }
-            c.host.report_error(c.node_id, message);
+            if c.node_id.0.is_nil() { self.settings_error = Some(message); }
+            else { c.host.report_error(c.node_id, message); }
         }
     }
 

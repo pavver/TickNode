@@ -593,3 +593,8 @@ property-duration-hint = Число у вибраній одиниці, 1h 30m �
 parse-error-identifier = «{ $value }» не є цілим 64-бітним числом зі знаком
 identifier-clear = Очистити ідентифікатор
 error-plugin-identifier-output = Плагін повернув некоректне значення ідентифікатора
+
+template-error = Рядок { $line }, поз { $column }: { $message }
+template-render-error = Помилка шаблону: { $message }
+template-preview-empty = (порожньо)
+template-preview-waiting = Попередній перегляд зʼявиться після отримання значень

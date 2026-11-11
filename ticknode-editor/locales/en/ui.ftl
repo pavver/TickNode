@@ -578,3 +578,8 @@ property-duration-hint = A number in the selected unit, 1h 30m, or HH:MM:SS
 parse-error-identifier = "{ $value }" is not a signed 64-bit integer
 identifier-clear = Clear identifier
 error-plugin-identifier-output = The plugin returned an invalid identifier value
+
+template-error = Line { $line }, col { $column }: { $message }
+template-render-error = Render error: { $message }
+template-preview-empty = (empty)
+template-preview-waiting = Preview appears after the inputs get values

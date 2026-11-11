@@ -130,6 +130,12 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         Some(DataValue::String(s)) => s,
                         _ => String::new(),
                     };
+                    let is_template_prop = type_name() == "text/template" && name == "template";
+                    if is_template_prop {
+                        let initial = text_of();
+                        let draft = RwSignal::new(initial);
+                        provide_context(TemplateDraft(draft));
+                    }
                     let control = if let Some(PropertyKind::Select(options)) = described.as_ref().map(|d| d.kind.clone()) {
                         let owner = type_name();
                         view! {
@@ -166,6 +172,17 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         .into_any()
                     } else if let Some(kind @ (PropertyKind::Duration { .. } | PropertyKind::Time | PropertyKind::MultiSelect(_))) = described.as_ref().map(|d| d.kind.clone()) {
                         view! { <super::typed_properties::TypedProperty kind=kind owner=type_name() name=name.clone() value=value title=label on_commit=send /> }.into_any()
+                    } else if is_template_prop {
+                        view! {
+                            <TemplateField
+                                id=id
+                                value=value
+                                title=label
+                                row_height=row_height
+                                on_commit=Callback::new(move |v| send.run(v))
+                            />
+                        }
+                        .into_any()
                     } else if value_type == DataType::Bool {
                         view! {
                             <Switch
@@ -206,11 +223,17 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         }
                         .into_any()
                     };
+                    let status_row = is_template_prop.then(|| {
+                        view! {
+                            <TemplateStatusRow node=id />
+                        }
+                    });
                     view! {
                         <div class="prop-row" class:grown={move || row_height.get() > crate::geometry::ROW_H} style=move || format!("height:{}px", row_height.get())>
                             <span class="ellipsis prop-label" title=move || label.get()>{move || label.get()}</span>
                             {control}
                         </div>
+                        {status_row}
                     }
                 }
             </For>

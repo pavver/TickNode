@@ -39,6 +39,7 @@ use wasm_bindgen::JsCast;
 use crate::canvas::{Canvas, fit_view};
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
 use crate::picker::PickerLayer;
+use crate::inline::TemplateCompletionLayer;
 use crate::state::{Editor, LogKind, Theme, now_ms};
 use crate::toolbar::Header;
 use ticknode_shared::ClientMessage;
@@ -213,6 +214,7 @@ fn App() -> impl IntoView {
                     <PaletteGhost />
                     <TooltipLayer />
                     <PickerLayer />
+                    <TemplateCompletionLayer />
                     <wire_menu::WireMenuLayer />
                     <quick_add::QuickAddLayer />
                     <wire_context::WireContextLayer />

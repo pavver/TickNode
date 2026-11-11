@@ -48,6 +48,9 @@ pub fn hide_picker(editor: Editor, ev: web_sys::PointerEvent) {
     if !inside && editor.picker.with_untracked(|p| p.is_some()) {
         editor.picker.set(None);
     }
+    if !inside && editor.template_completion.with_untracked(|p| p.is_some()) {
+        editor.template_completion.set(None);
+    }
 }
 
 pub fn paste(editor: Editor, ev: web_sys::ClipboardEvent) {

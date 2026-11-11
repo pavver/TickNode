@@ -23,7 +23,7 @@ pub struct NodeLayout {
 
 impl NodeLayout {
     pub fn new(def: &NodeDefinition, properties: &[(String, DataValue)]) -> Self {
-        let pins_top = HEADER_H + BODY_PAD + property_rows(def, properties).len() as f64 * ROW_H;
+        let pins_top = HEADER_H + BODY_PAD + (property_rows(def, properties).len() + status_rows(def)) as f64 * ROW_H;
         let row_y = |i: usize| pins_top + i as f64 * ROW_H + ROW_H / 2.0;
         let inputs: Vec<_> = pins(def, PinDirection::Input).enumerate().map(|(i, p)| (p.id, row_y(i))).collect();
         if def.type_name == "match" {

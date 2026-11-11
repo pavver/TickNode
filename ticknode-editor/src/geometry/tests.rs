@@ -243,3 +243,42 @@ fn hysteresis_type_is_hidden_while_mode_keeps_its_row() {
     assert!(!is_node_property("logic/hysteresis", "value_type", &DataValue::from("quantity.voltage")));
     assert_eq!(prop_rows("logic/hysteresis", &props), 1);
 }
+
+#[test]
+fn template_node_includes_fixed_status_row_in_geometry() {
+    let mut template_def = def("text/template", vec![
+        (1, PinType::Data(DataType::Any), PinDirection::Input),
+        (0, PinType::Data(DataType::String), PinDirection::Output),
+    ]);
+    template_def.properties = vec![ticknode_shared::PropertyDefinition {
+        name: "template".into(),
+        title: "Template".into(),
+        description: String::new(),
+        kind: ticknode_shared::PropertyKind::Multiline,
+        input: None,
+    }];
+    assert_eq!(status_rows(&template_def), 1);
+
+    let regular_def = def("text/concat", vec![
+        (1, PinType::Data(DataType::Any), PinDirection::Input),
+        (0, PinType::Data(DataType::String), PinDirection::Output),
+    ]);
+    assert_eq!(status_rows(&regular_def), 0);
+
+    let props = vec![("template".into(), DataValue::from("{{ a }}"))];
+    let template_layout = NodeLayout::new(&template_def, &props);
+    let regular_layout = NodeLayout::new(&regular_def, &props);
+
+    assert_eq!(template_layout.pins_top, HEADER_H + BODY_PAD + 2.0 * ROW_H);
+    assert_eq!(regular_layout.pins_top, HEADER_H + BODY_PAD + 1.0 * ROW_H);
+    assert_eq!(template_layout.pins_top - regular_layout.pins_top, ROW_H);
+
+    let pos = Position { x: 0.0, y: 0.0 };
+    let (_, t_y) = template_layout.anchor(pos, PinId(1), PinDirection::Input).unwrap();
+    let (_, r_y) = regular_layout.anchor(pos, PinId(1), PinDirection::Input).unwrap();
+    assert_eq!(t_y - r_y, ROW_H);
+
+    let sized_template = NodeLayout::sized(&template_def, &props, None, &[]);
+    assert_eq!(sized_template.pins_top, template_layout.pins_top);
+    assert_eq!(sized_template.height, template_layout.height);
+}

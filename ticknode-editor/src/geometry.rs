@@ -114,6 +114,11 @@ pub fn is_type_property(def: &NodeDefinition, name: &str) -> bool {
     name.ends_with("_type") && !def.properties.iter().any(|p| p.name == name)
 }
 
+/// Status rows rendered between inline properties and pins.
+pub fn status_rows(def: &NodeDefinition) -> usize {
+    if def.type_name == "text/template" { 1 } else { 0 }
+}
+
 /// Number of inline property rows on a node.
 #[cfg(test)]
 pub fn prop_rows(node_type: &str, properties: &[(String, DataValue)]) -> usize {

@@ -17,8 +17,9 @@ console_error_panic_hook = "0.1.7"
 web-sys = { version = "0.3.77", features = [
     "WebSocket", "MessageEvent", "BinaryType", "CloseEvent", "Location", "Url", "Storage",
     "PointerEvent", "WheelEvent", "KeyboardEvent", "DomRect", "Element", "HtmlElement",
-    "Document", "Window", "HtmlInputElement", "HtmlDocument", "ClipboardEvent", "DataTransfer",
-    "NodeList", "Navigator", "ScrollIntoViewOptions", "ScrollLogicalPosition",
+    "Document", "Window", "HtmlInputElement", "HtmlTextAreaElement", "HtmlDocument",
+    "ClipboardEvent", "DataTransfer", "NodeList", "Navigator", "ScrollIntoViewOptions",
+    "ScrollLogicalPosition", "CssStyleDeclaration", "Text",
 ] }
 uuid = { workspace = true }
 fluent-bundle = "0.16.0"

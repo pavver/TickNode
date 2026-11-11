@@ -10,12 +10,14 @@ use crate::ui::{ControlState, flash};
 
 pub(crate) mod properties;
 pub(crate) mod duration;
+pub(crate) mod template_field;
 mod quantity;
 mod identifier;
 mod text_field;
 mod typed_properties;
 
 pub use properties::*;
+pub use template_field::{TemplateField, TemplateStatusRow, TemplateDraft, TemplateCompletionLayer};
 
 /// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.
 fn value_text(value: &DataValue, value_type: &DataType) -> String {

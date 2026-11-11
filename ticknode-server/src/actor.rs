@@ -93,6 +93,13 @@ pub fn spawn(
 ) -> std::io::Result<EngineHandle> {
     let (commands, rx) = std_mpsc::channel();
     let (events, _) = broadcast::channel(1024);
+    if !["en", "uk"].contains(&server_settings.locale.as_str()) {
+        tracing::warn!(locale = %server_settings.locale, "Invalid formatting locale; using en");
+    }
+    let server_settings = server_settings.validated();
+    server_settings.display.validate().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.fallback))?;
+    engine.set_locale(&server_settings.locale);
+    engine.set_display_rules(server_settings.display.clone());
     let tick = Duration::from_millis(server_settings.tick_ms as u64);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
@@ -361,7 +368,7 @@ impl Actor {
             sheets: summaries,
             open_sheet: active_sheet,
             variables,
-            server_settings: self.server_settings,
+            server_settings: self.server_settings.clone(),
         }
     }
 

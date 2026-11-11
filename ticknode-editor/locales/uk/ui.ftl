@@ -547,3 +547,25 @@ settings-save = Зберегти
 settings-reset = Скинути
 settings-invalid-number = Некоректне число
 error-save-settings = Не вдалося зберегти налаштування
+
+settings-formatting-language = Мова форматування
+settings-formatting-language-description = Мова тексту, який створює рушій.
+language-en = Англійська
+language-uk = Українська
+quantity-unit-title = Одиниця вимірювання
+parse-error-quantity = «{ $value }» не є значенням типу { $type }.
+error-plugin-quantity-type = Плагін { $plugin } не може оголошувати зарезервований тип фізичної величини { $type }.
+
+settings-display = Одиниці та форматування
+settings-display-description = Правила використовують модуль канонічного значення. Пороги вводяться в обраній одиниці. Правила діють для всіх аркушів і серверного тексту.
+settings-display-default = Відновити типове правило
+settings-display-from = Від |значення|
+settings-display-remove = Видалити крок
+settings-display-add = + крок
+settings-display-digits = Значущі цифри
+settings-display-invalid = Задайте 1–8 кроків від нуля зі скінченними зростаючими порогами та 1–15 значущих цифр.
+error-display-quantity = Невідома величина у правилі: { $quantity }.
+error-display-unit = Невідома одиниця у правилі: { $quantity }.
+error-display-digits = Правило для { $quantity } потребує 1–15 значущих цифр.
+error-display-steps = Правило для { $quantity } потребує 1–8 кроків.
+error-display-threshold = Пороги для { $quantity } мають починатися з нуля, бути скінченними, невід’ємними та строго зростати.

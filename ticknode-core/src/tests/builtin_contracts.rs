@@ -42,11 +42,11 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 31);
+    assert_eq!(definitions.len(), 32);
     for definition in &definitions {
         assert!(!definition.pins.is_empty(), "{}", definition.type_name);
         for pin in &definition.pins {
-            if !(definition.type_name == "variable/set" && pin.id == PinId(3)) {
+            if !((definition.type_name == "variable/set" && pin.id == PinId(3)) || (definition.type_name == "text/to_text" && pin.id == PinId(1))) {
                 assert!(!pin.required, "catalog: {} / {}", definition.type_name, pin.name);
             }
         }
@@ -63,7 +63,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
         assert!(!definition.pins.is_empty());
         if node.type_name == "object/unpack" { assert_eq!(definition.pins.len(), 3); }
         for pin in &definition.pins {
-            if !(node.type_name == "variable/set" && pin.id == PinId(3)) {
+            if !((node.type_name == "variable/set" && pin.id == PinId(3)) || (node.type_name == "text/to_text" && pin.id == PinId(1))) {
                 assert!(!pin.required, "restored: {} / {}", node.type_name, pin.name);
             }
         }

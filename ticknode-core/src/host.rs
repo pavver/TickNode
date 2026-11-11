@@ -47,6 +47,8 @@ pub struct HostTask {
 }
 
 pub struct HostState {
+    pub locale: String,
+    pub display: ticknode_shared::DisplayRules,
     /// Pending tasks. Completed tasks are removed by the engine and delivered to the node via `Node::on_task`.
     pub active_tasks: HashMap<TaskId, HostTask>,
     next_task_id: TaskId,
@@ -66,6 +68,8 @@ pub struct HostState {
 impl Default for HostState {
     fn default() -> Self {
         Self {
+            locale: "en".into(),
+            display: Default::default(),
             active_tasks: HashMap::new(),
             next_task_id: 0,
             current_tick: 0,

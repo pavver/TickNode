@@ -28,6 +28,20 @@ pub fn field_json(value: &DataValue) -> Value {
     }
 }
 
+impl Field {
+    /// Quantity inputs carry canonical numbers; HA expects the snapshotted selector's unit.
+    pub fn json(&self, value: &DataValue) -> Value {
+        if let (DataType::Named(name), DataValue::Number(n), Some(symbol)) =
+            (&self.data_type, value, &self.unit)
+            && let Some((actual, unit)) = crate::units::mapping(symbol, None)
+            && actual == name
+        {
+            return json!(quantity::from_canonical(n.to_f64(), unit));
+        }
+        field_json(value)
+    }
+}
+
 pub fn outputs(result: Result<Value, String>) -> Vec<Output> {
     match result {
         Ok(result) => {
@@ -47,3 +61,6 @@ pub fn outputs(result: Result<Value, String>) -> Vec<Output> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod quantity_tests;

@@ -5,7 +5,7 @@ struct Probe { id: NodeId, cost: u32, pure: bool, polls: bool }
 impl Node for Probe {
     fn id(&self) -> NodeId { self.id }
     fn definition(&self) -> NodeDefinition {
-        let mut def = ConstNode { id: self.id, value: 1i64.into() }.definition();
+        let mut def = ConstNode { id: self.id, value: 1i64.into(), value_type: None }.definition();
         def.type_name = "probe".into();
         def.cost = self.cost;
         def

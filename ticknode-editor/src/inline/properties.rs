@@ -1,7 +1,7 @@
 //! Node property rows, including type selectors and dynamic pickers.
 
 use super::*;
-use crate::geometry::is_inline_property;
+use crate::geometry::visible_node_property;
 use crate::match_editor::stop_on_controls;
 use crate::panels::property_label;
 use crate::picker::PickerField;
@@ -22,7 +22,13 @@ pub(super) fn default_value(type_name: &str) -> DataValue {
 
 /// `(value, label)` pairs: built-in types followed by custom plugin types (labeled with `title`).
 pub(crate) fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
-    let mut options: Vec<_> = builtin.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect();
+    let mut options: Vec<_> = builtin.iter().map(|o| {
+        let label = match parse_data_type(o) {
+            Some(t @ DataType::List(_)) => i18n::data_type_title(&TypeRegistry::new(), &t),
+            _ => i18n::type_name_label(o),
+        };
+        (o.to_string(), label)
+    }).collect();
     ed.types.with_untracked(|types| {
         options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", i18n::type_def_title(&d), d.name))));
     });
@@ -35,6 +41,7 @@ fn InlineSelect(
     mut options: Vec<(String, String)>,
     #[prop(into)] selected: Signal<String>,
     on_select: Callback<String>,
+    #[prop(optional)] localization: Option<(String, String)>,
     #[prop(optional, into)] title: Signal<String>,
 ) -> impl IntoView {
     // A value not present in the options list (from a missing plugin's type) remains visible
@@ -54,7 +61,16 @@ fn InlineSelect(
                 }
             }
         >
-            {options.into_iter().map(|(value, label)| view! { <option value=value>{label}</option> }).collect_view()}
+            {options.into_iter().map(|(value, label)| {
+                let context = localization.clone();
+                let key = value.clone();
+                view! { <option value=value>{move || match &context {
+                    Some((owner, name)) if owner == "text/to_text" && name == "unit" && key != "auto" =>
+                        i18n::unit_symbol(&key).unwrap_or_else(|| label.clone()),
+                    Some((owner, name)) => i18n::property_option_label(owner, name, &key, &label),
+                    None => label.clone(),
+                }}</option> }
+            }).collect_view()}
         </select>
     }
 }
@@ -68,14 +84,17 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
     let Some(node) = ed.node(id) else { return ().into_any() };
     let names = Memo::new(move |_| node.instance.with(|i| {
         i.model.properties.iter()
-            .filter(|(n, v)| is_inline_property(n, v))
+            .filter(|(n, v)| visible_node_property(&i.model.type_name, n, v, &i.model.properties))
             .map(|(n, v)| {
                 // Only a string property can be shown as a drop-down or picker
                 let described = matches!(v, DataValue::String(_))
                     .then(|| i.definition.properties.iter().find(|p| p.name == *n).cloned())
                     .flatten()
                     .filter(|p| p.kind != PropertyKind::Text || !p.title.is_empty());
-                (n.clone(), v.get_type(), described)
+                let declared = if i.model.type_name == "const" && n == "value" {
+                    i.definition.pins.iter().find_map(|p| match &p.pin_type { PinType::Data(t) if p.id == PinId(0) => Some(t.clone()), _ => None }).unwrap_or_else(|| v.get_type())
+                } else { v.get_type() };
+                (n.clone(), declared, described)
             })
             .collect::<Vec<_>>()
     }));
@@ -106,12 +125,10 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     };
                     let control = if let Some(PropertyKind::Select(options)) = described.as_ref().map(|d| d.kind.clone()) {
                         let owner = type_name();
-                        let options = options.into_iter()
-                            .map(|(v, l)| { let label = i18n::property_option_label(&owner, &name, &v, &l); (v, label) })
-                            .collect();
                         view! {
                             <InlineSelect
                                 options=options
+                                localization=(owner, name.clone())
                                 selected=Signal::derive(text_of)
                                 title=label
                                 on_select=Callback::new(move |v| send.run(DataValue::String(v)))
@@ -133,7 +150,7 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     } else if name.ends_with("_type") {
                         view! {
                             <InlineSelect
-                                options=type_options(ed, &TYPE_OPTIONS)
+                                options=if type_name() == "text/to_text" { type_options(ed, &["any", "number", "string", "bool", "time", "datetime", "duration", "color", "object", "list<any>"]) } else { type_options(ed, &TYPE_OPTIONS) }
                                 selected=Signal::derive(text_of)
                                 title=label
                                 on_select=Callback::new(move |v| send.run(DataValue::String(v)))
@@ -152,10 +169,15 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     } else {
                         let type_select = (name == "value" && is_const()).then(|| view! {
                             <InlineSelect
-                                options=CONST_TYPES.iter().map(|o| (o.to_string(), i18n::type_name_label(o))).collect()
-                                selected=Signal::derive(move || value.get().map(|v| data_type_name(&v.get_type())).unwrap_or_default())
+                                options=type_options(ed, &CONST_TYPES).into_iter().filter(|(v, _)| CONST_TYPES.contains(&v.as_str()) || ticknode_shared::quantity::kind(v).is_some()).collect()
+                                selected=Signal::derive(move || node.instance.with(|i| i.definition.pins.iter().find_map(|p| match &p.pin_type {
+                                    PinType::Data(t) if p.id == PinId(0) => Some(data_type_name(t)), _ => None,
+                                }).unwrap_or_default()))
                                 title=Signal::derive(move || t!("inline-value-type-title"))
-                                on_select=Callback::new(move |t: String| send.run(default_value(&t)))
+                                on_select=Callback::new(move |t: String| ed.send(ClientMessage::Batch(vec![
+                                    ClientMessage::SetProperty { id, name: "value_type".into(), value: t.clone().into() },
+                                    ClientMessage::SetProperty { id, name: "value".into(), value: default_value(&t) },
+                                ])))
                             />
                         });
                         view! {

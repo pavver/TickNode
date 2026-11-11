@@ -1,8 +1,7 @@
 //! Property-backed action form, snapshots and service execution.
 
 use super::{
-    DONE, ERROR, FAILED, Field, RESPONSE, Service, action_source, field_json, outputs,
-    service_matches,
+    DONE, ERROR, FAILED, Field, RESPONSE, Service, action_source, outputs, service_matches,
 };
 use crate::{CATEGORY, text_property, with_hub};
 use serde_json::Value;
@@ -74,7 +73,7 @@ impl PluginNode for ActionNode {
             cost: 50,
             type_name: "ha/action".into(), title: "Action".into(), category: CATEGORY.into(),
             description: "Runs a Home Assistant action with fields from its form".into(),
-            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
+            help: "Choose an entity and an action from the lists: the action list is filtered by the selected entity and sorted by usage frequency. Entity overrides the selected entity when set. Selecting an action while its catalog is available snapshots its fields as input pins (advanced fields last); they survive saving and reconnects. Required fields must be set; unset optional fields are omitted. Select fields accept text; their options are not shown as a dropdown. Number fields with recognized units use quantity inputs and convert canonical values back to the snapshotted HA unit. Colors are sent as RGB, durations as hours/minutes/seconds, and times as HH:MM:SS. Done confirms success; Failed and Error report a rejected request, timeout or disconnected connection. Response is emitted only when HA returns response data. Reselect the action to refresh its field schema after HA changes it.".into(),
             properties: vec![
                 PropertyDefinition::dynamic("target", "Entity", crate::entities::ACTION_TARGETS_SOURCE)
                     .described("The target entity; filters the available actions. The Entity input overrides this choice"),
@@ -119,6 +118,15 @@ impl PluginNode for ActionNode {
                 "supports_response".into(),
                 DataValue::Bool(self.service.response),
             ),
+            (
+                "field_units".into(),
+                strings(
+                    self.service
+                        .fields
+                        .iter()
+                        .map(|f| f.unit.clone().unwrap_or_default()),
+                ),
+            ),
         ]
     }
 
@@ -131,6 +139,7 @@ impl PluginNode for ActionNode {
             "required_fields" => self.set_required_fields(value),
             "target_domains" => self.service.domains = read_strings(value),
             "supports_response" => self.set_supports_response(value),
+            "field_units" => self.set_field_units(value),
             _ => {}
         }
     }
@@ -152,9 +161,7 @@ impl PluginNode for ActionNode {
             .fields
             .iter()
             .enumerate()
-            .filter_map(|(i, f)| {
-                Some((f.name.clone(), field_json(inputs.get(PinId(i as u32 + 2))?)))
-            })
+            .filter_map(|(i, f)| Some((f.name.clone(), f.json(inputs.get(PinId(i as u32 + 2))?))))
             .collect();
         with_hub(|hub, env| {
             hub.action(
@@ -222,6 +229,7 @@ impl ActionNode {
                     label: name.into(),
                     data_type: parse_data_type(kind)?,
                     required: false,
+                    unit: None,
                 })
             })
             .collect();
@@ -230,6 +238,12 @@ impl ActionNode {
     fn set_field_labels(&mut self, value: DataValue) {
         for (field, label) in self.service.fields.iter_mut().zip(read_strings(value)) {
             field.label = label;
+        }
+    }
+
+    fn set_field_units(&mut self, value: DataValue) {
+        for (field, unit) in self.service.fields.iter_mut().zip(read_strings(value)) {
+            field.unit = (!unit.is_empty()).then_some(unit);
         }
     }
 

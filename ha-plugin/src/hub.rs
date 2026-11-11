@@ -74,6 +74,7 @@ struct EntityWatch {
     reply: Option<Reply<State>>,
     value_type: crate::entity::ValueType,
     fire_on: crate::entity::FireOn,
+    unit_warning: bool,
 }
 
 #[derive(Default)]

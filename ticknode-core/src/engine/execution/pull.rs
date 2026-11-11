@@ -47,7 +47,7 @@ impl TickEngine {
                 ) && let Some(conversion) = self.types.convertible(src, dst)
                     && let Some(original) = value.take()
                 {
-                    value = conversion.apply(original);
+                    value = conversion.apply_with_display(original, &self.host_state.display, crate::quantity::labels(&self.host_state.locale));
                     if value.is_none()
                         && let Some(pin) = dst_pin.filter(|p| p.required)
                         && self.required_reported.insert(node_id)

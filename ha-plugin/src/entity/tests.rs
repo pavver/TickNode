@@ -17,7 +17,7 @@ fn infers_types_from_domains_attributes_and_state_text() {
             "sensor.voltage",
             "unavailable",
             json!({"unit_of_measurement":"V"}),
-            ValueType::Number,
+            ValueType::Quantity("quantity.voltage"),
         ),
         (
             "sensor.energy",
@@ -205,7 +205,7 @@ fn property_order_preserves_manual_type_after_inference_on_load() {
     entity.set_property("entity_id", " sensor.voltage ".into());
     assert_eq!(
         entity.definition().pins[1].pin_type,
-        PinType::Data(DataType::Number)
+        PinType::Data(DataType::Named("quantity.voltage".into()))
     );
     entity.set_property("value_type", "bool".into());
     entity.set_property("fire_on", "any".into());

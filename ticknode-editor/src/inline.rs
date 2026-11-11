@@ -10,6 +10,7 @@ use crate::ui::{ControlState, flash};
 
 pub(crate) mod properties;
 pub(crate) mod duration;
+mod quantity;
 mod text_field;
 
 pub use properties::*;
@@ -46,6 +47,10 @@ pub fn InlineValue(
     let state = RwSignal::new(ControlState::Idle);
     // Pressing on the field does not start node dragging or rubber-band selection
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
+
+    if let Some(kind) = ed.types.with_untracked(|types| types.definition_of(&value_type).and_then(|d| d.quantity()).cloned()) {
+        return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title /> }.into_any();
+    }
 
     if value_type == DataType::Duration {
         return view! { <duration::DurationValue value=value on_commit=on_commit optional=optional title=title /> }.into_any();

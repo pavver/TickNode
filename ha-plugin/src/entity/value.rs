@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use ha_core_client::State;
-use ticknode_plugin_sdk::{DataType, DataValue};
+use ticknode_plugin_sdk::{DataType, DataValue, quantity};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ValueType {
@@ -11,6 +11,7 @@ pub enum ValueType {
     #[default]
     Text,
     DateTime,
+    Quantity(&'static str),
 }
 
 impl ValueType {
@@ -20,7 +21,13 @@ impl ValueType {
             "bool" => Self::Bool,
             "text" => Self::Text,
             "datetime" => Self::DateTime,
-            _ => return None,
+            _ => Self::Quantity(
+                quantity::catalog()
+                    .iter()
+                    .find(|d| d.name == text)?
+                    .name
+                    .as_str(),
+            ),
         })
     }
 
@@ -30,6 +37,7 @@ impl ValueType {
             Self::Bool => "bool",
             Self::Text => "text",
             Self::DateTime => "datetime",
+            Self::Quantity(name) => name,
         }
     }
 
@@ -39,6 +47,7 @@ impl ValueType {
             Self::Bool => DataType::Bool,
             Self::Text => DataType::String,
             Self::DateTime => DataType::DateTime,
+            Self::Quantity(name) => DataType::Named(name.into()),
         }
     }
 }
@@ -65,6 +74,9 @@ pub fn infer_value_type(state: &State) -> ValueType {
         .next()
         .unwrap_or_default();
     let attrs = crate::convert::attributes_json(state);
+    if let Some((name, _)) = crate::units::state_unit(state) {
+        return ValueType::Quantity(name);
+    }
     if matches!(domain, "input_number" | "number" | "counter")
         || attrs
             .get("unit_of_measurement")
@@ -114,5 +126,41 @@ pub fn typed_value(state: &State, value_type: ValueType) -> Option<DataValue> {
         ValueType::DateTime => DateTime::parse_from_rfc3339(text)
             .ok()
             .map(|dt| DataValue::DateTime(dt.with_timezone(&Utc))),
+        ValueType::Quantity(name) => {
+            let (actual, unit) = crate::units::state_unit(state)?;
+            if actual != name {
+                return None;
+            }
+            let canonical = quantity::to_canonical(finite_number(text)?, unit);
+            canonical.is_finite().then(|| canonical.into())
+        }
     }
+}
+
+pub fn unit_mismatch(state: &State, value_type: ValueType) -> bool {
+    matches!(value_type, ValueType::Quantity(name)
+        if crate::units::state_unit(state).is_none_or(|(actual, _)| actual != name))
+}
+
+pub fn type_property() -> ticknode_plugin_sdk::PropertyDefinition {
+    use ticknode_plugin_sdk::PropertyDefinition;
+    let mut property = PropertyDefinition::select(
+        "value_type",
+        "Value type",
+        &[
+            ("number", "Number"),
+            ("bool", "On/Off"),
+            ("text", "Text"),
+            ("datetime", "Date and time"),
+        ],
+    )
+    .described("Auto-detected when choosing a known entity; can be overridden");
+    if let ticknode_plugin_sdk::PropertyKind::Select(options) = &mut property.kind {
+        options.extend(
+            quantity::catalog()
+                .iter()
+                .map(|d| (d.name.clone(), d.title.clone())),
+        );
+    }
+    property
 }

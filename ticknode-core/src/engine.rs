@@ -46,7 +46,7 @@ pub struct TickEngine {
     pub(crate) live_nodes: BTreeSet<NodeId>,
     pub(crate) connections: ConnectionIndex,
     pub registry: NodeRegistry,
-    /// Custom data types declared by plugins.
+    /// Core quantities and custom data types declared by plugins.
     pub types: TypeRegistry,
     /// Which plugin declared each custom data type.
     pub(crate) type_owners: HashMap<String, String>,
@@ -94,7 +94,7 @@ impl TickEngine {
             live_nodes: BTreeSet::new(),
             connections: ConnectionIndex::default(),
             registry: NodeRegistry::new(),
-            types: TypeRegistry::new(),
+            types: TypeRegistry::from_definitions(quantity::builtin_quantities()),
             type_owners: HashMap::new(),
             plugins: Default::default(),
             data_cache: HashMap::new(),
@@ -110,6 +110,17 @@ impl TickEngine {
             executed: Vec::new(),
             executed_index: HashMap::new(),
         }
+    }
+
+    /// Changes server text formatting and invalidates cached pure results immediately.
+    pub fn set_locale(&mut self, locale: &str) {
+        self.host_state.locale = if locale == "uk" { "uk" } else { "en" }.into();
+        self.pure_cache.clear();
+    }
+
+    pub fn set_display_rules(&mut self, rules: ticknode_shared::DisplayRules) {
+        self.host_state.display = rules;
+        self.pure_cache.clear();
     }
 
     pub fn set_node_sheet(&mut self, node: NodeId, sheet: Option<SheetId>) {

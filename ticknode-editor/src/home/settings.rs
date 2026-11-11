@@ -1,6 +1,7 @@
 //! Settings page: interface preferences and engine configuration.
 
 pub mod logic;
+mod display;
 
 use leptos::prelude::*;
 use ticknode_shared::ClientMessage;
@@ -92,14 +93,15 @@ fn EngineGroup() -> impl IntoView {
 
     Effect::new(move |_| {
         let current = ed.server_settings.get();
-        if !draft.with_untracked(|d| d.is_dirty(current)) {
+        if !draft.with_untracked(|d| d.is_dirty(current.clone())) {
             draft.set(EngineSettingsDraft::new(current));
         }
     });
 
     Effect::new(move |_| {
-        ed.server_settings.track();
+        let current = ed.server_settings.get();
         if saving.get_untracked() == ControlState::Pending {
+            draft.set(EngineSettingsDraft::new(current));
             crate::ui::flash(saving, ControlState::Success);
         }
     });
@@ -168,6 +170,19 @@ fn EngineGroup() -> impl IntoView {
                 })}
                 <span class="settings-description">{move || t!("settings-budget-description")}</span>
             </div>
+            <div class="settings-row">
+                <div class="settings-row-head">
+                    <span class="settings-label">{move || t!("settings-formatting-language")}</span>
+                    <select class="form-input settings-control"
+                        prop:value=move || draft.with(|d| d.locale.clone())
+                        on:change=move |ev| draft.update(|d| d.locale = event_target_value(&ev))>
+                        <option value="en">{move || t!("language-en")}</option>
+                        <option value="uk">{move || t!("language-uk")}</option>
+                    </select>
+                </div>
+                <span class="settings-description">{move || t!("settings-formatting-language-description")}</span>
+            </div>
+            <display::DisplayGroup draft=draft />
             <div class="settings-actions">
                 <ActionButton
                     text=Signal::derive(move || t!("settings-save"))

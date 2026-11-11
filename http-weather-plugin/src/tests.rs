@@ -19,6 +19,34 @@ fn responses_trim_fields_and_keep_commas_in_description() {
         assert_eq!(parse(invalid), None);
     }
 }
+
+#[test]
+fn temperature_pin_declares_canonical_celsius() {
+    let node = WeatherNode {
+        url: DEFAULT_URL.into(),
+        pending: None,
+    };
+    let definition = node.definition();
+    assert_eq!(
+        definition
+            .pins
+            .iter()
+            .find(|p| p.id == TEMP)
+            .unwrap()
+            .pin_type,
+        PinType::Data(DataType::Named("quantity.temperature".into()))
+    );
+    let mut node = node;
+    let out = node.complete(
+        Ok(TaskOutput::Http(HttpResponse {
+            status: 200,
+            headers: vec![],
+            body: b"-12.5,Cold".to_vec(),
+        })),
+        &mut Http::default(),
+    );
+    assert!(out.contains(&Output::Data(TEMP, (-12.5).into())));
+}
 #[test]
 fn only_current_request_completes_and_success_sets_data_before_pulsing() {
     let mut node = WeatherNode {

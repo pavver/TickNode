@@ -73,9 +73,23 @@ pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
         && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 
+/// Constant's declared quantity type shares the Value row instead of adding a separate row.
+pub fn is_node_property(node_type: &str, name: &str, value: &DataValue) -> bool {
+    is_inline_property(name, value) && !(node_type == "const" && name == "value_type")
+}
+
+pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, properties: &[(String, DataValue)]) -> bool {
+    if !is_node_property(node_type, name, value) { return false; }
+    if node_type != "text/to_text" { return true; }
+    let ty = properties.iter().find(|(n, _)| n == "value_type").and_then(|(_, v)| match v {
+        DataValue::String(s) => ticknode_shared::parse_data_type(s), _ => None,
+    }).unwrap_or(DataType::Any);
+    ticknode_shared::to_text::property_visible(&ty, name)
+}
+
 /// Number of inline property rows on a node.
-pub fn prop_rows(properties: &[(String, DataValue)]) -> usize {
-    properties.iter().filter(|(n, v)| is_inline_property(n, v)).count()
+pub fn prop_rows(node_type: &str, properties: &[(String, DataValue)]) -> usize {
+    properties.iter().filter(|(n, v)| visible_node_property(node_type, n, v, properties)).count()
 }
 
 /// Match node cases extracted from its properties (invalid entries are skipped, just as on the server).

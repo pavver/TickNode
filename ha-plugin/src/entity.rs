@@ -2,6 +2,7 @@
 
 mod value;
 pub use value::{ValueType, infer_value_type, typed_value};
+pub(crate) use value::unit_mismatch;
 
 use ha_core_client::{State, StateChange};
 use std::time::Instant;
@@ -109,12 +110,11 @@ impl PluginNode for Entity {
             cost: 2,
             type_name: "ha/entity".into(), title: "Entity".into(), category: CATEGORY.into(),
             description: "Fires when a Home Assistant entity changes and exposes its typed value".into(),
-            help: "Choose an entity. Changed fires on state text changes by default; Any update also fires on attribute-only updates. Each event updates Value and Previous (the value before the change), in order, at most one per tick. Value type is auto-detected when choosing a known entity; you can override it with Number, On/Off, Text or Date and time (RFC 3339). Unknown, unavailable or non-convertible values clear the corresponding pin. Unit comes from unit_of_measurement. Attributes and Entity state expose the full current state. Subscription and reconnect snapshots update current data without firing Changed or changing Previous. A removed entity clears current data. While offline the last values remain available; missed events are not replayed. A missing entity subscription is retried every 30 seconds.".into(),
+            help: "Choose an entity. Changed fires on state text changes by default; Any update also fires on attribute-only updates. Each event updates Value and Previous (the value before the change), in order, at most one per tick. Value type is auto-detected when choosing a known entity; you can override it with a physical quantity, Number, On/Off, Text or Date and time (RFC 3339). Quantity values use canonical units (for example kW becomes W); each state uses its own unit. A missing or incompatible unit clears the affected pin and logs a warning until recovery. Unknown, unavailable or non-convertible values clear the corresponding pin. Unit comes from unit_of_measurement. Attributes and Entity state expose the full current state. Subscription and reconnect snapshots update current data without firing Changed or changing Previous. A removed entity clears current data. While offline the last values remain available; missed events are not replayed. A missing entity subscription is retried every 30 seconds.".into(),
             properties: vec![
                 PropertyDefinition::dynamic("entity_id", "Entity", "entities")
                     .described("The Home Assistant entity to watch"),
-                PropertyDefinition::select("value_type", "Value type", &[("number", "Number"), ("bool", "On/Off"), ("text", "Text"), ("datetime", "Date and time")])
-                    .described("Auto-detected when choosing a known entity; can be overridden"),
+                value::type_property(),
                 PropertyDefinition::select("fire_on", "Fire on", &[("state", "State changes"), ("any", "Any update")])
                     .described("When Changed fires; data outputs update on every event"),
             ],
@@ -176,3 +176,6 @@ impl PluginNode for Entity {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod quantity_tests;

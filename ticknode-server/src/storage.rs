@@ -15,6 +15,10 @@ pub struct VariablesFile {
 
 #[derive(Debug, Deserialize)]
 struct SettingsFile {
+    #[serde(default)]
+    display: ticknode_shared::DisplayRules,
+    #[serde(default = "default_settings_locale")]
+    locale: String,
     tick_ms: Option<u32>,
     tick_budget: Option<u32>,
 }
@@ -95,14 +99,14 @@ impl Storage {
     }
 
     pub fn load_settings_from(path: &Path, env: &dyn Fn(&str) -> Option<String>) -> anyhow::Result<ServerSettings> {
-        let (file_tick_ms, file_tick_budget) = if path.exists() {
+        let (file_tick_ms, file_tick_budget, locale, display) = if path.exists() {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("failed to read {}", path.display()))?;
             let file: SettingsFile = serde_json::from_str(&text)
                 .with_context(|| format!("invalid settings JSON in {}", path.display()))?;
-            (file.tick_ms, file.tick_budget)
+            (file.tick_ms, file.tick_budget, file.locale, file.display)
         } else {
-            (None, None)
+            (None, None, "en".into(), Default::default())
         };
 
         let tick_ms = file_tick_ms
@@ -113,7 +117,9 @@ impl Storage {
             .or_else(|| env("TICKNODE_TICK_BUDGET").and_then(|v| v.trim().parse().ok()))
             .unwrap_or(ticknode_shared::DEFAULT_TICK_BUDGET);
 
-        Ok(ServerSettings { tick_ms, tick_budget }.validated())
+        if !["en", "uk"].contains(&locale.as_str()) { tracing::warn!(%locale, "Invalid formatting locale; using en"); }
+        display.validate().map_err(|e| anyhow::anyhow!(e.fallback))?;
+        Ok(ServerSettings { tick_ms, tick_budget, locale, display }.validated())
     }
 
     pub fn save_settings(&self, settings: &ServerSettings) -> anyhow::Result<()> {
@@ -318,3 +324,5 @@ fn write_atomic(path: &Path, contents: &str) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+fn default_settings_locale() -> String { "en".into() }

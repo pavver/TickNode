@@ -106,7 +106,7 @@ impl Node for VariableChangedNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let mut outputs = vec![NodeOutput::Execution(PinId(0))];
         if let Some(var) = ctx.variable(&self.name, self.lookup) {
-            if let Some(val) = fit_variable_value(ctx.types, var.value.clone(), &self.value_type) {
+            if let Some(val) = fit_variable_value_with_display(ctx.types, var.value.clone(), &self.value_type, &ctx.host_state.display, crate::quantity::labels(&ctx.host_state.locale)) {
                 outputs.push(NodeOutput::Data(PinId(1), val));
             } else {
                 outputs.push(NodeOutput::Clear(PinId(1)));

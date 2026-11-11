@@ -128,7 +128,7 @@ impl TickEngine {
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     return false;
                 }
-                let Some(converted) = fit_variable_value(&self.types, value, &data_type) else {
+                let Some(converted) = fit_variable_value_with_display(&self.types, value, &data_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
                     let err = VariableError::TypeMismatch(name);
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     return false;
@@ -160,7 +160,7 @@ impl TickEngine {
                     return false;
                 };
                 let var_type = self.variables.get(&key).unwrap().data_type.clone();
-                let Some(converted) = fit_variable_value(&self.types, value, &var_type) else {
+                let Some(converted) = fit_variable_value_with_display(&self.types, value, &var_type, &self.host_state.display, crate::quantity::labels(&self.host_state.locale)) else {
                     let err = VariableError::TypeMismatch(name);
                     self.host_state.error(node_id, err.ui_message(), err.log_message());
                     fired.push(PinId(2));

@@ -176,7 +176,7 @@ fn settings_fallback_to_env_and_defaults() {
     let path = dir.path().join("settings.json");
 
     let no_env = Storage::load_settings_from(&path, &|_| None).unwrap();
-    assert_eq!(no_env, ServerSettings { tick_ms: 100, tick_budget: 0 });
+    assert_eq!(no_env, ServerSettings { tick_ms: 100, tick_budget: 0, ..Default::default() });
 
     let env = |k: &str| match k {
         "TICKNODE_TICK_MS" => Some("50".into()),
@@ -184,7 +184,7 @@ fn settings_fallback_to_env_and_defaults() {
         _ => None,
     };
     let with_env = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(with_env, ServerSettings { tick_ms: 50, tick_budget: 1000 });
+    assert_eq!(with_env, ServerSettings { tick_ms: 50, tick_budget: 1000, ..Default::default() });
 }
 
 #[test]
@@ -193,7 +193,7 @@ fn settings_file_precedence_over_env() {
     let storage = Storage::new(dir.path().to_path_buf());
     let path = storage.settings_json_path();
 
-    storage.save_settings(&ServerSettings { tick_ms: 250, tick_budget: 2000 }).unwrap();
+    storage.save_settings(&ServerSettings { tick_ms: 250, tick_budget: 2000, ..Default::default() }).unwrap();
 
     let env = |k: &str| match k {
         "TICKNODE_TICK_MS" => Some("50".into()),
@@ -201,7 +201,7 @@ fn settings_file_precedence_over_env() {
         _ => None,
     };
     let loaded = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 250, tick_budget: 2000 });
+    assert_eq!(loaded, ServerSettings { tick_ms: 250, tick_budget: 2000, ..Default::default() });
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn settings_partial_file_uses_env_fallback() {
         _ => None,
     };
     let loaded = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 300, tick_budget: 500 });
+    assert_eq!(loaded, ServerSettings { tick_ms: 300, tick_budget: 500, ..Default::default() });
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn settings_validation_clamp() {
     std::fs::write(&path, r#"{"tick_ms": 0, "tick_budget": 5000000}"#).unwrap();
 
     let loaded = Storage::load_settings_from(&path, &|_| None).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 1, tick_budget: 1_000_000 });
+    assert_eq!(loaded, ServerSettings { tick_ms: 1, tick_budget: 1_000_000, ..Default::default() });
 }
 
 #[test]
@@ -236,4 +236,19 @@ fn corrupt_settings_file_fails_start() {
 
     let res = Storage::load_settings_from(&path, &|_| None);
     assert!(res.is_err());
+}
+
+#[test]
+fn display_settings_roundtrip_and_invalid_file_is_rejected() {
+    use ticknode_shared::{DisplayRules, QuantityDisplay, UnitStep};
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().join("graph.json"));
+    let mut settings = ServerSettings { display: DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
+        digits: 4, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }, UnitStep { from: 10000.0, unit: "kilowatt".into() }],
+    })].into() }, ..Default::default() };
+    storage.save_settings(&settings).unwrap();
+    assert_eq!(Storage::load_settings_from(&storage.settings_json_path(), &|_| None).unwrap(), settings);
+    settings.display.quantities.get_mut("quantity.power").unwrap().steps[0].from = 1.0;
+    storage.save_settings(&settings).unwrap();
+    assert!(Storage::load_settings_from(&storage.settings_json_path(), &|_| None).is_err());
 }

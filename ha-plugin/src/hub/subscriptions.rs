@@ -124,6 +124,7 @@ impl Hub {
                 reply: None,
                 value_type: Default::default(),
                 fire_on: Default::default(),
+                unit_warning: false,
             },
         );
         serial
@@ -159,6 +160,7 @@ impl Hub {
         watch.snapshot_due = false;
         if let Some(entity) = self.entities.get_mut(&node) {
             entity.reply = None;
+            entity.unit_warning = false;
         }
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
@@ -177,6 +179,9 @@ impl Hub {
             return;
         };
         if let Some(entity) = self.entities.get_mut(&node) {
+            if entity.value_type != value_type {
+                entity.unit_warning = false;
+            }
             // A new type re-reads the current state, so Value is not left in the old type until the next change.
             if entity.value_type != value_type && matches!(watch.sub, Sub::Active(_)) {
                 watch.snapshot_due = true;

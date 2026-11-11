@@ -79,7 +79,7 @@ impl NodeRegistry {
     fn register_defaults(&mut self) {
         self.register(Box::new(|id| Box::new(ClockNode { id, interval_ticks: 10 })));
         self.register(Box::new(|id| Box::new(ConsoleNode { id })));
-        self.register(Box::new(|id| Box::new(ConstNode { id, value: DataValue::Number(NumberValue::Int(0)) })));
+        self.register(Box::new(|id| Box::new(ConstNode { id, value: DataValue::Number(NumberValue::Int(0)), value_type: None })));
         for op in [MathOp::Add, MathOp::Sub, MathOp::Mul, MathOp::Div] {
             self.register(Box::new(move |id| Box::new(PureMathNode { id, op })));
         }
@@ -97,6 +97,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(VariableDeleteNode::new(id))));
         self.register(Box::new(|id| Box::new(VariableChangedNode::new(id))));
         self.register(Box::new(|id| Box::new(MatchNode::new(id))));
+        self.register(Box::new(|id| Box::new(ToTextNode::new(id))));
         self.register(Box::new(|id| Box::new(CompareNode { id })));
         self.register(Box::new(|id| Box::new(ForLoopNode { id, active: false, current_index: 0, count: 0 })));
         self.register(Box::new(|id| Box::new(SleepNode { id })));

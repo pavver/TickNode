@@ -26,6 +26,23 @@ pub fn property_label(name: &str) -> String {
 }
 
 /// Formats a value for display in the inspector: strings are quoted to distinguish `"5"` from `5`.
+pub fn display_value_in(value: &DataValue, declared: &DataType) -> String {
+    let runtime = value.get_type();
+    let declared = if *declared == DataType::Any { &runtime } else { declared };
+    if let Some(text) = i18n::quantity_text(value, declared) { return text; }
+    if let (DataValue::List { elements, .. }, DataType::List(inner)) = (value, declared) {
+        return format!("[{}]", elements.iter().map(|v| display_value_in(v, inner)).collect::<Vec<_>>().join(", "));
+    }
+    if let DataValue::Object { fields, .. } = value {
+        let fields = fields.iter().map(|(name, f)| {
+            let ty = i18n::declared_field_type(declared, name).unwrap_or(DataType::Any);
+            format!("{name}: {}", display_value_in(&f.value, &ty))
+        }).collect::<Vec<_>>().join(", ");
+        return format!("{{{fields}}}");
+    }
+    display_value(value)
+}
+
 pub fn display_value(value: &DataValue) -> String {
     match value {
         DataValue::String(s) => format!("\"{s}\""),
@@ -72,7 +89,7 @@ pub(super) fn instance_pin_label(instance: &NodeInstance, pin: PinId, dir: PinDi
         && pin != PinId(0)
         && let Some(case) = match_cases(&instance.model.properties).into_iter().find(|c| c.pin == pin.0)
     {
-        return i18n::format_match_case(&case);
+        return i18n::format_match_case_in(&case, &crate::geometry::match_inputs_of(&instance.model.properties));
     }
     i18n::node_pin_label(&instance.definition.type_name, fallback)
 }

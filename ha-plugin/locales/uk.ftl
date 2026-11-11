@@ -228,7 +228,7 @@ node-ha-action-description = Виконує дію Home Assistant із поля�
 node-ha-action-help =
     Оберіть сутність і дію зі списків: список дій фільтрується за обраною сутністю та сортується за частотою використання. Вхід Entity замінює вибрану сутність, якщо його задано. Вибір дії за наявності каталогу зберігає її поля як вхідні піни (розширені — наприкінці); вони відновлюються після збереження та перепідключення. Обов'язкові поля потрібно заповнити; незадані необов'язкові поля не надсилаються.
 
-    Поля з переліком варіантів приймають текст без випадного списку. Колір надсилається як RGB, тривалість — як години, хвилини та секунди, час — як HH:MM:SS. Done підтверджує успіх; Failed і Error повідомляють про відхилений запит, тайм-аут або відсутність зв'язку. Response оновлюється лише тоді, коли HA повертає дані відповіді. Повторно оберіть дію, щоб оновити схему полів після її зміни в HA.
+    Поля з переліком варіантів приймають текст без випадного списку. Числові поля з відомими одиницями мають входи фізичних величин; канонічне значення перед надсиланням перетворюється в збережену одиницю HA. Колір надсилається як RGB, тривалість — як години, хвилини та секунди, час — як HH:MM:SS. Done підтверджує успіх; Failed і Error повідомляють про відхилений запит, тайм-аут або відсутність зв'язку. Response оновлюється лише тоді, коли HA повертає дані відповіді. Повторно оберіть дію, щоб оновити схему полів після її зміни в HA.
 node-ha-action-prop-target-title = Сутність
 node-ha-action-prop-target-description = Цільова сутність; визначає доступні дії. Вхід Entity замінює цей вибір
 node-ha-action-prop-action-title = Дія
@@ -315,7 +315,7 @@ node-ha-entity-title = Сутність
 node-ha-entity-description = Спрацьовує при зміні сутності Home Assistant і надає її типізоване значення
 node-ha-entity-help =
     Оберіть сутність. «Зміна» за замовчуванням спрацьовує лише при зміні тексту стану; «Будь-яке оновлення» враховує також зміни атрибутів. Кожна подія оновлює «Значення» та «Попереднє» (значення до зміни), у порядку надходження, не більше однієї події за такт.
-    Тип значення визначається автоматично при виборі відомої сутності. Його можна змінити на число, увімк/вимк, текст або дату й час (RFC 3339). Невідомий, недоступний або неперетворюваний стан очищає відповідний вихід. Одиниця береться з unit_of_measurement; «Атрибути» й «Стан сутності» надають повний поточний стан.
+    Тип значення визначається автоматично при виборі відомої сутності. Його можна змінити на фізичну величину, число, увімк/вимк, текст або дату й час (RFC 3339). Невідомий, недоступний або неперетворюваний стан очищає відповідний вихід. Фізичні величини мають канонічні значення (наприклад, кВт перетворюються у Вт); кожен стан використовує власну одиницю. Відсутня або несумісна одиниця очищає відповідний вихід і спричиняє одноразове попередження до відновлення. Одиниця береться з unit_of_measurement; «Атрибути» й «Стан сутності» надають повний поточний стан.
     Початковий знімок і знімок після відновлення зв’язку оновлюють поточні дані без імпульсу «Зміна» та без зміни «Попереднє». Видалення сутності очищає поточні дані. Без зв’язку останні значення зберігаються, пропущені події не відтворюються. Невдалу підписку повторюють через 30 секунд.
 node-ha-entity-pin-Changed = Зміна
 node-ha-entity-pin-Value = Значення
@@ -335,3 +335,21 @@ node-ha-entity-prop-fire_on-title = Спрацьовувати на
 node-ha-entity-prop-fire_on-description = Коли надсилати імпульс «Зміна»; дані оновлюються при кожній події
 node-ha-entity-prop-fire_on-option-state = Зміна стану
 node-ha-entity-prop-fire_on-option-any = Будь-яке оновлення
+
+node-ha-entity-prop-value_type-option-quantity-power = Потужність
+node-ha-entity-prop-value_type-option-quantity-energy = Енергія
+node-ha-entity-prop-value_type-option-quantity-voltage = Напруга
+node-ha-entity-prop-value_type-option-quantity-current = Струм
+node-ha-entity-prop-value_type-option-quantity-apparent-power = Повна потужність
+node-ha-entity-prop-value_type-option-quantity-frequency = Частота
+node-ha-entity-prop-value_type-option-quantity-temperature = Температура
+node-ha-entity-prop-value_type-option-quantity-percentage = Відсоток
+node-ha-entity-prop-value_type-option-quantity-pressure = Тиск
+node-ha-entity-prop-value_type-option-quantity-speed = Швидкість
+node-ha-entity-prop-value_type-option-quantity-length = Довжина
+node-ha-entity-prop-value_type-option-quantity-volume = Об’єм
+node-ha-entity-prop-value_type-option-quantity-mass = Маса
+node-ha-entity-prop-value_type-option-quantity-illuminance = Освітленість
+node-ha-entity-prop-value_type-option-quantity-irradiance = Опромінення
+node-ha-entity-prop-value_type-option-quantity-concentration = Концентрація
+node-ha-entity-prop-value_type-option-quantity-parts = Частки

@@ -35,3 +35,5 @@ mod tests;
 #[cfg(test)]
 #[path = "budget/tests.rs"]
 mod budget_tests;
+
+pub mod quantity;

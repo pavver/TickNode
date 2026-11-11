@@ -68,10 +68,26 @@ impl TickEngine {
 
     /// A data input pin has at most one source: a new connection replaces the previous one.
     pub fn connect_data(&mut self, src_node: NodeId, src_pin: PinId, dst_node: NodeId, dst_pin: PinId) -> Result<(), EngineError> {
-        let c = ConnectionModel { src_node, src_pin, dst_node, dst_pin };
-        self.validate_data_types(&c)?;
+        self.connect_data_inner(ConnectionModel { src_node, src_pin, dst_node, dst_pin }, true)
+    }
+
+    /// Snapshot restoration preserves persisted adaptive properties and confirmed contracts.
+    pub(super) fn connect_saved_data(&mut self, c: ConnectionModel) -> Result<(), EngineError> {
+        self.connect_data_inner(c, false)
+    }
+
+    fn connect_data_inner(&mut self, c: ConnectionModel, adapt: bool) -> Result<(), EngineError> {
+        let ConnectionModel { src_node, src_pin, dst_node, dst_pin } = c;
+        let source = self.find_pin(src_node, src_pin, PinDirection::Output)?;
+        let target = self.find_pin(dst_node, dst_pin, PinDirection::Input)?;
+        let adapts = adapt && self.nodes.get(&dst_node).is_some_and(|n| n.definition().type_name == "text/to_text")
+            && dst_pin == PinId(1) && matches!((&source, &target), (PinType::Data(_), PinType::Data(_)));
+        if !adapts { self.validate_data_types(&c)?; }
         if self.has_data_path(src_node, dst_node) {
             return Err(EngineError::CycleDetected(dst_node, src_node));
+        }
+        if adapts && let PinType::Data(t) = source {
+            self.adapt_node(dst_node, dst_pin, &t)?;
         }
         self.connections.set_data(c);
         self.pure_cache.clear();

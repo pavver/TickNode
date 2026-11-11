@@ -285,5 +285,6 @@ fn fire(id: u64, trigger: Value) -> Value {
 mod catalog;
 mod conditions;
 mod entity;
+mod quantities;
 mod transport;
 mod triggers;

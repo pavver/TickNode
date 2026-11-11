@@ -142,7 +142,7 @@ mod tests {
     async fn editor_session_over_websocket_persists_graph() {
         let dir = tempfile::tempdir().unwrap();
         let graph_path = dir.path().join("graph.json");
-        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), ServerSettings { tick_ms: 10, tick_budget: 0 }).unwrap();
+        let handle = actor::spawn(TickEngine::new(), Default::default(), Storage::new(graph_path.clone()), plugins::Plugins::new(dir.path()), ServerSettings { tick_ms: 10, tick_budget: 0, ..Default::default() }).unwrap();
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -272,7 +272,7 @@ mod tests {
         plugins.load_all(&mut engine);
         let storage = Storage::new(dir);
         let loaded = storage.load(&mut engine).unwrap();
-        let handle = actor::spawn(engine, loaded, storage, plugins, ServerSettings { tick_ms: 10, tick_budget: 0 }).unwrap();
+        let handle = actor::spawn(engine, loaded, storage, plugins, ServerSettings { tick_ms: 10, tick_budget: 0, ..Default::default() }).unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(axum::serve(listener, router(handle.clone(), dir)).into_future());
@@ -380,7 +380,7 @@ mod tests {
         assert!(matches!(recv_logged(&mut ws, &mut seen).await, ServerMessage::PluginUpdated(_)));
         send(&mut ws, ClientMessage::SetPluginEnabled { name: "test_plugin".into(), enabled: false }).await;
         let ServerMessage::Catalog { definitions, types, translations } = recv_logged(&mut ws, &mut seen).await else { panic!("expected Catalog") };
-        assert!(!definitions.iter().any(|d| d.type_name == "test/greeter" || d.type_name.starts_with("type/make/")) && types.is_empty());
+        assert!(!definitions.iter().any(|d| d.type_name == "test/greeter" || d.type_name.starts_with("type/make/")) && types.iter().all(|t| t.name.starts_with("quantity.")));
         assert!(!translations.iter().any(|(_, t)| t.contains("node-test-greeter")), "the disabled plugin takes its translations away");
         let ServerMessage::NodeUpdated(stub) = recv_logged(&mut ws, &mut seen).await else { panic!("expected NodeUpdated") };
         let unavailable = stub.unavailable.as_ref().expect("stub");

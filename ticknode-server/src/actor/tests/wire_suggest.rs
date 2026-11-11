@@ -201,3 +201,20 @@ fn init_contains_current_delay_timers_and_completed_delays_disappear() {
     assert_eq!(telemetry.flush(now + super::telemetry::INTERVAL * 2, &mut actor.engine, &actor.node_sheet), vec![(Some(sheet_id), ServerMessage::Timers(vec![]))]);
     assert!(matches!(actor.snapshot(Some(sheet_id)), ServerMessage::Init { timers, .. } if timers.is_empty()));
 }
+
+#[test]
+fn to_text_creation_and_reconnection_broadcast_the_adapted_contract() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let source = seed(&mut actor, "const");
+    actor.engine.set_node_property(source, "value_type", "quantity.power".into()).unwrap();
+    let (events, id) = apply(&mut actor, command(source, 0, "text/to_text", 1));
+    let power_pin = PinType::Data(DataType::Named("quantity.power".into()));
+    assert!(matches!(&events[0], ServerMessage::NodeAdded(n) if n.definition.pins[0].pin_type == power_pin));
+    let boolean = seed(&mut actor, "const");
+    actor.engine.set_node_property(boolean, "value", true.into()).unwrap();
+    let c = ConnectionModel { src_node: boolean, src_pin: PinId(0), dst_node: id, dst_pin: PinId(1) };
+    let (reply, _) = mpsc::unbounded_channel();
+    let (events, _) = actor.apply(ClientMessage::ConnectData(c), actor.sheets.first().map(|s| s.id), &reply).unwrap();
+    assert!(events.iter().any(|(_, event)| matches!(event, ServerMessage::NodeUpdated(n) if n.model.id == id && n.definition.pins[0].pin_type == PinType::Data(DataType::Bool))));
+}

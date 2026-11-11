@@ -26,8 +26,8 @@ fn ha_plugin_entity_changes_expose_numbers_for_match() {
         .unwrap();
     let def = engine.node_definition(entity).unwrap();
     assert_eq!(def.pins[0].pin_type, PinType::Exec);
-    assert_eq!(def.pins[1].pin_type, PinType::Data(DataType::Number));
-    assert_eq!(def.pins[2].pin_type, PinType::Data(DataType::Number));
+    assert_eq!(def.pins[1].pin_type, PinType::Data(DataType::Named("quantity.voltage".into())));
+    assert_eq!(def.pins[2].pin_type, PinType::Data(DataType::Named("quantity.voltage".into())));
     let changed = sink(&mut engine, entity, 0);
     let decision = NodeId::generate();
     let list = |values: &[&str]| DataValue::List {

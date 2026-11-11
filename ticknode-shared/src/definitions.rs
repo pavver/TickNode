@@ -132,6 +132,7 @@ pub fn input_value_editable(types: &TypeRegistry, t: &DataType) -> bool {
 /// Whether `value` is valid as an inline input value of type `t` on a node.
 pub fn input_value_fits(types: &TypeRegistry, t: &DataType, value: &DataValue) -> bool {
     if let Some(def) = types.definition_of(t) {
+        if def.quantity().is_some() { return matches!(value, DataValue::Number(n) if n.to_f64().is_finite()); }
         return matches!(value, DataValue::String(s) if def.values().iter().any(|v| &v.value == s));
     }
     let value_type = value.get_type();

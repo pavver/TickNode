@@ -63,6 +63,11 @@ fn entity_outputs(
         // A newer event wins over an outstanding baseline request.
         entity.reply = None;
         watch.snapshot_due = false;
+        entity.check_units(
+            [change.new_state.as_ref(), change.old_state.as_ref()],
+            &watch.config,
+            env,
+        );
         return Some(crate::entity::change_outputs(
             &change,
             entity.value_type,
@@ -80,7 +85,10 @@ fn entity_outputs(
         && let Some(result) = pending.poll()
     {
         let output = match result {
-            Ok(state) => Some(crate::entity::outputs(Some(&state), entity.value_type)),
+            Ok(state) => {
+                entity.check_units([Some(&state)], &watch.config, env);
+                Some(crate::entity::outputs(Some(&state), entity.value_type))
+            }
             Err(e) => {
                 env.warn(&format!("Could not read entity {}: {e}", watch.config));
                 None
@@ -90,4 +98,25 @@ fn entity_outputs(
         return output;
     }
     None
+}
+
+impl EntityWatch {
+    fn check_units<'a>(
+        &mut self,
+        states: impl IntoIterator<Item = Option<&'a ha_core_client::State>>,
+        entity_id: &str,
+        env: &mut impl Env,
+    ) {
+        let mismatch = states
+            .into_iter()
+            .flatten()
+            .any(|state| crate::entity::unit_mismatch(state, self.value_type));
+        if mismatch && !self.unit_warning {
+            env.warn(&format!(
+                "Entity {entity_id}: missing or incompatible unit_of_measurement for {}; clearing the affected value pin",
+                self.value_type.as_str()
+            ));
+        }
+        self.unit_warning = mismatch;
+    }
 }

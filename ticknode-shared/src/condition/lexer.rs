@@ -40,7 +40,7 @@ struct Lexer {
 impl Lexer {
     fn token(&mut self, ch: char) -> Result<Token, ConditionError> {
         if ch == '"' { return self.string(); }
-        if ch.is_ascii_digit() || (ch == '-' && self.chars.get(self.position + 1).is_some_and(|d| d.is_ascii_digit())) {
+        if ch.is_ascii_digit() || (['-', '+'].contains(&ch) && self.chars.get(self.position + 1).is_some_and(|d| d.is_ascii_digit())) {
             return self.number();
         }
         if ch.is_alphabetic() || ch == '_' { return Ok(self.word()); }
@@ -72,11 +72,24 @@ impl Lexer {
     fn number(&mut self) -> Result<Token, ConditionError> {
         let start = self.position;
         self.position += 1;
-        while self.chars.get(self.position).is_some_and(|ch| ch.is_ascii_digit() || *ch == '.') {
+        while self.chars.get(self.position).is_some_and(|ch| ch.is_ascii_digit() || *ch == '.' || *ch == ',') {
             self.position += 1;
         }
         let text: String = self.chars[start..self.position].iter().collect();
-        let number: f64 = text.parse().map_err(|_| ConditionError::NotNumber(text))?;
+        let number_end = self.position;
+        let tail: String = self.chars[number_end..].iter().collect();
+        // The longest exact or unambiguous folded catalog suffix wins. Joins remain separate tokens.
+        let mut ends: Vec<usize> = tail.char_indices().map(|(i, _)| i).collect();
+        ends.push(tail.len());
+        for end in ends.into_iter().rev() {
+            if tail[end..].chars().next().is_some_and(|ch| !ch.is_whitespace() && ch != '&' && ch != '|') { continue; }
+            let unit = tail[..end].trim();
+            if crate::quantity::unit_by_symbol(unit).is_some() {
+                self.position += tail[..end].chars().count();
+                return Ok(Token::Value(DataValue::String(format!("{text} {unit}"))));
+            }
+        }
+        let number: f64 = text.replace(',', ".").parse().map_err(|_| ConditionError::NotNumber(text))?;
         Ok(Token::Value(DataValue::Number(NumberValue::Float(number).normalize())))
     }
 

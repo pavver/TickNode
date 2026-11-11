@@ -22,7 +22,7 @@ pub struct NodeLayout {
 
 impl NodeLayout {
     pub fn new(def: &NodeDefinition, properties: &[(String, DataValue)]) -> Self {
-        let pins_top = HEADER_H + BODY_PAD + prop_rows(properties) as f64 * ROW_H;
+        let pins_top = HEADER_H + BODY_PAD + prop_rows(&def.type_name, properties) as f64 * ROW_H;
         let row_y = |i: usize| pins_top + i as f64 * ROW_H + ROW_H / 2.0;
         let inputs: Vec<_> = pins(def, PinDirection::Input).enumerate().map(|(i, p)| (p.id, row_y(i))).collect();
         if def.type_name == "match" {
@@ -63,7 +63,7 @@ impl NodeLayout {
             layout.height = layout.height.max(size.height);
         }
         if def.type_name == "match" { return layout; }
-        let grow_props: Vec<_> = properties.iter().filter(|(name, value)| is_inline_property(name, value))
+        let grow_props: Vec<_> = properties.iter().filter(|(name, value)| visible_node_property(&def.type_name, name, value, properties))
             .map(|(name, value)| (name.clone(), matches!(value, DataValue::String(_)) && !name.ends_with("_type")
                 && !def.properties.iter().any(|p| p.name == *name && !matches!(p.kind, PropertyKind::Text))))
             .collect();

@@ -17,6 +17,7 @@ mod options;
 mod queue;
 mod runtime;
 mod triggers;
+mod units;
 
 use convert::STATE_TYPE;
 use runtime::{install_core_logger, try_with_hub, with_hub};

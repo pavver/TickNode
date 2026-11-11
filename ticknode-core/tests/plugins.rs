@@ -72,3 +72,4 @@ include!("plugins/ha_support_2.rs");
 include!("plugins/catalog_1.rs");
 include!("plugins/catalog_2.rs");
 include!("plugins/catalog_3.rs");
+include!("plugins/quantities.rs");

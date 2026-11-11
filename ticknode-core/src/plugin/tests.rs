@@ -90,7 +90,7 @@
         // A built-in node (no owner) and a `const` node whose type is registered as owned by plugin "mine"
         let builtin = NodeId::generate();
         engine.create_node(builtin, "test/debug", &[]).unwrap();
-        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: DataValue::Number(NumberValue::Int(0)) })));
+        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: DataValue::Number(NumberValue::Int(0)), value_type: None })));
         let mine = NodeId::generate();
         engine.create_node(mine, "const", &[]).unwrap();
         let mut queue = std::collections::VecDeque::new();
@@ -171,7 +171,7 @@
     fn plugin_emission_cost_reduces_queue_allowance() {
         let mut engine = TickEngine::new();
         engine.budget.limit = Some(2);
-        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: 1i64.into() })));
+        engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::ConstNode { id, value: 1i64.into(), value_type: None })));
         let source = NodeId::generate();
         engine.create_node(source, "const", &[]).unwrap();
         let ids: Vec<_> = (0..3).map(|_| {

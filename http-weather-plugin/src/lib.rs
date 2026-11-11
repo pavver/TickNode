@@ -1,7 +1,7 @@
 //! Example network plugin: fetches city temperature over HTTP.
 //!
 //! The service at the `url` property (`{city}` is replaced with the city name) is expected to respond
-//! with plain text `temperature,description`, for example `22.5,Sunny`.
+//! with plain text `temperature,description` in degrees Celsius, for example `22.5,Sunny`.
 
 use ticknode_plugin_sdk::*;
 
@@ -36,13 +36,13 @@ impl PluginNode for WeatherNode {
             title: "Get Weather".into(),
             category: "Network".into(),
             description: "Fetches the temperature for a city".into(),
-            help: "On a signal at Trigger, makes an HTTP request to the address from the url property: {city} is replaced with City (without City — Kyiv). The service must respond with the text \"temperature,description\", for example `22.5,Sunny`.\n\n• Success — Temp, Description and a signal on Success.\n• A network error, a 4xx/5xx status or an unintelligible response — a signal on Failure.\n\nA new signal cancels the previous unfinished request. The plugin can only access the domains allowed in its manifest.".into(),
+            help: "On a signal at Trigger, makes an HTTP request to the address from the url property: {city} is replaced with City (without City — Kyiv). Temp is a temperature quantity in canonical degrees Celsius. The service must respond with the text \"temperature,description\", in degrees Celsius, for example `22.5,Sunny`.\n\n• Success — Temp, Description and a signal on Success.\n• A network error, a 4xx/5xx status or an unintelligible response — a signal on Failure.\n\nA new signal cancels the previous unfinished request. The plugin can only access the domains allowed in its manifest.".into(),
             pins: vec![
                 exec_in(TRIGGER.0, "Trigger"),
                 data_in(CITY.0, "City", DataType::String),
                 exec_out(SUCCESS.0, "Success"),
                 exec_out(FAILURE.0, "Failure"),
-                data_out(TEMP.0, "Temp", DataType::Number),
+                data_out(TEMP.0, "Temp", DataType::Named("quantity.temperature".into())),
                 data_out(DESCRIPTION.0, "Description", DataType::String),
             ],
         }

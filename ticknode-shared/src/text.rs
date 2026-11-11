@@ -209,9 +209,9 @@ pub fn is_text_type(t: &DataType) -> bool {
     )
 }
 
-/// Like `is_text_type`, but enum values can also be set (by selecting from a list or entering text).
+/// Registry-aware text types also include enums and physical quantities.
 pub fn is_text_type_in(types: &TypeRegistry, t: &DataType) -> bool {
-    is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum())
+    is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum() || d.quantity().is_some())
 }
 
 /// Placeholder hint for an input field of this type.
@@ -235,6 +235,7 @@ pub fn default_of(t: &DataType) -> DataValue {
         DataType::Duration => DataValue::Duration(Duration::from_secs(1)),
         DataType::Color => DataValue::Color(Color { r: 255, g: 255, b: 255, a: 255 }),
         DataType::List(inner) => DataValue::List { element_type: (**inner).clone(), elements: Vec::new() },
+        DataType::Named(name) if crate::quantity::kind(name).is_some() => DataValue::from(0),
         DataType::Object | DataType::Named(_) => DataValue::Object { fields: Default::default(), type_name: None },
         DataType::Number | DataType::Any => DataValue::Number(NumberValue::Int(0)),
     }
@@ -278,6 +279,8 @@ fn parse_bool(text: &str) -> Option<DataValue> {
 /// (matched by value or label), while a struct cannot be entered as text.
 pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<DataValue, String> {
     match types.definition_of(t) {
+        Some(def) if def.quantity().is_some() => crate::quantity::parse_quantity(text, def.quantity().unwrap())
+            .map(DataValue::from).ok_or_else(|| format!("\"{}\" is not a value of {}", text.trim(), def.title)),
         Some(def) if def.is_enum() => {
             let wanted = text.trim();
             def.values().iter()
@@ -308,6 +311,14 @@ pub fn coerce_to(value: DataValue, like: &DataType) -> DataValue {
         },
         _ => value,
     }
+}
+
+/// Registry-aware constant coercion, including strings with quantity units.
+pub fn coerce_to_in(types: &TypeRegistry, value: DataValue, like: &DataType) -> DataValue {
+    if let DataValue::String(s) = &value && types.definition_of(like).is_some() {
+        return parse_value_in(types, s, like).unwrap_or(value);
+    }
+    coerce_to(value, like)
 }
 
 #[cfg(test)]

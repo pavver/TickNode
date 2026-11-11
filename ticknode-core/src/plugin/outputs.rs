@@ -11,6 +11,11 @@ fn check_output_type(definition: &NodeDefinition, pin: PinId, value: &DataValue)
             PinType::Data(DataType::Named(name)) => Some(name),
             _ => None,
         });
+    if let Some(name) = declared && quantity::kind(name).is_some()
+        && !matches!(value, DataValue::Number(n) if n.to_f64().is_finite())
+    {
+        return Err(format!("The plugin emitted a non-numeric value on an output of type {name}: the value was dropped"));
+    }
     match (declared, value) {
         (Some(name), DataValue::Object { type_name, .. }) if type_name.as_deref() != Some(name) => Err(format!(
             "The plugin emitted a value {} on an output of type {name}: the value was dropped",
@@ -65,4 +70,20 @@ fn decode_output(definition: &NodeDefinition, pin: u32, bytes: &[u8]) -> Result<
     let Some(value) = decode_value(bytes) else { return Ok(None) };
     check_output_type(definition, PinId(pin), &value)?;
     Ok(Some(NodeOutput::Data(PinId(pin), value)))
+}
+
+#[cfg(test)]
+mod quantity_tests {
+    use super::*;
+    #[test]
+    fn quantity_outputs_accept_canonical_numbers_and_reject_other_representations() {
+        let definition = NodeDefinition { pins: vec![PinDefinition {
+            id: PinId(0), name: "Power".into(), direction: PinDirection::Output,
+            pin_type: PinType::Data(DataType::Named("quantity.power".into())), required: false,
+        }], ..Default::default() };
+        assert!(check_output_type(&definition, PinId(0), &2000i64.into()).is_ok());
+        assert!(check_output_type(&definition, PinId(0), &1.5.into()).is_ok());
+        assert!(check_output_type(&definition, PinId(0), &"2 kW".into()).is_err());
+        assert!(check_output_type(&definition, PinId(0), &DataValue::Bool(true)).is_err());
+    }
 }

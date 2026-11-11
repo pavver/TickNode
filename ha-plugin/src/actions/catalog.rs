@@ -10,6 +10,8 @@ pub struct Field {
     pub label: String,
     pub data_type: DataType,
     pub required: bool,
+    /// HA unit captured with the field; absent in legacy Number snapshots.
+    pub unit: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -60,7 +62,7 @@ pub struct Service {
 pub fn selector_type(selector: &Value) -> DataType {
     let has = |key| selector.get(key).is_some();
     if has("number") {
-        DataType::Number
+        selector_unit(selector).map_or(DataType::Number, |(name, _)| DataType::Named(name.into()))
     } else if has("boolean") {
         DataType::Bool
     } else if has("text") || has("template") || has("select") {
@@ -74,6 +76,18 @@ pub fn selector_type(selector: &Value) -> DataType {
     } else {
         DataType::Any
     }
+}
+
+fn selector_unit(
+    selector: &Value,
+) -> Option<(
+    &'static str,
+    &'static ticknode_plugin_sdk::quantity::UnitDefinition,
+)> {
+    crate::units::mapping(
+        selector["number"]["unit_of_measurement"].as_str()?,
+        selector["number"]["device_class"].as_str(),
+    )
 }
 
 fn humanize(name: &str) -> String {
@@ -164,6 +178,11 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
                             .into(),
                         data_type: selector_type(&field["selector"]),
                         required: field["required"].as_bool().unwrap_or(false),
+                        unit: selector_unit(&field["selector"]).and_then(|_| {
+                            field["selector"]["number"]["unit_of_measurement"]
+                                .as_str()
+                                .map(str::to_string)
+                        }),
                     });
                 }
             }

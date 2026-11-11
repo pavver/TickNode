@@ -103,11 +103,20 @@ pub fn valid_variable_value(value: &DataValue) -> bool {
 }
 
 pub fn fit_variable_value(types: &TypeRegistry, value: DataValue, target_type: &DataType) -> Option<DataValue> {
+    fit_variable_value_with_labels(types, value, target_type, &crate::quantity::CanonicalLabels)
+}
+
+pub fn fit_variable_value_with_labels(types: &TypeRegistry, value: DataValue, target_type: &DataType, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+    fit_variable_value_with_display(types, value, target_type, &Default::default(), labels)
+}
+
+pub fn fit_variable_value_with_display(types: &TypeRegistry, value: DataValue, target_type: &DataType,
+    rules: &crate::DisplayRules, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
     let src = value.get_type();
     if types.compatible(&src, target_type) {
         Some(value)
     } else if let Some(conv) = types.convertible(&src, target_type) {
-        conv.apply(value)
+        conv.apply_with_display(value, rules, labels)
     } else {
         None
     }

@@ -70,6 +70,7 @@ pub fn ops_for(t: &DataType) -> &'static [CompareOp] {
 /// Like `ops_for`, but a struct from the registry behaves like an object (`has_field`, `is_empty`, etc.).
 pub fn ops_in(types: &crate::TypeRegistry, t: &DataType) -> &'static [CompareOp] {
     match types.definition_of(t) {
+        Some(def) if def.quantity().is_some() => ops_for(&DataType::Number),
         Some(def) if def.is_struct() => ops_for(&DataType::Object),
         _ => ops_for(t),
     }

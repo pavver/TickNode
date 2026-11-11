@@ -121,6 +121,20 @@ fn length_ordering(a: &DataValue, b: DataValue) -> Option<Ordering> {
 }
 
 impl MatchCase {
+    /// Evaluates constants using the declared left input type, including canonical quantities.
+    pub fn matches_in(&self, types: &crate::TypeRegistry, type_of: impl Fn(&str) -> DataType, value_of: impl Fn(&str) -> Option<DataValue>) -> bool {
+        let mut coerced = self.clone();
+        for c in &mut coerced.conditions {
+            if let Operand::Input(name) = &c.left
+                && let Some(Operand::Value(v)) = &mut c.right
+                && let Some(t) = c.op.right_type(&type_of(name))
+            {
+                *v = crate::text::coerce_to_in(types, v.clone(), &t);
+            }
+        }
+        coerced.matches(value_of)
+    }
+
     /// Disjunction ("or") of conjunction ("and") groups; empty conditions always match.
     pub fn matches(&self, value_of: impl Fn(&str) -> Option<DataValue>) -> bool {
         if self.conditions.is_empty() {

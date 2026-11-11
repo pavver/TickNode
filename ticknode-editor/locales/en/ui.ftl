@@ -532,3 +532,25 @@ settings-save = Save
 settings-reset = Reset
 settings-invalid-number = Invalid number
 error-save-settings = Failed to save settings
+
+settings-formatting-language = Formatting language
+settings-formatting-language-description = Language for text produced by the engine.
+language-en = English
+language-uk = Ukrainian
+quantity-unit-title = Unit
+parse-error-quantity = “{ $value }” is not a value of { $type }.
+error-plugin-quantity-type = Plugin { $plugin } cannot declare reserved quantity type { $type }.
+
+settings-display = Units and formatting
+settings-display-description = Rules use absolute canonical values. Thresholds are entered in the selected unit. Rules apply to all sheets and server text.
+settings-display-default = Reset to default
+settings-display-from = From |value|
+settings-display-remove = Remove step
+settings-display-add = + step
+settings-display-digits = Significant digits
+settings-display-invalid = Use 1–8 steps starting at zero with increasing finite thresholds and 1–15 significant digits.
+error-display-quantity = Unknown quantity in display rule: { $quantity }.
+error-display-unit = Unknown unit in display rule: { $quantity }.
+error-display-digits = Display rule for { $quantity } needs 1–15 significant digits.
+error-display-steps = Display rule for { $quantity } needs 1–8 steps.
+error-display-threshold = Thresholds for { $quantity } must start at zero, be finite, nonnegative and strictly increasing.

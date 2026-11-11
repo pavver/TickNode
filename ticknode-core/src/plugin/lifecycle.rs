@@ -54,6 +54,7 @@ impl TickEngine {
                 return Err(UiMessage::plain(format!("Node type {} is already registered", def.type_name)));
             }
         }
+        check_quantity_types(name, &types)?;
         let node_definitions: Vec<NodeDefinition> = definitions.iter().map(|(d, _)| d.clone()).collect();
         self.register_types_owned(Some(name), &types, &node_definitions).map_err(|e| UiMessage::plain(format!("Plugin {name}: {e}")))?;
         self.clear_definitions();
@@ -153,4 +154,27 @@ fn uses_owned_types(plugin: &super::PluginSlot, owned: &[&String]) -> bool {
         }
     }
     used.iter().any(|u| owned.contains(&u))
+}
+
+/// Keep the reserved-type rejection translatable at the plugin boundary.
+fn check_quantity_types(plugin: &str, types: &[TypeDefinition]) -> Result<(), UiMessage> {
+    if let Some(def) = types.iter().find(|d| d.name.starts_with("quantity.") || d.quantity().is_some()) {
+        return Err(UiMessage::new("error-plugin-quantity-type", format!("Plugin {plugin} cannot declare reserved quantity type {}", def.name))
+            .arg("plugin", plugin).arg("type", &def.name));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod quantity_tests {
+    use super::*;
+    #[test]
+    fn reserved_quantity_registration_returns_a_translatable_plugin_error() {
+        for definition in [TypeDefinition::new_enum("quantity.fake", "Fake", &[("x", "X")]), quantity::builtin_quantities().remove(0)] {
+            let error = check_quantity_types("example", &[definition.clone()]).unwrap_err();
+            assert_eq!(error.key, "error-plugin-quantity-type");
+            assert!(error.args.contains(&("type".into(), definition.name)));
+        }
+        assert!(check_quantity_types("example", &[TypeDefinition::new_enum("example.mode", "Mode", &[("x", "X")])]).is_ok());
+    }
 }

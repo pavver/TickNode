@@ -2,7 +2,7 @@
 
 use super::*;
 use ticknode_shared::{
-    fit_variable_value, valid_variable_name, valid_variable_value, DataValue, Variable, VariableKey, VariableScope, MAX_VARIABLES,
+    fit_variable_value_with_display, valid_variable_name, valid_variable_value, DataValue, Variable, VariableKey, VariableScope, MAX_VARIABLES,
 };
 
 impl Actor {
@@ -31,7 +31,7 @@ impl Actor {
         if !valid_variable_value(&var.value) {
             return Err(UiMessage::new("error-variable-limit", "Variable value exceeds maximum size (64 KiB)"));
         }
-        let Some(fitted_value) = fit_variable_value(&self.engine.types, var.value, &var.data_type) else {
+        let Some(fitted_value) = fit_variable_value_with_display(&self.engine.types, var.value, &var.data_type, &self.engine.host_state.display, ticknode_core::quantity::labels(&self.engine.host_state.locale)) else {
             return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
         };
         if !self.engine.variables.create(var.key, var.data_type, fitted_value) {
@@ -50,7 +50,7 @@ impl Actor {
         let Some(existing) = self.engine.variables.get(&key) else {
             return Err(UiMessage::new("error-variable-missing", "Variable not found").arg("name", &key.name));
         };
-        let Some(fitted) = fit_variable_value(&self.engine.types, value, &existing.data_type) else {
+        let Some(fitted) = fit_variable_value_with_display(&self.engine.types, value, &existing.data_type, &self.engine.host_state.display, ticknode_core::quantity::labels(&self.engine.host_state.locale)) else {
             return Err(UiMessage::new("error-variable-type", "Value does not match variable type"));
         };
         self.engine.variables.set(&key, fitted);

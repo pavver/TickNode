@@ -41,7 +41,7 @@ fn split_fields_use_regular_rows_and_settings_add_no_property_row() {
         }).collect(),
     };
     let properties = vec![("split:5".into(), DataValue::Bool(true)), (format!("in:{}", field.0), DataValue::from("value"))];
-    assert_eq!(prop_rows(&properties), 0);
+    assert_eq!(prop_rows("match", &properties), 0);
     let layout = NodeLayout::new(&def, &properties);
     assert_eq!(layout.anchor(Position::default(), field, PinDirection::Input), Some((0.0, HEADER_H + BODY_PAD + ROW_H / 2.0)));
     assert_eq!(layout.anchor(Position::default(), next, PinDirection::Input).unwrap().1, HEADER_H + BODY_PAD + ROW_H * 1.5);
@@ -79,7 +79,7 @@ fn property_rows_shift_pins() {
         ("element_type".to_string(), DataValue::String("number".into())),
         ("in:1".to_string(), DataValue::Bool(true)),
     ];
-    assert_eq!(prop_rows(&props), 2);
+    assert_eq!(prop_rows("example", &props), 2);
     let pos = Position { x: 0.0, y: 0.0 };
     let (_, y0) = NodeLayout::new(&d, &[]).anchor(pos, PinId(0), PinDirection::Output).unwrap();
     let (_, y2) = NodeLayout::new(&d, &props).anchor(pos, PinId(0), PinDirection::Output).unwrap();
@@ -208,4 +208,13 @@ fn wire_label_midpoint_follows_routed_curves_and_handles_overlapping_pins() {
     assert!((middle.0 - 200.0).abs() < 0.01 && (middle.1 - 300.0).abs() < 0.01);
     let same = route_midpoint(a, &[], a);
     assert!(same.0.is_finite() && same.1.is_finite());
+}
+
+#[test]
+fn to_text_hidden_properties_do_not_take_layout_rows() {
+    let names = ["value_type", "unit", "digits", "locale", "show_units", "true_text", "false_text", "datetime_format"];
+    for (ty, rows) in [("any", 2), ("quantity.power", 5), ("bool", 4), ("datetime", 3), ("number", 3), ("duration", 3)] {
+        let props = names.iter().map(|n| (n.to_string(), DataValue::from(if *n == "value_type" { ty } else { "" }))).collect::<Vec<_>>();
+        assert_eq!(prop_rows("text/to_text", &props), rows);
+    }
 }

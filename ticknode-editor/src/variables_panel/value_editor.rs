@@ -16,6 +16,13 @@ pub fn VariableValueEditor(
     let ed = use_editor();
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
+    if ed.types.with_untracked(|types| types.definition_of(&data_type).is_some_and(|d| d.quantity().is_some())) {
+        return view! {
+            <crate::inline::InlineValue value=Signal::derive(move || Some(value.get())) value_type=data_type
+                on_commit=Callback::new(move |v: Option<DataValue>| { if let Some(v) = v { on_commit.run(v); } }) />
+        }.into_any();
+    }
+
     // 1. Bool: Switch
     if data_type == DataType::Bool {
         let checked = Memo::new(move |_| matches!(value.get(), DataValue::Bool(true)));
@@ -80,7 +87,7 @@ pub fn VariableValueEditor(
 
     // 6. Complex types: List, Object, Any, Struct - read-only preview with expand toggle
     view! {
-        <ComplexPreview value=value />
+        <ComplexPreview value=value data_type=data_type />
     }.into_any()
 }
 
@@ -393,9 +400,10 @@ fn ScalarTextEditor(
 #[component]
 fn ComplexPreview(
     #[prop(into)] value: Signal<DataValue>,
+    data_type: DataType,
 ) -> impl IntoView {
     let is_expanded = RwSignal::new(false);
-    let full_text = Memo::new(move |_| text::format_value(&value.get()));
+    let full_text = Memo::new(move |_| crate::panels::display_value_in(&value.get(), &data_type));
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
     view! {

@@ -63,7 +63,7 @@ impl Node for VariableGetNode {
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         if let Some(var) = ctx.variable(&self.name, self.lookup) {
-            if let Some(val) = fit_variable_value(ctx.types, var.value.clone(), &self.value_type) {
+            if let Some(val) = fit_variable_value_with_display(ctx.types, var.value.clone(), &self.value_type, &ctx.host_state.display, crate::quantity::labels(&ctx.host_state.locale)) {
                 return vec![
                     NodeOutput::Data(PinId(0), val),
                     NodeOutput::Data(PinId(1), DataValue::Bool(true)),

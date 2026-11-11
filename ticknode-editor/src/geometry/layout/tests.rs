@@ -78,3 +78,14 @@ fn drags_snap_in_world_pixels_and_observe_all_bounds() {
     assert_eq!(resize_size(origin, (-9999.0, -9999.0), 64.0), NodeSize { width: MIN_NODE_W, height: 64.0 });
     assert_eq!(resize_size(origin, (9999.0, 9999.0), 64.0), NodeSize { width: MAX_NODE_W, height: MAX_NODE_H });
 }
+
+#[test]
+fn quantity_constant_type_metadata_does_not_move_sockets_or_add_rows() {
+    let def = definition("const");
+    let plain = vec![("value".into(), DataValue::from(1970i64))];
+    let typed = vec![("value_type".into(), DataValue::from("quantity.power")), plain[0].clone()];
+    let a = NodeLayout::new(&def, &plain);
+    let b = NodeLayout::new(&def, &typed);
+    assert_eq!(a, b);
+    assert_eq!(NodeLayout::sized(&def, &plain, None, &[]), NodeLayout::sized(&def, &typed, None, &[]));
+}

@@ -3,7 +3,7 @@
 use leptos::prelude::*;
 use ticknode_shared::*;
 use crate::i18n::{self, t};
-use crate::panels::{display_value, relative_time};
+use crate::panels::{display_value_in, relative_time};
 use crate::state::Editor;
 
 const STORAGE_KEY: &str = "ticknode.show-values";
@@ -39,6 +39,11 @@ pub fn truncate(text: String, max: usize) -> String {
     }
 }
 
+fn declared_type(node: crate::state::ClientNode, pin: PinId, dir: PinDirection) -> DataType {
+    node.instance.with(|i| i.definition.pins.iter().find(|p| p.id == pin && p.direction == dir)
+        .and_then(|p| match &p.pin_type { PinType::Data(t) => Some(t.clone()), _ => None }).unwrap_or(DataType::Any))
+}
+
 pub fn pin_status(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection, exec: bool) -> String {
     let Some(node) = ed.node_tracked(id) else { return String::new() };
     node.trace.with(|trace| {
@@ -49,7 +54,7 @@ pub fn pin_status(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection, exec: b
             } else { String::new() }
         } else {
             match trace.as_ref().and_then(|t| trace_value(t, pin, dir)) {
-                Some(value) => format!("{}\n{}", truncate(display_value(value), 200), age()),
+                Some(value) => format!("{}\n{}", truncate(display_value_in(value, &declared_type(node, pin, dir)), 200), age()),
                 None => t!("pin-no-value"),
             }
         }
@@ -74,7 +79,7 @@ pub fn capture_title(ev: &web_sys::PointerEvent, text: impl Fn() -> String) {
 pub fn wire_value(ed: Editor, conn: ConnectionModel) -> Option<String> {
     let node = ed.node_tracked(conn.src_node)?;
     node.trace.with(|trace| {
-        Some(truncate(display_value(trace_value(trace.as_ref()?, conn.src_pin, PinDirection::Output)?), 24))
+        Some(truncate(display_value_in(trace_value(trace.as_ref()?, conn.src_pin, PinDirection::Output)?, &declared_type(node, conn.src_pin, PinDirection::Output)), 24))
     })
 }
 

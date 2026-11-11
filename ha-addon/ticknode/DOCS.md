@@ -12,7 +12,17 @@ TickNode server together with its web editor and plugs it into Home Assistant.
    typed **Entity** change events, triggers for time, sun, zone,
    event, MQTT, webhook, template and others, condition gates, an **Action** node with fields
    from the service catalog. Entity values can feed Match comparisons directly. Entities
-   and actions are chosen in searchable pickers.
+   and actions are chosen in searchable pickers. Recognized entity units infer physical quantity
+   types: `2 kW` becomes a canonical `2000 W` value, with display units controlled in Settings →
+   Units and formatting. Each current/previous sample uses its own HA unit; a missing or incompatible
+   unit clears that typed value and logs a warning until recovery. The Unit output retains HA's
+   original text, and Entity state still contains the string state.
+4. Action number fields with recognized units accept quantities and convert canonical values back
+   to the field's saved HA unit before sending. Unitless/unknown-unit fields keep Number behavior;
+   old saved field schemas remain valid. Reselect an action to refresh its schema.
+5. The bundled HTTP weather example exposes Temp as a temperature quantity; its text endpoint
+   expects Celsius (`22.5,Sunny`). Quantity outputs can feed existing math inputs directly as
+   canonical numbers.
 
 ## How the Home Assistant connection works
 

@@ -16,6 +16,8 @@ use unic_langid::LanguageIdentifier;
 
 mod definitions;
 mod values;
+mod quantities;
+pub use quantities::*;
 
 pub use definitions::*;
 pub use values::*;

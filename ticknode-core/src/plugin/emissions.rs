@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn frozen_emissions_are_dropped_until_confirmation() {
         let mut engine = TickEngine::new();
-        engine.registry.register_owned("probe", Box::new(|id| Box::new(crate::builtin::ConstNode { id, value: 1i64.into() })));
+        engine.registry.register_owned("probe", Box::new(|id| Box::new(crate::builtin::ConstNode { id, value: 1i64.into(), value_type: None })));
         let id = NodeId::generate();
         engine.create_node(id, "const", &[]).unwrap();
         let mut graph = engine.export_graph();
@@ -84,7 +84,7 @@ mod error_tests {
     #[test]
     fn invalid_emissions_set_errors_and_valid_emissions_clear_them() {
         let mut engine = TickEngine::new();
-        engine.registry.register_owned("probe", Box::new(|id| Box::new(crate::builtin::ConstNode { id, value: 1i64.into() })));
+        engine.registry.register_owned("probe", Box::new(|id| Box::new(crate::builtin::ConstNode { id, value: 1i64.into(), value_type: None })));
         let id = NodeId::generate();
         engine.create_node(id, "const", &[]).unwrap();
         let mut queue = Default::default();

@@ -33,7 +33,8 @@ fn service_catalog_builds_options_fields_targets_and_response_support() {
             name: "brightness".into(),
             label: "Brightness".into(),
             data_type: DataType::Number,
-            required: true
+            required: true,
+            unit: None,
         }
     );
     assert_eq!(action_source(""), "actions");

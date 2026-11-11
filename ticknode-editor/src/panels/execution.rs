@@ -31,12 +31,19 @@ pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
             let pin = p.id;
             let exec = p.pin_type == PinType::Exec;
             // (text, muted, tooltip)
+            let declared = match &p.pin_type { PinType::Data(t) => t.clone(), _ => DataType::Any };
             let value = move || -> (String, bool, String) {
                 let connected = match dir {
                     PinDirection::Input => ed.is_input_connected(id, pin),
                     PinDirection::Output => ed.is_output_connected(id, pin),
                 };
-                node.trace.with(|trace| trace_value(trace.as_ref(), dir, exec, pin, connected))
+                node.trace.with(|trace| {
+                    if !exec && let Some(v) = trace.as_ref().and_then(|t| crate::node_status::trace_value(t, pin, dir)) {
+                        let full = super::display_value_in(v, &declared);
+                        return (truncate(full.clone(), MAX_VALUE_CHARS), false, truncate(full, 5000));
+                    }
+                    trace_value(trace.as_ref(), dir, exec, pin, connected)
+                })
             };
             let pin_type = p.pin_type.clone();
             let ty = move || match &pin_type {

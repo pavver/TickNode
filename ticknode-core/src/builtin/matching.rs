@@ -170,7 +170,7 @@ impl Node for MatchNode {
         let all = self.mode == MatchMode::All;
         let mut matched = Vec::new();
         for case in &self.cases {
-            if case.matches(value_of) {
+            if case.matches_in(ctx.types, |name| self.inputs.iter().find(|i| i.name == name).map_or(DataType::Any, |i| i.value_type.clone()), value_of) {
                 matched.push(PinId(case.pin));
                 if !all {
                     break;

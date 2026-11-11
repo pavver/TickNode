@@ -349,9 +349,13 @@ impl Actor {
         self.require_session_connection(&c, sheet)?;
         if self.engine.data_connections().contains(&c) { return Ok(vec![]); }
         let replaced = self.engine.data_connections().iter().any(|old| old.dst_node == c.dst_node && old.dst_pin == c.dst_pin);
+        let before = self.instance(c.dst_node);
         self.engine.connect_data(c.src_node, c.src_pin, c.dst_node, c.dst_pin).map_err(|e| e.ui_message())?;
         let mut events = Vec::new();
         if replaced { events.push(ServerMessage::DataDisconnected { dst_node: c.dst_node, dst_pin: c.dst_pin }); }
+        if self.instance(c.dst_node) != before {
+            events.push(ServerMessage::NodeUpdated(self.instance(c.dst_node).expect("the node exists")));
+        }
         events.push(ServerMessage::DataConnected(c));
         Ok(events)
     }

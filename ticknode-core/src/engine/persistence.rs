@@ -89,7 +89,7 @@ impl TickEngine {
             }
         }
         for c in &graph.data_connections {
-            if let Err(e) = self.connect_data(map_id(c.src_node), c.src_pin, map_id(c.dst_node), c.dst_pin) {
+            if let Err(e) = self.connect_saved_data(ConnectionModel { src_node: map_id(c.src_node), dst_node: map_id(c.dst_node), ..*c }) {
                 let mapped = ConnectionModel { src_node: map_id(c.src_node), dst_node: map_id(c.dst_node), ..*c };
                 if user_connection(&mapped) || !self.detach_invalid(false, mapped, &e) {
                     warnings.push(format!("Data connection {:?}: {}", c, e));

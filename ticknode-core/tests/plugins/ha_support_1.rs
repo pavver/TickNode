@@ -13,6 +13,9 @@ fn ha_services() -> serde_json::Value {
         "weather":{"get_forecasts":{"name":"Get forecasts", "target":{"entity":[{"domain":"weather"}]}, "fields":{
             "type":{"selector":{"select":{"options":["daily","hourly"]}}}
         },"response":{"optional":false}}},
+        "number":{"set_value":{"fields":{
+            "value":{"required":true,"selector":{"number":{"unit_of_measurement":"kW"}}}
+        }}},
         "homeassistant":{"turn_on":{"name":"Turn on", "target":{}}}
     })
 }
@@ -132,8 +135,12 @@ impl FakeHa {
                                 }
                                 "subscribe_entities" => {
                                     let entity = request["entity_ids"][0].as_str().unwrap();
-                                    let state = states.lock().unwrap().get(entity).cloned().unwrap_or_else(|| "off".into());
-                                    replies.push(json!({"id": id, "type": "event", "event": {"a": {entity: {"s": state, "a": {}, "c": "01X", "lc": 1.0, "lu": 1.0}}}}));
+                                    let known = entity_list.lock().unwrap().iter().find(|s| s["entity_id"] == entity).cloned();
+                                    let state = states.lock().unwrap().get(entity).cloned()
+                                        .or_else(|| known.as_ref()?.get("state")?.as_str().map(str::to_string))
+                                        .unwrap_or_else(|| "off".into());
+                                    let attrs = known.map(|s| s["attributes"].clone()).unwrap_or_else(|| json!({}));
+                                    replies.push(json!({"id": id, "type": "event", "event": {"a": {entity: {"s": state, "a": attrs, "c": "01X", "lc": 1.0, "lu": 1.0}}}}));
                                 }
                                 "unsubscribe_events" => {
                                     unsubscribed.fetch_add(1, Ordering::SeqCst);
@@ -180,9 +187,15 @@ impl FakeHa {
 
     /// Pushes a state change of `entity`, as the entity's `state` trigger subscription reports it.
     fn change(&self, entity: &str, from: &str, to: &str) {
+        let mut attributes = serde_json::json!({"friendly_name":"Kitchen", "brightness":120});
+        if let Some(state) = self.entity_list.lock().unwrap().iter().find(|s| s["entity_id"] == entity)
+            && let Some(attrs) = state["attributes"].as_object()
+        {
+            attributes.as_object_mut().unwrap().extend(attrs.clone());
+        }
         let state = |s: &str| {
             serde_json::json!({
-                "entity_id": entity, "state": s, "attributes": {"friendly_name": "Kitchen", "brightness": 120},
+                "entity_id": entity, "state": s, "attributes": attributes,
                 "last_changed": "2026-10-30T23:15:42.500000+02:00",
                 "last_reported": "2026-10-30T23:15:42.500000+02:00",
                 "last_updated": "2026-10-30T23:15:42.500000+02:00",
@@ -326,9 +339,12 @@ fn ha_plugin_declares_its_nodes_and_type() {
             plugin: "home_assistant".into()
         }
     );
-    assert!(
-        matches!(&def.properties[1].kind, PropertyKind::Select(o) if o.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>() == ["number", "bool", "text", "datetime"])
-    );
+    let PropertyKind::Select(options) = &def.properties[1].kind else { panic!("expected value type options") };
+    assert_eq!(options.iter().take(4).map(|(v, _)| v.as_str()).collect::<Vec<_>>(),
+        ["number", "bool", "text", "datetime"]);
+    for quantity in ticknode_shared::quantity::catalog() {
+        assert!(options.contains(&(quantity.name.clone(), quantity.title.clone())));
+    }
     assert!(
         matches!(&def.properties[2].kind, PropertyKind::Select(o) if o.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>() == ["state", "any"])
     );

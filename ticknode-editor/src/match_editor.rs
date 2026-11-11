@@ -75,9 +75,16 @@ fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
 fn operand_fits(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> bool {
     match right {
         Some(Operand::Input(_)) => true,
-        Some(Operand::Value(value)) => *expected == DataType::Any || input_value_fits(reg, expected, value) || reg.compatible(&value.get_type(), expected),
+        Some(Operand::Value(value)) => *expected == DataType::Any || input_value_fits(reg, expected, value) || reg.compatible(&value.get_type(), expected)
+            || quantity_literal(reg, value, expected),
         None => false,
     }
+}
+
+/// `68 °F` keeps its written unit for a quantity input instead of being converted to a canonical number.
+fn quantity_literal(reg: &TypeRegistry, value: &DataValue, expected: &DataType) -> bool {
+    let DataValue::String(s) = value else { return false };
+    reg.definition_of(expected).and_then(|d| d.quantity()).is_some_and(|q| quantity::parse_literal(s, q).is_some())
 }
 
 fn fit_value(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> DataValue {

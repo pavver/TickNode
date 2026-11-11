@@ -2,6 +2,12 @@
 use ticknode_shared::{*, quantity::*};
 
 pub fn presentation(value: Option<&DataValue>, q: &QuantityKind, preferred: Option<&str>, decimal: &str, rule: &QuantityDisplay) -> (String, String) {
+    // A literal (`68 °F`) is shown in its own unit unless another unit is explicitly preferred.
+    if let Some(DataValue::String(s)) = value && let Some((n, written)) = parse_literal(s, q) {
+        let unit = preferred.and_then(|id| q.units.iter().find(|u| u.id == id)).unwrap_or(written);
+        let n = if unit.id == written.id { n } else { from_canonical(to_canonical(n, written), unit) };
+        return (n.to_string().replace('.', decimal), unit.id.clone());
+    }
     let value = match value { Some(DataValue::Number(n)) => Some(n.to_f64()), _ => None };
     let unit = preferred.and_then(|id| q.units.iter().find(|u| u.id == id))
         .unwrap_or_else(|| rule.unit(value.unwrap_or(0.0), q, rule.digits));
@@ -19,6 +25,39 @@ pub fn parse(input: &str, selected: &str, q: &QuantityKind, title: &str) -> Resu
         UiMessage::new("parse-error-quantity", format!("\"{input}\" is not a physical quantity in {}", q.canonical))
             .arg("value", input).arg("type", title)
     })
+}
+
+/// Literal mode: a bare number takes the selected unit, an explicit suffix overrides it; the result is
+/// `<number> <catalog symbol>` text and the unit id to keep selected.
+pub fn parse_literal_input(input: &str, selected: &str, q: &QuantityKind, title: &str) -> Result<Option<(DataValue, String)>, UiMessage> {
+    let input = input.trim();
+    if input.is_empty() { return Ok(None); }
+    let found = match text::parse_number(input) {
+        Some(n) => q.units.iter().find(|u| u.id == selected).map(|u| (n.to_f64(), u)),
+        None => parse_literal(input, q),
+    };
+    found.filter(|(n, _)| n.is_finite())
+        .map(|(n, u)| Some((DataValue::String(literal_text(n, u)), u.id.clone())))
+        .ok_or_else(|| {
+            UiMessage::new("parse-error-quantity", format!("\"{input}\" is not a physical quantity in {}", q.canonical))
+                .arg("value", input).arg("type", title)
+        })
+}
+
+#[cfg(test)]
+mod literal_tests {
+    use super::*;
+    #[test]
+    fn literals_keep_the_written_unit() {
+        let q = kind("quantity.temperature").unwrap();
+        let rule = QuantityDisplay::default_for(q);
+        assert_eq!(parse_literal_input("68", "fahrenheit", q, "T"), Ok(Some(("68 °F".into(), "fahrenheit".into()))));
+        assert_eq!(parse_literal_input("20,5 °C", "fahrenheit", q, "T"), Ok(Some(("20.5 °C".into(), "celsius".into()))));
+        assert!(parse_literal_input("5 V", "celsius", q, "T").is_err());
+        assert_eq!(presentation(Some(&"68 °F".into()), q, None, ",", &rule), ("68".into(), "fahrenheit".into()));
+        // Legacy canonical numbers still follow the project rule.
+        assert_eq!(presentation(Some(&20i64.into()), q, None, ".", &rule), ("20".into(), "celsius".into()));
+    }
 }
 
 #[cfg(test)]

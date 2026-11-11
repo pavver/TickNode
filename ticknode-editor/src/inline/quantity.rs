@@ -10,6 +10,8 @@ pub(super) fn QuantityValue(
     on_commit: Callback<Option<DataValue>>,
     optional: bool,
     title: Signal<String>,
+    /// Commit `<number> <symbol>` text instead of a canonical number, so the written unit persists.
+    #[prop(optional)] literal: bool,
 ) -> impl IntoView {
     let ed = use_editor();
     let kind = StoredValue::new(kind);
@@ -18,8 +20,11 @@ pub(super) fn QuantityValue(
         let name = ticknode_shared::quantity::catalog().iter().find(|d| d.quantity() == Some(q)).map_or("", |d| d.name.as_str());
         rules.effective(name, q)
     });
+    let present = move |value: Option<&DataValue>, preferred: Option<&str>| kind.with_value(|q| {
+        units::presentation(value, q, preferred, &i18n::decimal_separator(), &rule())
+    });
     let initial = value.get_untracked();
-    let (text, selected) = kind.with_value(|q| units::presentation(initial.as_ref(), q, None, &i18n::decimal_separator(), &rule()));
+    let (text, selected) = present(initial.as_ref(), None);
     let last_shown = RwSignal::new((text.clone(), selected.clone()));
     let draft = RwSignal::new(text);
     let unit = RwSignal::new(selected);
@@ -29,25 +34,33 @@ pub(super) fn QuantityValue(
     Effect::new(move |_| {
         let current = value.get();
         let _ = ed.server_settings.get();
-        let decimal = i18n::decimal_separator();
-        let (text, selected) = kind.with_value(|q| units::presentation(current.as_ref(), q, None, &decimal, &rule()));
+        // Our own commit keeps the unit the user chose; external changes follow the project rule.
+        let own = saved.try_get_untracked().is_some_and(|s| s == current);
+        let preferred = own.then(|| unit.try_get_untracked()).flatten();
+        let (text, selected) = present(current.as_ref(), preferred.as_deref());
         last_shown.set((text.clone(), selected.clone()));
         draft.set(text); unit.set(selected); saved.set(current); error.set(None);
     });
     let restore = move || {
         let (Some(current), Some(selected)) = (saved.try_get_untracked(), unit.try_get_untracked()) else { return };
-        let (text, _) = kind.with_value(|q| units::presentation(current.as_ref(), q, Some(&selected), &i18n::decimal_separator(), &rule()));
+        let (text, _) = present(current.as_ref(), Some(&selected));
         last_shown.set((text.clone(), selected));
         draft.set(text);
     };
     let commit = move || {
         let (Some(text), Some(selected), Some(current)) = (draft.try_get_untracked(), unit.try_get_untracked(), saved.try_get_untracked()) else { return };
         if last_shown.try_get_untracked().as_ref() == Some(&(text.clone(), selected.clone())) { return; }
-        let parsed = kind.with_value(|q| units::parse(&text, &selected, q, &title.get_untracked()));
+        let parsed = kind.with_value(|q| if literal {
+            units::parse_literal_input(&text, &selected, q, &title.get_untracked())
+        } else {
+            units::parse(&text, &selected, q, &title.get_untracked()).map(|v| v.map(|v| (v, selected.clone())))
+        });
         match parsed {
             Ok(None) if !optional => restore(),
             Ok(next) => {
-                let (text, _) = kind.with_value(|q| units::presentation(next.as_ref(), q, Some(&selected), &i18n::decimal_separator(), &rule()));
+                let (next, selected) = match next { Some((v, u)) => (Some(v), u), None => (None, selected) };
+                unit.set(selected.clone());
+                let (text, _) = present(next.as_ref(), Some(&selected));
                 last_shown.set((text.clone(), selected.clone()));
                 draft.set(text); error.set(None);
                 if next != current { saved.set(next.clone()); on_commit.run(next); }

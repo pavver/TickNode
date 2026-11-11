@@ -98,7 +98,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(VariableChangedNode::new(id))));
         self.register(Box::new(|id| Box::new(MatchNode::new(id))));
         self.register(Box::new(|id| Box::new(ToTextNode::new(id))));
-        self.register(Box::new(|id| Box::new(CompareNode { id })));
+        self.register(Box::new(|id| Box::new(CompareNode::new(id))));
         self.register(Box::new(|id| Box::new(ForLoopNode { id, active: false, current_index: 0, count: 0 })));
         self.register(Box::new(|id| Box::new(SleepNode { id })));
         self.register(Box::new(|id| Box::new(ListCreateNode { id, element_type: DataType::Number })));

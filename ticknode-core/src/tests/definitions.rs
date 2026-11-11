@@ -79,7 +79,7 @@ fn definitions_follow_graph_edits_and_execution() {
     step!(engine.import_snippet(&snapshot));
     step!(engine.remove_node(source));
     assert!(engine.definition_arc(source).is_none());
-    step!(engine.add_node(Box::new(CompareNode { id: expression })));
+    step!(engine.add_node(Box::new(CompareNode::new(expression))));
     step!(engine.tick());
 }
 

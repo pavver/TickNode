@@ -42,6 +42,8 @@ pub fn InlineValue(
     #[prop(optional)] optional: bool,
     #[prop(optional, into)] multiline: Signal<bool>,
     #[prop(optional, into)] title: Signal<String>,
+    /// Quantities commit `68 °F` text literals that keep the chosen unit (Match constants).
+    #[prop(optional)] unit_literal: bool,
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
@@ -49,7 +51,7 @@ pub fn InlineValue(
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
     if let Some(kind) = ed.types.with_untracked(|types| types.definition_of(&value_type).and_then(|d| d.quantity()).cloned()) {
-        return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title /> }.into_any();
+        return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal /> }.into_any();
     }
 
     if value_type == DataType::Duration {

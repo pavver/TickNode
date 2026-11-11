@@ -192,6 +192,7 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
                                     value=right_value
                                     value_type=vt
                                     title=Signal::derive(move || t!("match-right-value-title"))
+                                    unit_literal=true
                                     on_commit=Callback::new(move |v: Option<DataValue>| {
                                         if let Some(v) = v {
                                             set_right(Some(Operand::Value(v)));

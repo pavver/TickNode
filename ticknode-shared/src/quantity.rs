@@ -12,7 +12,7 @@ mod format;
 mod parse;
 pub use catalog::builtin_quantities;
 pub use format::{CanonicalLabels,QuantityFormat, QuantityLabels, auto_unit, format_number, format_quantity, format_rounded};
-pub use parse::{parse_quantity, unit_in};
+pub use parse::{literal_text, parse_literal, parse_quantity, unit_in};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct QuantityKind {

@@ -275,6 +275,8 @@ node-compare-help =
     • Gt — A is greater than B;
     • Lt — A is less than B.
 
+    Connecting a physical quantity (for example temperature) gives both inputs its type, so B can be entered in any of its units (20 °C or 68 °F).
+
     An unconnected input uses the value set next to the pin on the node, or defaults to 0.
 
     For branching execution on a condition, the Match node is more convenient.

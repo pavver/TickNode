@@ -11,7 +11,7 @@ impl PureMathNode {
 }
 
 /// Number or a core physical quantity (canonical numbers on the wire).
-fn numeric_type(t: &DataType) -> bool {
+pub(crate) fn numeric_type(t: &DataType) -> bool {
     match t {
         DataType::Number => true,
         DataType::Named(name) => quantity::kind(name).is_some(),

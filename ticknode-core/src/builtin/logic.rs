@@ -42,23 +42,27 @@ impl Node for LogicalNode {
     }
 }
 
-pub struct CompareNode { pub id: NodeId }
+/// `value_type` is Number or a physical quantity shared by A and B (canonical numbers are compared).
+pub struct CompareNode { pub id: NodeId, pub value_type: DataType }
+impl CompareNode {
+    pub fn new(id: NodeId) -> Self { Self { id, value_type: DataType::Number } }
+}
 impl Node for CompareNode {
     fn id(&self) -> NodeId { self.id }
     fn is_pure(&self) -> bool { true }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
-            adaptive: false,
+            adaptive: true,
             cost: 1,
             properties: Vec::new(),
             type_name: "compare".to_string(),
             title: "Compare".to_string(),
             category: "Logic".to_string(),
             description: "Compares two numbers".to_string(),
-            help: "Compares numbers A and B:\n• Eq — A equals B (within 1e-9);\n• Gt — A is greater than B;\n• Lt — A is less than B.\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to 0.\n\nFor branching execution on a condition, the Match node is more convenient.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
+            help: "Compares numbers A and B:\n• Eq — A equals B (within 1e-9);\n• Gt — A is greater than B;\n• Lt — A is less than B.\n\nConnecting a physical quantity (for example temperature) gives both inputs its type, so B can be entered in any of its units (20 °C or 68 °F).\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to 0.\n\nFor branching execution on a condition, the Match node is more convenient.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![
-                PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "B".to_string(), pin_type: PinType::Data(DataType::Number), direction: PinDirection::Input, required: false },
+                PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(self.value_type.clone()), direction: PinDirection::Input, required: false },
+                PinDefinition { id: PinId(1), name: "B".to_string(), pin_type: PinType::Data(self.value_type.clone()), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(2), name: "Eq".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
                 PinDefinition { id: PinId(3), name: "Gt".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
                 PinDefinition { id: PinId(4), name: "Lt".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
@@ -74,6 +78,24 @@ impl Node for CompareNode {
             NodeOutput::Data(PinId(4), DataValue::Bool(a < b)),
         ]
     }
+    fn properties(&self) -> Vec<(String, DataValue)> {
+        // Plain numbers persist nothing, so existing graphs stay unchanged.
+        if self.value_type == DataType::Number { return Vec::new(); }
+        vec![("value_type".into(), data_type_name(&self.value_type).into())]
+    }
+    fn set_property(&mut self, name: &str, value: DataValue) {
+        if name == "value_type" && let DataValue::String(s) = value
+            && let Some(t) = parse_data_type(&s).filter(super::math::numeric_type)
+        {
+            self.value_type = t;
+        }
+    }
+    fn adapt_to(&mut self, pin: PinId, t: &DataType) -> bool {
+        if pin.0 > 1 || !super::math::numeric_type(t) || *t == self.value_type { return false; }
+        self.value_type = t.clone();
+        true
+    }
+    fn adapts_on_connect(&self, pin: PinId) -> bool { pin.0 <= 1 }
 }
 
 fn operation_identity(op: LogOp) -> (&'static str, &'static str) {

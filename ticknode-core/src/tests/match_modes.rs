@@ -75,3 +75,27 @@ fn legacy_all_matches_loads_as_all_mode_and_unknown_modes_are_ignored() {
     engine.set_node_property(id, "mode", DataValue::from("sometimes")).unwrap();
     assert_eq!(mode_of(&engine, id), Some(DataValue::from("all")));
 }
+
+#[test]
+fn quantity_constants_keep_their_units_and_compare_canonically() {
+    let mut engine = TickEngine::new();
+    let id = NodeId::generate();
+    engine.create_node(id, "match", &[
+        ("inputs".into(), list(&["1:t:quantity.temperature"])),
+        ("cases".into(), list(&["1: t < 20 °C", "2: t < \"68 °F\"", "3: t >= 300 K"])),
+        ("mode".into(), DataValue::from("all")),
+    ]).unwrap();
+    // 19.5 °C is below 20 °C and below 68 °F (= 20 °C), but not above 300 K (26.85 °C).
+    let fire = |engine: &mut TickEngine, celsius: f64| {
+        engine.set_input_value(id, PinId(1), Some(DataValue::from(celsius))).unwrap();
+        engine.trigger_node(id, PinId(0));
+        engine.tick();
+        engine.executed.iter().find(|t| t.node_id == id).map(|t| t.fired.clone()).unwrap_or_default()
+    };
+    assert_eq!(fire(&mut engine, 19.5), vec![PinId(1), PinId(2)]);
+    assert_eq!(fire(&mut engine, 27.0), vec![PinId(3)]);
+    // The written units survive persistence.
+    let cases = engine.node_model(id).unwrap().properties.into_iter().find(|(n, _)| n == "cases").unwrap().1;
+    let DataValue::List { elements, .. } = cases else { panic!("cases are a list") };
+    assert!(elements.iter().any(|c| matches!(c, DataValue::String(s) if s.contains("68 °F"))));
+}

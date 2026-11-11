@@ -107,7 +107,7 @@ fn core_c_dependency_error_distinguishes_one_and_multiple_dependents() {
 #[test]
 fn core_c_output_tag_validation_uses_the_selected_output_not_a_neighbor() {
     let mut engine = TickEngine::new();
-    engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::CompareNode { id })));
+    engine.registry.register_owned("mine", Box::new(|id| Box::new(crate::CompareNode::new(id))));
     let node = NodeId::generate();
     engine.create_node(node, "compare", &[]).unwrap();
     // The validator is shared by node executions and plugin-level emissions.

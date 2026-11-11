@@ -61,8 +61,16 @@ pub fn format_match_case_in(case: &condition::MatchCase, inputs: &[condition::Ma
             && let Some(t) = inputs.iter().find(|i| &i.name == name).map(|i| &i.value_type)
             && let Some(Operand::Value(v)) = &c.right
         {
+            let literal = match v {
+                DataValue::String(s) => TYPES.with(|types| types.borrow().definition_of(t)?.quantity()
+                    .and_then(|q| quantity::parse_literal(s, q)).map(|(n, u)| {
+                        let symbol = unit_symbol(&u.id).unwrap_or_else(|| u.symbol.clone());
+                        format!("{} {symbol}", n.to_string().replace('.', &decimal_separator()))
+                    })),
+                _ => None,
+            };
             let canonical = TYPES.with(|types| text::coerce_to_in(&types.borrow(), v.clone(), t));
-            if let Some(label) = quantity_text(&canonical, t) {
+            if let Some(label) = literal.or_else(|| quantity_text(&canonical, t)) {
                 // Input operands display without quotation marks; this temporary value never persists.
                 c.right = Some(Operand::Input(label));
             }

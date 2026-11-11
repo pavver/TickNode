@@ -49,3 +49,16 @@ fn math_never_adapts_to_text_or_over_an_existing_wire() {
     assert_eq!(data_type(&engine, add, 0, PinDirection::Input), DataType::Number);
     assert_eq!(engine.export_graph().data_connections.len(), 2);
 }
+
+#[test]
+fn compare_adapts_both_inputs_to_the_quantity() {
+    let mut engine = TickEngine::new();
+    let temp = create(&mut engine, "const", &[("value".into(), 19i64.into()), ("value_type".into(), "quantity.temperature".into())]).unwrap();
+    let cmp = create(&mut engine, "compare", &[]).unwrap();
+    engine.connect_data(temp, PinId(0), cmp, PinId(0)).unwrap();
+    let t = DataType::Named("quantity.temperature".into());
+    assert_eq!(data_type(&engine, cmp, 1, PinDirection::Input), t);
+    // 68 °F is stored canonically as 20 °C.
+    engine.set_input_value(cmp, PinId(1), Some(DataValue::from(20i64))).unwrap();
+    assert_eq!(engine.pull_data(cmp, PinId(4), &mut Vec::new()), Some(DataValue::Bool(true)));
+}

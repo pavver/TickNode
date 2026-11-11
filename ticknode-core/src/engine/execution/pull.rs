@@ -1,6 +1,15 @@
 use super::*;
 
 impl TickEngine {
+    pub(super) fn input_source_types(&mut self, node_id: NodeId) -> HashMap<PinId, DataType> {
+        self.connections.data_into(node_id).to_vec().into_iter().filter_map(|c| {
+            let source = self.definition_arc(c.src_node)?;
+            let pin = source.pins.iter().find(|p| p.id == c.src_pin && p.direction == PinDirection::Output)?;
+            let PinType::Data(ty) = &pin.pin_type else { return None };
+            Some((c.dst_pin, ty.clone()))
+        }).collect()
+    }
+
     pub(crate) fn pull_data(&mut self, node_id: NodeId, pin_id: PinId, stack: &mut Vec<NodeId>) -> Option<DataValue> {
         if self.is_disabled(node_id) || self.skip_frozen(node_id) { return None; }
         if stack.contains(&node_id) { return None; }
@@ -77,7 +86,8 @@ impl TickEngine {
         let inputs = self.native_inputs(node_id, inputs);
         let mut node = self.nodes.remove(&node_id)?;
         let sheet = self.node_sheets.get(&node_id).copied();
-        let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
+        let input_types = self.input_source_types(node_id);
+        let mut ctx = NodeContext { node_id, inputs, input_types, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
         let outputs = node.execute(None, &mut ctx);
         self.last_tick.charge(definition.cost);
         self.nodes.insert(node_id, node);

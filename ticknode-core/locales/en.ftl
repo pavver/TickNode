@@ -854,3 +854,22 @@ node-logic-hysteresis-prop-mode-title = Mode
 node-logic-hysteresis-prop-mode-description = Whether rising or falling values turn the state on
 node-logic-hysteresis-prop-mode-option-rising = Rising
 node-logic-hysteresis-prop-mode-option-falling = Falling
+
+# text/template
+node-text-template-title = Format text
+node-text-template-description = Formats text with a MiniJinja template
+node-text-template-help =
+    Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } supplies a fallback.
+
+    Examples: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
+
+    Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: { "{" }{ "{" } text.power { "}" }{ "}" } can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
+
+    The text filter formats runtime kinds only, including values computed in the template: numbers use plain-number display rules, booleans use localized words, lists and maps are formatted recursively, and strings stay unchanged. It has no source type or quantity units: { "{" }{ "{" } (power / 1000) | text { "}" }{ "}" } formats a plain number. Globals and filters have separate namespaces, so both text.name and | text are available.
+
+    Numbers retain integer/float precision; date-times use RFC 3339, and time, duration and color use canonical text. Structures expose field names. Pure node: evaluated when Text is needed. Rendering has a fixed 10,000 instruction fuel budget and the default recursion limit. A rendering error produces no output and reports a node error.
+node-text-template-pin-Text = Text
+node-text-template-prop-template-title = Template
+node-text-template-prop-template-description = MiniJinja template; variables become input pins.
+error-template-syntax = Invalid template syntax: { $message }
+error-template-render = Template rendering failed: { $message }

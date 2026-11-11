@@ -27,5 +27,7 @@ pub use objects::*;
 
 mod to_text;
 pub use to_text::*;
+mod template;
+pub use template::TemplateNode;
 mod convert;
 pub use convert::*;

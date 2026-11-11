@@ -98,6 +98,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(VariableChangedNode::new(id))));
         self.register(Box::new(|id| Box::new(MatchNode::new(id))));
         self.register(Box::new(|id| Box::new(ToTextNode::new(id))));
+        self.register(Box::new(|id| Box::new(TemplateNode::new(id))));
         self.register(Box::new(|id| Box::new(ConvertNode::new(id))));
         self.register(Box::new(|id| Box::new(CompareNode::new(id))));
         self.register(Box::new(|id| Box::new(HysteresisNode::new(id))));

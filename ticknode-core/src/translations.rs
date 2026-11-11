@@ -161,6 +161,11 @@ mod tests {
             Entry::Message(m) => {
                 let text: String = m.value.iter().flat_map(|p| p.elements.iter()).map(|el| match el {
                     fluent_syntax::ast::PatternElement::TextElement { value } => *value,
+                    fluent_syntax::ast::PatternElement::Placeable {
+                        expression: fluent_syntax::ast::Expression::Inline(
+                            fluent_syntax::ast::InlineExpression::StringLiteral { value }
+                        ),
+                    } => *value,
                     fluent_syntax::ast::PatternElement::Placeable { .. } => "{?}",
                 }).collect();
                 Some((m.id.name.to_string(), text))

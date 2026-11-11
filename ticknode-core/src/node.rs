@@ -5,6 +5,8 @@ use crate::{HostState, TaskId, TaskResult, variables::VariableStore};
 pub struct NodeContext<'a> {
     pub node_id: NodeId,
     pub inputs: HashMap<PinId, Option<DataValue>>,
+    /// Declared output contracts of connected sources, including quantities on Any inputs.
+    pub input_types: HashMap<PinId, DataType>,
     pub variables: &'a VariableStore,
     pub types: &'a TypeRegistry,
     pub sheet: Option<SheetId>,

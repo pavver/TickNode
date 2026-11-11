@@ -42,7 +42,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 34);
+    assert_eq!(definitions.len(), 35);
     for definition in &definitions {
         assert!(!definition.pins.is_empty(), "{}", definition.type_name);
         for pin in &definition.pins {
@@ -52,6 +52,8 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
         }
         let properties = if definition.type_name == "object/unpack" {
             vec![property("fields_list", "answer:number,other:string")]
+        } else if definition.type_name == "text/template" {
+            vec![property("template", "{{ first }}{{ second }}")]
         } else { vec![] };
         add(&mut engine, &definition.type_name, &properties);
     }
@@ -62,6 +64,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
         let definition = restored.node_definition(node.id).unwrap();
         assert!(!definition.pins.is_empty());
         if node.type_name == "object/unpack" { assert_eq!(definition.pins.len(), 3); }
+        if node.type_name == "text/template" { assert_eq!(definition.pins.len(), 3); }
         for pin in &definition.pins {
             if !((node.type_name == "variable/set" && pin.id == PinId(3)) || (matches!(node.type_name.as_str(), "text/to_text" | "convert") && pin.id == PinId(1)) || (node.type_name == "logic/hysteresis" && (1..=3).contains(&pin.id.0))) {
                 assert!(!pin.required, "restored: {} / {}", node.type_name, pin.name);
@@ -82,6 +85,7 @@ fn pure_nodes_charge_one_work_unit_for_their_results() {
         ("logical/and", 2, DataValue::Bool(false)),
         ("logical/or", 2, DataValue::Bool(false)),
         ("logical/not", 2, DataValue::Bool(true)),
+        ("text/template", 0, DataValue::from("")),
         ("compare", 2, DataValue::Bool(true)),
         ("variable/get", 0, number(0)),
         ("list/create", 0, list(&[])),

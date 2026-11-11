@@ -80,7 +80,8 @@ impl TickEngine {
             let traced = trace_inputs(&inputs);
             let inputs = self.native_inputs(node_id, inputs);
             let sheet = self.node_sheets.get(&node_id).copied();
-            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
+            let input_types = self.input_source_types(node_id);
+            let mut ctx = NodeContext { node_id, inputs, input_types, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.execute(Some(trigger_pin), &mut ctx);
             self.last_tick.charge(def.cost);
@@ -100,7 +101,8 @@ impl TickEngine {
             let traced = trace_inputs(&inputs);
             let inputs = self.native_inputs(node_id, inputs);
             let sheet = self.node_sheets.get(&node_id).copied();
-            let mut ctx = NodeContext { node_id, inputs, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
+            let input_types = self.input_source_types(node_id);
+            let mut ctx = NodeContext { node_id, inputs, input_types, variables: &self.variables, types: &self.types, sheet, host_state: &mut self.host_state };
             let Some(node) = self.nodes.get_mut(&node_id) else { continue };
             let outputs = node.on_task(task, result, &mut ctx);
             self.apply_outputs(node_id, traced, outputs, next_tick_queue);

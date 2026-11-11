@@ -20,7 +20,7 @@ impl Editor {
                 self.sheets.set(sheets.clone());
                 self.sheets_received_at.set(now_ms());
                 self.open_sheet.set(open_sheet);
-                i18n::set_display_rules(&server_settings.display);
+                i18n::set_server_settings(&server_settings);
                 self.server_settings.set(server_settings);
                 self.variables.set(variables.into_iter().map(|v| (v.key.clone(), v)).collect());
                 self.history.set(history);
@@ -123,7 +123,7 @@ impl Editor {
                 });
             }
             ServerMessage::ServerSettingsChanged(settings) => {
-                i18n::set_display_rules(&settings.display);
+                i18n::set_server_settings(&settings);
                 self.server_settings.set(settings);
             }
             ServerMessage::Error(message) => {

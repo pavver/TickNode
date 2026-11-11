@@ -28,6 +28,7 @@ pub struct TemplateNode {
     pins: Vec<(String, PinId)>,
     next_pin: u32,
     restoring: bool,
+    restoration_started: bool,
     env: Environment<'static>,
     reported: bool,
 }
@@ -46,10 +47,11 @@ impl TemplateNode {
     pub fn new(id: NodeId) -> Self {
         let mut node = Self {
             id,
-            template: String::new(),
+            template: "{{ value }}".into(),
             pins: Vec::new(),
             next_pin: 1,
             restoring: true,
+            restoration_started: false,
             env: environment(),
             reported: false,
         };
@@ -203,6 +205,7 @@ impl Node for TemplateNode {
                 PropertyDefinition::hidden("next_pin"),
             ],
             pins,
+            adaptive: true,
             ..Default::default()
         }
     }
@@ -271,6 +274,13 @@ impl Node for TemplateNode {
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
+        if self.restoring && !self.restoration_started {
+            // Constructor pins belong to the default template, not to the stored contract.
+            // Discard them before restoring properties, regardless of their order.
+            self.pins.clear();
+            self.next_pin = 1;
+            self.restoration_started = true;
+        }
         match (name, value) {
             ("template", DataValue::String(source)) => self.template = source,
             ("pin_ids", DataValue::List { elements, .. }) => {

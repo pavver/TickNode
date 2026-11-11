@@ -443,8 +443,10 @@ mod tests {
         ] }).await;
         let mut got = None;
         for _ in 0..500 {
+            // The initial list may be re-broadcast after Init (events can repeat): wait for the new one.
             if let ServerMessage::PropertyOptions { plugin, source, options } = recv_any(&mut ws).await
                 && source == "greetings"
+                && options.first().is_some_and(|o| o.value == "Hola")
             {
                 got = Some((plugin, source, options));
                 break;

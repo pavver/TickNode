@@ -12,6 +12,20 @@ pub struct Suggestion {
     pub group: String,
     pub pin: PinId,
     pub rank: u8,
+    /// Editor-only priority within a category; independent of connection compatibility.
+    preference: usize,
+}
+
+/// Preferred node types for each dragged data type, in order. Applies in either wire direction.
+const PREFERRED_TYPES: &[(DataType, &[&str])] = &[
+    (DataType::String, &["text/template"]),
+];
+
+fn preference(pin_type: &PinType, type_name: &str) -> usize {
+    let PinType::Data(data_type) = pin_type else { return usize::MAX };
+    PREFERRED_TYPES.iter().find(|(t, _)| t == data_type)
+        .and_then(|(_, names)| names.iter().position(|name| *name == type_name))
+        .unwrap_or(usize::MAX)
 }
 
 /// Rank of a connection that works only through an implicit value conversion.
@@ -65,6 +79,7 @@ pub fn suggestions(
             result.push(Suggestion {
                 type_name: definition.type_name.clone(), title, category,
                 group: definition.category.clone(), pin: PinId(pin), rank,
+                preference: preference(pin_type, &definition.type_name),
             });
         }
     }
@@ -77,7 +92,7 @@ pub const MAX_POPULAR: usize = 5;
 
 /// Menu order: up to [`MAX_POPULAR`] frequently used types first (most nodes of that type in the
 /// graph, then most recently added), then every other suggestion grouped by category in palette
-/// order and sorted by title. Each suggestion appears once; `true` marks the popular ones.
+/// order, preferred types, then title. Each suggestion appears once; `true` marks the popular ones.
 pub fn arrange(
     list: Vec<Suggestion>,
     usage: &HashMap<String, usize>,
@@ -93,8 +108,8 @@ pub fn arrange(
     popular.truncate(MAX_POPULAR);
     let picked: Vec<usize> = popular.iter().map(|&(_, _, i)| i).collect();
     let mut rest: Vec<_> = list.iter().enumerate().filter(|(i, _)| !picked.contains(i)).map(|(_, s)| s).collect();
-    rest.sort_by(|a, b| (group_rank(&a.group), &a.group, &a.title, &a.type_name)
-        .cmp(&(group_rank(&b.group), &b.group, &b.title, &b.type_name)));
+    rest.sort_by(|a, b| (group_rank(&a.group), &a.group, a.preference, &a.title, &a.type_name)
+        .cmp(&(group_rank(&b.group), &b.group, b.preference, &b.title, &b.type_name)));
     picked.iter().map(|&i| (true, list[i].clone()))
         .chain(rest.into_iter().map(|s| (false, s.clone())))
         .collect()

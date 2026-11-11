@@ -109,7 +109,7 @@ fn adaptive_definitions_match_fitting_data_types_in_the_opposite_direction_only(
 }
 
 fn suggestion(name: &str, title: &str, group: &str) -> Suggestion {
-    Suggestion { type_name: name.into(), title: title.into(), category: group.into(), group: group.into(), pin: PinId(0), rank: 0 }
+    Suggestion { type_name: name.into(), title: title.into(), category: group.into(), group: group.into(), pin: PinId(0), rank: 0, preference: usize::MAX }
 }
 
 #[test]
@@ -132,4 +132,25 @@ fn arrange_limits_popular_section() {
     let result = arrange(list, &usage, &[], |_| 0);
     assert_eq!(result.iter().filter(|(p, _)| *p).count(), MAX_POPULAR);
     assert_eq!(result.len(), 8);
+}
+
+#[test]
+fn text_template_comes_first_in_its_category_for_text_wires() {
+    use PinDirection::{Input, Output};
+    let mut template = node("text/template", vec![(1, Input, PinType::Data(DataType::Any)), (0, Output, PinType::Data(DataType::String))]);
+    template.adaptive = true;
+    template.category = "String".into();
+    let mut concat = node("string/concat", vec![(1, Input, PinType::Data(DataType::String)), (0, Output, PinType::Data(DataType::String))]);
+    concat.category = "String".into();
+    let catalog = [concat, template];
+    for direction in [Output, Input] {
+        let list = suggestions(direction, &PinType::Data(DataType::String), &catalog, &TypeRegistry::new(),
+            |d| (if d.type_name == "text/template" { "Zz".into() } else { "Aa".into() }, d.category.clone()));
+        let order: Vec<_> = arrange(list, &HashMap::new(), &[], |_| 0).into_iter().map(|(_, s)| s.type_name).collect();
+        assert_eq!(order, ["text/template", "string/concat"], "{direction:?}");
+    }
+    // Other data types keep title order.
+    let list = suggestions(Output, &PinType::Data(DataType::Number), &catalog, &TypeRegistry::new(),
+        |d| (if d.type_name == "text/template" { "Zz".into() } else { "Aa".into() }, d.category.clone()));
+    assert_eq!(arrange(list, &HashMap::new(), &[], |_| 0)[0].1.type_name, "text/template");
 }

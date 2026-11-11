@@ -115,6 +115,9 @@ pub fn property_description(type_name: &str, prop: &PropertyDefinition) -> Strin
 
 /// Select labels prefer node-specific keys, then known type titles, unit symbols, and definition text.
 pub fn property_option_label(type_name: &str, prop_name: &str, value: &str, label: &str) -> String {
+    if prop_name == "locale" && value == "server" {
+        return super::engine::server_locale_label();
+    }
     property_lookup(type_name, prop_name, &format!("option-{}", slug(value)))
         .or_else(|| {
             // Only named types (`quantity:<name>` targets, `plugin.type` values): plain words such as

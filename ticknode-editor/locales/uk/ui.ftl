@@ -549,7 +549,8 @@ settings-invalid-number = Некоректне число
 error-save-settings = Не вдалося зберегти налаштування
 
 settings-formatting-language = Мова форматування
-settings-formatting-language-description = Мова тексту, який створює рушій.
+settings-formatting-language-description = Мова тексту, який створює рушій, зокрема в нодах «У текст» і «Форматувати текст».
+property-locale-server = Сервер ({ $language })
 language-en = Англійська
 language-uk = Українська
 quantity-unit-title = Одиниця вимірювання

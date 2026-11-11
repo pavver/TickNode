@@ -806,3 +806,27 @@ type-quantity-color-temperature-description = Колірна температу�
 unit-mired = майред
 unit-signal-milliwatt = мВт
 unit-signal-watt = Вт
+
+# Explicit directional conversions
+node-convert-title = Перетворити
+node-convert-description = Перетворює значення за допомогою явних напрямлених перетворень
+node-convert-help = Під’єднайте Значення, щоб визначити його тип, і виберіть ціль у полі «У». Список містить лише доступні перетворення. Величина → Число виражає значення у вибраній одиниці; Число → Величина інтерпретує число в цій одиниці. Деякі перетворення односторонні: колірна температура → RGB існує, RGB → колірна температура — ні. Швидкість ↔ Бофорт і рівень сигналу ↔ потужність перетворюють величини. Дата й час → Час використовує місцевий часовий пояс сервера; час Unix і тривалість вимірюються в секундах. Тривалість у тактах не перетворюється на секунди. Відсутні, некоректні або нескінченні значення не дають результату.
+node-convert-pin-Value = Значення
+node-convert-pin-Result = Результат
+node-convert-prop-value_type-title = Тип значення
+node-convert-prop-value_type-description = Заданий тип входу; під’єднання дроту адаптує його.
+node-convert-prop-target-title = У
+node-convert-prop-target-description = Список містить лише перетворення, доступні для типу входу.
+node-convert-prop-unit-title = Одиниця
+node-convert-prop-unit-description = Одиниця для інтерпретації або вираження числа.
+node-convert-prop-target-option-number = Число в одиниці
+node-convert-prop-target-option-beaufort = Сила вітру за Бофортом
+node-convert-prop-target-option-speed = Швидкість
+node-convert-prop-target-option-power = Потужність
+node-convert-prop-target-option-signal-strength = Рівень сигналу
+node-convert-prop-target-option-color = Колір (RGB)
+node-convert-prop-target-option-time = Час доби
+node-convert-prop-target-option-unix-seconds = Час Unix (секунди)
+node-convert-prop-target-option-datetime = Дата й час із секунд Unix
+node-convert-prop-target-option-seconds = Секунди
+node-convert-prop-target-option-duration = Тривалість із секунд

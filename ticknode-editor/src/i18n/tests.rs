@@ -392,3 +392,30 @@ weather-plugin-error-no-token = Токен не задано ({ $name })
             assert_eq!(t!("status-online", count = 4), "connected · 4 nodes");
         });
     }
+
+#[test]
+fn property_options_fall_back_to_type_titles_and_unit_symbols() {
+    set_known_types(&TypeRegistry::from_definitions(quantity::builtin_quantities()));
+    set_runtime_translations(&[
+        ("en".into(), "type-quantity-power-title = Power\nunit-kilowatt = kW\n".into()),
+        ("uk".into(), "type-quantity-power-title = Потужність\nunit-kilowatt = кВт\nnode-convert-prop-target-option-time = Час доби\nnode-text-to-text-prop-unit-option-auto = Правило проєкту\n".into()),
+    ]);
+    with_locale(Locale::Uk, || {
+        assert_eq!(property_option_label("convert", "target", "quantity:quantity.power", "Power"), "Потужність");
+        assert_eq!(property_option_label("other", "type", "quantity.power", "Power"), "Потужність");
+        assert_eq!(property_option_label("convert", "target", "time", "Time of day"), "Час доби");
+        // Plain words keep the definition label (an HA "bool" option stays "On/Off").
+        assert_eq!(property_option_label("other", "type", "number", "Number"), "Number");
+        assert_eq!(property_option_label("convert", "unit", "kilowatt", "kW"), "кВт");
+        assert_eq!(property_option_label("text/to_text", "unit", "kilowatt", "kW"), "кВт");
+        assert_eq!(property_option_label("text/to_text", "unit", "auto", "Project rule"), "Правило проєкту");
+        assert_eq!(property_option_label("other", "target", "quantity:missing.type", "Fallback"), "Fallback");
+        assert_eq!(property_option_label("other", "unit", "missing", "Fallback"), "Fallback");
+    });
+    with_locale(Locale::En, || {
+        assert_eq!(property_option_label("convert", "target", "quantity:quantity.power", "Fallback"), "Power");
+        assert_eq!(property_option_label("convert", "unit", "kilowatt", "Fallback"), "kW");
+    });
+    set_runtime_translations(&[]);
+    set_known_types(&TypeRegistry::default());
+}

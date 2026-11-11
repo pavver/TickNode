@@ -1,5 +1,6 @@
     mod legacy_nodes;
     mod quantities;
+    mod convert;
     mod math_quantities;
     mod behavior;
     mod mutation_contracts;

@@ -65,8 +65,6 @@ fn InlineSelect(
                 let context = localization.clone();
                 let key = value.clone();
                 view! { <option value=value>{move || match &context {
-                    Some((owner, name)) if owner == "text/to_text" && name == "unit" && key != "auto" =>
-                        i18n::unit_symbol(&key).unwrap_or_else(|| label.clone()),
                     Some((owner, name)) => i18n::property_option_label(owner, name, &key, &label),
                     None => label.clone(),
                 }}</option> }

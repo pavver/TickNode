@@ -218,3 +218,19 @@ fn to_text_hidden_properties_do_not_take_layout_rows() {
         assert_eq!(prop_rows("text/to_text", &props), rows);
     }
 }
+
+#[test]
+fn convert_hidden_type_and_irrelevant_units_take_no_layout_rows() {
+    for (ty, target, rows) in [
+        ("any", "", 1), ("number", "datetime", 1), ("duration", "seconds", 1),
+        ("quantity.color_temperature", "color", 1), ("quantity.speed", "beaufort", 1),
+        ("quantity.power", "number", 2), ("number", "quantity:quantity.color_temperature", 2),
+        ("quantity.power", "invalid", 1),
+    ] {
+        let props = vec![
+            ("value_type".into(), ty.into()), ("target".into(), target.into()), ("unit".into(), "kelvin".into()),
+        ];
+        assert!(!is_node_property("convert", "value_type", &DataValue::from(ty)));
+        assert_eq!(prop_rows("convert", &props), rows, "{ty}: {target}");
+    }
+}

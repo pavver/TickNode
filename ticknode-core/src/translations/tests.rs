@@ -112,3 +112,40 @@ fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
             if locale == "uk" { "1 год 30 хв" } else { "1h 30m" });
     }
 }
+
+#[test]
+fn convert_properties_and_fixed_options_cover_every_input_type() {
+    use crate::{Node, builtin::ConvertNode};
+    use ticknode_shared::{DataType, NodeId, PropertyKind, TypeRegistry, convert};
+    let mut inputs = vec![DataType::Any, DataType::Number, DataType::DateTime, DataType::Duration];
+    inputs.extend(ticknode_shared::quantity::catalog().iter().map(|d| DataType::Named(d.name.clone())));
+    for (locale, source) in CORE_TRANSLATIONS {
+        let ids = message_ids(source);
+        for input in &inputs {
+            let mut node = ConvertNode::new(NodeId::generate());
+            node.set_property("value_type", ticknode_shared::data_type_name(input).into());
+            let mut targets = convert::targets(input, &TypeRegistry::default());
+            // Include the unselected form with an empty target list.
+            targets.push(convert::ConversionTarget { id: String::new(), title: String::new(), output: DataType::Any, unit_of: None });
+            for target in targets {
+                node.set_property("target", target.id.into());
+                for prop in node.definition().properties {
+                    for (suffix, text) in [("title", &prop.title), ("description", &prop.description)] {
+                        let key = format!("node-convert-prop-{}-{suffix}", prop.name);
+                        assert!(ids.contains(&key), "{locale}: {key}");
+                        if locale == "en" { assert!(source.lines().any(|l| l == format!("{key} = {text}"))); }
+                    }
+                    if let PropertyKind::Select(options) = prop.kind {
+                        for (value, label) in options {
+                            // Quantity titles and unit symbols use the generic editor fallback.
+                            if prop.name == "unit" || value.starts_with("quantity:") { continue; }
+                            let key = format!("node-convert-prop-{}-option-{}", prop.name, fluent_slug(&value));
+                            assert!(ids.contains(&key), "{locale}: {key}");
+                            if locale == "en" { assert!(source.lines().any(|l| l == format!("{key} = {label}"))); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

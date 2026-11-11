@@ -6,6 +6,7 @@ pub use uuid::Uuid;
 pub const PLUGIN_API: &str = env!("TICKNODE_PLUGIN_API");
 
 pub mod condition;
+pub mod convert;
 pub mod text;
 pub mod quantity;
 pub mod to_text;

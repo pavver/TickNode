@@ -73,19 +73,26 @@ pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
         && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 
-/// Constant's declared quantity type shares the Value row; math nodes' adapted type is shown by their pins.
+/// Adaptive nodes show their declared type through pins or the existing Value row.
 pub fn is_node_property(node_type: &str, name: &str, value: &DataValue) -> bool {
     is_inline_property(name, value)
-        && !(matches!(node_type, "const" | "compare" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
+        && !(matches!(node_type, "const" | "convert" | "compare" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
 }
 
 pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, properties: &[(String, DataValue)]) -> bool {
     if !is_node_property(node_type, name, value) { return false; }
-    if node_type != "text/to_text" { return true; }
+    if !matches!(node_type, "text/to_text" | "convert") { return true; }
     let ty = properties.iter().find(|(n, _)| n == "value_type").and_then(|(_, v)| match v {
         DataValue::String(s) => ticknode_shared::parse_data_type(s), _ => None,
     }).unwrap_or(DataType::Any);
-    ticknode_shared::to_text::property_visible(&ty, name)
+    if node_type == "convert" {
+        let target = properties.iter().find(|(n, _)| n == "target").and_then(|(_, v)| match v {
+            DataValue::String(s) => Some(s.as_str()), _ => None,
+        }).unwrap_or_default();
+        ticknode_shared::convert::property_visible(&ty, target, name)
+    } else {
+        ticknode_shared::to_text::property_visible(&ty, name)
+    }
 }
 
 /// Number of inline property rows on a node.

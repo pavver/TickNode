@@ -806,3 +806,27 @@ type-quantity-color-temperature-description = Color temperature in physical unit
 unit-mired = mired
 unit-signal-milliwatt = mW
 unit-signal-watt = W
+
+# Explicit directional conversions
+node-convert-title = Convert
+node-convert-description = Converts values using explicit, directional conversions
+node-convert-help = Connect Value to select its type, then choose To. Only available conversions are listed. Quantity → Number expresses the value in Unit; Number → Quantity interprets the number in Unit. Some conversions are one-way: color temperature → RGB exists, RGB → color temperature does not. Speed ↔ Beaufort and signal strength ↔ power convert between quantities. Date and time → Time uses the server local time zone; Unix time and durations use seconds. Tick durations have no seconds conversion. Missing, invalid or non-finite values produce no result.
+node-convert-pin-Value = Value
+node-convert-pin-Result = Result
+node-convert-prop-value_type-title = Value type
+node-convert-prop-value_type-description = Declared input type; connecting a wire adapts it.
+node-convert-prop-target-title = To
+node-convert-prop-target-description = Only conversions available for the input type are listed.
+node-convert-prop-unit-title = Unit
+node-convert-prop-unit-description = Unit used to interpret or express the number.
+node-convert-prop-target-option-number = Number in unit
+node-convert-prop-target-option-beaufort = Beaufort force
+node-convert-prop-target-option-speed = Speed
+node-convert-prop-target-option-power = Power
+node-convert-prop-target-option-signal-strength = Signal strength
+node-convert-prop-target-option-color = Color (RGB)
+node-convert-prop-target-option-time = Time of day
+node-convert-prop-target-option-unix-seconds = Unix time (seconds)
+node-convert-prop-target-option-datetime = Date and time from Unix seconds
+node-convert-prop-target-option-seconds = Seconds
+node-convert-prop-target-option-duration = Duration from seconds

@@ -113,9 +113,20 @@ pub fn property_description(type_name: &str, prop: &PropertyDefinition) -> Strin
     property_lookup(type_name, &prop.name, "description").unwrap_or_else(|| prop.description.clone())
 }
 
-/// Label of a `Select` property option (`node-<type slug>-prop-<name>-option-<value slug>`).
+/// Select labels prefer node-specific keys, then known type titles, unit symbols, and definition text.
 pub fn property_option_label(type_name: &str, prop_name: &str, value: &str, label: &str) -> String {
-    property_lookup(type_name, prop_name, &format!("option-{}", slug(value))).unwrap_or_else(|| label.to_string())
+    property_lookup(type_name, prop_name, &format!("option-{}", slug(value)))
+        .or_else(|| {
+            // Only named types (`quantity:<name>` targets, `plugin.type` values): plain words such as
+            // `bool` keep their own option labels.
+            let name = value.strip_prefix("quantity:").unwrap_or(value);
+            let known = name.contains('.') && (TYPES.with(|types| types.borrow().get(name).is_some())
+                || quantity::kind(name).is_some());
+            known.then(|| translated_type_title(name)
+                .or_else(|| lookup(&format!("type-{}", slug(name))))).flatten()
+        })
+        .or_else(|| (prop_name == "unit").then(|| lookup(&format!("unit-{}", slug(value)))).flatten())
+        .unwrap_or_else(|| label.to_string())
 }
 
 /// Make/Break pins are named after the type (pin 0) and the field titles (the rest).

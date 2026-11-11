@@ -235,3 +235,67 @@ fn property_order_preserves_manual_type_after_inference_on_load() {
     offline.set_property("entity_id", "sensor.voltage".into());
     assert_eq!(offline.value_type, ValueType::Text);
 }
+
+#[test]
+fn remaining_quantity_kinds_infer_and_convert_finite_numeric_samples() {
+    for (class, symbol, quantity, text, expected) in [
+        ("monetary", "uah", "currency_uah", "10.25", 10.25),
+        ("monetary", "USD", "currency_usd", "10.25", 10.25),
+        ("wind_speed", "Bft", "beaufort", "6", 6.0),
+        (
+            "energy_distance",
+            "Wh/km",
+            "energy_consumption",
+            "150",
+            15.0,
+        ),
+        (
+            "energy_distance",
+            "mi/kWh",
+            "energy_efficiency",
+            "2",
+            3.218688,
+        ),
+    ] {
+        let state = test_state(
+            "sensor.value",
+            text,
+            json!({"device_class":class, "unit_of_measurement":symbol}),
+        );
+        let ty = ValueType::parse(&format!("quantity.{quantity}")).unwrap();
+        assert_eq!(infer_value_type(&state), ty);
+        assert_eq!(typed_value(&state, ty), Some(expected.into()));
+        assert!(!unit_mismatch(&state, ty));
+        if class == "monetary" {
+            let other = ValueType::Quantity("quantity.currency_eur");
+            assert_eq!(typed_value(&state, other), None);
+            assert!(unit_mismatch(&state, other));
+        }
+    }
+    for (class, ty) in [
+        ("aqi", ValueType::Quantity("quantity.aqi")),
+        ("ph", ValueType::Quantity("quantity.ph")),
+    ] {
+        for unit in [None, Some(""), Some("  ")] {
+            let mut attrs = json!({"device_class":class});
+            if let Some(unit) = unit {
+                attrs["unit_of_measurement"] = unit.into();
+            }
+            let state = test_state("sensor.value", "7.2", attrs.clone());
+            assert_eq!(infer_value_type(&state), ty);
+            assert_eq!(typed_value(&state, ty), Some(7.2.into()));
+            assert!(!unit_mismatch(&state, ty));
+            for invalid in ["unknown", "unavailable", "NaN", "inf", "-inf", "text"] {
+                let state = test_state("sensor.value", invalid, attrs.clone());
+                assert_eq!(typed_value(&state, ty), None, "{class}: {invalid}");
+            }
+        }
+        let state = test_state(
+            "sensor.value",
+            "7.2",
+            json!({"device_class":class, "unit_of_measurement":"unknown"}),
+        );
+        assert_eq!(typed_value(&state, ty), None);
+        assert!(unit_mismatch(&state, ty));
+    }
+}

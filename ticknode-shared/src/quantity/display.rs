@@ -75,8 +75,12 @@ impl QuantityDisplay {
         steps[0].from = 0.0;
         Self {
             steps,
-            digits: 3,
-            rounding: Rounding::Significant,
+            digits: kind.decimals.unwrap_or(3),
+            rounding: if kind.decimals.is_some() {
+                Rounding::Decimals
+            } else {
+                Rounding::Significant
+            },
         }
     }
 

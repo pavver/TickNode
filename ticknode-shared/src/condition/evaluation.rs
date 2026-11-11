@@ -1,8 +1,8 @@
-use std::cmp::Ordering;
-use crate::{DataType, DataValue};
+use super::{CompareOp, Condition, Join, MatchCase, Operand};
 use crate::text::{coerce_to, format_value};
-use super::{CompareOp, Condition, Operand, MatchCase, Join};
+use crate::{DataType, DataValue};
 use CompareOp::*;
+use std::cmp::Ordering;
 
 impl Operand {
     fn resolve(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> Option<DataValue> {
@@ -46,12 +46,12 @@ impl Condition {
             Contains | NotContains => operands().is_some_and(|(a, b)| {
                 contains(a, &b).is_some_and(|found| found == (self.op == Contains))
             }),
-            StartsWith => operands().is_some_and(|(a, b)| {
-                matches!(a, DataValue::String(s) if s.starts_with(&format_value(&b)))
-            }),
-            EndsWith => operands().is_some_and(|(a, b)| {
-                matches!(a, DataValue::String(s) if s.ends_with(&format_value(&b)))
-            }),
+            StartsWith => operands().is_some_and(
+                |(a, b)| matches!(a, DataValue::String(s) if s.starts_with(&format_value(&b))),
+            ),
+            EndsWith => operands().is_some_and(
+                |(a, b)| matches!(a, DataValue::String(s) if s.ends_with(&format_value(&b))),
+            ),
             HasField | NoField => operands().is_some_and(|(a, b)| {
                 has_field(a, &b).is_some_and(|found| found == (self.op == HasField))
             }),
@@ -86,7 +86,11 @@ fn ordering(a: &DataValue, b: &DataValue) -> Option<Ordering> {
 }
 
 fn mixed_durations(a: &DataValue, b: &DataValue) -> bool {
-    matches!((a, b), (DataValue::Ticks(_), DataValue::Duration(_)) | (DataValue::Duration(_), DataValue::Ticks(_)))
+    matches!(
+        (a, b),
+        (DataValue::Ticks(_), DataValue::Duration(_))
+            | (DataValue::Duration(_), DataValue::Ticks(_))
+    )
 }
 
 /// Equality after coercing `b` to the type of `a` (`1` = `1.0`, `"07:30"` = time 07:30).
@@ -116,27 +120,61 @@ fn has_field(a: &DataValue, b: &DataValue) -> Option<bool> {
 
 fn length_ordering(a: &DataValue, b: DataValue) -> Option<Ordering> {
     let n = length(a)?;
-    let DataValue::Number(m) = coerce_to(b, &DataType::Number) else { return None };
+    let DataValue::Number(m) = coerce_to(b, &DataType::Number) else {
+        return None;
+    };
     (n as f64).partial_cmp(&m.to_f64())
 }
 
 impl MatchCase {
-    /// Evaluates constants using the declared left input type, including canonical quantities.
-    pub fn matches_in(&self, types: &crate::TypeRegistry, type_of: impl Fn(&str) -> DataType, value_of: impl Fn(&str) -> Option<DataValue>) -> bool {
-        let mut coerced = self.clone();
-        for c in &mut coerced.conditions {
+    /// Evaluates constants using declared types; different quantities never compare directly.
+    pub fn matches_in(
+        &self,
+        types: &crate::TypeRegistry,
+        type_of: impl Fn(&str) -> DataType,
+        value_of: impl Fn(&str) -> Option<DataValue>,
+    ) -> bool {
+        self.matches_by(|condition| {
+            let mut c = condition.clone();
+            if let (Operand::Input(left), Some(Operand::Input(right))) = (&c.left, &c.right) {
+                let a = type_of(left);
+                let b = type_of(right);
+                let quantity = |t: &DataType| {
+                    types
+                        .definition_of(t)
+                        .is_some_and(|d| d.quantity().is_some())
+                };
+                if quantity(&a) && quantity(&b) && !types.compatible(&a, &b) {
+                    return false;
+                }
+            }
             if let Operand::Input(name) = &c.left
                 && let Some(Operand::Value(v)) = &mut c.right
                 && let Some(t) = c.op.right_type(&type_of(name))
             {
-                *v = crate::text::coerce_to_in(types, v.clone(), &t);
+                if let DataValue::String(text) = v
+                    && types
+                        .definition_of(&t)
+                        .is_some_and(|d| d.quantity().is_some())
+                {
+                    let Ok(parsed) = crate::text::parse_value_in(types, text, &t) else {
+                        return false;
+                    };
+                    *v = parsed;
+                } else {
+                    *v = crate::text::coerce_to_in(types, v.clone(), &t);
+                }
             }
-        }
-        coerced.matches(value_of)
+            c.holds(&value_of)
+        })
     }
 
     /// Disjunction ("or") of conjunction ("and") groups; empty conditions always match.
     pub fn matches(&self, value_of: impl Fn(&str) -> Option<DataValue>) -> bool {
+        self.matches_by(|c| c.holds(&value_of))
+    }
+
+    fn matches_by(&self, holds: impl Fn(&Condition) -> bool) -> bool {
         if self.conditions.is_empty() {
             return true;
         }
@@ -147,7 +185,7 @@ impl MatchCase {
                 any |= group;
                 group = true;
             }
-            group = group && c.holds(&value_of);
+            group = group && holds(c);
         }
         any || group
     }

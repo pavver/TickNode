@@ -8,7 +8,8 @@ and access token in the Plugins panel; the Home Assistant add-on supplies the Su
 Choose an entity in Resources and select **When it changes** to create `ha/entity`. Its outputs are
 **Changed** (exec 0), **Value** (1), **Previous** (2), **Unit** (3), **Attributes** (4), and
 **Entity state** (`ha.state`, 5). Value and Previous share the selected `value_type`: Number,
-On/Off, Text (default), Date and time (RFC 3339), Duration, or any built-in physical quantity.
+On/Off, Text (default), Date and time (RFC 3339), Duration, or any built-in quantity, including
+currencies and sensor scales.
 Choosing an entity known to the live cache infers its type; manual edits and stored types override inference. Unknown entities retain the
 current type. Unknown, unavailable and non-convertible values clear the corresponding typed pin.
 
@@ -19,11 +20,16 @@ changing Previous. Removal clears current data; offline values remain cached, wh
 are not replayed. Failed subscriptions retry after 30 seconds.
 
 A recognized `unit_of_measurement` infers a quantity type; `device_class` selects quantity candidates
-before an unambiguous symbol lookup. The catalog covers all HA linear sensor classes. Unknown
-units retain Number behavior. Value and Previous convert each state's own unit to the canonical
+before an unambiguous symbol lookup. The catalog covers HA linear sensor classes, Beaufort wind
+force, energy consumption per distance,
+distance per energy, AQI, pH, and separate ISO currency types for monetary sensors. Currency codes
+are case-insensitive; currencies never convert or compare directly. Money defaults to two decimal
+places (JPY/KRW/HUF: zero). AQI and pH use their sole unit when HA omits the unit or sends an
+empty unit; typed values still require finite numeric states. Unknown units retain Number behavior.
+Value and Previous convert each state's own unit to the canonical
 unit: `2 kW` becomes `2000` on `quantity.power`, and `68 °F` becomes `20` on
-`quantity.temperature`. A missing/incompatible unit clears that sample's pin and logs an English
-warning once per node until the units recover. Unit keeps the raw HA spelling. Attributes and
+`quantity.temperature`. A missing/incompatible unit (except unitless AQI/pH) clears that sample's
+pin and logs an English warning once per node until the units recover. Unit keeps the raw HA spelling. Attributes and
 `ha.state` are unchanged; the latter still stores the state as text.
 
 Duration sensors with `d`, `h`, `min`, `s`, `ms` or `µs` units produce `Duration` values;

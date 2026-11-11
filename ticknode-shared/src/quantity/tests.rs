@@ -5,7 +5,7 @@ fn named(s: &str) -> DataType { DataType::Named(format!("quantity.{s}")) }
 
 #[test]
 fn catalog_is_consistent() {
-    assert_eq!(catalog().len(), 29);
+    assert_eq!(catalog().len(), 66);
     for def in catalog() {
         let q = def.quantity().unwrap();
         let canonical = q.units.iter().find(|u| u.id == q.canonical).unwrap();

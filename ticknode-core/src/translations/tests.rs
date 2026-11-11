@@ -68,7 +68,12 @@ fn quantity_catalog_has_titles_descriptions_and_unit_symbols_in_both_locales() {
         assert_eq!(labels.decimal_separator(), if locale == "uk" { "," } else { "." });
         for d in ticknode_shared::quantity::builtin_quantities() {
             for suffix in ["title", "description"] {
-                assert!(ids.contains(&format!("type-{}-{suffix}", fluent_slug(&d.name))));
+                let key = format!("type-{}-{suffix}", fluent_slug(&d.name));
+                assert!(ids.contains(&key));
+                if locale == "en" {
+                    let expected = if suffix == "title" { &d.title } else { &d.description };
+                    assert!(source.lines().any(|line| line == format!("{key} = {expected}")), "{key}");
+                }
             }
             for u in &d.quantity().unwrap().units {
                 let symbol = labels.unit_symbol(&u.id).expect("every unit has a localized symbol");

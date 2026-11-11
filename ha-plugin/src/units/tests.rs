@@ -173,3 +173,39 @@ fn pollutant_classes_accept_both_mass_and_parts_concentrations() {
         );
     }
 }
+
+#[test]
+fn remaining_device_classes_and_currency_codes_use_the_shared_catalog() {
+    for definition in quantity::catalog()
+        .iter()
+        .filter(|d| d.name.starts_with("quantity.currency_"))
+    {
+        let unit = &definition.quantity().unwrap().units[0];
+        for code in [&unit.symbol, &unit.symbol.to_ascii_lowercase()] {
+            for class in [None, Some("monetary")] {
+                assert_eq!(mapping(code, class).unwrap().0, definition.name);
+            }
+        }
+    }
+    for (class, symbol, name, factor) in [
+        ("wind_speed", "Bft", "beaufort", 1.0),
+        ("wind_speed", "Beaufort", "beaufort", 1.0),
+        ("wind_speed", "Бфт", "beaufort", 1.0),
+        ("wind_speed", "m/s", "speed", 1.0),
+        ("energy_distance", "kWh/100km", "energy_consumption", 1.0),
+        ("energy_distance", "Wh/km", "energy_consumption", 0.1),
+        ("energy_distance", "km/kWh", "energy_efficiency", 1.0),
+        ("energy_distance", "mi/kWh", "energy_efficiency", 1.609344),
+        ("aqi", "AQI", "aqi", 1.0),
+        ("aqi", "", "aqi", 1.0),
+        ("ph", "pH", "ph", 1.0),
+        ("ph", "  ", "ph", 1.0),
+    ] {
+        let (actual, unit) = mapping(symbol, Some(class)).unwrap();
+        assert_eq!(actual, format!("quantity.{name}"));
+        assert_eq!(unit.factor, factor);
+    }
+    for symbol in ["$", "¥", "kr", ""] {
+        assert!(mapping(symbol, Some("monetary")).is_none());
+    }
+}

@@ -133,20 +133,16 @@ pub fn builtin_quantities() -> Vec<TypeDefinition> {
         ], &["ppm"]),
     ];
     definitions.extend(super::catalog_extra::quantities());
+    definitions.extend(super::indices::quantities());
+    definitions.extend(super::currencies::quantities());
     definitions
 }
 
-type UnitSpec = (
-    &'static str,
-    &'static str,
-    f64,
-    f64,
-    &'static [&'static str],
-);
+type UnitSpec<'a> = (&'a str, &'a str, f64, f64, &'a [&'a str]);
 pub(super) fn quantity(
     name: &str,
     title: &str,
-    units: &[UnitSpec],
+    units: &[UnitSpec<'_>],
     auto: &[&str],
 ) -> TypeDefinition {
     TypeDefinition {
@@ -167,6 +163,14 @@ pub(super) fn quantity(
                 })
                 .collect(),
             auto: auto.iter().map(|id| (*id).into()).collect(),
+            decimals: None,
         }),
     }
+}
+
+pub(super) fn with_decimals(mut definition: TypeDefinition, decimals: u8) -> TypeDefinition {
+    if let TypeKind::Quantity(kind) = &mut definition.kind {
+        kind.decimals = Some(decimals);
+    }
+    definition
 }

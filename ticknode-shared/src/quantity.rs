@@ -1,17 +1,22 @@
 //! Physical values are plain numbers in canonical units; declared types carry their units.
 
+use crate::{TypeDefinition, TypeKind};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
-use crate::{TypeDefinition, TypeKind};
 
 mod catalog;
 mod catalog_extra;
+mod currencies;
 mod display;
+mod indices;
 pub use display::{DisplayRules, NumberDisplay, QuantityDisplay, Rounding, UnitStep};
 mod format;
 mod parse;
 pub use catalog::builtin_quantities;
-pub use format::{CanonicalLabels,QuantityFormat, QuantityLabels, auto_unit, format_number, format_quantity, format_rounded};
+pub use format::{
+    CanonicalLabels, QuantityFormat, QuantityLabels, auto_unit, format_number, format_quantity,
+    format_rounded,
+};
 pub use parse::{literal_text, parse_literal, parse_quantity, unit_in};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -20,6 +25,9 @@ pub struct QuantityKind {
     pub units: Vec<UnitDefinition>,
     /// Unit ids, ordered by increasing factor.
     pub auto: Vec<String>,
+    /// Default fixed decimal places; absent values use three significant digits.
+    #[serde(default)]
+    pub decimals: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -32,9 +40,13 @@ pub struct UnitDefinition {
 }
 
 /// Converts a number expressed in `unit` to the canonical number stored in DataValue.
-pub fn to_canonical(value: f64, unit: &UnitDefinition) -> f64 { value * unit.factor + unit.offset }
+pub fn to_canonical(value: f64, unit: &UnitDefinition) -> f64 {
+    value * unit.factor + unit.offset
+}
 /// Converts a canonical number to a display or integration unit.
-pub fn from_canonical(value: f64, unit: &UnitDefinition) -> f64 { (value - unit.offset) / unit.factor }
+pub fn from_canonical(value: f64, unit: &UnitDefinition) -> f64 {
+    (value - unit.offset) / unit.factor
+}
 
 /// Cached catalog for plugin adapters and callers that need borrowed definitions.
 pub fn catalog() -> &'static [TypeDefinition] {
@@ -43,14 +55,19 @@ pub fn catalog() -> &'static [TypeDefinition] {
 }
 
 pub fn kind(name: &str) -> Option<&'static QuantityKind> {
-    catalog().iter().find(|d| d.name == name).and_then(TypeDefinition::quantity)
+    catalog()
+        .iter()
+        .find(|d| d.name == name)
+        .and_then(TypeDefinition::quantity)
 }
 
 /// Finds a globally unambiguous symbol/alias (exact case first).
 pub fn unit_by_symbol(symbol: &str) -> Option<(&'static str, &'static UnitDefinition)> {
     let find = |fold: bool| {
         let mut matches = catalog().iter().filter_map(|d| {
-            let TypeKind::Quantity(q) = &d.kind else { return None };
+            let TypeKind::Quantity(q) = &d.kind else {
+                return None;
+            };
             unit_in(q, symbol, fold).map(|u| (d.name.as_str(), u))
         });
         let found = matches.next()?;
@@ -70,3 +87,6 @@ mod catalog_tests;
 
 #[cfg(test)]
 mod rounding_tests;
+
+#[cfg(test)]
+mod scales_tests;

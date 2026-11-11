@@ -56,6 +56,12 @@ pub(super) fn quantities() -> Vec<TypeDefinition> {
             ("gibibyte", "GiB", 1073741824.0, 0.0, &["gibibyte", "ГіБ"]),
             ("tebibyte", "TiB", 1099511627776.0, 0.0, &["tebibyte", "ТіБ"]),
             ("pebibyte", "PiB", 1125899906842624.0, 0.0, &["pebibyte", "ПіБ"]),
+            ("exabyte", "EB", 1e18, 0.0, &["exabyte", "ЕБ"]),
+            ("zettabyte", "ZB", 1e21, 0.0, &["zettabyte", "ЗБ"]),
+            ("yottabyte", "YB", 1e24, 0.0, &["yottabyte", "ЙБ"]),
+            ("exbibyte", "EiB", 1152921504606846976.0, 0.0, &["exbibyte", "ЕіБ"]),
+            ("zebibyte", "ZiB", 1180591620717411303424.0, 0.0, &["zebibyte", "ЗіБ"]),
+            ("yobibyte", "YiB", 1208925819614629174706176.0, 0.0, &["yobibyte", "ЙіБ"]),
         ], &["byte", "kilobyte", "megabyte", "gigabyte", "terabyte", "petabyte"]),
         quantity("precipitation_intensity", "Precipitation intensity", &[
             ("millimeter_per_hour", "mm/h", 1.0, 0.0, &["millimeter_per_hour", "мм/год"]),

@@ -308,3 +308,25 @@ fn response_is_emitted_only_for_response_data() {
             .any(|o| matches!(o,Output::Exec(p) if *p == FAILED))
     );
 }
+
+#[test]
+fn remaining_quantity_selector_units_follow_the_shared_mapping() {
+    for (class, unit, quantity) in [
+        ("monetary", "uah", "currency_uah"),
+        ("monetary", "EUR", "currency_eur"),
+        ("wind_speed", "Bft", "beaufort"),
+        ("energy_distance", "Wh/km", "energy_consumption"),
+        ("energy_distance", "mi/kWh", "energy_efficiency"),
+        ("aqi", "AQI", "aqi"),
+        ("ph", "pH", "ph"),
+    ] {
+        assert_eq!(
+            selector_type(&json!({"number":{"device_class":class, "unit_of_measurement":unit}})),
+            DataType::Named(format!("quantity.{quantity}"))
+        );
+    }
+    assert_eq!(
+        selector_type(&json!({"number":{"unit_of_measurement":"UAH"}})),
+        DataType::Named("quantity.currency_uah".into())
+    );
+}

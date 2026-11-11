@@ -35,7 +35,7 @@ fn parse_errors() {
     assert!(MatchInput::parse("1:a:weird").is_err());
     assert_eq!(MatchCase::parse("a > 1"), Err(ConditionError::MissingPin));
     assert_eq!(MatchCase::parse("1: a >"), Err(ConditionError::Expected(Expected::Operand, None)));
-    assert_eq!(MatchCase::parse("1: a > 1 b"), Err(ConditionError::Expected(Expected::Join, Some("b".into()))));
+    assert_eq!(MatchCase::parse("1: a > 1 extra"), Err(ConditionError::Expected(Expected::Join, Some("extra".into()))));
     assert_eq!(MatchCase::parse("1: a frobnicate 1"), Err(ConditionError::UnknownOperator("frobnicate".into())));
     assert_eq!(MatchCase::parse("1: a = \"x"), Err(ConditionError::UnclosedQuote));
     assert_eq!(MatchInput::parse("1:a:weird"), Err(ConditionError::UnknownType("weird".into())));

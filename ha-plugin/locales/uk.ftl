@@ -315,7 +315,7 @@ node-ha-entity-title = Сутність
 node-ha-entity-description = Спрацьовує при зміні сутності Home Assistant і надає її типізоване значення
 node-ha-entity-help =
     Оберіть сутність. «Зміна» за замовчуванням спрацьовує лише при зміні тексту стану; «Будь-яке оновлення» враховує також зміни атрибутів. Кожна подія оновлює «Значення» та «Попереднє» (значення до зміни), у порядку надходження, не більше однієї події за такт.
-    Тип значення визначається автоматично при виборі відомої сутності. Його можна змінити на фізичну величину, число, увімк/вимк, текст або дату й час (RFC 3339). Невідомий, недоступний або неперетворюваний стан очищає відповідний вихід. Фізичні величини мають канонічні значення (наприклад, кВт перетворюються у Вт); кожен стан використовує власну одиницю. Відсутня або несумісна одиниця очищає відповідний вихід і спричиняє одноразове попередження до відновлення. Одиниця береться з unit_of_measurement; «Атрибути» й «Стан сутності» надають повний поточний стан.
+    Тип значення визначається автоматично при виборі відомої сутності. Його можна змінити на фізичну величину, число, увімк/вимк, текст, дату й час (RFC 3339) або тривалість. Одиниці сенсора тривалості перетворюються на проміжок часу. Невідомий, недоступний або неперетворюваний стан очищає відповідний вихід. Фізичні величини мають канонічні значення (наприклад, кВт перетворюються у Вт); кожен стан використовує власну одиницю. Відсутня або несумісна одиниця очищає відповідний вихід і спричиняє одноразове попередження до відновлення. Одиниця береться з unit_of_measurement; «Атрибути» й «Стан сутності» надають повний поточний стан.
     Початковий знімок і знімок після відновлення зв’язку оновлюють поточні дані без імпульсу «Зміна» та без зміни «Попереднє». Видалення сутності очищає поточні дані. Без зв’язку останні значення зберігаються, пропущені події не відтворюються. Невдалу підписку повторюють через 30 секунд.
 node-ha-entity-pin-Changed = Зміна
 node-ha-entity-pin-Value = Значення
@@ -331,6 +331,7 @@ node-ha-entity-prop-value_type-option-number = Число
 node-ha-entity-prop-value_type-option-bool = Увімк/Вимк
 node-ha-entity-prop-value_type-option-text = Текст
 node-ha-entity-prop-value_type-option-datetime = Дата й час
+node-ha-entity-prop-value_type-option-duration = Тривалість
 node-ha-entity-prop-fire_on-title = Спрацьовувати на
 node-ha-entity-prop-fire_on-description = Коли надсилати імпульс «Зміна»; дані оновлюються при кожній події
 node-ha-entity-prop-fire_on-option-state = Зміна стану
@@ -353,3 +354,15 @@ node-ha-entity-prop-value_type-option-quantity-illuminance = Освітлені�
 node-ha-entity-prop-value_type-option-quantity-irradiance = Опромінення
 node-ha-entity-prop-value_type-option-quantity-concentration = Концентрація
 node-ha-entity-prop-value_type-option-quantity-parts = Частки
+node-ha-entity-prop-value_type-option-quantity-reactive-power = Реактивна потужність
+node-ha-entity-prop-value_type-option-quantity-reactive-energy = Реактивна енергія
+node-ha-entity-prop-value_type-option-quantity-area = Площа
+node-ha-entity-prop-value_type-option-quantity-data-rate = Швидкість передавання даних
+node-ha-entity-prop-value_type-option-quantity-data-size = Обсяг даних
+node-ha-entity-prop-value_type-option-quantity-precipitation-intensity = Інтенсивність опадів
+node-ha-entity-prop-value_type-option-quantity-volume-flow-rate = Об’ємна витрата
+node-ha-entity-prop-value_type-option-quantity-conductivity = Електропровідність
+node-ha-entity-prop-value_type-option-quantity-signal-strength = Рівень сигналу
+node-ha-entity-prop-value_type-option-quantity-sound-pressure = Звуковий тиск
+node-ha-entity-prop-value_type-option-quantity-angle = Кут
+node-ha-entity-prop-value_type-option-quantity-blood-glucose = Глюкоза крові

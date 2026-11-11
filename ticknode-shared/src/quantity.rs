@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 use crate::{TypeDefinition, TypeKind};
 
 mod catalog;
+mod catalog_extra;
 mod display;
 pub use display::{DisplayRules, QuantityDisplay, UnitStep};
 mod format;
@@ -63,3 +64,6 @@ mod tests;
 
 #[cfg(test)]
 mod display_tests;
+
+#[cfg(test)]
+mod catalog_tests;

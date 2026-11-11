@@ -1,7 +1,7 @@
 //! In-place value editor for variables (text fields, switch, dropdown, duration, textarea, read-only preview).
 
 use leptos::prelude::*;
-use ticknode_shared::{DataType, DataValue, text};
+use ticknode_shared::{DataType, DataValue};
 use crate::i18n::{self, t};
 use crate::inline::duration::units::{self, Unit};
 use crate::state::use_editor;
@@ -325,7 +325,7 @@ fn ScalarTextEditor(
     #[prop(into)] value: Signal<DataValue>,
     on_commit: Callback<DataValue>,
 ) -> impl IntoView {
-    let initial_text = text::format_value(&value.get_untracked());
+    let initial_text = i18n::value_edit_text(&value.get_untracked());
     let draft = RwSignal::new(initial_text);
     let error = RwSignal::new(None::<String>);
     let is_focused = RwSignal::new(false);
@@ -334,7 +334,7 @@ fn ScalarTextEditor(
     Effect::new(move |_| {
         let v = value.get();
         if !is_focused.get_untracked() && !is_dirty.get_untracked() {
-            draft.set(text::format_value(&v));
+            draft.set(i18n::value_edit_text(&v));
             error.set(None);
         }
     });
@@ -378,7 +378,7 @@ fn ScalarTextEditor(
                 }
                 on:keydown=move |ev: web_sys::KeyboardEvent| {
                     if ev.key() == "Escape" {
-                        draft.set(text::format_value(&value.get_untracked()));
+                        draft.set(i18n::value_edit_text(&value.get_untracked()));
                         error.set(None);
                         is_dirty.set(false);
                         use wasm_bindgen::JsCast;

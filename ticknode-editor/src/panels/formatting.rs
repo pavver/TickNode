@@ -50,7 +50,7 @@ pub fn display_value(value: &DataValue) -> String {
         DataValue::Number(NumberValue::Float(f)) => f.to_string(),
         DataValue::Bool(b) => b.to_string(),
         DataValue::Time(t) => t.format("%H:%M:%S").to_string(),
-        DataValue::DateTime(dt) => dt.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+        DataValue::DateTime(dt) => i18n::local_datetime_text(dt),
         DataValue::Duration(d) => text::format_duration(*d),
         DataValue::Ticks(n) => i18n::ticks_text(*n),
         DataValue::Color(c) => format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),

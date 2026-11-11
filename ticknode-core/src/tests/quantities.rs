@@ -11,7 +11,7 @@ fn power() -> DataType { DataType::Named("quantity.power".into()) }
 #[test]
 fn format_node_uses_explicit_and_server_locales_and_persists_properties() {
     let mut e = TickEngine::new();
-    assert_eq!(e.types.definitions().len(), 17);
+    assert_eq!(e.types.definitions().len(), ticknode_shared::quantity::catalog().len());
     let id = add(&mut e, "text/to_text", &[prop("value_type", "quantity.power")]);
     e.set_input_value(id, PinId(1), Some(1970i64.into())).unwrap();
     assert_eq!(pull(&mut e, id), Some("1.97 kW".into()));

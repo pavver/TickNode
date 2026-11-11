@@ -3,27 +3,60 @@
 use ha_core_client::State;
 use ticknode_plugin_sdk::quantity::{self, UnitDefinition};
 
-fn class_quantity(class: &str) -> Option<&'static str> {
-    Some(match class {
-        "power" => "quantity.power",
-        "energy" => "quantity.energy",
-        "voltage" => "quantity.voltage",
-        "current" => "quantity.current",
-        "apparent_power" => "quantity.apparent_power",
-        "frequency" => "quantity.frequency",
-        "temperature" => "quantity.temperature",
-        "battery" | "humidity" | "moisture" => "quantity.percentage",
-        "pressure" | "atmospheric_pressure" => "quantity.pressure",
-        "speed" | "wind_speed" => "quantity.speed",
-        "distance" => "quantity.length",
-        "volume" | "water" | "gas" => "quantity.volume",
-        "weight" => "quantity.mass",
-        "illuminance" => "quantity.illuminance",
-        "irradiance" => "quantity.irradiance",
-        "pm1" | "pm25" | "pm10" | "volatile_organic_compounds" => "quantity.concentration",
-        "carbon_dioxide" | "carbon_monoxide" | "volatile_organic_compounds_parts" => {
-            "quantity.parts"
-        }
+fn class_quantity(class: &str) -> &'static [&'static str] {
+    match class {
+        "absolute_humidity" => &["quantity.concentration"],
+        "apparent_power" => &["quantity.apparent_power"],
+        "area" => &["quantity.area"],
+        "pressure" | "atmospheric_pressure" => &["quantity.pressure"],
+        "battery" | "humidity" | "moisture" | "power_factor" => &["quantity.percentage"],
+        "blood_glucose_concentration" => &["quantity.blood_glucose"],
+        "carbon_dioxide" | "volatile_organic_compounds_parts" => &["quantity.parts"],
+        "carbon_monoxide" => &["quantity.parts", "quantity.concentration"],
+        "conductivity" => &["quantity.conductivity"],
+        "current" => &["quantity.current"],
+        "data_rate" => &["quantity.data_rate"],
+        "data_size" => &["quantity.data_size"],
+        "distance" | "precipitation" => &["quantity.length"],
+        "energy" | "energy_storage" => &["quantity.energy"],
+        "frequency" => &["quantity.frequency"],
+        "gas" | "volume" | "volume_storage" | "water" => &["quantity.volume"],
+        "illuminance" => &["quantity.illuminance"],
+        "irradiance" => &["quantity.irradiance"],
+        "nitrogen_dioxide"
+        | "nitrogen_monoxide"
+        | "nitrous_oxide"
+        | "ozone"
+        | "sulphur_dioxide"
+        | "pm1"
+        | "pm25"
+        | "pm10"
+        | "volatile_organic_compounds" => &["quantity.concentration", "quantity.parts"],
+        "power" => &["quantity.power"],
+        "precipitation_intensity" => &["quantity.precipitation_intensity"],
+        "reactive_power" => &["quantity.reactive_power"],
+        "reactive_energy" => &["quantity.reactive_energy"],
+        "signal_strength" => &["quantity.signal_strength"],
+        "sound_pressure" => &["quantity.sound_pressure"],
+        "speed" | "wind_speed" => &["quantity.speed"],
+        "temperature" => &["quantity.temperature"],
+        "voltage" => &["quantity.voltage"],
+        "volume_flow_rate" => &["quantity.volume_flow_rate"],
+        "weight" => &["quantity.mass"],
+        "wind_direction" => &["quantity.angle"],
+        _ => &[],
+    }
+}
+
+/// Seconds per HA duration unit; these units do not belong to the quantity catalog.
+pub fn duration_factor(symbol: &str) -> Option<f64> {
+    Some(match symbol.trim() {
+        "d" => 86400.0,
+        "h" => 3600.0,
+        "min" => 60.0,
+        "s" => 1.0,
+        "ms" => 0.001,
+        "µs" | "μs" | "us" => 0.000001,
         _ => return None,
     })
 }
@@ -39,11 +72,15 @@ pub fn mapping(
         "ft^3" => "ft³",
         other => other,
     };
-    if let Some(name) = device_class.and_then(class_quantity) {
-        let kind = quantity::kind(name)?;
-        let unit = quantity::unit_in(kind, symbol, false)
-            .or_else(|| quantity::unit_in(kind, symbol, true))?;
-        return Some((name, unit));
+    for &name in class_quantity(device_class.unwrap_or_default()) {
+        let Some(kind) = quantity::kind(name) else {
+            continue;
+        };
+        if let Some(unit) =
+            quantity::unit_in(kind, symbol, false).or_else(|| quantity::unit_in(kind, symbol, true))
+        {
+            return Some((name, unit));
+        }
     }
     quantity::unit_by_symbol(symbol)
 }

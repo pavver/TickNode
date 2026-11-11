@@ -11,6 +11,7 @@ pub enum ValueType {
     #[default]
     Text,
     DateTime,
+    Duration,
     Quantity(&'static str),
 }
 
@@ -21,6 +22,7 @@ impl ValueType {
             "bool" => Self::Bool,
             "text" => Self::Text,
             "datetime" => Self::DateTime,
+            "duration" => Self::Duration,
             _ => Self::Quantity(
                 quantity::catalog()
                     .iter()
@@ -37,6 +39,7 @@ impl ValueType {
             Self::Bool => "bool",
             Self::Text => "text",
             Self::DateTime => "datetime",
+            Self::Duration => "duration",
             Self::Quantity(name) => name,
         }
     }
@@ -47,6 +50,7 @@ impl ValueType {
             Self::Bool => DataType::Bool,
             Self::Text => DataType::String,
             Self::DateTime => DataType::DateTime,
+            Self::Duration => DataType::Duration,
             Self::Quantity(name) => DataType::Named(name.into()),
         }
     }
@@ -74,6 +78,14 @@ pub fn infer_value_type(state: &State) -> ValueType {
         .next()
         .unwrap_or_default();
     let attrs = crate::convert::attributes_json(state);
+    let duration_unit = attrs["unit_of_measurement"]
+        .as_str()
+        .and_then(crate::units::duration_factor);
+    if duration_unit.is_some()
+        && (attrs["device_class"] == "duration" || finite_number(&state.state).is_some())
+    {
+        return ValueType::Duration;
+    }
     if let Some((name, _)) = crate::units::state_unit(state) {
         return ValueType::Quantity(name);
     }
@@ -126,6 +138,13 @@ pub fn typed_value(state: &State, value_type: ValueType) -> Option<DataValue> {
         ValueType::DateTime => DateTime::parse_from_rfc3339(text)
             .ok()
             .map(|dt| DataValue::DateTime(dt.with_timezone(&Utc))),
+        ValueType::Duration => {
+            let unit = state.attributes.get_as::<String>("unit_of_measurement")?;
+            let seconds = finite_number(text)? * crate::units::duration_factor(&unit)?;
+            std::time::Duration::try_from_secs_f64(seconds)
+                .ok()
+                .map(DataValue::Duration)
+        }
         ValueType::Quantity(name) => {
             let (actual, unit) = crate::units::state_unit(state)?;
             if actual != name {
@@ -152,6 +171,7 @@ pub fn type_property() -> ticknode_plugin_sdk::PropertyDefinition {
             ("bool", "On/Off"),
             ("text", "Text"),
             ("datetime", "Date and time"),
+            ("duration", "Duration"),
         ],
     )
     .described("Auto-detected when choosing a known entity; can be overridden");

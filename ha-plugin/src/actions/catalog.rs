@@ -84,8 +84,13 @@ fn selector_unit(
     &'static str,
     &'static ticknode_plugin_sdk::quantity::UnitDefinition,
 )> {
+    let symbol = selector["number"]["unit_of_measurement"].as_str()?;
+    // Number selectors keep HA's numeric duration contract.
+    if crate::units::duration_factor(symbol).is_some() {
+        return None;
+    }
     crate::units::mapping(
-        selector["number"]["unit_of_measurement"].as_str()?,
+        symbol,
         selector["number"]["device_class"].as_str(),
     )
 }

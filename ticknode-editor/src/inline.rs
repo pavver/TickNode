@@ -20,7 +20,7 @@ fn value_text(value: &DataValue, value_type: &DataType) -> String {
     match value {
         DataValue::String(s) if *value_type == DataType::Any && !matches!(text::parse_any(s), DataValue::String(_)) => format!("\"{s}\""),
         DataValue::Ticks(n) => i18n::ticks_text(*n),
-        other => text::format_value(other),
+        other => i18n::value_edit_text(other),
     }
 }
 

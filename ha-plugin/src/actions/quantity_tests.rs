@@ -50,3 +50,16 @@ fn legacy_number_fields_without_unit_metadata_remain_unscaled() {
     assert_eq!(action.service.fields[0].unit, None);
     assert_eq!(action.service.fields[0].json(&2000i64.into()), json!(2000));
 }
+
+#[test]
+fn numeric_duration_selectors_keep_number_pins_and_raw_values() {
+    for unit in ["d", "h", "min", "s", "ms", "µs", "μs", "us"] {
+        let catalog = services(&json!({"number":{"set_value":{"fields":{
+            "duration":{"selector":{"number":{"unit_of_measurement":unit}}}
+        }}}}));
+        let field = &catalog["number.set_value"].fields[0];
+        assert_eq!(field.data_type, DataType::Number, "{unit}");
+        assert_eq!(field.unit, None);
+        assert_eq!(field.json(&2.5.into()), json!(2.5));
+    }
+}

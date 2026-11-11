@@ -44,7 +44,7 @@ RUN cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugi
 RUN cd ticknode-editor && trunk build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 COPY --from=build /target/release/ticknode-server /usr/local/bin/ticknode-server
 COPY --from=build /src/ticknode-editor/dist /opt/ticknode/web
 COPY --from=build /target/wasm32-wasip2/release/*_plugin.wasm /opt/ticknode/plugins/

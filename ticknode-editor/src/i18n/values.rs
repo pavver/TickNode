@@ -70,9 +70,40 @@ pub fn type_hint(t: &DataType) -> String {
     }
 }
 
+/// Date-times are entered and shown in the browser time zone; values stay UTC instants.
+pub fn local_datetime_text(dt: &chrono::DateTime<chrono::Utc>) -> String {
+    dt.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+/// Text for an editable field: like `text::format_value`, but date-times in the browser time zone.
+pub fn value_edit_text(value: &DataValue) -> String {
+    match value {
+        DataValue::DateTime(dt) => local_datetime_text(dt),
+        other => text::format_value(other),
+    }
+}
+
+/// A date-time without an explicit offset is local browser time; RFC 3339 text keeps its offset.
+pub fn parse_local_datetime(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    use chrono::{Local, NaiveDateTime, TimeZone, Utc};
+    let t = input.trim();
+    if chrono::DateTime::parse_from_rfc3339(t).is_ok() {
+        return text::parse_datetime(t);
+    }
+    let naive = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"]
+        .iter()
+        .find_map(|f| NaiveDateTime::parse_from_str(t, f).ok())
+        .or_else(|| chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)))?;
+    Local.from_local_datetime(&naive).earliest().map(|dt| dt.with_timezone(&Utc))
+}
+
 pub fn parse_value_localized(input: &str, t: &DataType) -> Result<DataValue, String> {
     let trimmed = input.trim();
-    text::parse_value(input, t).map_err(|_| match t {
+    let parsed = match t {
+        DataType::DateTime => parse_local_datetime(input).map(DataValue::DateTime).ok_or(()),
+        _ => text::parse_value(input, t).map_err(|_| ()),
+    };
+    parsed.map_err(|_| match t {
         DataType::Number => t!("parse-error-number", value = trimmed),
         DataType::Bool => t!("parse-error-bool", value = trimmed),
         DataType::Time => t!("parse-error-time", value = trimmed),

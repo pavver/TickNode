@@ -9,13 +9,17 @@ fn inspector_values_preserve_types_and_nested_contents() {
         (DataValue::Number(NumberValue::Float(1.25)), "1.25"),
         (DataValue::Bool(false), "false"),
         (text::parse_value("07:30", &DataType::Time).unwrap(), "07:30:00"),
-        (text::parse_value("2026-01-02 07:30", &DataType::DateTime).unwrap(), "2026-01-02 07:30:00 UTC"),
         (text::parse_value("500ms", &DataType::Duration).unwrap(), "500ms"),
         (text::parse_value("#123456", &DataType::Color).unwrap(), "#123456ff"),
     ];
     for (value, expected) in values {
         assert_eq!(display_value(&value), expected);
     }
+    // Date-times are shown in the local (browser) time zone.
+    let dt = text::parse_value("2026-01-02T07:30:00+00:00", &DataType::DateTime).unwrap();
+    let DataValue::DateTime(utc) = dt else { unreachable!() };
+    assert_eq!(display_value(&dt), utc.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string());
+    assert_eq!(i18n::parse_local_datetime(&display_value(&dt)), Some(utc));
     let list = DataValue::List { element_type: DataType::Any, elements: vec![DataValue::String("x".into()), DataValue::Bool(true)] };
     assert_eq!(display_value(&list), "[\"x\", true]");
     let object = DataValue::Object {

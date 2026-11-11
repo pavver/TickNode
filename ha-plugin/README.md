@@ -8,7 +8,7 @@ and access token in the Plugins panel; the Home Assistant add-on supplies the Su
 Choose an entity in Resources and select **When it changes** to create `ha/entity`. Its outputs are
 **Changed** (exec 0), **Value** (1), **Previous** (2), **Unit** (3), **Attributes** (4), and
 **Entity state** (`ha.state`, 5). Value and Previous share the selected `value_type`: Number,
-On/Off, Text (default), Date and time (RFC 3339), or any of the 17 built-in physical quantities.
+On/Off, Text (default), Date and time (RFC 3339), Duration, or any built-in physical quantity.
 Choosing an entity known to the live cache infers its type; manual edits and stored types override inference. Unknown entities retain the
 current type. Unknown, unavailable and non-convertible values clear the corresponding typed pin.
 
@@ -18,13 +18,17 @@ one per tick. Initial and reconnect snapshots update current data without firing
 changing Previous. Removal clears current data; offline values remain cached, while missed events
 are not replayed. Failed subscriptions retry after 30 seconds.
 
-A recognized `unit_of_measurement` infers a quantity type; `device_class` constrains the mapping
-(for example voltage, power, battery/humidity, pressure and particulate concentration). Unknown
+A recognized `unit_of_measurement` infers a quantity type; `device_class` selects quantity candidates
+before an unambiguous symbol lookup. The catalog covers all HA linear sensor classes. Unknown
 units retain Number behavior. Value and Previous convert each state's own unit to the canonical
 unit: `2 kW` becomes `2000` on `quantity.power`, and `68 °F` becomes `20` on
 `quantity.temperature`. A missing/incompatible unit clears that sample's pin and logs an English
 warning once per node until the units recover. Unit keeps the raw HA spelling. Attributes and
 `ha.state` are unchanged; the latter still stores the state as text.
+
+Duration sensors with `d`, `h`, `min`, `s`, `ms` or `µs` units produce `Duration` values;
+numeric states with these units infer Duration even without a device class. Negative, non-finite
+and out-of-range durations clear the typed pin. Each sample uses its own unit.
 
 For example, connect a voltage sensor's Changed and Voltage Value to Match, use an auto input `v`
 and cases `v > 230 V` and `v < 200 V`, then connect each case to `ha/action`.
@@ -33,7 +37,7 @@ and cases `v > 230 V` and `v < 200 V`, then connect each case to `ha/action`.
 
 A number selector with a recognized unit becomes a quantity input. Before sending the action,
 the plugin converts the canonical input back to the selector's captured unit: a `2000 W` input
-for a `kW` field sends `2`. Unmapped or unitless selectors remain Number fields. Field pin IDs,
+for a `kW` field sends `2`. Unmapped, unitless and numeric duration selectors remain Number fields. Field pin IDs,
 labels and required flags keep their existing order. An appended `field_units` property stores
 units positionally alongside the existing field snapshot; missing metadata defaults to no unit,
 so old Number snapshots load without scaling. Reselect the action to adopt a newer HA schema.

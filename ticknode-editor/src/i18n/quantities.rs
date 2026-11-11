@@ -20,6 +20,19 @@ pub struct UiQuantityLabels;
 impl QuantityLabels for UiQuantityLabels {
     fn unit_symbol(&self, id: &str) -> Option<String> { unit_symbol(id) }
     fn decimal_separator(&self) -> String { decimal_separator() }
+    fn bool_text(&self, value: bool) -> String {
+        lookup(if value { "text-true" } else { "text-false" }).unwrap_or_else(|| value.to_string())
+    }
+    fn duration_unit(&self, unit: &str) -> String {
+        lookup(&format!("text-duration-{unit}")).unwrap_or_else(|| unit.into())
+    }
+}
+
+/// The same presentation as the To text node, with the UI locale, the project display rules and the
+/// browser time zone (wire value labels).
+pub fn value_as_text(value: &DataValue, declared: &DataType) -> String {
+    let rules = display_rules();
+    TYPES.with(|types| to_text::to_text_in(value, declared, &Default::default(), &rules, &UiQuantityLabels, &types.borrow()))
 }
 pub fn unit_symbol(id: &str) -> Option<String> { lookup(&format!("unit-{}", fluent_slug(id))) }
 pub fn decimal_separator() -> String { lookup("number-decimal-separator").unwrap_or_else(|| ".".into()) }
@@ -132,6 +145,23 @@ mod structure_tests {
         with_locale(Locale::En, || assert_eq!(crate::panels::display_value_in(&value, &DataType::Any), "{value: 5000 W}"));
         set_display_rules(&Default::default());
         set_known_types(&TypeRegistry::new());
+        set_runtime_translations(&[]);
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    use crate::i18n::{Locale, with_locale, set_runtime_translations};
+    #[test]
+    fn wire_values_use_to_text_presentation_in_ui_locale() {
+        set_runtime_translations(&[("en".into(), include_str!("../../../ticknode-core/locales/en.ftl").into()),
+            ("uk".into(), include_str!("../../../ticknode-core/locales/uk.ftl").into())]);
+        with_locale(Locale::Uk, || {
+            assert_eq!(value_as_text(&DataValue::Number(NumberValue::Float(1.23456)), &DataType::Number), "1,23");
+            assert_ne!(value_as_text(&DataValue::Bool(true), &DataType::Bool), "true");
+            assert_eq!(value_as_text(&DataValue::String("x".into()), &DataType::String), "x");
+        });
         set_runtime_translations(&[]);
     }
 }

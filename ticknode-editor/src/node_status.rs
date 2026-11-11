@@ -79,7 +79,7 @@ pub fn capture_title(ev: &web_sys::PointerEvent, text: impl Fn() -> String) {
 pub fn wire_value(ed: Editor, conn: ConnectionModel) -> Option<String> {
     let node = ed.node_tracked(conn.src_node)?;
     node.trace.with(|trace| {
-        Some(truncate(display_value_in(trace_value(trace.as_ref()?, conn.src_pin, PinDirection::Output)?, &declared_type(node, conn.src_pin, PinDirection::Output)), 24))
+        Some(truncate(i18n::value_as_text(trace_value(trace.as_ref()?, conn.src_pin, PinDirection::Output)?, &declared_type(node, conn.src_pin, PinDirection::Output)), 24))
     })
 }
 

@@ -20,7 +20,7 @@ fn class_quantity(class: &str) -> &'static [&'static str] {
         "data_size" => &["quantity.data_size"],
         "distance" | "precipitation" => &["quantity.length"],
         "energy" | "energy_storage" => &["quantity.energy"],
-        "energy_distance" => &["quantity.energy_consumption", "quantity.energy_efficiency"],
+        "energy_distance" => &["quantity.energy_consumption"],
         "frequency" => &["quantity.frequency"],
         "gas" | "volume" | "volume_storage" | "water" => &["quantity.volume"],
         "illuminance" => &["quantity.illuminance"],

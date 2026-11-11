@@ -20,7 +20,7 @@ fn quantity_emissions_clear_mismatched_units_and_warn_once_per_node_until_recove
         let mut event = rig.change("sensor.power", "1", "2");
         for side in ["from_state", "to_state"] {
             event["event"]["variables"]["trigger"][side]["attributes"] =
-                json!({"unit_of_measurement":unit, "sequence":sequence.get()});
+                json!({"unit_of_measurement":unit, "device_class":"power", "sequence":sequence.get()});
             event["event"]["variables"]["trigger"][side]["last_updated"] =
                 json!(format!("2026-10-28T14:46:{:02}Z", sequence.get()));
         }

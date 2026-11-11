@@ -316,7 +316,7 @@ fn remaining_quantity_selector_units_follow_the_shared_mapping() {
         ("monetary", "EUR", "currency_eur"),
         ("wind_speed", "Bft", "beaufort"),
         ("energy_distance", "Wh/km", "energy_consumption"),
-        ("energy_distance", "mi/kWh", "energy_efficiency"),
+        ("energy_distance", "mi/kWh", "energy_consumption"),
         ("aqi", "AQI", "aqi"),
         ("ph", "pH", "ph"),
     ] {

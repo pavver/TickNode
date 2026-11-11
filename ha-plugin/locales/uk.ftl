@@ -369,8 +369,7 @@ node-ha-entity-prop-value_type-option-quantity-blood-glucose = Глюкоза к
 
 # Additional entity value type options.
 node-ha-entity-prop-value_type-option-quantity-beaufort = Сила вітру (Бофорт)
-node-ha-entity-prop-value_type-option-quantity-energy-consumption = Споживання енергії на відстань
-node-ha-entity-prop-value_type-option-quantity-energy-efficiency = Відстань на одиницю енергії
+node-ha-entity-prop-value_type-option-quantity-energy-consumption = Енергія на відстань
 node-ha-entity-prop-value_type-option-quantity-aqi = Індекс якості повітря
 node-ha-entity-prop-value_type-option-quantity-ph = pH
 node-ha-entity-prop-value_type-option-quantity-currency-uah = Українська гривня
@@ -405,3 +404,4 @@ node-ha-entity-prop-value_type-option-quantity-currency-brl = Бразильсь
 node-ha-entity-prop-value_type-option-quantity-currency-mxn = Мексиканський песо
 node-ha-entity-prop-value_type-option-quantity-currency-zar = Південноафриканський ранд
 node-ha-entity-prop-value_type-option-quantity-currency-aed = Дирхам ОАЕ
+node-ha-entity-prop-value_type-option-quantity-color-temperature = Колірна температура

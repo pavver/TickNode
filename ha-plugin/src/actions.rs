@@ -8,9 +8,9 @@ pub use catalog::*;
 pub use node::ActionNode;
 pub use options::*;
 
+use crate::convert::{json_to_value, value_to_json};
 use serde_json::{Value, json};
 use ticknode_plugin_sdk::*;
-use crate::convert::{json_to_value, value_to_json};
 
 // Reserve the high IDs so service fields can grow from input pin 2 without moving outputs.
 pub const DONE: PinId = PinId(u32::MAX - 3);
@@ -30,15 +30,17 @@ pub fn field_json(value: &DataValue) -> Value {
 
 impl Field {
     /// Quantity inputs carry canonical numbers; HA expects the snapshotted selector's unit.
-    pub fn json(&self, value: &DataValue) -> Value {
+    pub fn json(&self, value: &DataValue) -> Option<Value> {
         if let (DataType::Named(name), DataValue::Number(n), Some(symbol)) =
             (&self.data_type, value, &self.unit)
-            && let Some((actual, unit)) = crate::units::mapping(symbol, None)
-            && actual == name
+            && let Some(kind) = quantity::kind(name)
+            && let Some(unit) = quantity::unit_in(kind, symbol, false)
+                .or_else(|| quantity::unit_in(kind, symbol, true))
         {
-            return json!(quantity::from_canonical(n.to_f64(), unit));
+            let converted = quantity::from_canonical(n.to_f64(), unit);
+            return (n.to_f64().is_finite() && converted.is_finite()).then(|| json!(converted));
         }
-        field_json(value)
+        Some(field_json(value))
     }
 }
 

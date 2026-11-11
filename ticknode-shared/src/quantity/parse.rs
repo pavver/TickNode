@@ -5,7 +5,11 @@ pub fn unit_in<'a>(kind: &'a QuantityKind, symbol: &str, fold: bool) -> Option<&
     let wanted = symbol.trim();
     let mut matches = kind.units.iter().filter(|u| {
         std::iter::once(&u.symbol).chain(&u.aliases).any(|s| {
-            if fold { s.to_lowercase() == wanted.to_lowercase() } else { s == wanted }
+            if fold {
+                s.to_lowercase() == wanted.to_lowercase()
+            } else {
+                s == wanted
+            }
         })
     });
     let found = matches.next()?;
@@ -14,7 +18,9 @@ pub fn unit_in<'a>(kind: &'a QuantityKind, symbol: &str, fold: bool) -> Option<&
 
 /// Bare numbers are canonical; explicit units must belong to this quantity.
 pub fn parse_quantity(text: &str, kind: &QuantityKind) -> Option<f64> {
-    if let Some(n) = crate::text::parse_number(text.trim()) { return Some(n.to_f64()); }
+    if let Some(n) = crate::text::parse_number(text.trim()) {
+        return Some(n.to_f64());
+    }
     let (n, unit) = parse_literal(text, kind)?;
     let canonical = to_canonical(n, unit);
     canonical.is_finite().then_some(canonical)
@@ -25,10 +31,17 @@ pub fn parse_literal<'a>(text: &str, kind: &'a QuantityKind) -> Option<(f64, &'a
     let text = text.trim();
     // Trying character boundaries also handles exponent notation and units containing spaces.
     for (i, _) in text.char_indices().rev() {
-        let Some(n) = crate::text::parse_number(&text[..i]) else { continue };
+        let Some(n) = crate::text::parse_number(&text[..i]) else {
+            continue;
+        };
         let suffix = text[i..].trim();
-        let Some(unit) = unit_in(kind, suffix, false).or_else(|| unit_in(kind, suffix, true)) else { continue };
-        return n.to_f64().is_finite().then_some((n.to_f64(), unit));
+        let Some(unit) = unit_in(kind, suffix, false).or_else(|| unit_in(kind, suffix, true))
+        else {
+            continue;
+        };
+        return to_canonical(n.to_f64(), unit)
+            .is_finite()
+            .then_some((n.to_f64(), unit));
     }
     None
 }

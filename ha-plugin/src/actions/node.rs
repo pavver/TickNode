@@ -156,13 +156,18 @@ impl PluginNode for ActionNode {
             Some(DataValue::String(s)) => s.trim(),
             _ => &self.target,
         };
-        let data: serde_json::Map<_, _> = self
-            .service
-            .fields
-            .iter()
-            .enumerate()
-            .filter_map(|(i, f)| Some((f.name.clone(), f.json(inputs.get(PinId(i as u32 + 2))?))))
-            .collect();
+        let mut data = serde_json::Map::new();
+        for (i, field) in self.service.fields.iter().enumerate() {
+            if let Some(value) = inputs.get(PinId(i as u32 + 2)) {
+                let Some(value) = field.json(value) else {
+                    return outputs(Err(format!(
+                        "Invalid unit conversion for field {}",
+                        field.name
+                    )));
+                };
+                data.insert(field.name.clone(), value);
+            }
+        }
         with_hub(|hub, env| {
             hub.action(
                 self.node,

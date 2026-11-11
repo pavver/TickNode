@@ -78,13 +78,16 @@ impl Lexer {
         let text: String = self.chars[start..self.position].iter().collect();
         let number_end = self.position;
         let tail: String = self.chars[number_end..].iter().collect();
-        // The longest exact or unambiguous folded catalog suffix wins. Joins remain separate tokens.
+        // Recognize suffixes within any quantity; the declared input type resolves global ambiguity.
         let mut ends: Vec<usize> = tail.char_indices().map(|(i, _)| i).collect();
         ends.push(tail.len());
         for end in ends.into_iter().rev() {
             if tail[end..].chars().next().is_some_and(|ch| !ch.is_whitespace() && ch != '&' && ch != '|') { continue; }
             let unit = tail[..end].trim();
-            if crate::quantity::unit_by_symbol(unit).is_some() {
+            if crate::quantity::catalog().iter().any(|d| {
+                d.quantity().is_some_and(|q| crate::quantity::unit_in(q, unit, false)
+                    .or_else(|| crate::quantity::unit_in(q, unit, true)).is_some())
+            }) {
                 self.position += tail[..end].chars().count();
                 return Ok(Token::Value(DataValue::String(format!("{text} {unit}"))));
             }

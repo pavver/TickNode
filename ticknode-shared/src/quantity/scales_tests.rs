@@ -135,7 +135,7 @@ fn quantity_defaults_use_fixed_decimals_only_when_specified() {
         ("aqi", Some(0)),
         ("ph", Some(1)),
         ("energy_consumption", None),
-        ("energy_efficiency", None),
+        ("color_temperature", Some(0)),
     ] {
         let q = kind(&format!("quantity.{name}")).unwrap();
         assert_eq!(q.decimals, expected);
@@ -170,8 +170,6 @@ fn remaining_scales_and_appended_data_units_have_canonical_factors() {
         ("ph", "pH", 1.0),
         ("energy_consumption", "kWh/100km", 1.0),
         ("energy_consumption", "Wh/km", 0.1),
-        ("energy_efficiency", "km/kWh", 1.0),
-        ("energy_efficiency", "mi/kWh", 1.609344),
         ("data_size", "EB", 1e18),
         ("data_size", "ZB", 1e21),
         ("data_size", "YB", 1e24),

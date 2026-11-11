@@ -252,9 +252,9 @@ fn remaining_quantity_kinds_infer_and_convert_finite_numeric_samples() {
         (
             "energy_distance",
             "mi/kWh",
-            "energy_efficiency",
+            "energy_consumption",
             "2",
-            3.218688,
+            100.0 / 1.609344 / 2.0,
         ),
     ] {
         let state = test_state(

@@ -23,13 +23,13 @@ fn ha_symbols_use_the_catalog_and_preserve_case() {
     ] {
         for symbol in symbols.split_whitespace() {
             assert_eq!(
-                mapping(symbol, None).unwrap().0,
+                mapping(symbol, Some(name)).unwrap().0,
                 format!("quantity.{name}"),
                 "{symbol}"
             );
         }
     }
-    assert_eq!(mapping("mW", None).unwrap().1.factor, 0.001);
+    assert_eq!(mapping("mW", Some("power")).unwrap().1.factor, 0.001);
     assert_eq!(mapping("MW", None).unwrap().1.factor, 1e6);
     assert!(mapping("mw", None).is_none(), "ambiguous case folding");
     assert!(mapping("unknown", None).is_none());
@@ -95,7 +95,10 @@ fn device_classes_try_candidates_before_unambiguous_symbol_fallback() {
             format!("quantity.{name}")
         );
     }
+    // A class without that unit falls back to the global symbol (the single linear W is power).
     assert_eq!(mapping("W", Some("energy")).unwrap().0, "quantity.power");
+    assert!(mapping("K", None).is_none());
+    assert_eq!(mapping("K", Some("temperature")).unwrap().0, "quantity.temperature");
     assert!(mapping("mw", Some("power")).is_none());
     assert!(mapping("unknown", Some("temperature")).is_none());
     assert_eq!(
@@ -194,8 +197,8 @@ fn remaining_device_classes_and_currency_codes_use_the_shared_catalog() {
         ("wind_speed", "m/s", "speed", 1.0),
         ("energy_distance", "kWh/100km", "energy_consumption", 1.0),
         ("energy_distance", "Wh/km", "energy_consumption", 0.1),
-        ("energy_distance", "km/kWh", "energy_efficiency", 1.0),
-        ("energy_distance", "mi/kWh", "energy_efficiency", 1.609344),
+        ("energy_distance", "km/kWh", "energy_consumption", 100.0),
+        ("energy_distance", "mi/kWh", "energy_consumption", 100.0 / 1.609344),
         ("aqi", "AQI", "aqi", 1.0),
         ("aqi", "", "aqi", 1.0),
         ("ph", "pH", "ph", 1.0),

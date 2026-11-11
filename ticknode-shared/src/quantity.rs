@@ -1,6 +1,6 @@
 //! Physical values are plain numbers in canonical units; declared types carry their units.
 
-use crate::{TypeDefinition, TypeKind};
+use crate::TypeDefinition;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
@@ -23,7 +23,7 @@ pub use parse::{literal_text, parse_literal, parse_quantity, unit_in};
 pub struct QuantityKind {
     pub canonical: String,
     pub units: Vec<UnitDefinition>,
-    /// Unit ids, ordered by increasing factor.
+    /// Affine unit ids, ordered by increasing factor.
     pub auto: Vec<String>,
     /// Default fixed decimal places; absent values use three significant digits.
     #[serde(default)]
@@ -37,15 +37,36 @@ pub struct UnitDefinition {
     pub factor: f64,
     pub offset: f64,
     pub aliases: Vec<String>,
+    #[serde(default)]
+    pub curve: UnitCurve,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UnitCurve {
+    #[default]
+    Affine,
+    Inverse,
+    Log10 {
+        scale: f64,
+    },
 }
 
 /// Converts a number expressed in `unit` to the canonical number stored in DataValue.
 pub fn to_canonical(value: f64, unit: &UnitDefinition) -> f64 {
-    value * unit.factor + unit.offset
+    match unit.curve {
+        UnitCurve::Affine => value * unit.factor + unit.offset,
+        UnitCurve::Inverse => unit.factor / value,
+        UnitCurve::Log10 { scale } => scale * (value * unit.factor).log10() + unit.offset,
+    }
 }
 /// Converts a canonical number to a display or integration unit.
 pub fn from_canonical(value: f64, unit: &UnitDefinition) -> f64 {
-    (value - unit.offset) / unit.factor
+    match unit.curve {
+        UnitCurve::Affine => (value - unit.offset) / unit.factor,
+        UnitCurve::Inverse => unit.factor / value,
+        UnitCurve::Log10 { scale } => 10f64.powf((value - unit.offset) / scale) / unit.factor,
+    }
 }
 
 /// Cached catalog for plugin adapters and callers that need borrowed definitions.
@@ -61,19 +82,23 @@ pub fn kind(name: &str) -> Option<&'static QuantityKind> {
         .and_then(TypeDefinition::quantity)
 }
 
-/// Finds a globally unambiguous symbol/alias (exact case first).
+/// Finds a globally unambiguous symbol/alias (exact case first). When a symbol is also a non-linear
+/// unit elsewhere (signal `W`/`mW`), the single linear match wins.
 pub fn unit_by_symbol(symbol: &str) -> Option<(&'static str, &'static UnitDefinition)> {
-    let find = |fold: bool| {
-        let mut matches = catalog().iter().filter_map(|d| {
-            let TypeKind::Quantity(q) = &d.kind else {
-                return None;
-            };
-            unit_in(q, symbol, fold).map(|u| (d.name.as_str(), u))
-        });
-        let found = matches.next()?;
-        matches.next().is_none().then_some(found)
+    let symbol = symbol.trim();
+    let find = |fold: bool| -> Vec<(&'static str, &'static UnitDefinition)> {
+        catalog().iter().flat_map(|d| {
+            d.quantity().into_iter().flat_map(move |q| q.units.iter()
+                .filter(move |u| std::iter::once(&u.symbol).chain(&u.aliases).any(|s| {
+                    if fold { s.to_lowercase() == symbol.to_lowercase() } else { s == symbol }
+                }))
+                .map(move |u| (d.name.as_str(), u)))
+        }).collect()
     };
-    find(false).or_else(|| find(true))
+    let mut found = find(false);
+    if found.is_empty() { found = find(true); }
+    if found.len() > 1 { found.retain(|(_, u)| u.curve == UnitCurve::Affine); }
+    (found.len() == 1).then(|| found[0])
 }
 
 #[cfg(test)]
@@ -90,3 +115,6 @@ mod rounding_tests;
 
 #[cfg(test)]
 mod scales_tests;
+
+#[cfg(test)]
+mod curve_tests;

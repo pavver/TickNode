@@ -50,6 +50,9 @@ pub fn auto_unit(value: f64, kind: &QuantityKind, digits: u8) -> &UnitDefinition
 }
 
 pub fn format_number(value: f64, digits: u8, labels: &dyn QuantityLabels) -> String {
+    if !value.is_finite() {
+        return String::new();
+    }
     let mut number = format!("{:.*}", decimals(value, digits), value);
     if number.contains('.') {
         number = number
@@ -70,6 +73,9 @@ pub fn format_rounded(
     digits: u8,
     labels: &dyn QuantityLabels,
 ) -> String {
+    if !value.is_finite() {
+        return String::new();
+    }
     if rounding == Rounding::Significant {
         return format_number(value, digits, labels);
     }
@@ -97,13 +103,12 @@ pub fn format_quantity(
     let symbol = labels
         .unit_symbol(&unit.id)
         .unwrap_or_else(|| unit.symbol.clone());
+    let converted = from_canonical(value, unit);
+    if !value.is_finite() || !converted.is_finite() {
+        return String::new();
+    }
     format!(
         "{} {symbol}",
-        format_rounded(
-            from_canonical(value, unit),
-            format.rounding,
-            format.digits,
-            labels
-        )
+        format_rounded(converted, format.rounding, format.digits, labels)
     )
 }

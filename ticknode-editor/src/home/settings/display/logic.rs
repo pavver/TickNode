@@ -13,7 +13,12 @@ pub struct StepDraft {
 }
 impl StepDraft {
     fn new(from: f64, unit: &quantity::UnitDefinition) -> Self {
-        let threshold = from_canonical(from, unit).to_string();
+        let converted = from_canonical(from, unit);
+        let threshold = if converted.is_finite() {
+            converted.to_string()
+        } else {
+            String::new()
+        };
         Self {
             original: (threshold.clone(), unit.id.clone(), from),
             threshold,
@@ -25,7 +30,9 @@ impl StepDraft {
             return Some(self.original.2);
         }
         let unit = q.units.iter().find(|u| u.id == self.unit)?;
-        text::parse_number(&self.threshold).map(|v| to_canonical(v.to_f64(), unit))
+        text::parse_number(&self.threshold)
+            .map(|v| to_canonical(v.to_f64(), unit))
+            .filter(|v| v.is_finite())
     }
 }
 #[derive(Debug, Clone, PartialEq)]

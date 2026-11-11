@@ -61,7 +61,7 @@ pub struct Service {
 
 pub fn selector_type(selector: &Value) -> DataType {
     let has = |key| selector.get(key).is_some();
-    if has("number") {
+    if has("number") || has("color_temp") {
         selector_unit(selector).map_or(DataType::Number, |(name, _)| DataType::Named(name.into()))
     } else if has("boolean") {
         DataType::Bool
@@ -84,15 +84,21 @@ fn selector_unit(
     &'static str,
     &'static ticknode_plugin_sdk::quantity::UnitDefinition,
 )> {
+    if let Some(config) = selector.get("color_temp") {
+        let kind = ticknode_plugin_sdk::quantity::kind("quantity.color_temperature")?;
+        let id = config["unit"].as_str().unwrap_or("mired");
+        return kind
+            .units
+            .iter()
+            .find(|u| u.id == id)
+            .map(|u| ("quantity.color_temperature", u));
+    }
     let symbol = selector["number"]["unit_of_measurement"].as_str()?;
     // Number selectors keep HA's numeric duration contract.
     if crate::units::duration_factor(symbol).is_some() {
         return None;
     }
-    crate::units::mapping(
-        symbol,
-        selector["number"]["device_class"].as_str(),
-    )
+    crate::units::mapping(symbol, selector["number"]["device_class"].as_str())
 }
 
 fn humanize(name: &str) -> String {
@@ -183,10 +189,12 @@ pub fn services(json: &Value) -> BTreeMap<String, Service> {
                             .into(),
                         data_type: selector_type(&field["selector"]),
                         required: field["required"].as_bool().unwrap_or(false),
-                        unit: selector_unit(&field["selector"]).and_then(|_| {
+                        unit: selector_unit(&field["selector"]).map(|(_, unit)| {
                             field["selector"]["number"]["unit_of_measurement"]
                                 .as_str()
-                                .map(str::to_string)
+                                .or_else(|| field["selector"]["color_temp"]["unit"].as_str())
+                                .unwrap_or(&unit.symbol)
+                                .to_string()
                         }),
                     });
                 }

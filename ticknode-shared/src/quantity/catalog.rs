@@ -1,5 +1,5 @@
 //! Built-in physical quantity definitions. Values use the first (canonical) unit.
-use super::{QuantityKind, UnitDefinition};
+use super::{QuantityKind, UnitCurve, UnitDefinition};
 use crate::{TypeDefinition, TypeKind};
 
 #[rustfmt::skip]
@@ -160,12 +160,29 @@ pub(super) fn quantity(
                     factor: *factor,
                     offset: *offset,
                     aliases: aliases.iter().map(|a| (*a).into()).collect(),
+                    curve: UnitCurve::Affine,
                 })
                 .collect(),
             auto: auto.iter().map(|id| (*id).into()).collect(),
             decimals: None,
         }),
     }
+}
+
+pub(super) fn with_curves(
+    mut definition: TypeDefinition,
+    curves: &[(&str, UnitCurve)],
+) -> TypeDefinition {
+    if let TypeKind::Quantity(kind) = &mut definition.kind {
+        for (id, curve) in curves {
+            kind.units
+                .iter_mut()
+                .find(|u| u.id == *id)
+                .expect("catalog unit")
+                .curve = *curve;
+        }
+    }
+    definition
 }
 
 pub(super) fn with_decimals(mut definition: TypeDefinition, decimals: u8) -> TypeDefinition {

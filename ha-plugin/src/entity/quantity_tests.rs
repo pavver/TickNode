@@ -35,7 +35,13 @@ fn inference_and_property_options_cover_quantities_and_unknown_units() {
 #[test]
 fn each_sample_uses_its_own_unit_and_mismatches_clear_only_the_affected_pin() {
     let power = ValueType::Quantity("quantity.power");
-    let state = |text, unit| test_state("sensor.power", text, json!({"unit_of_measurement":unit}));
+    let state = |text, unit| {
+        test_state(
+            "sensor.power",
+            text,
+            json!({"unit_of_measurement":unit, "device_class":"power"}),
+        )
+    };
     let mut change = StateChange {
         entity_id: "sensor.power".into(),
         old_state: Some(state("500", "W")),
@@ -80,4 +86,42 @@ fn each_sample_uses_its_own_unit_and_mismatches_clear_only_the_affected_pin() {
 
 fn state_with_text(text: &str) -> ha_core_client::State {
     test_state("sensor.power", text, json!({"unit_of_measurement":"kW"}))
+}
+
+#[test]
+fn nonlinear_sensor_units_convert_and_reject_undefined_samples() {
+    for (class, symbol, name, text, expected) in [
+        (
+            "energy_distance",
+            "km/kWh",
+            "energy_consumption",
+            "5",
+            Some(20.0),
+        ),
+        ("energy_distance", "km/kWh", "energy_consumption", "0", None),
+        (
+            "signal_strength",
+            "mW",
+            "signal_strength",
+            "0.01",
+            Some(-20.0),
+        ),
+        ("signal_strength", "W", "signal_strength", "1", Some(30.0)),
+        ("signal_strength", "mW", "signal_strength", "0", None),
+        ("signal_strength", "W", "signal_strength", "-1", None),
+        ("signal_strength", "W", "signal_strength", "1e308", None),
+        ("temperature", "K", "temperature", "273.15", Some(0.0)),
+    ] {
+        let state = test_state(
+            "sensor.value",
+            text,
+            json!({"device_class":class, "unit_of_measurement":symbol}),
+        );
+        let value_type = ValueType::parse(&format!("quantity.{name}")).unwrap();
+        assert_eq!(infer_value_type(&state), value_type);
+        assert_eq!(
+            typed_value(&state, value_type),
+            expected.map(DataValue::from)
+        );
+    }
 }

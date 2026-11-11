@@ -67,6 +67,9 @@ pub fn quantity_text(
     rules: &DisplayRules,
     labels: &dyn QuantityLabels,
 ) -> String {
+    if !value.is_finite() {
+        return String::new();
+    }
     let mut rule = rules.effective(name, kind);
     let effective = options.effective_number(NumberDisplay {
         rounding: rule.rounding,

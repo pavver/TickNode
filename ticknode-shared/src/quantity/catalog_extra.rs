@@ -1,6 +1,7 @@
 //! Additional physical quantities for sensor and integration data.
 
-use super::catalog::quantity;
+use super::UnitCurve;
+use super::catalog::{quantity, with_curves};
 use crate::TypeDefinition;
 
 #[rustfmt::skip]
@@ -84,9 +85,14 @@ pub(super) fn quantities() -> Vec<TypeDefinition> {
             ("millisiemens_per_centimeter", "mS/cm", 1000.0, 0.0, &["millisiemens_per_centimeter", "мСм/см"]),
             ("siemens_per_centimeter", "S/cm", 1e6, 0.0, &["siemens_per_centimeter", "См/см"]),
         ], &["microsiemens_per_centimeter", "millisiemens_per_centimeter", "siemens_per_centimeter"]),
-        quantity("signal_strength", "Signal strength", &[
+        with_curves(quantity("signal_strength", "Signal strength", &[
             ("decibel_milliwatt", "dBm", 1.0, 0.0, &["decibel_milliwatt", "дБм"]),
-        ], &["decibel_milliwatt"]),
+            ("signal_milliwatt", "mW", 1.0, 0.0, &["signal_milliwatt"]),
+            ("signal_watt", "W", 1000.0, 0.0, &["signal_watt"]),
+        ], &["decibel_milliwatt"]), &[
+            ("signal_milliwatt", UnitCurve::Log10 { scale: 10.0 }),
+            ("signal_watt", UnitCurve::Log10 { scale: 10.0 }),
+        ]),
         quantity("sound_pressure", "Sound pressure", &[
             ("decibel", "dB", 1.0, 0.0, &["decibel", "дБ"]),
             ("a_weighted_decibel", "dBA", 1.0, 0.0, &["a_weighted_decibel", "дБА"]),

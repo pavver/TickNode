@@ -1,5 +1,5 @@
 //! Project display preferences. Canonical values and graph persistence remain unchanged.
-use super::{QuantityKind, UnitDefinition, kind};
+use super::{QuantityKind, UnitCurve, UnitDefinition, kind};
 use crate::UiMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -60,10 +60,13 @@ impl QuantityDisplay {
             .auto
             .iter()
             .filter_map(|id| {
-                kind.units.iter().find(|u| &u.id == id).map(|u| UnitStep {
-                    from: u.factor,
-                    unit: id.clone(),
-                })
+                kind.units
+                    .iter()
+                    .find(|u| &u.id == id && u.curve == UnitCurve::Affine)
+                    .map(|u| UnitStep {
+                        from: u.factor,
+                        unit: id.clone(),
+                    })
             })
             .collect();
         if steps.is_empty() {

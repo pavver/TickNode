@@ -15,7 +15,7 @@ mod tests;
 
 pub mod complete;
 pub use complete::{
-    complete, Completion, CompletionInput, CompletionItem, CompletionKind,
+    complete, expression_at, Completion, CompletionInput, CompletionItem, CompletionKind,
 };
 
 pub use values::plain;

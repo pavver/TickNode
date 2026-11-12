@@ -7,6 +7,7 @@ use crate::state::use_editor;
 
 pub mod caret;
 pub mod completion;
+pub mod hover;
 pub mod preview;
 
 #[cfg(test)]
@@ -52,6 +53,9 @@ pub fn TemplateField(
 
     let timer = StoredValue::<Option<leptos::prelude::TimeoutHandle>>::new(None);
     let last_sent = StoredValue::<Option<String>>::new(None);
+    let last_pos = StoredValue::<Option<(f64, f64)>>::new(None);
+    let last_time = StoredValue::<f64>::new(0.0);
+    let last_hovered = StoredValue::<Option<hover::HoverToken>>::new(None);
 
     on_cleanup(move || {
         if let Some(h) = timer.get_value() {
@@ -226,6 +230,8 @@ pub fn TemplateField(
             on:focus=move |_| focused.set(true)
             on:blur=move |_| {
                 focused.set(false);
+                last_pos.set_value(None);
+                last_hovered.set_value(None);
                 if let Some(h) = timer.get_value() {
                     h.clear();
                     timer.set_value(None);
@@ -248,6 +254,7 @@ pub fn TemplateField(
             on:input=move |ev| {
                 let new_val = event_target_value(&ev);
                 draft.set(new_val.clone());
+                last_hovered.set_value(None);
 
                 if let Some(h) = timer.get_value() {
                     h.clear();
@@ -273,6 +280,69 @@ pub fn TemplateField(
                 // Accepting an item dispatches a synthetic input event: do not reopen the popup for it.
                 if ev.is_trusted() {
                     trigger_completion(false);
+                }
+            }
+            on:pointermove=move |ev| {
+                #[cfg(target_arch = "wasm32")]
+                if let Some(textarea) = textarea_ref.get() {
+                    let cx = ev.client_x() as f64;
+                    let cy = ev.client_y() as f64;
+                    let now = js_sys::Date::now();
+
+                    let should_check = match last_pos.get_value() {
+                        None => true,
+                        Some((lx, ly)) => {
+                            let dx = cx - lx;
+                            let dy = cy - ly;
+                            let moved_sq = dx * dx + dy * dy;
+                            let elapsed = now - last_time.get_value();
+                            moved_sq >= 4.0 || elapsed >= 60.0
+                        }
+                    };
+                    if !should_check {
+                        return;
+                    }
+                    last_pos.set_value(Some((cx, cy)));
+                    last_time.set_value(now);
+
+                    let current_text = draft.get_untracked();
+                    let hovered = hover::hit_test_token(&textarea, cx, cy, &current_text);
+
+                    if hovered != last_hovered.get_value() {
+                        last_hovered.set_value(hovered.clone());
+                        let desired_title = match hovered {
+                            Some(token) => hover::resolve_hover_tooltip(ed, id, &token.path).unwrap_or_else(|| title.get_untracked()),
+                            None => title.get_untracked(),
+                        };
+                        let current_title = textarea.get_attribute("title").unwrap_or_default();
+                        if current_title != desired_title {
+                            let _ = textarea.set_attribute("title", &desired_title);
+                        }
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let _ = ev;
+                    let _ = &last_pos;
+                    let _ = &last_time;
+                    let _ = &last_hovered;
+                }
+            }
+            on:pointerleave=move |_| {
+                #[cfg(target_arch = "wasm32")]
+                if let Some(textarea) = textarea_ref.get() {
+                    last_pos.set_value(None);
+                    last_hovered.set_value(None);
+                    let default_title = title.get_untracked();
+                    let current_title = textarea.get_attribute("title").unwrap_or_default();
+                    if current_title != default_title {
+                        let _ = textarea.set_attribute("title", &default_title);
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let _ = &last_pos;
+                    let _ = &last_hovered;
                 }
             }
             on:keydown=keydown

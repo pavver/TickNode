@@ -134,6 +134,8 @@ pub fn evaluate_preview(
     match compiled.render(inputs, &format, runtime_text) {
         Ok(text) if text.is_empty() => PreviewStatus::Empty,
         Ok(text) => PreviewStatus::Text(text),
+        // A missing input usually explains the failure (`msg.chat` on an undefined `msg`): wait for values.
+        Err(_) if inputs.iter().any(|(_, value, _)| value.is_none()) => PreviewStatus::Waiting,
         Err(err) => PreviewStatus::RenderError(err.message),
     }
 }

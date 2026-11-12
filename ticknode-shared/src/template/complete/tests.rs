@@ -329,3 +329,25 @@ fn unparsable_for_header_keeps_endfor_balanced() {
     assert!(result.items.iter().any(|i| i.label == "a"));
     assert!(result.items.iter().any(|i| i.label == "loop"));
 }
+
+#[test]
+fn test_expression_at() {
+    let source = "Привіт {{ val }} {% tag %} {# comment #} {{ 'str' }}";
+    // Cyrillic text before expression
+    assert!(!expression_at(source, 0));
+    assert!(!expression_at(source, 6));
+    // Inside interpolation
+    let val_pos = source.find("val").unwrap();
+    assert!(expression_at(source, val_pos));
+    assert!(expression_at(source, val_pos + 1));
+    assert!(expression_at(source, val_pos + 2));
+    // Inside tag
+    let tag_pos = source.find("tag").unwrap();
+    assert!(expression_at(source, tag_pos));
+    // Inside comment
+    let com_pos = source.find("comment").unwrap();
+    assert!(!expression_at(source, com_pos));
+    // Inside string literal
+    let str_pos = source.find("str").unwrap();
+    assert!(!expression_at(source, str_pos));
+}

@@ -53,7 +53,84 @@ pub fn apply_completion(source: &str, range: Range<usize>, insert: &str) -> (Str
     (result, caret_byte)
 }
 
-/// Computes pixel coordinates of the caret in a `<textarea>` using the mirror-div technique.
+/// Maps rectangles measured in a mirror div onto the screen position of the (possibly zoomed) textarea.
+#[cfg(target_arch = "wasm32")]
+pub struct MirrorFrame {
+    origin_x: f64,
+    origin_y: f64,
+    div_left: f64,
+    div_top: f64,
+    /// Canvas zoom: the textarea is CSS-transformed while the mirror in `<body>` is not.
+    scale: f64,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl MirrorFrame {
+    /// Screen `(x, y, width, height)` of a rectangle measured inside the mirror.
+    pub fn screen_rect(&self, rect: &web_sys::DomRect) -> (f64, f64, f64, f64) {
+        (
+            self.origin_x + (rect.left() - self.div_left) * self.scale,
+            self.origin_y + (rect.top() - self.div_top) * self.scale,
+            rect.width() * self.scale,
+            rect.height() * self.scale,
+        )
+    }
+}
+
+/// A hidden, unscaled copy of the textarea's box and typography appended to `<body>`.
+/// Fill it with content, call [`Mirror::frame`], measure, then [`Mirror::remove`].
+#[cfg(target_arch = "wasm32")]
+pub struct Mirror {
+    pub div: web_sys::Element,
+    pub document: web_sys::Document,
+    computed: web_sys::CssStyleDeclaration,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Mirror {
+    pub fn new(textarea: &web_sys::HtmlTextAreaElement) -> Option<Self> {
+        use wasm_bindgen::JsCast;
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        let computed = window.get_computed_style(textarea).ok().flatten()?;
+        let div = document.create_element("div").ok()?;
+        let style = div.dyn_ref::<web_sys::HtmlElement>()?.style();
+        for (name, value) in [("position", "absolute"), ("visibility", "hidden"), ("top", "0"), ("left", "0"),
+            ("white-space", "pre-wrap"), ("word-wrap", "break-word"), ("overflow-wrap", "break-word"), ("overflow", "hidden"),
+            ("border-style", "solid"), ("border-color", "transparent")] {
+            let _ = style.set_property(name, value);
+        }
+        for name in ["box-sizing", "width", "font-family", "font-size", "font-weight", "font-style", "letter-spacing",
+            "line-height", "tab-size", "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"] {
+            let _ = style.set_property(name, &computed.get_property_value(name).unwrap_or_default());
+        }
+        document.body()?.append_child(&div).ok()?;
+        Some(Self { div, document, computed })
+    }
+
+    /// Call after the content is appended: relates mirror coordinates to the textarea on screen.
+    pub fn frame(&self, textarea: &web_sys::HtmlTextAreaElement) -> MirrorFrame {
+        let _ = &self.computed;
+        let ta_rect = textarea.get_bounding_client_rect();
+        let div_rect = self.div.get_bounding_client_rect();
+        let width = textarea.offset_width() as f64;
+        let scale = if width > 0.0 { ta_rect.width() / width } else { 1.0 };
+        MirrorFrame {
+            origin_x: ta_rect.left() - textarea.scroll_left() as f64 * scale,
+            origin_y: ta_rect.top() - textarea.scroll_top() as f64 * scale,
+            div_left: div_rect.left(),
+            div_top: div_rect.top(),
+            scale,
+        }
+    }
+
+    pub fn remove(self) {
+        self.div.remove();
+    }
+}
+
+/// Computes screen coordinates of the caret in a `<textarea>` using a mirror div.
 /// Returns `(caret_x, caret_bottom_y, caret_top_y)`.
 #[cfg(target_arch = "wasm32")]
 pub fn measure_caret_screen_pos(
@@ -61,79 +138,16 @@ pub fn measure_caret_screen_pos(
     caret_byte: usize,
     source: &str,
 ) -> Option<(f64, f64, f64)> {
-    use wasm_bindgen::JsCast;
-
-    let window = web_sys::window()?;
-    let document = window.document()?;
-    let computed = window.get_computed_style(textarea).ok().flatten()?;
-
-    let div = document.create_element("div").ok()?;
-    let div_style = div.dyn_ref::<web_sys::HtmlElement>()?.style();
-
-    // Mirror textarea geometry and typography
-    let _ = div_style.set_property("position", "absolute");
-    let _ = div_style.set_property("visibility", "hidden");
-    let _ = div_style.set_property("top", "0");
-    let _ = div_style.set_property("left", "0");
-    let _ = div_style.set_property("box-sizing", &computed.get_property_value("box-sizing").unwrap_or_default());
-    let _ = div_style.set_property("width", &computed.get_property_value("width").unwrap_or_default());
-    let _ = div_style.set_property("font-family", &computed.get_property_value("font-family").unwrap_or_default());
-    let _ = div_style.set_property("font-size", &computed.get_property_value("font-size").unwrap_or_default());
-    let _ = div_style.set_property("font-weight", &computed.get_property_value("font-weight").unwrap_or_default());
-    let _ = div_style.set_property("font-style", &computed.get_property_value("font-style").unwrap_or_default());
-    let _ = div_style.set_property("letter-spacing", &computed.get_property_value("letter-spacing").unwrap_or_default());
-    let _ = div_style.set_property("line-height", &computed.get_property_value("line-height").unwrap_or_default());
-    let _ = div_style.set_property("padding-top", &computed.get_property_value("padding-top").unwrap_or_default());
-    let _ = div_style.set_property("padding-right", &computed.get_property_value("padding-right").unwrap_or_default());
-    let _ = div_style.set_property("padding-bottom", &computed.get_property_value("padding-bottom").unwrap_or_default());
-    let _ = div_style.set_property("padding-left", &computed.get_property_value("padding-left").unwrap_or_default());
-    let _ = div_style.set_property("border-top-width", &computed.get_property_value("border-top-width").unwrap_or_default());
-    let _ = div_style.set_property("border-right-width", &computed.get_property_value("border-right-width").unwrap_or_default());
-    let _ = div_style.set_property("border-bottom-width", &computed.get_property_value("border-bottom-width").unwrap_or_default());
-    let _ = div_style.set_property("border-left-width", &computed.get_property_value("border-left-width").unwrap_or_default());
-    let _ = div_style.set_property("white-space", "pre-wrap");
-    let _ = div_style.set_property("word-wrap", "break-word");
-    let _ = div_style.set_property("overflow-wrap", "break-word");
-    let _ = div_style.set_property("overflow", "hidden");
-
-    let text_before = if caret_byte <= source.len() { &source[..caret_byte] } else { source };
-    let text_node = document.create_text_node(text_before);
-    let _ = div.append_child(&text_node);
-
-    let marker = document.create_element("span").ok()?;
+    let mirror = Mirror::new(textarea)?;
+    let text_before = source.get(..caret_byte).unwrap_or(source);
+    let _ = mirror.div.append_child(&mirror.document.create_text_node(text_before));
+    let marker = mirror.document.create_element("span").ok()?;
     marker.set_text_content(Some("\u{200b}"));
-    let _ = div.append_child(&marker);
-
-    let body = document.body()?;
-    let _ = body.append_child(&div);
-
-    let marker_rect = marker.get_bounding_client_rect();
-    let div_rect = div.get_bounding_client_rect();
-
-    let span_x = marker_rect.left() - div_rect.left();
-    let span_y = marker_rect.top() - div_rect.top();
-    let span_h = marker_rect.height().max(16.0);
-
-    let _ = body.remove_child(&div);
-
-    let ta_rect = textarea.get_bounding_client_rect();
-    let scroll_top = textarea.scroll_top() as f64;
-    let scroll_left = textarea.scroll_left() as f64;
-
-    let border_left = computed.get_property_value("border-left-width")
-        .ok()
-        .and_then(|v| v.strip_suffix("px").and_then(|s| s.parse::<f64>().ok()))
-        .unwrap_or(0.0);
-    let border_top = computed.get_property_value("border-top-width")
-        .ok()
-        .and_then(|v| v.strip_suffix("px").and_then(|s| s.parse::<f64>().ok()))
-        .unwrap_or(0.0);
-
-    let caret_x = ta_rect.left() + border_left + span_x - scroll_left;
-    let caret_top = ta_rect.top() + border_top + span_y - scroll_top;
-    let caret_bottom = caret_top + span_h;
-
-    Some((caret_x, caret_bottom, caret_top))
+    let _ = mirror.div.append_child(&marker);
+    let frame = mirror.frame(textarea);
+    let (x, top, _, height) = frame.screen_rect(&marker.get_bounding_client_rect());
+    mirror.remove();
+    Some((x, top + height.max(16.0 * frame.scale), top))
 }
 
 #[cfg(not(target_arch = "wasm32"))]

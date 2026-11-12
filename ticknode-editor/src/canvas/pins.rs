@@ -6,7 +6,7 @@ use ticknode_shared::*;
 use crate::geometry::*;
 use crate::i18n::{self, t};
 use crate::inline::PinValue;
-use crate::state::use_editor;
+use crate::state::{use_editor, Editor};
 use super::wires::{PendingConnection, connection_pin};
 
 /// Sends the change to the server; effective pins arrive in NodeUpdated.
@@ -52,7 +52,6 @@ pub fn Pin(
         let eff = effective_pin_type(ed, node, pin_id, is_input, &color_declared);
         ed.types.with(|types| pin_color(types, &eff))
     };
-    let is_required = pin.required;
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
     // An unconnected data input can have an inline value set right here
@@ -60,14 +59,9 @@ pub fn Pin(
     let row_height = Signal::derive(move || ed.layout(node).map_or(ROW_H, |l| l.pin_height(pin_id, dir)));
     let property_input = ed.node(node).is_some_and(|n| n.instance.with_untracked(|i| i.definition.properties.iter().any(|p| p.input == Some(pin_id))));
     let value = value_type.filter(|_| !property_input).map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() multiline=Signal::derive(move || row_height.get() > ROW_H) /> }));
-    let pin_name_title = pin.name.clone();
-    let title_declared = pin.pin_type.clone();
+    let pin_for_title = pin.clone();
     let pin_title = move || {
-        let eff_type = effective_pin_type(ed, node, pin_id, is_input, &title_declared);
-        let translated_pin = translated_pin_name(ed, node, &pin_name_title);
-        let type_name = pin_type_title_label(ed, &eff_type);
-        let status = crate::node_status::pin_status(ed, node, pin_id, dir, exec);
-        format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &eff_type, is_required))
+        pin_title_text(ed, node, &pin_for_title, dir)
     };
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();
@@ -105,6 +99,16 @@ pub fn Pin(
             {value}
         </div>
     }
+}
+
+pub(crate) fn pin_title_text(ed: Editor, node: NodeId, pin: &PinDefinition, dir: PinDirection) -> String {
+    let is_input = dir == PinDirection::Input;
+    let eff_type = effective_pin_type(ed, node, pin.id, is_input, &pin.pin_type);
+    let translated_pin = translated_pin_name(ed, node, &pin.name);
+    let type_name = pin_type_title_label(ed, &eff_type);
+    let exec = pin.pin_type == PinType::Exec;
+    let status = crate::node_status::pin_status(ed, node, pin.id, dir, exec);
+    format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &eff_type, pin.required))
 }
 
 pub(crate) fn display_type(declared: &DataType, source: Option<DataType>) -> DataType {

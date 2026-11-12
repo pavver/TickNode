@@ -181,3 +181,188 @@ fn trigger_chars_identify_completion_positions() {
     assert!(!is_completion_trigger_char("hello world ", false));
     assert!(is_completion_trigger_char("hello", true));
 }
+
+#[test]
+fn hover_token_at_plain_text_returns_none() {
+    use super::hover::token_at;
+    let source = "Hello world";
+    for i in 0..source.len() {
+        assert_eq!(token_at(source, i), None);
+    }
+}
+
+#[test]
+fn hover_token_at_single_variable_over_each_char() {
+    use super::hover::{token_at, HoverToken};
+    let source = "{{ value }}";
+    let val_start = source.find("value").unwrap();
+    let val_end = val_start + "value".len();
+    for i in val_start..val_end {
+        assert_eq!(
+            token_at(source, i),
+            Some(HoverToken {
+                range: val_start..val_end,
+                path: vec!["value".to_string()],
+            })
+        );
+    }
+}
+
+#[test]
+fn hover_token_at_dotted_path_over_u_and_name() {
+    use super::hover::{token_at, HoverToken};
+    let source = "{{ u.name }}";
+    let u_pos = source.find('u').unwrap();
+    assert_eq!(
+        token_at(source, u_pos),
+        Some(HoverToken {
+            range: u_pos..u_pos + 1,
+            path: vec!["u".to_string()],
+        })
+    );
+
+    let name_start = source.find("name").unwrap();
+    let name_end = name_start + "name".len();
+    for i in name_start..name_end {
+        assert_eq!(
+            token_at(source, i),
+            Some(HoverToken {
+                range: name_start..name_end,
+                path: vec!["u".to_string(), "name".to_string()],
+            })
+        );
+    }
+}
+
+#[test]
+fn hover_token_at_cyrillic_text_before_expression() {
+    use super::hover::{token_at, HoverToken};
+    let source = "Привіт, світ! {{ val }}";
+    let val_pos = source.find("val").unwrap();
+    // Over Cyrillic text
+    for (i, _) in source[..val_pos - 3].char_indices() {
+        assert_eq!(token_at(source, i), None);
+    }
+    // Over val
+    assert_eq!(
+        token_at(source, val_pos),
+        Some(HoverToken {
+            range: val_pos..val_pos + 3,
+            path: vec!["val".to_string()],
+        })
+    );
+}
+
+#[test]
+fn hover_token_at_string_literal_returns_none() {
+    use super::hover::token_at;
+    let source = "{{ 'value' }}";
+    let val_pos = source.find("value").unwrap();
+    for i in val_pos..val_pos + "value".len() {
+        assert_eq!(token_at(source, i), None);
+    }
+}
+
+#[test]
+fn hover_token_at_text_prefix_gives_two_segments() {
+    use super::hover::{token_at, HoverToken};
+    let source = "{{ text.x }}";
+    let x_pos = source.rfind('x').unwrap();
+    assert_eq!(
+        token_at(source, x_pos),
+        Some(HoverToken {
+            range: x_pos..x_pos + 1,
+            path: vec!["text".to_string(), "x".to_string()],
+        })
+    );
+}
+
+#[test]
+fn hover_find_expression_tokens() {
+    use super::hover::find_expression_tokens;
+    let source = "Hi {{ u.name }} and {% if active %} {# skip #} {{ 'str' }}";
+    let tokens = find_expression_tokens(source);
+    let token_texts: Vec<&str> = tokens.iter().map(|r| &source[r.clone()]).collect();
+    assert_eq!(token_texts, vec!["u", "name", "if", "active"]);
+}
+
+#[test]
+fn hover_field_resolution_and_formatting() {
+    use super::hover::{format_field_tooltip, resolve_field_path_type, resolve_field_path_value};
+    use ticknode_shared::types::{FieldDefinition, TypeDefinition, TypeKind};
+    use ticknode_shared::TypeRegistry;
+
+    let struct_type = TypeDefinition {
+        name: "test.user".to_string(),
+        title: "User".to_string(),
+        description: "User struct".to_string(),
+        color: Some("#ffffff".to_string()),
+        kind: TypeKind::Struct {
+            fields: vec![
+                FieldDefinition {
+                    name: "name".to_string(),
+                    title: "Name".to_string(),
+                    description: "User name".to_string(),
+                    data_type: DataType::String,
+                    optional: false,
+                },
+                FieldDefinition {
+                    name: "age".to_string(),
+                    title: "Age".to_string(),
+                    description: "User age".to_string(),
+                    data_type: DataType::Number,
+                    optional: false,
+                },
+            ],
+        },
+        plugin: None,
+    };
+    let types = TypeRegistry::from_definitions(vec![struct_type]);
+
+    let root_type = DataType::Named("test.user".to_string());
+    let path = vec!["u".to_string(), "name".to_string()];
+    let field_type = resolve_field_path_type(&root_type, &path[1..], &types);
+    assert_eq!(field_type, Some(DataType::String));
+
+    let mut fields = std::collections::BTreeMap::new();
+    fields.insert(
+        "name".to_string(),
+        ticknode_shared::ObjectField {
+            name: "name".into(),
+            description: String::new(),
+            value: DataValue::from("Alice"),
+        },
+    );
+    fields.insert(
+        "age".to_string(),
+        ticknode_shared::ObjectField {
+            name: "age".into(),
+            description: String::new(),
+            value: DataValue::from(30),
+        },
+    );
+    let obj = DataValue::Object {
+        fields,
+        type_name: Some("test.user".to_string()),
+    };
+
+    let val = resolve_field_path_value(Some(&obj), &path[1..]);
+    assert_eq!(val, Some(DataValue::from("Alice")));
+
+    let tooltip = format_field_tooltip(&path, &DataType::String, val.as_ref(), "String");
+    assert_eq!(tooltip, "u.name: String\nAlice");
+
+    let missing_tooltip = format_field_tooltip(&path, &DataType::String, None, "String");
+    assert!(missing_tooltip.starts_with("u.name: String\n"));
+}
+
+#[test]
+fn evaluate_preview_waits_when_a_missing_input_breaks_rendering() {
+    let inputs = vec![
+        ("value".to_string(), Some(DataValue::from("world")), DataType::String),
+        ("msg".to_string(), None, DataType::Any),
+    ];
+    assert_eq!(evaluate_preview("{{ value }} {{ msg.chat.id }}", &inputs), PreviewStatus::Waiting);
+    let complete = vec![("value".to_string(), Some(DataValue::from("world")), DataType::String)];
+    assert!(matches!(evaluate_preview("{{ value.a.b }}", &complete), PreviewStatus::RenderError(_)));
+}

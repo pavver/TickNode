@@ -598,3 +598,4 @@ template-error = Рядок { $line }, поз { $column }: { $message }
 template-render-error = Помилка шаблону: { $message }
 template-preview-empty = (порожньо)
 template-preview-waiting = Попередній перегляд зʼявиться після отримання значень
+template-hover-text-of = Форматовано як «У текст» ({ $name })

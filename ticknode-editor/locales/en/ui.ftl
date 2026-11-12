@@ -583,3 +583,4 @@ template-error = Line { $line }, col { $column }: { $message }
 template-render-error = Render error: { $message }
 template-preview-empty = (empty)
 template-preview-waiting = Preview appears after the inputs get values
+template-hover-text-of = Formatted like To text ({ $name })

@@ -185,6 +185,21 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
     Some(Completion { range, items })
 }
 
+/// Returns true if the byte offset is inside an interpolation `{{ ... }}` or tag `{% ... %}`,
+/// and not inside a comment `{# ... #}` or a string literal.
+pub fn expression_at(source: &str, byte: usize) -> bool {
+    let mut b = byte.min(source.len());
+    while b > 0 && !source.is_char_boundary(b) {
+        b -= 1;
+    }
+    let dummy_types = TypeRegistry::default();
+    let (state, _, _) = scan::scan_prefix(source, b, &[], &dummy_types);
+    matches!(
+        state,
+        scan::ScanState::Interpolation { in_str: None, .. } | scan::ScanState::Tag { in_str: None, .. }
+    )
+}
+
 pub(crate) fn filter_and_dedup(items: Vec<CompletionItem>, partial: &str) -> Vec<CompletionItem> {
     let partial_lower = partial.to_ascii_lowercase();
     let mut seen = HashSet::new();

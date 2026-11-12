@@ -7,6 +7,7 @@ use crate::state::use_editor;
 
 pub mod caret;
 pub mod completion;
+pub mod highlight;
 pub mod hover;
 pub mod preview;
 
@@ -14,6 +15,7 @@ pub mod preview;
 mod tests;
 
 pub use completion::{TemplateCompletionLayer, TemplateCompletionState};
+pub use highlight::TemplateHighlightLayer;
 pub use preview::TemplateStatusRow;
 
 /// Reactive context storing the current draft of the template being edited on a node.
@@ -33,6 +35,28 @@ pub fn TemplateField(
     let ed = use_editor();
     let focused = RwSignal::new(false);
     let textarea_ref = NodeRef::<leptos::html::Textarea>::new();
+    let pre_ref = NodeRef::<leptos::html::Pre>::new();
+
+    let sync_scroll = move || {
+        #[cfg(target_arch = "wasm32")]
+        if let (Some(ta), Some(pre)) = (textarea_ref.get(), pre_ref.get()) {
+            pre.set_scroll_top(ta.scroll_top());
+            pre.set_scroll_left(ta.scroll_left());
+        }
+    };
+
+    let input_names = Signal::derive(move || {
+        ed.node_tracked(id).map_or(Vec::new(), |node| {
+            node.instance.with(|i| {
+                i.definition
+                    .pins
+                    .iter()
+                    .filter(|p| p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_)))
+                    .map(|p| p.name.clone())
+                    .collect()
+            })
+        })
+    });
 
     let initial_value = match value.get_untracked() {
         Some(DataValue::String(s)) => s,
@@ -75,7 +99,8 @@ pub fn TemplateField(
             let prefix = if caret_byte <= current_text.len() { &current_text[..caret_byte] } else { &current_text };
 
             if !is_completion_trigger_char(prefix, _is_explicit) {
-                if _is_explicit {
+                // A stale popup would accept an item over an outdated range on the next Enter.
+                if ed.template_completion.with_untracked(|c| c.is_some()) {
                     ed.template_completion.set(None);
                 }
                 return;
@@ -94,15 +119,15 @@ pub fn TemplateField(
                 })
             });
 
-            let types = ed.types.with_untracked(|r| r.clone());
-            let comp_input = ticknode_shared::template::CompletionInput {
+            // Borrow the registry: it holds the whole quantity catalog, too large to clone per keystroke.
+            let completion = ed.types.with_untracked(|types| ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
                 source: &current_text,
                 caret: caret_byte,
                 inputs: &input_pins,
-                types: &types,
-            };
+                types,
+            }));
 
-            if let Some(completion) = ticknode_shared::template::complete(&comp_input)
+            if let Some(completion) = completion
                 && !completion.items.is_empty()
                 && let Some((x, caret_bottom, caret_top)) = measure_caret_screen_pos(&textarea, caret_byte, &current_text)
             {
@@ -183,6 +208,8 @@ pub fn TemplateField(
                     ed.template_completion.set(None);
                     return;
                 }
+                // Moving the caret leaves the completion range behind.
+                "ArrowLeft" | "ArrowRight" | "Home" | "End" => ed.template_completion.set(None),
                 _ => {}
             }
         }
@@ -213,75 +240,84 @@ pub fn TemplateField(
     let has_syntax_error = Memo::new(move |_| draft.with(|d| ticknode_shared::template::validate(d).is_err()));
 
     view! {
-        <textarea
-            id=format!("template-textarea-{}", id.0)
-            node_ref=textarea_ref
-            class="inline-value multiline template-source"
-            class:st-error=move || has_syntax_error.get()
-            title=move || title.get()
-            spellcheck="false"
-            prop:value=move || draft.get()
-            on:pointerdown=move |ev| {
-                crate::match_editor::stop_on_controls(ev);
-                if ed.template_completion.with_untracked(|c| c.is_some()) {
+        <div class="template-editor">
+            <TemplateHighlightLayer
+                node_id=id
+                pre_ref=pre_ref
+                draft=Signal::derive(move || draft.get())
+                inputs=input_names
+            />
+            <textarea
+                id=format!("template-textarea-{}", id.0)
+                node_ref=textarea_ref
+                class="inline-value multiline template-source"
+                class:st-error=move || has_syntax_error.get()
+                title=move || title.get()
+                spellcheck="false"
+                prop:value=move || draft.get()
+                on:pointerdown=move |ev| {
+                    crate::match_editor::stop_on_controls(ev);
+                    if ed.template_completion.with_untracked(|c| c.is_some()) {
+                        ed.template_completion.set(None);
+                    }
+                }
+                on:focus=move |_| focused.set(true)
+                on:blur=move |_| {
+                    focused.set(false);
+                    last_pos.set_value(None);
+                    last_hovered.set_value(None);
+                    if let Some(h) = timer.get_value() {
+                        h.clear();
+                        timer.set_value(None);
+                    }
                     ed.template_completion.set(None);
-                }
-            }
-            on:focus=move |_| focused.set(true)
-            on:blur=move |_| {
-                focused.set(false);
-                last_pos.set_value(None);
-                last_hovered.set_value(None);
-                if let Some(h) = timer.get_value() {
-                    h.clear();
-                    timer.set_value(None);
-                }
-                ed.template_completion.set(None);
 
-                let current = draft.get_untracked();
-                let stored = match value.get_untracked() {
-                    Some(DataValue::String(s)) => s,
-                    _ => String::new(),
-                };
-                if current != stored {
-                    // The server echo resyncs the draft; resetting here would flash the old text.
-                    last_sent.set_value(Some(current.clone()));
-                    on_commit.run(DataValue::String(current));
-                } else {
-                    draft.set(stored);
-                }
-            }
-            on:input=move |ev| {
-                let new_val = event_target_value(&ev);
-                draft.set(new_val.clone());
-                last_hovered.set_value(None);
-
-                if let Some(h) = timer.get_value() {
-                    h.clear();
-                    timer.set_value(None);
-                }
-                let handle = set_timeout_with_handle(move || {
                     let current = draft.get_untracked();
                     let stored = match value.get_untracked() {
                         Some(DataValue::String(s)) => s,
                         _ => String::new(),
                     };
-                    let last = last_sent.get_value();
-                    if ticknode_shared::template::validate(&current).is_ok()
-                        && last.as_deref() != Some(&current)
-                        && current != stored
-                    {
+                    if current != stored {
+                        // The server echo resyncs the draft; resetting here would flash the old text.
                         last_sent.set_value(Some(current.clone()));
                         on_commit.run(DataValue::String(current));
+                    } else {
+                        draft.set(stored);
                     }
-                }, std::time::Duration::from_millis(400));
-                timer.set_value(handle.ok());
-
-                // Accepting an item dispatches a synthetic input event: do not reopen the popup for it.
-                if ev.is_trusted() {
-                    trigger_completion(false);
                 }
-            }
+                on:scroll=move |_| sync_scroll()
+                on:input=move |ev| {
+                    let new_val = event_target_value(&ev);
+                    draft.set(new_val.clone());
+                    last_hovered.set_value(None);
+                    sync_scroll();
+
+                    if let Some(h) = timer.get_value() {
+                        h.clear();
+                        timer.set_value(None);
+                    }
+                    let handle = set_timeout_with_handle(move || {
+                        let current = draft.get_untracked();
+                        let stored = match value.get_untracked() {
+                            Some(DataValue::String(s)) => s,
+                            _ => String::new(),
+                        };
+                        let last = last_sent.get_value();
+                        if ticknode_shared::template::validate(&current).is_ok()
+                            && last.as_deref() != Some(&current)
+                            && current != stored
+                        {
+                            last_sent.set_value(Some(current.clone()));
+                            on_commit.run(DataValue::String(current));
+                        }
+                    }, std::time::Duration::from_millis(400));
+                    timer.set_value(handle.ok());
+
+                    // Accepting an item dispatches a synthetic input event: do not reopen the popup for it.
+                    if ev.is_trusted() {
+                        trigger_completion(false);
+                    }
+                }
             on:pointermove=move |ev| {
                 #[cfg(target_arch = "wasm32")]
                 if let Some(textarea) = textarea_ref.get() {
@@ -348,5 +384,6 @@ pub fn TemplateField(
             on:keydown=keydown
             on:wheel=|ev: web_sys::WheelEvent| ev.stop_propagation()
         ></textarea>
+        </div>
     }
 }

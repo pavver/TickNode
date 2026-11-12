@@ -366,3 +366,49 @@ fn evaluate_preview_waits_when_a_missing_input_breaks_rendering() {
     let complete = vec![("value".to_string(), Some(DataValue::from("world")), DataType::String)];
     assert!(matches!(evaluate_preview("{{ value.a.b }}", &complete), PreviewStatus::RenderError(_)));
 }
+
+#[test]
+fn test_clamp_error_range_bounds_and_char_boundaries() {
+    use super::highlight::clamp_error_range;
+
+    assert_eq!(clamp_error_range("", 0..0), None);
+
+    let ascii = "hello";
+    assert_eq!(clamp_error_range(ascii, 1..3), Some(1..3));
+    assert_eq!(clamp_error_range(ascii, 2..2), Some(2..3));
+    // At end-of-text, marks last char
+    assert_eq!(clamp_error_range(ascii, 5..5), Some(4..5));
+    assert_eq!(clamp_error_range(ascii, 10..20), Some(4..5));
+
+    let cyrillic = "Привіт"; // 6 chars, 12 bytes
+    // Char 1 'р' is bytes 2..4
+    assert_eq!(clamp_error_range(cyrillic, 2..4), Some(2..4));
+    // Unaligned offset 3 aligns to char boundary
+    assert_eq!(clamp_error_range(cyrillic, 3..3), Some(2..4));
+}
+
+#[test]
+fn test_compute_styled_spans_with_error() {
+    use super::highlight::compute_styled_spans;
+    use ticknode_shared::template::highlight;
+
+    let source = "Hi {{ unclosed";
+    let highlights = highlight(source, &[]);
+    // Error on "unclosed" (6..14)
+    let spans = compute_styled_spans(source, &highlights, Some(6..14));
+    assert_eq!(spans[0].text, "Hi ");
+    assert_eq!(spans[0].class, "tk-text");
+    assert!(!spans[0].is_error);
+
+    assert_eq!(spans[1].text, "{{");
+    assert_eq!(spans[1].class, "tk-delimiter");
+    assert!(!spans[1].is_error);
+
+    assert_eq!(spans[2].text, " ");
+    assert_eq!(spans[2].class, "tk-text");
+    assert!(!spans[2].is_error);
+
+    assert_eq!(spans[3].text, "unclosed");
+    assert_eq!(spans[3].class, "tk-variable");
+    assert!(spans[3].is_error);
+}

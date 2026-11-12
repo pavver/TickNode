@@ -18,6 +18,9 @@ pub use complete::{
     complete, expression_at, Completion, CompletionInput, CompletionItem, CompletionKind,
 };
 
+pub mod highlight;
+pub use highlight::{highlight, Highlight, TokenClass};
+
 pub use values::plain;
 
 pub const FUEL: u64 = 10_000;

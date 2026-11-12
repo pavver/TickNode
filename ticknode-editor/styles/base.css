@@ -20,6 +20,8 @@
 :root {
     --du: 4px;
     --border-w: calc(var(--du) * 0.25);
+    /* Type Unit: one scalable logical point for font sizes and line heights. */
+    --tu: 1px;
     --border-thick: calc(var(--du) * 0.5);
 
     --font: "Cascadia Code", "Cascadia Mono", ui-monospace, monospace;
@@ -61,6 +63,20 @@
     --switch-unchecked-track: #3B1E1E;
     --grid: #1A2029;
     --magenta: #C678DD;
+
+    --text: var(--text-primary);
+    --tk-delimiter: #8B949E;
+    --tk-keyword: var(--magenta);
+    --tk-input: var(--accent);
+    --tk-variable: #79C0FF;
+    --tk-field: #61D6D6;
+    --tk-filter: var(--info);
+    --tk-test: #FF7B72;
+    --tk-function: #E5C07B;
+    --tk-string: #7EE787;
+    --tk-number: var(--warning);
+    --tk-operator: var(--text-secondary);
+    --tk-comment: #6E7681;
 }
 
 :root[data-theme="light"] {
@@ -90,6 +106,20 @@
     --switch-unchecked-track: #FFCDD2;
     --grid: #E3E8EE;
     --magenta: #9C27B0;
+
+    --text: var(--text-primary);
+    --tk-delimiter: #6E7781;
+    --tk-keyword: var(--magenta);
+    --tk-input: var(--accent);
+    --tk-variable: #0550AE;
+    --tk-field: #0969DA;
+    --tk-filter: var(--info);
+    --tk-test: #CF222E;
+    --tk-function: #953800;
+    --tk-string: #116329;
+    --tk-number: var(--warning);
+    --tk-operator: var(--text-secondary);
+    --tk-comment: #8C959F;
 }
 
 * { box-sizing: border-box; }

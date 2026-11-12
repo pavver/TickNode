@@ -77,6 +77,11 @@ pub fn accept_completion_item(
                 let _ = textarea.set_selection_range(u16_caret, u16_caret);
                 let _ = textarea.focus();
 
+                if let Some(pre) = doc.get_element_by_id(&format!("template-highlight-{}", node.0)) {
+                    pre.set_scroll_top(textarea.scroll_top());
+                    pre.set_scroll_left(textarea.scroll_left());
+                }
+
                 // Dispatch an input event so that reactive listeners (draft, debounce timer) update
                 if let Ok(ev) = web_sys::Event::new("input") {
                     let _ = textarea.dispatch_event(&ev);

@@ -3,7 +3,9 @@
 use ticknode_shared::{ConnectionModel, NodeId, PinId};
 
 pub(super) fn connect_exec(all: &mut Vec<ConnectionModel>, connection: ConnectionModel) {
-    if !all.contains(&connection) { all.push(connection); }
+    if !all.contains(&connection) {
+        all.push(connection);
+    }
 }
 
 pub(super) fn connect_data(all: &mut Vec<ConnectionModel>, connection: ConnectionModel) {

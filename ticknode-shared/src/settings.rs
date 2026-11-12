@@ -19,7 +19,9 @@ pub struct ServerSettings {
     pub display: crate::DisplayRules,
 }
 
-fn default_locale() -> String { "en".into() }
+fn default_locale() -> String {
+    "en".into()
+}
 
 impl Default for ServerSettings {
     fn default() -> Self {
@@ -34,7 +36,9 @@ impl Default for ServerSettings {
 
 impl ServerSettings {
     pub fn validated(mut self) -> Self {
-        if !["en", "uk"].contains(&self.locale.as_str()) { self.locale = default_locale(); }
+        if !["en", "uk"].contains(&self.locale.as_str()) {
+            self.locale = default_locale();
+        }
         self.tick_ms = self.tick_ms.clamp(MIN_TICK_MS, MAX_TICK_MS);
         self.tick_budget = self.tick_budget.clamp(MIN_TICK_BUDGET, MAX_TICK_BUDGET);
         self

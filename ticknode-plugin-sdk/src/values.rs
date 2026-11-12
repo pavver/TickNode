@@ -1,10 +1,9 @@
+use crate::{DataValue, ObjectField, PinId};
 use std::collections::{BTreeMap, HashMap};
-use crate::{DataValue, PinId, ObjectField};
 
 /// Values of connected input data pins.
 #[derive(Debug, Default, Clone)]
 pub struct Inputs(pub(crate) HashMap<PinId, DataValue>);
-
 
 impl FromIterator<(PinId, DataValue)> for Inputs {
     fn from_iter<T: IntoIterator<Item = (PinId, DataValue)>>(values: T) -> Self {
@@ -67,11 +66,21 @@ pub struct StructValue {
 
 impl StructValue {
     pub fn new(type_name: &str) -> Self {
-        Self { type_name: type_name.into(), fields: BTreeMap::new() }
+        Self {
+            type_name: type_name.into(),
+            fields: BTreeMap::new(),
+        }
     }
 
     pub fn field(mut self, name: &str, value: impl Into<DataValue>) -> Self {
-        self.fields.insert(name.into(), ObjectField { name: name.into(), description: String::new(), value: value.into() });
+        self.fields.insert(
+            name.into(),
+            ObjectField {
+                name: name.into(),
+                description: String::new(),
+                value: value.into(),
+            },
+        );
         self
     }
 
@@ -84,12 +93,17 @@ impl StructValue {
     }
 
     pub fn build(self) -> DataValue {
-        DataValue::Object { fields: self.fields, type_name: Some(self.type_name) }
+        DataValue::Object {
+            fields: self.fields,
+            type_name: Some(self.type_name),
+        }
     }
 }
 
 impl From<StructValue> for DataValue {
-    fn from(v: StructValue) -> Self { v.build() }
+    fn from(v: StructValue) -> Self {
+        v.build()
+    }
 }
 
 /// Field of a struct value (or any object).

@@ -39,7 +39,13 @@ impl PluginNode for PointSource {
     }
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
-        vec![Output::Data(PinId(1), StructValue::new(POINT).field("x", self.x).field("y", self.y).build())]
+        vec![Output::Data(
+            PinId(1),
+            StructValue::new(POINT)
+                .field("x", self.x)
+                .field("y", self.y)
+                .build(),
+        )]
     }
 }
 
@@ -62,7 +68,10 @@ impl PluginNode for BadSource {
     }
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
-        vec![Output::Data(PinId(1), StructValue::new("other.type").field("x", 1.0).build())]
+        vec![Output::Data(
+            PinId(1),
+            StructValue::new("other.type").field("x", 1.0).build(),
+        )]
     }
 }
 
@@ -91,13 +100,19 @@ impl PluginNode for PointSink {
     }
 
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
-        let (Some(x), Some(y)) = (inputs.field_number(PinId(1), "x"), inputs.field_number(PinId(1), "y")) else {
+        let (Some(x), Some(y)) = (
+            inputs.field_number(PinId(1), "x"),
+            inputs.field_number(PinId(1), "y"),
+        ) else {
             return Vec::new();
         };
         let mut text = format!("{}:{x},{y}", inputs.string(PinId(2)));
         if let Some(label) = inputs.field_string(PinId(1), "label") {
             text.push_str(&format!(":{label}"));
         }
-        vec![Output::Data(PinId(3), text.into()), Output::Data(PinId(4), (x + y).into())]
+        vec![
+            Output::Data(PinId(3), text.into()),
+            Output::Data(PinId(4), (x + y).into()),
+        ]
     }
 }

@@ -1,6 +1,6 @@
-use ticknode_shared::*;
+use super::{LOOKUP_OPTIONS, format_lookup, parse_lookup};
 use crate::{Node, NodeContext};
-use super::{format_lookup, parse_lookup, LOOKUP_OPTIONS};
+use ticknode_shared::*;
 
 pub struct VariableSetNode {
     pub id: NodeId,
@@ -72,7 +72,9 @@ impl Node for VariableSetNode {
     }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let value = ctx.get_value(PinId(3)).unwrap_or_else(|| ctx.types.default_value(&self.value_type));
+        let value = ctx
+            .get_value(PinId(3))
+            .unwrap_or_else(|| ctx.types.default_value(&self.value_type));
         vec![NodeOutput::Variable(VariableCommand::Set {
             name: self.name.clone(),
             lookup: self.lookup,
@@ -94,8 +96,14 @@ impl Node for VariableSetNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("name".to_string(), DataValue::String(self.name.clone())),
-            ("lookup".to_string(), DataValue::String(format_lookup(self.lookup).to_string())),
-            ("value_type".to_string(), DataValue::String(data_type_name(&self.value_type))),
+            (
+                "lookup".to_string(),
+                DataValue::String(format_lookup(self.lookup).to_string()),
+            ),
+            (
+                "value_type".to_string(),
+                DataValue::String(data_type_name(&self.value_type)),
+            ),
         ]
     }
 

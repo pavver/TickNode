@@ -8,21 +8,28 @@ use crate::i18n::{self, t};
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, flash};
 
-pub(crate) mod properties;
 pub(crate) mod duration;
-pub(crate) mod template_field;
-mod quantity;
 mod identifier;
+pub(crate) mod properties;
+mod quantity;
+pub(crate) mod template_field;
 mod text_field;
 mod typed_properties;
 
 pub use properties::*;
-pub use template_field::{TemplateField, TemplateStatusRow, TemplateDraft, TemplateCompletionLayer};
+pub use template_field::{
+    TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateStatusRow,
+};
 
 /// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.
 fn value_text(value: &DataValue, value_type: &DataType) -> String {
     match value {
-        DataValue::String(s) if *value_type == DataType::Any && !matches!(text::parse_any(s), DataValue::String(_)) => format!("\"{s}\""),
+        DataValue::String(s)
+            if *value_type == DataType::Any
+                && !matches!(text::parse_any(s), DataValue::String(_)) =>
+        {
+            format!("\"{s}\"")
+        }
         DataValue::Ticks(n) => i18n::ticks_text(*n),
         other => i18n::value_edit_text(other),
     }
@@ -47,14 +54,20 @@ pub fn InlineValue(
     #[prop(optional, into)] multiline: Signal<bool>,
     #[prop(optional, into)] title: Signal<String>,
     /// Quantities commit `68 °F` text literals that keep the chosen unit (Match constants).
-    #[prop(optional)] unit_literal: bool,
+    #[prop(optional)]
+    unit_literal: bool,
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
     // Pressing on the field does not start node dragging or rubber-band selection
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
-    if let Some(kind) = ed.types.with_untracked(|types| types.definition_of(&value_type).and_then(|d| d.quantity()).cloned()) {
+    if let Some(kind) = ed.types.with_untracked(|types| {
+        types
+            .definition_of(&value_type)
+            .and_then(|d| d.quantity())
+            .cloned()
+    }) {
         return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal /> }.into_any();
     }
 
@@ -98,7 +111,12 @@ pub fn InlineValue(
     }
 
     // Enum: value is chosen from a dropdown rather than typed
-    let enum_def = ed.types.with_untracked(|types| types.definition_of(&value_type).filter(|d| d.is_enum()).cloned());
+    let enum_def = ed.types.with_untracked(|types| {
+        types
+            .definition_of(&value_type)
+            .filter(|d| d.is_enum())
+            .cloned()
+    });
     if let Some(def) = enum_def {
         let sizing_name = def.name.clone();
         return view! {
@@ -137,12 +155,21 @@ pub fn InlineValue(
 
     let hint_type = value_type.clone();
     let shown_type = value_type.clone();
-    let shown = Signal::derive(move || value.with(|v| v.as_ref().map(|v| value_text(v, &shown_type)).unwrap_or_default()));
+    let shown = Signal::derive(move || {
+        value.with(|v| {
+            v.as_ref()
+                .map(|v| value_text(v, &shown_type))
+                .unwrap_or_default()
+        })
+    });
     let draft = RwSignal::new(String::new());
     Effect::new(move |_| draft.set(shown.get()));
     // The field may lose focus after it has already been removed from the DOM — in that case signals are disposed
     let commit = move || {
-        let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked()) else { return };
+        let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked())
+        else {
+            return;
+        };
         if text == saved {
             return;
         }
@@ -152,7 +179,13 @@ pub fn InlineValue(
             Err(_) => {
                 draft.set(saved);
                 flash(state, ControlState::Error);
-                ed.log(LogKind::Error, format!("[ERROR] Invalid inline value for {}", data_type_name(&value_type)));
+                ed.log(
+                    LogKind::Error,
+                    format!(
+                        "[ERROR] Invalid inline value for {}",
+                        data_type_name(&value_type)
+                    ),
+                );
             }
         }
     };
@@ -191,13 +224,27 @@ pub fn InlineValue(
 }
 
 fn property_value(node: ClientNode, name: &str) -> Option<DataValue> {
-    node.instance.with(|i| i.model.properties.iter().find(|(n, _)| n == name).map(|(_, v)| v.clone()))
+    node.instance.with(|i| {
+        i.model
+            .properties
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.clone())
+    })
 }
 
 /// Value of an unconnected data input (rendered inside the pin row).
 #[component]
-pub fn PinValue(ed: Editor, node: NodeId, pin: PinId, value_type: DataType, #[prop(optional, into)] multiline: Signal<bool>) -> impl IntoView {
-    let Some(client) = ed.node(node) else { return ().into_any() };
+pub fn PinValue(
+    ed: Editor,
+    node: NodeId,
+    pin: PinId,
+    value_type: DataType,
+    #[prop(optional, into)] multiline: Signal<bool>,
+) -> impl IntoView {
+    let Some(client) = ed.node(node) else {
+        return ().into_any();
+    };
     let name = input_value_property(pin);
     view! {
         <InlineValue

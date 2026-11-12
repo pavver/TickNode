@@ -32,9 +32,19 @@ impl TickEngine {
                 .definitions()
                 .into_iter()
                 .filter_map(|d| {
-                    let TypeKind::Identifier { labels: Some(source) } = d.kind else { return None };
+                    let TypeKind::Identifier {
+                        labels: Some(source),
+                    } = d.kind
+                    else {
+                        return None;
+                    };
                     let plugin = self.plugins.get(d.plugin.as_deref()?)?;
-                    let options = plugin.runtime.lock().unwrap_or_else(|p| p.into_inner()).options.clone();
+                    let options = plugin
+                        .runtime
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .options
+                        .clone();
                     Some((d.name, (source, options)))
                 })
                 .collect(),

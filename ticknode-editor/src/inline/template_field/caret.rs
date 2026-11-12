@@ -95,18 +95,48 @@ impl Mirror {
         let computed = window.get_computed_style(textarea).ok().flatten()?;
         let div = document.create_element("div").ok()?;
         let style = div.dyn_ref::<web_sys::HtmlElement>()?.style();
-        for (name, value) in [("position", "absolute"), ("visibility", "hidden"), ("top", "0"), ("left", "0"),
-            ("white-space", "pre-wrap"), ("word-wrap", "break-word"), ("overflow-wrap", "break-word"), ("overflow", "hidden"),
-            ("border-style", "solid"), ("border-color", "transparent")] {
+        for (name, value) in [
+            ("position", "absolute"),
+            ("visibility", "hidden"),
+            ("top", "0"),
+            ("left", "0"),
+            ("white-space", "pre-wrap"),
+            ("word-wrap", "break-word"),
+            ("overflow-wrap", "break-word"),
+            ("overflow", "hidden"),
+            ("border-style", "solid"),
+            ("border-color", "transparent"),
+        ] {
             let _ = style.set_property(name, value);
         }
-        for name in ["box-sizing", "width", "font-family", "font-size", "font-weight", "font-style", "letter-spacing",
-            "line-height", "tab-size", "padding-top", "padding-right", "padding-bottom", "padding-left",
-            "border-top-width", "border-right-width", "border-bottom-width", "border-left-width"] {
-            let _ = style.set_property(name, &computed.get_property_value(name).unwrap_or_default());
+        for name in [
+            "box-sizing",
+            "width",
+            "font-family",
+            "font-size",
+            "font-weight",
+            "font-style",
+            "letter-spacing",
+            "line-height",
+            "tab-size",
+            "padding-top",
+            "padding-right",
+            "padding-bottom",
+            "padding-left",
+            "border-top-width",
+            "border-right-width",
+            "border-bottom-width",
+            "border-left-width",
+        ] {
+            let _ =
+                style.set_property(name, &computed.get_property_value(name).unwrap_or_default());
         }
         document.body()?.append_child(&div).ok()?;
-        Some(Self { div, document, computed })
+        Some(Self {
+            div,
+            document,
+            computed,
+        })
     }
 
     /// Call after the content is appended: relates mirror coordinates to the textarea on screen.
@@ -115,7 +145,11 @@ impl Mirror {
         let ta_rect = textarea.get_bounding_client_rect();
         let div_rect = self.div.get_bounding_client_rect();
         let width = textarea.offset_width() as f64;
-        let scale = if width > 0.0 { ta_rect.width() / width } else { 1.0 };
+        let scale = if width > 0.0 {
+            ta_rect.width() / width
+        } else {
+            1.0
+        };
         MirrorFrame {
             origin_x: ta_rect.left() - textarea.scroll_left() as f64 * scale,
             origin_y: ta_rect.top() - textarea.scroll_top() as f64 * scale,
@@ -140,7 +174,9 @@ pub fn measure_caret_screen_pos(
 ) -> Option<(f64, f64, f64)> {
     let mirror = Mirror::new(textarea)?;
     let text_before = source.get(..caret_byte).unwrap_or(source);
-    let _ = mirror.div.append_child(&mirror.document.create_text_node(text_before));
+    let _ = mirror
+        .div
+        .append_child(&mirror.document.create_text_node(text_before));
     let marker = mirror.document.create_element("span").ok()?;
     marker.set_text_content(Some("\u{200b}"));
     let _ = mirror.div.append_child(&marker);

@@ -7,23 +7,23 @@ pub const PLUGIN_API: &str = env!("TICKNODE_PLUGIN_API");
 
 pub mod condition;
 pub mod convert;
-pub mod text;
 pub mod quantity;
+pub mod text;
 pub mod to_text;
 pub use quantity::{DisplayRules, NumberDisplay, QuantityDisplay, Rounding, UnitStep};
 pub mod plugin;
 pub mod property;
+pub mod settings;
+pub mod sheets;
 pub mod types;
 pub mod ui_message;
-pub mod sheets;
-pub mod settings;
 
 pub use plugin::*;
 pub use property::*;
+pub use settings::*;
+pub use sheets::*;
 pub use types::*;
 pub use ui_message::*;
-pub use sheets::*;
-pub use settings::*;
 
 pub mod variables;
 pub use variables::*;
@@ -31,25 +31,34 @@ pub use variables::*;
 pub mod template;
 pub use template::*;
 
-mod values;
 mod definitions;
 mod graph;
 mod signatures;
+mod values;
 pub use signatures::*;
-mod protocol;
 mod manifest;
+mod protocol;
 
-pub use values::*;
 pub use definitions::*;
 pub use graph::*;
-pub use protocol::*;
 pub use manifest::*;
+pub use protocol::*;
+pub use values::*;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-pub enum MathOp { Add, Sub, Mul, Div }
+pub enum MathOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-pub enum LogOp { And, Or, Not }
+pub enum LogOp {
+    And,
+    Or,
+    Not,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NodeOutput {

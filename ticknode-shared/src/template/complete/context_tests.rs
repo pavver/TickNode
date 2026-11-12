@@ -49,7 +49,10 @@ fn setup_test_context() -> (Vec<(String, DataType)>, TypeRegistry) {
         ),
         ("u".to_string(), DataType::Named("test.user".to_string())),
         ("any".to_string(), DataType::Any),
-        ("q_power".to_string(), DataType::Named("quantity.power".to_string())),
+        (
+            "q_power".to_string(),
+            DataType::Named("quantity.power".to_string()),
+        ),
     ];
 
     (inputs, types)
@@ -197,10 +200,16 @@ fn test_type_aware_test_completion() {
     let c_p = res_p.expect("power is completion");
     let labels_p: Vec<_> = c_p.items.iter().map(|i| i.label.as_str()).collect();
     for expected in ["odd", "even", "divisibleby", "defined"] {
-        assert!(labels_p.contains(&expected), "power is must contain {expected}");
+        assert!(
+            labels_p.contains(&expected),
+            "power is must contain {expected}"
+        );
     }
     for forbidden in ["startingwith", "mapping"] {
-        assert!(!labels_p.contains(&forbidden), "power is must not contain {forbidden}");
+        assert!(
+            !labels_p.contains(&forbidden),
+            "power is must not contain {forbidden}"
+        );
     }
 
     // name is -> startingwith, lower; not odd
@@ -208,7 +217,10 @@ fn test_type_aware_test_completion() {
     let c_n = res_n.expect("name is completion");
     let labels_n: Vec<_> = c_n.items.iter().map(|i| i.label.as_str()).collect();
     for expected in ["startingwith", "lower"] {
-        assert!(labels_n.contains(&expected), "name is must contain {expected}");
+        assert!(
+            labels_n.contains(&expected),
+            "name is must contain {expected}"
+        );
     }
     assert!(!labels_n.contains(&"odd"), "name is must not contain odd");
 }
@@ -220,10 +232,16 @@ fn test_for_in_iterable_completion() {
     let c = res.expect("for in completion");
     let labels: Vec<_> = c.items.iter().map(|i| i.label.as_str()).collect();
     for expected in ["items", "name", "any", "range"] {
-        assert!(labels.contains(&expected), "must contain iterable {expected}");
+        assert!(
+            labels.contains(&expected),
+            "must contain iterable {expected}"
+        );
     }
     for forbidden in ["power", "on"] {
-        assert!(!labels.contains(&forbidden), "must not contain non-iterable {forbidden}");
+        assert!(
+            !labels.contains(&forbidden),
+            "must not contain non-iterable {forbidden}"
+        );
     }
 }
 
@@ -232,7 +250,11 @@ fn test_filter_detail_with_output_kind() {
     let (inputs, types) = setup_test_context();
     let (_, res) = complete_at("{{ name | len|^|}}", &inputs, &types);
     let c = res.expect("length completion");
-    let item = c.items.iter().find(|i| i.label == "length").expect("must offer length");
+    let item = c
+        .items
+        .iter()
+        .find(|i| i.label == "length")
+        .expect("must offer length");
     assert!(
         item.detail.contains("→ Number"),
         "detail must contain → Number, got: {}",

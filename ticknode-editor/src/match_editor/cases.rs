@@ -5,7 +5,14 @@ use crate::geometry::type_color;
 use crate::inline::InlineValue;
 
 #[component]
-pub(super) fn CaseBlock(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ci: usize, pin: u32, edit: Callback<EditFn>) -> impl IntoView {
+pub(super) fn CaseBlock(
+    node: NodeId,
+    state: Memo<MatchState>,
+    types: Memo<InputTypes>,
+    ci: usize,
+    pin: u32,
+    edit: Callback<EditFn>,
+) -> impl IntoView {
     let case = Memo::new(move |_| state.with(|s| s.cases.get(ci).cloned()));
     let rows = move || case.with(|c| c.as_ref().map_or(0, |c| c.conditions.len()));
     let out = Memo::new(move |_| pin_def(node, PinId(pin), PinDirection::Output));
@@ -53,19 +60,35 @@ enum Right {
 }
 
 #[component]
-fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: Memo<InputTypes>, ci: usize, ri: usize, edit: Callback<EditFn>) -> impl IntoView {
+fn ConditionRow(
+    case: Memo<Option<MatchCase>>,
+    state: Memo<MatchState>,
+    types: Memo<InputTypes>,
+    ci: usize,
+    ri: usize,
+    edit: Callback<EditFn>,
+) -> impl IntoView {
     let ed = use_editor();
-    let cond = Memo::new(move |_| case.with(|c| c.as_ref().and_then(|c| c.conditions.get(ri).cloned())));
+    let cond =
+        Memo::new(move |_| case.with(|c| c.as_ref().and_then(|c| c.conditions.get(ri).cloned())));
     let join = move || cond.with(|c| c.as_ref().map(|c| c.join));
     let left_type = Memo::new(move |_| {
         let left = cond.with(|c| c.as_ref().map(|c| c.left.clone()));
         left.map_or(DataType::Any, |l| types.with(|t| type_of(t, &l)))
     });
-    let left_text = Memo::new(move |_| cond.with(|c| c.as_ref().map(|c| match &c.left {
-        Operand::Input(n) => n.clone(),
-        other => other.to_text(),
-    }).unwrap_or_default()));
-    let names = Memo::new(move |_| state.with(|s| s.inputs.iter().map(|i| i.name.clone()).collect::<Vec<_>>()));
+    let left_text = Memo::new(move |_| {
+        cond.with(|c| {
+            c.as_ref()
+                .map(|c| match &c.left {
+                    Operand::Input(n) => n.clone(),
+                    other => other.to_text(),
+                })
+                .unwrap_or_default()
+        })
+    });
+    let names = Memo::new(move |_| {
+        state.with(|s| s.inputs.iter().map(|i| i.name.clone()).collect::<Vec<_>>())
+    });
     let op = Memo::new(move |_| cond.with(|c| c.as_ref().map(|c| c.op)));
     let right = Memo::new(move |_| {
         let (op, right) = cond.with(|c| c.as_ref().map(|c| (c.op, c.right.clone())))?;
@@ -75,29 +98,37 @@ fn ConditionRow(case: Memo<Option<MatchCase>>, state: Memo<MatchState>, types: M
             _ => Right::Value(rt),
         })
     });
-    let right_value = Signal::derive(move || cond.with(|c| match c.as_ref().and_then(|c| c.right.as_ref()) {
-        Some(Operand::Value(v)) => Some(v.clone()),
-        _ => None,
-    }));
+    let right_value = Signal::derive(move || {
+        cond.with(|c| match c.as_ref().and_then(|c| c.right.as_ref()) {
+            Some(Operand::Value(v)) => Some(v.clone()),
+            _ => None,
+        })
+    });
 
-    let set_left = move |name: String| edit.run(EditFn::new(move |s, env| {
-        let c = &mut s.cases[ci].conditions[ri];
-        c.left = Operand::Input(name);
-        let t = type_of(&env.types, &c.left);
-        fit_condition(&env.reg, c, &t);
-    }));
-    let set_op = move |op: CompareOp| edit.run(EditFn::new(move |s, env| {
-        let c = &mut s.cases[ci].conditions[ri];
-        c.op = op;
-        let t = type_of(&env.types, &c.left);
-        fit_condition(&env.reg, c, &t);
-    }));
-    let set_right = move |o: Option<Operand>| edit.run(EditFn::new(move |s, env| {
-        let c = &mut s.cases[ci].conditions[ri];
-        c.right = o;
-        let t = type_of(&env.types, &c.left);
-        fit_condition(&env.reg, c, &t);
-    }));
+    let set_left = move |name: String| {
+        edit.run(EditFn::new(move |s, env| {
+            let c = &mut s.cases[ci].conditions[ri];
+            c.left = Operand::Input(name);
+            let t = type_of(&env.types, &c.left);
+            fit_condition(&env.reg, c, &t);
+        }))
+    };
+    let set_op = move |op: CompareOp| {
+        edit.run(EditFn::new(move |s, env| {
+            let c = &mut s.cases[ci].conditions[ri];
+            c.op = op;
+            let t = type_of(&env.types, &c.left);
+            fit_condition(&env.reg, c, &t);
+        }))
+    };
+    let set_right = move |o: Option<Operand>| {
+        edit.run(EditFn::new(move |s, env| {
+            let c = &mut s.cases[ci].conditions[ri];
+            c.right = o;
+            let t = type_of(&env.types, &c.left);
+            fit_condition(&env.reg, c, &t);
+        }))
+    };
 
     view! {
         <div class="case-row cond-row">

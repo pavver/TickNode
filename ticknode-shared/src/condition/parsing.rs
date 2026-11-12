@@ -1,11 +1,20 @@
 use super::lexer::{Token, tokenize};
-use super::{CompareOp, Condition, ConditionError, Expected, Join, Operand, MatchCase, MatchInput, is_input_name, parse_input_type};
+use super::{
+    CompareOp, Condition, ConditionError, Expected, Join, MatchCase, MatchInput, Operand,
+    is_input_name, parse_input_type,
+};
 
 impl MatchCase {
     pub fn parse(text: &str) -> Result<MatchCase, ConditionError> {
         let (pin, rest) = text.split_once(':').ok_or(ConditionError::MissingPin)?;
-        let pin: u32 = pin.trim().parse().map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
-        Ok(MatchCase { pin, conditions: parse_conditions(rest)? })
+        let pin: u32 = pin
+            .trim()
+            .parse()
+            .map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
+        Ok(MatchCase {
+            pin,
+            conditions: parse_conditions(rest)?,
+        })
     }
 }
 
@@ -15,13 +24,21 @@ impl MatchInput {
         let (Some(pin), Some(name), Some(ty)) = (parts.next(), parts.next(), parts.next()) else {
             return Err(ConditionError::InputFormat(text.to_string()));
         };
-        let pin: u32 = pin.trim().parse().map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
+        let pin: u32 = pin
+            .trim()
+            .parse()
+            .map_err(|_| ConditionError::NotPinNumber(pin.trim().to_string()))?;
         let name = name.trim().to_string();
         if !is_input_name(&name) {
             return Err(ConditionError::InvalidInputName(name));
         }
-        let value_type = parse_input_type(ty).ok_or_else(|| ConditionError::UnknownType(ty.trim().to_string()))?;
-        Ok(MatchInput { pin, name, value_type })
+        let value_type = parse_input_type(ty)
+            .ok_or_else(|| ConditionError::UnknownType(ty.trim().to_string()))?;
+        Ok(MatchInput {
+            pin,
+            name,
+            value_type,
+        })
     }
 }
 
@@ -32,8 +49,17 @@ fn parse_conditions(text: &str) -> Result<Vec<Condition>, ConditionError> {
         let join = parse_join(conditions.is_empty(), &mut tokens)?;
         let left = parse_operand(tokens.next())?;
         let op = parse_operator(tokens.next())?;
-        let right = if op.is_unary() { None } else { Some(parse_operand(tokens.next())?) };
-        conditions.push(Condition { join, left, op, right });
+        let right = if op.is_unary() {
+            None
+        } else {
+            Some(parse_operand(tokens.next())?)
+        };
+        conditions.push(Condition {
+            join,
+            left,
+            op,
+            right,
+        });
     }
     Ok(conditions)
 }
@@ -48,23 +74,38 @@ fn found(token: Option<&Token>) -> Option<String> {
     })
 }
 
-fn parse_join(first: bool, tokens: &mut impl Iterator<Item = Token>) -> Result<Join, ConditionError> {
-    if first { return Ok(Join::And); }
+fn parse_join(
+    first: bool,
+    tokens: &mut impl Iterator<Item = Token>,
+) -> Result<Join, ConditionError> {
+    if first {
+        return Ok(Join::And);
+    }
     match tokens.next() {
         Some(Token::Join(join)) => Ok(join),
-        other => Err(ConditionError::Expected(Expected::Join, found(other.as_ref()))),
+        other => Err(ConditionError::Expected(
+            Expected::Join,
+            found(other.as_ref()),
+        )),
     }
 }
 
 fn parse_operand(token: Option<Token>) -> Result<Operand, ConditionError> {
-    token.clone().and_then(Token::into_operand)
+    token
+        .clone()
+        .and_then(Token::into_operand)
         .ok_or_else(|| ConditionError::Expected(Expected::Operand, found(token.as_ref())))
 }
 
 fn parse_operator(token: Option<Token>) -> Result<CompareOp, ConditionError> {
     match token {
         Some(Token::Op(op)) => Ok(op),
-        Some(Token::Ident(word)) => CompareOp::parse(&word).ok_or(ConditionError::UnknownOperator(word)),
-        other => Err(ConditionError::Expected(Expected::Operator, found(other.as_ref()))),
+        Some(Token::Ident(word)) => {
+            CompareOp::parse(&word).ok_or(ConditionError::UnknownOperator(word))
+        }
+        other => Err(ConditionError::Expected(
+            Expected::Operator,
+            found(other.as_ref()),
+        )),
     }
 }

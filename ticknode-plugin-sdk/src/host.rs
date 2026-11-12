@@ -1,5 +1,5 @@
-use crate::*;
 use crate::bindings::ticknode::plugin::{host as wit_host, types as wit};
+use crate::*;
 
 /// Logs an info message to the node's console. Logs are always English and never translated.
 pub fn log(message: &str) {
@@ -19,9 +19,14 @@ pub fn error(message: &str) {
 /// Reports a structured runtime error. Repeat with `log=false` while the failure continues.
 /// From plugin-tick, reports an asynchronous settings error instead (cleared by configure).
 pub fn node_error(message: &UiError, log: bool) {
-    wit_host::node_error(&wit::UiError {
-        key: message.key.clone(), args: message.args.clone(), fallback: message.fallback.clone(),
-    }, log);
+    wit_host::node_error(
+        &wit::UiError {
+            key: message.key.clone(),
+            args: message.args.clone(),
+            fallback: message.fallback.clone(),
+        },
+        log,
+    );
 }
 
 pub fn current_tick() -> u64 {
@@ -46,7 +51,9 @@ pub fn delay_ms(ms: u64) -> Result<TaskId, String> {
 pub fn delay_for(value: &DataValue) -> Result<TaskId, String> {
     match value {
         DataValue::Ticks(n) => delay_ticks(*n),
-        DataValue::Duration(d) => delay_ms(d.as_nanos().div_ceil(1_000_000).min(u128::from(u64::MAX)) as u64),
+        DataValue::Duration(d) => {
+            delay_ms(d.as_nanos().div_ceil(1_000_000).min(u128::from(u64::MAX)) as u64)
+        }
         _ => Err("Delay must be a duration in ticks or time".into()),
     }
 }
@@ -85,12 +92,15 @@ pub fn ws_close(id: WsId) {
 /// previous list of that source. Usable from any plugin call. The host drops over-long strings and caps the
 /// list at 20 000 options; an empty list removes the source; an unchanged list is not re-sent to editors.
 pub fn set_options(source: &str, options: &[PropertyOption]) {
-    let options: Vec<wit::PropertyOption> = options.iter().map(|o| wit::PropertyOption {
-        value: o.value.clone(),
-        label: o.label.clone(),
-        detail: o.detail.clone(),
-        icon: o.icon.clone(),
-    }).collect();
+    let options: Vec<wit::PropertyOption> = options
+        .iter()
+        .map(|o| wit::PropertyOption {
+            value: o.value.clone(),
+            label: o.label.clone(),
+            detail: o.detail.clone(),
+            icon: o.icon.clone(),
+        })
+        .collect();
     wit_host::set_options(source, &options);
 }
 

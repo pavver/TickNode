@@ -16,8 +16,8 @@ use crate::state::{ClientNode, Editor, use_editor};
 use crate::ui::{Icon, icons};
 
 mod cases;
-mod inputs;
 mod editing;
+mod inputs;
 
 use cases::CaseBlock;
 use inputs::InputRow;
@@ -37,7 +37,10 @@ type InputTypes = Vec<(String, DataType)>;
 
 fn type_of(types: &[(String, DataType)], operand: &Operand) -> DataType {
     match operand {
-        Operand::Input(name) => types.iter().find(|(n, _)| n == name).map_or(DataType::Any, |(_, t)| t.clone()),
+        Operand::Input(name) => types
+            .iter()
+            .find(|(n, _)| n == name)
+            .map_or(DataType::Any, |(_, t)| t.clone()),
         Operand::Value(v) => v.get_type(),
     }
 }
@@ -52,7 +55,13 @@ fn effective_type(ed: Editor, id: NodeId, node: ClientNode, input: &MatchInput) 
     }
     let prop = input_value_property(pin);
     node.instance
-        .with(|i| i.model.properties.iter().find(|(n, _)| *n == prop).map(|(_, v)| v.get_type()))
+        .with(|i| {
+            i.model
+                .properties
+                .iter()
+                .find(|(n, _)| *n == prop)
+                .map(|(_, v)| v.get_type())
+        })
         .unwrap_or(DataType::Any)
 }
 
@@ -75,21 +84,31 @@ fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
 fn operand_fits(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> bool {
     match right {
         Some(Operand::Input(_)) => true,
-        Some(Operand::Value(value)) => *expected == DataType::Any || input_value_fits(reg, expected, value) || reg.compatible(&value.get_type(), expected)
-            || quantity_literal(reg, value, expected),
+        Some(Operand::Value(value)) => {
+            *expected == DataType::Any
+                || input_value_fits(reg, expected, value)
+                || reg.compatible(&value.get_type(), expected)
+                || quantity_literal(reg, value, expected)
+        }
         None => false,
     }
 }
 
 /// `68 °F` keeps its written unit for a quantity input instead of being converted to a canonical number.
 fn quantity_literal(reg: &TypeRegistry, value: &DataValue, expected: &DataType) -> bool {
-    let DataValue::String(s) = value else { return false };
-    reg.definition_of(expected).and_then(|d| d.quantity()).is_some_and(|q| quantity::parse_literal(s, q).is_some())
+    let DataValue::String(s) = value else {
+        return false;
+    };
+    reg.definition_of(expected)
+        .and_then(|d| d.quantity())
+        .is_some_and(|q| quantity::parse_literal(s, q).is_some())
 }
 
 fn fit_value(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> DataValue {
     let converted = match right {
-        Some(Operand::Value(value)) if text::is_text_type_in(reg, expected) => text::parse_value_in(reg, &text::format_value(value), expected).ok(),
+        Some(Operand::Value(value)) if text::is_text_type_in(reg, expected) => {
+            text::parse_value_in(reg, &text::format_value(value), expected).ok()
+        }
         _ => None,
     };
     converted.unwrap_or_else(|| reg.default_value(expected))
@@ -98,7 +117,8 @@ fn fit_value(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -
 /// First unused name: a, b, c, … then in1, in2, …
 fn free_name(inputs: &[MatchInput]) -> String {
     let taken = |n: &str| inputs.iter().any(|i| i.name == n);
-    ('a'..='z').map(String::from)
+    ('a'..='z')
+        .map(String::from)
         .chain((1..).map(|i| format!("in{i}")))
         .find(|n| !taken(n))
         .expect("an endless sequence of names")
@@ -107,7 +127,11 @@ fn free_name(inputs: &[MatchInput]) -> String {
 fn add_input(s: &mut MatchState) -> String {
     let pin = s.inputs.iter().map(|i| i.pin).max().unwrap_or(0) + 1;
     let name = free_name(&s.inputs);
-    s.inputs.push(MatchInput { pin, name: name.clone(), value_type: DataType::Any });
+    s.inputs.push(MatchInput {
+        pin,
+        name: name.clone(),
+        value_type: DataType::Any,
+    });
     name
 }
 
@@ -120,7 +144,12 @@ fn new_condition(s: &mut MatchState, env: &Env, join: Join) -> Condition {
     };
     let left = Operand::Input(name);
     let t = type_of(types, &left);
-    let mut c = Condition { join, left, op: ops_in(&env.reg, &t)[0], right: None };
+    let mut c = Condition {
+        join,
+        left,
+        op: ops_in(&env.reg, &t)[0],
+        right: None,
+    };
     fit_condition(&env.reg, &mut c, &t);
     c
 }
@@ -144,7 +173,8 @@ impl EditFn {
 
 /// Clicking a field or button does not start node dragging; clicking a pin or background behaves normally.
 pub fn stop_on_controls(ev: web_sys::PointerEvent) {
-    let on_control = ev.target()
+    let on_control = ev
+        .target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
         .and_then(|el| el.closest("input, textarea, select, button").ok().flatten())
         .is_some();
@@ -155,38 +185,71 @@ pub fn stop_on_controls(ev: web_sys::PointerEvent) {
 
 fn pin_def(id: NodeId, pin: PinId, dir: PinDirection) -> Option<PinDefinition> {
     let ed = use_editor();
-    ed.node_tracked(id)?.instance.with(|i| i.definition.pins.iter().find(|p| p.id == pin && p.direction == dir).cloned())
+    ed.node_tracked(id)?.instance.with(|i| {
+        i.definition
+            .pins
+            .iter()
+            .find(|p| p.id == pin && p.direction == dir)
+            .cloned()
+    })
 }
 
 fn string_list(items: impl Iterator<Item = String>) -> DataValue {
-    DataValue::List { element_type: DataType::String, elements: items.map(DataValue::String).collect() }
+    DataValue::List {
+        element_type: DataType::String,
+        elements: items.map(DataValue::String).collect(),
+    }
 }
 
 #[component]
 pub fn MatchBody(id: NodeId, #[prop(into)] top: Signal<f64>) -> impl IntoView {
     let ed = use_editor();
-    let Some(node) = ed.node(id) else { return ().into_any() };
-    let state = Memo::new(move |_| node.instance.with(|i| MatchState {
-        inputs: match_inputs_of(&i.model.properties),
-        cases: match_cases(&i.model.properties),
-    }));
+    let Some(node) = ed.node(id) else {
+        return ().into_any();
+    };
+    let state = Memo::new(move |_| {
+        node.instance.with(|i| MatchState {
+            inputs: match_inputs_of(&i.model.properties),
+            cases: match_cases(&i.model.properties),
+        })
+    });
     let types = Memo::new(move |_| {
         let inputs = state.with(|s| s.inputs.clone());
-        inputs.iter().map(|i| (i.name.clone(), effective_type(ed, id, node, i))).collect::<InputTypes>()
+        inputs
+            .iter()
+            .map(|i| (i.name.clone(), effective_type(ed, id, node, i)))
+            .collect::<InputTypes>()
     });
     // A field may lose focus (and commit its change) after already being removed,
     // so read state via try_
     let edit = Callback::new(move |f: EditFn| {
-        let (Some(before), Some(types)) = (state.try_get_untracked(), types.try_get_untracked()) else { return };
+        let (Some(before), Some(types)) = (state.try_get_untracked(), types.try_get_untracked())
+        else {
+            return;
+        };
         let mut after = before.clone();
-        f.0(&mut after, &Env { types, reg: ed.types.get_untracked() });
+        f.0(
+            &mut after,
+            &Env {
+                types,
+                reg: ed.types.get_untracked(),
+            },
+        );
         let mut commands = Vec::new();
         // Send inputs first: conditions may reference a newly added input
         if after.inputs != before.inputs {
-            commands.push(ClientMessage::SetProperty { id, name: "inputs".into(), value: string_list(after.inputs.iter().map(MatchInput::to_text)) });
+            commands.push(ClientMessage::SetProperty {
+                id,
+                name: "inputs".into(),
+                value: string_list(after.inputs.iter().map(MatchInput::to_text)),
+            });
         }
         if after.cases != before.cases {
-            commands.push(ClientMessage::SetProperty { id, name: "cases".into(), value: string_list(after.cases.iter().map(MatchCase::to_text)) });
+            commands.push(ClientMessage::SetProperty {
+                id,
+                name: "cases".into(),
+                value: string_list(after.cases.iter().map(MatchCase::to_text)),
+            });
         }
         ed.send_batch(commands);
     });

@@ -59,7 +59,11 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
                 })
                 .collect(),
             settings: m.settings.into_iter().map(to_wit_setting).collect(),
-            resources: m.resources.into_iter().map(to_wit_resource_collection).collect(),
+            resources: m
+                .resources
+                .into_iter()
+                .map(to_wit_resource_collection)
+                .collect(),
         }
     }
 
@@ -143,11 +147,18 @@ impl wit_nodes::GuestNode for NodeHandle {
 
     fn validate_property(&self, name: String, value: wit::Value) -> Result<(), wit::UiError> {
         let value = decode(&value).ok_or_else(|| wit::UiError {
-            key: String::new(), args: vec![], fallback: "Invalid property encoding".into(),
+            key: String::new(),
+            args: vec![],
+            fallback: "Invalid property encoding".into(),
         })?;
-        self.0.borrow().validate_property(&name, &value).map_err(|e| wit::UiError {
-            key: e.key, args: e.args, fallback: e.fallback,
-        })
+        self.0
+            .borrow()
+            .validate_property(&name, &value)
+            .map_err(|e| wit::UiError {
+                key: e.key,
+                args: e.args,
+                fallback: e.fallback,
+            })
     }
 
     fn set_property(&self, name: String, value: wit::Value) {

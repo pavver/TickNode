@@ -12,7 +12,9 @@ const BREAK_PREFIX: &str = "type/break/";
 
 /// For the automatic Make/Break nodes of a struct: (`"make"` | `"break"`, the type's name).
 fn custom_node_kind(type_name: &str) -> Option<(&'static str, &str)> {
-    type_name.strip_prefix(MAKE_PREFIX).map(|t| ("make", t))
+    type_name
+        .strip_prefix(MAKE_PREFIX)
+        .map(|t| ("make", t))
         .or_else(|| type_name.strip_prefix(BREAK_PREFIX).map(|t| ("break", t)))
 }
 
@@ -27,27 +29,32 @@ fn translated_custom_node(type_name: &str) -> Option<(&'static str, &str, String
 }
 
 pub fn node_title(def: &NodeDefinition) -> String {
-    if let Some((kind, _, title)) = translated_custom_node(&def.type_name)
-    {
+    if let Some((kind, _, title)) = translated_custom_node(&def.type_name) {
         return t!(if kind == "make" { "custom-make-title" } else { "custom-break-title" }, type = title);
     }
-    lookup(&format!("node-{}-title", node_slug(&def.type_name))).unwrap_or_else(|| def.title.clone())
+    lookup(&format!("node-{}-title", node_slug(&def.type_name)))
+        .unwrap_or_else(|| def.title.clone())
 }
 
 pub fn node_description(def: &NodeDefinition) -> String {
-    if let Some((kind, _, title)) = translated_custom_node(&def.type_name)
-    {
+    if let Some((kind, _, title)) = translated_custom_node(&def.type_name) {
         return t!(if kind == "make" { "custom-make-description" } else { "custom-break-description" }, type = title);
     }
-    lookup(&format!("node-{}-description", node_slug(&def.type_name))).unwrap_or_else(|| def.description.clone())
+    lookup(&format!("node-{}-description", node_slug(&def.type_name)))
+        .unwrap_or_else(|| def.description.clone())
 }
 
 pub fn node_help(def: &NodeDefinition) -> String {
-    if let Some((kind, type_name, title)) = translated_custom_node(&def.type_name)
-    {
-        let key = if kind == "make" { "custom-make-help" } else { "custom-break-help" };
+    if let Some((kind, type_name, title)) = translated_custom_node(&def.type_name) {
+        let key = if kind == "make" {
+            "custom-make-help"
+        } else {
+            "custom-break-help"
+        };
         let description = lookup(&format!("type-{}-description", slug(type_name)))
-            .or_else(|| TYPES.with(|types| types.borrow().get(type_name).map(|d| d.description.clone())))
+            .or_else(|| {
+                TYPES.with(|types| types.borrow().get(type_name).map(|d| d.description.clone()))
+            })
             .unwrap_or_default();
         let text = t!(key, type = title, name = type_name);
         return format!("{text}\n\n{description}").trim_end().to_string();
@@ -71,7 +78,10 @@ pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
         }
     }
     let base = format!("node-{}-pin-", node_slug(type_name));
-    if !pin_name.is_empty() && pin_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    if !pin_name.is_empty()
+        && pin_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         && let Some(label) = lookup(&format!("{base}{pin_name}"))
     {
         return label;
@@ -89,7 +99,11 @@ pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
 /// (`entity_id`), otherwise its slug.
 fn property_key(name: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         keys.push(name.to_string());
     }
     let name_slug = slug(name);
@@ -101,7 +115,9 @@ fn property_key(name: &str) -> Vec<String> {
 
 fn property_lookup(type_name: &str, name: &str, suffix: &str) -> Option<String> {
     let base = format!("node-{}-prop-", node_slug(type_name));
-    property_key(name).iter().find_map(|key| lookup(&format!("{base}{key}-{suffix}")))
+    property_key(name)
+        .iter()
+        .find_map(|key| lookup(&format!("{base}{key}-{suffix}")))
 }
 
 /// Title of a described property (`node-<type slug>-prop-<name>-title`), falling back to the definition's title.
@@ -110,7 +126,8 @@ pub fn property_title(type_name: &str, prop: &PropertyDefinition) -> String {
 }
 
 pub fn property_description(type_name: &str, prop: &PropertyDefinition) -> String {
-    property_lookup(type_name, &prop.name, "description").unwrap_or_else(|| prop.description.clone())
+    property_lookup(type_name, &prop.name, "description")
+        .unwrap_or_else(|| prop.description.clone())
 }
 
 /// Select labels prefer node-specific keys, then known type titles, unit symbols, and definition text.
@@ -123,19 +140,38 @@ pub fn property_option_label(type_name: &str, prop_name: &str, value: &str, labe
             // Only named types (`quantity:<name>` targets, `plugin.type` values): plain words such as
             // `bool` keep their own option labels.
             let name = value.strip_prefix("quantity:").unwrap_or(value);
-            let known = name.contains('.') && (TYPES.with(|types| types.borrow().get(name).is_some())
-                || quantity::kind(name).is_some());
-            known.then(|| translated_type_title(name)
-                .or_else(|| lookup(&format!("type-{}", slug(name))))).flatten()
+            let known = name.contains('.')
+                && (TYPES.with(|types| types.borrow().get(name).is_some())
+                    || quantity::kind(name).is_some());
+            known
+                .then(|| {
+                    translated_type_title(name).or_else(|| lookup(&format!("type-{}", slug(name))))
+                })
+                .flatten()
         })
-        .or_else(|| (prop_name == "unit").then(|| lookup(&format!("unit-{}", slug(value)))).flatten())
+        .or_else(|| {
+            (prop_name == "unit")
+                .then(|| lookup(&format!("unit-{}", slug(value))))
+                .flatten()
+        })
         .unwrap_or_else(|| label.to_string())
 }
 
 /// Compact MultiSelect text; the full option label remains available as a tooltip.
-pub fn property_option_short_label(type_name: &str, name: &str, value: &str, label: &str) -> String {
-    property_lookup(type_name, name, &format!("option-{}-short", slug(value)))
-        .unwrap_or_else(|| property_option_label(type_name, name, value, label).chars().take(3).collect())
+pub fn property_option_short_label(
+    type_name: &str,
+    name: &str,
+    value: &str,
+    label: &str,
+) -> String {
+    property_lookup(type_name, name, &format!("option-{}-short", slug(value))).unwrap_or_else(
+        || {
+            property_option_label(type_name, name, value, label)
+                .chars()
+                .take(3)
+                .collect()
+        },
+    )
 }
 
 /// Whether a named pin type has an expandable struct definition in the current catalog.
@@ -151,7 +187,13 @@ fn custom_pin_label(struct_name: &str, pin_name: &str) -> Option<String> {
         if pin_name == def.title {
             return translated_type_title(struct_name);
         }
-        let field = def.fields().iter().find(|f| if f.title.is_empty() { f.name == pin_name } else { f.title == pin_name })?;
+        let field = def.fields().iter().find(|f| {
+            if f.title.is_empty() {
+                f.name == pin_name
+            } else {
+                f.title == pin_name
+            }
+        })?;
         lookup(&format!("type-{}-field-{}", slug(struct_name), field.name))
     })
 }
@@ -168,8 +210,18 @@ pub fn type_def_title(def: &TypeDefinition) -> String {
 
 /// Title of an enum value in the drop-down (the value itself when it has no title).
 pub fn enum_value_title(type_name: &str, value: &EnumValue) -> String {
-    lookup(&format!("type-{}-value-{}", slug(type_name), slug(&value.value)))
-        .unwrap_or_else(|| if value.title.is_empty() { value.value.clone() } else { value.title.clone() })
+    lookup(&format!(
+        "type-{}-value-{}",
+        slug(type_name),
+        slug(&value.value)
+    ))
+    .unwrap_or_else(|| {
+        if value.title.is_empty() {
+            value.value.clone()
+        } else {
+            value.title.clone()
+        }
+    })
 }
 
 /// Localized selected enum label for content-based geometry; structs have no inline control.
@@ -177,33 +229,76 @@ pub(crate) fn enum_selected_label(name: &str, selected: &str) -> Option<String> 
     TYPES.with(|types| {
         let types = types.borrow();
         let def = types.get(name).filter(|d| d.is_enum())?;
-        Some(def.values().iter().find(|value| value.value == selected)
-            .map_or_else(|| if selected.is_empty() { "—".into() } else { selected.into() }, |value| enum_value_title(name, value)))
+        Some(
+            def.values()
+                .iter()
+                .find(|value| value.value == selected)
+                .map_or_else(
+                    || {
+                        if selected.is_empty() {
+                            "—".into()
+                        } else {
+                            selected.into()
+                        }
+                    },
+                    |value| enum_value_title(name, value),
+                ),
+        )
     })
 }
 
 /// Title of a plugin setting (`setting-<plugin slug>-<key slug>-title`).
 pub fn setting_title(plugin: &str, def: &SettingDefinition) -> String {
-    lookup(&format!("setting-{}-{}-title", slug(plugin), slug(&def.key))).unwrap_or_else(|| def.title.clone())
+    lookup(&format!(
+        "setting-{}-{}-title",
+        slug(plugin),
+        slug(&def.key)
+    ))
+    .unwrap_or_else(|| def.title.clone())
 }
 
 pub fn setting_description(plugin: &str, def: &SettingDefinition) -> String {
-    lookup(&format!("setting-{}-{}-description", slug(plugin), slug(&def.key))).unwrap_or_else(|| def.description.clone())
+    lookup(&format!(
+        "setting-{}-{}-description",
+        slug(plugin),
+        slug(&def.key)
+    ))
+    .unwrap_or_else(|| def.description.clone())
 }
 
 /// Label of a `Select` setting option.
-pub fn setting_option_label(plugin: &str, def: &SettingDefinition, value: &str, label: &str) -> String {
-    lookup(&format!("setting-{}-{}-option-{}", slug(plugin), slug(&def.key), slug(value))).unwrap_or_else(|| label.to_string())
+pub fn setting_option_label(
+    plugin: &str,
+    def: &SettingDefinition,
+    value: &str,
+    label: &str,
+) -> String {
+    lookup(&format!(
+        "setting-{}-{}-option-{}",
+        slug(plugin),
+        slug(&def.key),
+        slug(value)
+    ))
+    .unwrap_or_else(|| label.to_string())
 }
 
 /// Title of a plugin resource collection (`<plugin slug>-resource-<collection id slug>-title`).
 pub fn resource_collection_title(plugin: &str, collection: &ResourceCollection) -> String {
-    lookup(&format!("{}-resource-{}-title", slug(plugin), slug(&collection.id)))
-        .unwrap_or_else(|| collection.title.clone())
+    lookup(&format!(
+        "{}-resource-{}-title",
+        slug(plugin),
+        slug(&collection.id)
+    ))
+    .unwrap_or_else(|| collection.title.clone())
 }
 
 /// Title of a resource action (`<plugin slug>-resource-<collection id slug>-action-<type_name slug>`).
 pub fn resource_action_title(plugin: &str, collection_id: &str, action: &ResourceAction) -> String {
-    lookup(&format!("{}-resource-{}-action-{}", slug(plugin), slug(collection_id), slug(&action.type_name)))
-        .unwrap_or_else(|| action.title.clone())
+    lookup(&format!(
+        "{}-resource-{}-action-{}",
+        slug(plugin),
+        slug(collection_id),
+        slug(&action.type_name)
+    ))
+    .unwrap_or_else(|| action.title.clone())
 }

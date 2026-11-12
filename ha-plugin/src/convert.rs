@@ -138,39 +138,75 @@ mod tests {
             "entity_id": entity_id, "state": state, "attributes": attributes,
             "last_changed": changed, "last_updated": changed,
             "context": {"id": "01X", "parent_id": null, "user_id": null}
-        })).unwrap()
+        }))
+        .unwrap()
     }
 
     #[test]
     fn state_converts_with_utc_timestamps() {
         // +02:00 in the text: the instant is 2026-10-30 21:15:42.5 UTC
-        let s = state("sensor.temp", "21.5", json!({"unit_of_measurement": "°C", "friendly_name": "Temp", "tags": ["a", "b"], "extra": {"n": 1, "gone": null}}), "2026-10-30T23:15:42.500000+02:00");
+        let s = state(
+            "sensor.temp",
+            "21.5",
+            json!({"unit_of_measurement": "°C", "friendly_name": "Temp", "tags": ["a", "b"], "extra": {"n": 1, "gone": null}}),
+            "2026-10-30T23:15:42.500000+02:00",
+        );
         let v = state_value(&s);
         assert_eq!(v.get_type(), DataType::Named(STATE_TYPE.into()));
-        assert_eq!(field(&v, "entity_id"), &DataValue::String("sensor.temp".into()));
+        assert_eq!(
+            field(&v, "entity_id"),
+            &DataValue::String("sensor.temp".into())
+        );
         assert_eq!(field(&v, "state"), &DataValue::String("21.5".into()));
-        let expected = Utc.with_ymd_and_hms(2026, 10, 30, 21, 15, 42).unwrap() + chrono::Duration::milliseconds(500);
+        let expected = Utc.with_ymd_and_hms(2026, 10, 30, 21, 15, 42).unwrap()
+            + chrono::Duration::milliseconds(500);
         assert_eq!(field(&v, "last_changed"), &DataValue::DateTime(expected));
         assert_eq!(field(&v, "last_updated"), &DataValue::DateTime(expected));
         let attrs = field(&v, "attributes");
         assert_eq!(attrs.get_type(), DataType::Object);
-        assert_eq!(field(attrs, "unit_of_measurement"), &DataValue::String("°C".into()));
-        assert_eq!(field(attrs, "friendly_name"), &DataValue::String("Temp".into()));
-        let DataValue::List { element_type, elements } = field(attrs, "tags") else { panic!("tags") };
+        assert_eq!(
+            field(attrs, "unit_of_measurement"),
+            &DataValue::String("°C".into())
+        );
+        assert_eq!(
+            field(attrs, "friendly_name"),
+            &DataValue::String("Temp".into())
+        );
+        let DataValue::List {
+            element_type,
+            elements,
+        } = field(attrs, "tags")
+        else {
+            panic!("tags")
+        };
         assert_eq!((element_type, elements.len()), (&DataType::String, 2));
         // Nested objects keep their keys, nulls are skipped, absent typed attributes do not appear
-        assert_eq!(field(field(attrs, "extra"), "n"), &DataValue::Number(NumberValue::Int(1)));
+        assert_eq!(
+            field(field(attrs, "extra"), "n"),
+            &DataValue::Number(NumberValue::Int(1))
+        );
         assert!(ticknode_plugin_sdk::field(field(attrs, "extra"), "gone").is_none());
         assert!(ticknode_plugin_sdk::field(attrs, "device_class").is_none());
     }
 
     #[test]
     fn typed_attributes_of_other_domains_are_flat() {
-        let s = state("climate.living", "heat", json!({"temperature": 21.0, "current_temperature": 19.5, "hvac_modes": ["heat", "off"], "custom": true}), "2026-10-30T10:00:00+00:00");
+        let s = state(
+            "climate.living",
+            "heat",
+            json!({"temperature": 21.0, "current_temperature": 19.5, "hvac_modes": ["heat", "off"], "custom": true}),
+            "2026-10-30T10:00:00+00:00",
+        );
         let attrs = state_value(&s);
         let attrs = field(&attrs, "attributes");
-        assert_eq!(field(attrs, "temperature"), &DataValue::Number(NumberValue::Int(21)));
-        assert_eq!(field(attrs, "current_temperature"), &DataValue::Number(NumberValue::Float(19.5)));
+        assert_eq!(
+            field(attrs, "temperature"),
+            &DataValue::Number(NumberValue::Int(21))
+        );
+        assert_eq!(
+            field(attrs, "current_temperature"),
+            &DataValue::Number(NumberValue::Float(19.5))
+        );
         assert_eq!(field(attrs, "custom"), &DataValue::Bool(true));
         assert!(matches!(field(attrs, "hvac_modes"), DataValue::List { .. }));
     }
@@ -178,11 +214,22 @@ mod tests {
     #[test]
     fn json_lists_get_an_element_type() {
         let list = json_to_value(&json!([1, "a", null])).unwrap();
-        let DataValue::List { element_type, elements } = list else { panic!() };
+        let DataValue::List {
+            element_type,
+            elements,
+        } = list
+        else {
+            panic!()
+        };
         assert_eq!((element_type, elements.len()), (DataType::Any, 2));
-        let DataValue::List { element_type, .. } = json_to_value(&json!([])).unwrap() else { panic!() };
+        let DataValue::List { element_type, .. } = json_to_value(&json!([])).unwrap() else {
+            panic!()
+        };
         assert_eq!(element_type, DataType::Any);
-        assert_eq!(json_to_value(&json!(2.5)), Some(DataValue::Number(NumberValue::Float(2.5))));
+        assert_eq!(
+            json_to_value(&json!(2.5)),
+            Some(DataValue::Number(NumberValue::Float(2.5)))
+        );
         assert_eq!(json_to_value(&Value::Null), None);
     }
 
@@ -190,10 +237,21 @@ mod tests {
     fn values_convert_to_json() {
         let mut fields = BTreeMap::new();
         fields.insert("brightness".to_string(), DataValue::from(120i64));
-        fields.insert("rgb".to_string(), DataValue::List { element_type: DataType::Number, elements: vec![DataValue::from(1i64), DataValue::from(2.5)] });
+        fields.insert(
+            "rgb".to_string(),
+            DataValue::List {
+                element_type: DataType::Number,
+                elements: vec![DataValue::from(1i64), DataValue::from(2.5)],
+            },
+        );
         fields.insert("name".to_string(), DataValue::from("x"));
-        fields.insert("t".to_string(), DataValue::Duration(std::time::Duration::from_millis(1500)));
-        assert_eq!(value_to_json(&object(fields)), json!({"brightness": 120, "rgb": [1, 2.5], "name": "x", "t": 1.5}));
+        fields.insert(
+            "t".to_string(),
+            DataValue::Duration(std::time::Duration::from_millis(1500)),
+        );
+        assert_eq!(
+            value_to_json(&object(fields)),
+            json!({"brightness": 120, "rgb": [1, 2.5], "name": "x", "t": 1.5})
+        );
     }
-
 }

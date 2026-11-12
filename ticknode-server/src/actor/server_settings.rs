@@ -8,14 +8,18 @@ impl Actor {
         settings: ServerSettings,
     ) -> Result<Vec<(Option<SheetId>, ServerMessage)>, UiMessage> {
         settings.display.validate()?;
-        if !["en", "uk"].contains(&settings.locale.as_str()) { tracing::warn!(locale = %settings.locale, "Invalid formatting locale; using en"); }
+        if !["en", "uk"].contains(&settings.locale.as_str()) {
+            tracing::warn!(locale = %settings.locale, "Invalid formatting locale; using en");
+        }
         let settings = settings.validated();
         self.engine.set_locale(&settings.locale);
         self.engine.set_display_rules(settings.display.clone());
         self.server_settings = settings.clone();
         let tick = Duration::from_millis(settings.tick_ms as u64);
         self.engine.host_state.tick_duration = tick;
-        self.engine.budget = TickBudget { limit: (settings.tick_budget != 0).then_some(settings.tick_budget) };
+        self.engine.budget = TickBudget {
+            limit: (settings.tick_budget != 0).then_some(settings.tick_budget),
+        };
         self.storage.save_settings(&settings).map_err(|e| {
             tracing::error!("Failed to save settings: {e:#}");
             UiMessage::new("error-save-settings", "Failed to save settings")

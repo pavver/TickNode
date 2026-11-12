@@ -1,6 +1,6 @@
-use crate::{DataType, DataValue, NumberValue};
+use super::{CompareOp, Condition, Join, MatchCase, MatchInput, Operand, input_type_name};
 use crate::text::format_value;
-use super::{CompareOp, Operand, Join, Condition, MatchCase, MatchInput, input_type_name};
+use crate::{DataType, DataValue, NumberValue};
 use CompareOp::*;
 
 impl CompareOp {
@@ -16,16 +16,32 @@ impl CompareOp {
 
     fn presentation(self) -> (&'static str, &'static str) {
         const FORMS: &[(CompareOp, &str, &str)] = &[
-            (Eq, "=", "="), (Ne, "!=", "≠"), (Lt, "<", "<"), (Le, "<=", "≤"), (Gt, ">", ">"), (Ge, ">=", "≥"),
-            (Contains, "contains", "contains"), (NotContains, "not_contains", "not contains"),
-            (StartsWith, "starts_with", "starts with"), (EndsWith, "ends_with", "ends with"),
-            (IsEmpty, "is_empty", "is empty"), (NotEmpty, "not_empty", "is not empty"),
-            (IsTrue, "is_true", "= true"), (IsFalse, "is_false", "= false"),
-            (HasField, "has_field", "has field"), (NoField, "no_field", "no field"),
-            (LenEq, "len_eq", "length ="), (LenGt, "len_gt", "length >"), (LenLt, "len_lt", "length <"),
-            (HasValue, "has_value", "has value"), (NoValue, "no_value", "no value"),
+            (Eq, "=", "="),
+            (Ne, "!=", "≠"),
+            (Lt, "<", "<"),
+            (Le, "<=", "≤"),
+            (Gt, ">", ">"),
+            (Ge, ">=", "≥"),
+            (Contains, "contains", "contains"),
+            (NotContains, "not_contains", "not contains"),
+            (StartsWith, "starts_with", "starts with"),
+            (EndsWith, "ends_with", "ends with"),
+            (IsEmpty, "is_empty", "is empty"),
+            (NotEmpty, "not_empty", "is not empty"),
+            (IsTrue, "is_true", "= true"),
+            (IsFalse, "is_false", "= false"),
+            (HasField, "has_field", "has field"),
+            (NoField, "no_field", "no field"),
+            (LenEq, "len_eq", "length ="),
+            (LenGt, "len_gt", "length >"),
+            (LenLt, "len_lt", "length <"),
+            (HasValue, "has_value", "has value"),
+            (NoValue, "no_value", "no value"),
         ];
-        let (_, text, symbol) = FORMS.iter().find(|(op, _, _)| *op == self).expect("every operator has a presentation");
+        let (_, text, symbol) = FORMS
+            .iter()
+            .find(|(op, _, _)| *op == self)
+            .expect("every operator has a presentation");
         (text, symbol)
     }
 
@@ -64,7 +80,10 @@ fn quote(s: &str) -> String {
 
 impl Join {
     pub fn symbol(self) -> &'static str {
-        match self { Self::And => "and", Self::Or => "or" }
+        match self {
+            Self::And => "and",
+            Self::Or => "or",
+        }
     }
     fn text(self) -> &'static str {
         self.symbol()
@@ -72,7 +91,11 @@ impl Join {
 }
 
 impl Condition {
-    fn to_text(&self, op: impl Fn(CompareOp) -> String, value: impl Fn(&Operand) -> String) -> String {
+    fn to_text(
+        &self,
+        op: impl Fn(CompareOp) -> String,
+        value: impl Fn(&Operand) -> String,
+    ) -> String {
         match &self.right {
             Some(r) => format!("{} {} {}", value(&self.left), op(self.op), value(r)),
             None => format!("{} {}", value(&self.left), op(self.op)),
@@ -82,10 +105,20 @@ impl Condition {
 
 impl MatchCase {
     pub fn to_text(&self) -> String {
-        let body = self.conditions.iter().enumerate().map(|(i, c)| {
-            let cond = c.to_text(|op| op.text().to_string(), Operand::to_text);
-            if i == 0 { cond } else { format!("{} {}", c.join.text(), cond) }
-        }).collect::<Vec<_>>().join(" ");
+        let body = self
+            .conditions
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let cond = c.to_text(|op| op.text().to_string(), Operand::to_text);
+                if i == 0 {
+                    cond
+                } else {
+                    format!("{} {}", c.join.text(), cond)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         format!("{}: {}", self.pin, body).trim_end().to_string()
     }
 
@@ -94,15 +127,29 @@ impl MatchCase {
         if self.conditions.is_empty() {
             return "always".into();
         }
-        self.conditions.iter().enumerate().map(|(i, c)| {
-            let cond = c.to_text(|op| op.symbol().to_string(), Operand::to_text);
-            if i == 0 { cond } else { format!("{} {}", c.join.symbol(), cond) }
-        }).collect::<Vec<_>>().join(" ")
+        self.conditions
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let cond = c.to_text(|op| op.symbol().to_string(), Operand::to_text);
+                if i == 0 {
+                    cond
+                } else {
+                    format!("{} {}", c.join.symbol(), cond)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
 impl MatchInput {
     pub fn to_text(&self) -> String {
-        format!("{}:{}:{}", self.pin, self.name, input_type_name(&self.value_type))
+        format!(
+            "{}:{}:{}",
+            self.pin,
+            self.name,
+            input_type_name(&self.value_type)
+        )
     }
 }

@@ -1,11 +1,11 @@
 //! Live preview rendering and input collection for the template status row.
 
-use std::sync::Arc;
-use leptos::prelude::*;
-use ticknode_shared::*;
 use crate::i18n::t;
 use crate::inline::template_field::TemplateDraft;
 use crate::state::Editor;
+use leptos::prelude::*;
+use std::sync::Arc;
+use ticknode_shared::*;
 
 /// Resolves the effective input value according to precedence:
 /// own trace input > connected source trace output > inline value property.
@@ -14,10 +14,7 @@ pub fn resolve_input_value(
     source_trace: Option<&DataValue>,
     inline_value: Option<&DataValue>,
 ) -> Option<DataValue> {
-    own_trace
-        .or(source_trace)
-        .or(inline_value)
-        .cloned()
+    own_trace.or(source_trace).or(inline_value).cloned()
 }
 
 /// Plain descriptor for unit testing input collection precedence.
@@ -48,57 +45,92 @@ pub fn collect_preview_inputs(
 
 /// Collects input data pin values from live editor signals in pin order.
 pub fn node_preview_inputs(ed: Editor, id: NodeId) -> Vec<(String, Option<DataValue>, DataType)> {
-    let Some(node) = ed.node_tracked(id) else { return Vec::new() };
+    let Some(node) = ed.node_tracked(id) else {
+        return Vec::new();
+    };
     let pins: Vec<(PinId, String, DataType)> = node.instance.with(|i| {
-        i.definition.pins.iter()
-            .filter(|p| p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_)))
+        i.definition
+            .pins
+            .iter()
+            .filter(|p| {
+                p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_))
+            })
             .map(|p| {
-                let ty = match &p.pin_type { PinType::Data(t) => t.clone(), _ => DataType::Any };
+                let ty = match &p.pin_type {
+                    PinType::Data(t) => t.clone(),
+                    _ => DataType::Any,
+                };
                 (p.id, p.name.clone(), ty)
             })
             .collect()
     });
 
-    pins.into_iter().map(|(pin_id, name, default_ty)| {
-        let declared_ty = ed.source_type(id, pin_id).unwrap_or(default_ty);
+    pins.into_iter()
+        .map(|(pin_id, name, default_ty)| {
+            let declared_ty = ed.source_type(id, pin_id).unwrap_or(default_ty);
 
-        let own_trace = node.trace.with(|t| {
-            t.as_ref().and_then(|tr| crate::node_status::trace_value(tr, pin_id, PinDirection::Input)).cloned()
-        });
-
-        let source_trace = if own_trace.is_none() {
-            let src = ed.data.with(|d| {
-                d.iter().find(|c| c.dst_node == id && c.dst_pin == pin_id).map(|c| (c.src_node, c.src_pin))
+            let own_trace = node.trace.with(|t| {
+                t.as_ref()
+                    .and_then(|tr| crate::node_status::trace_value(tr, pin_id, PinDirection::Input))
+                    .cloned()
             });
-            src.and_then(|(src_node, src_pin)| {
-                ed.node_tracked(src_node).and_then(|sn| {
-                    sn.trace.with(|tr| {
-                        tr.as_ref().and_then(|t| crate::node_status::trace_value(t, src_pin, PinDirection::Output)).cloned()
+
+            let source_trace = if own_trace.is_none() {
+                let src = ed.data.with(|d| {
+                    d.iter()
+                        .find(|c| c.dst_node == id && c.dst_pin == pin_id)
+                        .map(|c| (c.src_node, c.src_pin))
+                });
+                src.and_then(|(src_node, src_pin)| {
+                    ed.node_tracked(src_node).and_then(|sn| {
+                        sn.trace.with(|tr| {
+                            tr.as_ref()
+                                .and_then(|t| {
+                                    crate::node_status::trace_value(
+                                        t,
+                                        src_pin,
+                                        PinDirection::Output,
+                                    )
+                                })
+                                .cloned()
+                        })
                     })
                 })
-            })
-        } else {
-            None
-        };
+            } else {
+                None
+            };
 
-        let inline_value = if own_trace.is_none() && source_trace.is_none() {
-            let prop_name = ticknode_shared::input_value_property(pin_id);
-            node.instance.with(|i| {
-                i.model.properties.iter().find(|(n, _)| *n == prop_name).map(|(_, v)| v.clone())
-            })
-        } else {
-            None
-        };
+            let inline_value = if own_trace.is_none() && source_trace.is_none() {
+                let prop_name = ticknode_shared::input_value_property(pin_id);
+                node.instance.with(|i| {
+                    i.model
+                        .properties
+                        .iter()
+                        .find(|(n, _)| *n == prop_name)
+                        .map(|(_, v)| v.clone())
+                })
+            } else {
+                None
+            };
 
-        let value = resolve_input_value(own_trace.as_ref(), source_trace.as_ref(), inline_value.as_ref());
-        (name, value, declared_ty)
-    }).collect()
+            let value = resolve_input_value(
+                own_trace.as_ref(),
+                source_trace.as_ref(),
+                inline_value.as_ref(),
+            );
+            (name, value, declared_ty)
+        })
+        .collect()
 }
 
 /// Status row evaluation state.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreviewStatus {
-    SyntaxError { line: usize, column: usize, message: String },
+    SyntaxError {
+        line: usize,
+        column: usize,
+        message: String,
+    },
     RenderError(String),
     Waiting,
     Empty,
@@ -144,17 +176,26 @@ pub fn evaluate_preview(
 #[component]
 pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
     let ed = crate::state::use_editor();
-    let draft = use_context::<TemplateDraft>().map(|d| d.0).unwrap_or_else(|| {
-        let stored = ed.node_tracked(node).and_then(|n| {
-            n.instance.with(|i| {
-                i.model.properties.iter().find(|(name, _)| name == "template").and_then(|(_, v)| match v {
-                    DataValue::String(s) => Some(s.clone()),
-                    _ => None,
+    let draft = use_context::<TemplateDraft>()
+        .map(|d| d.0)
+        .unwrap_or_else(|| {
+            let stored = ed
+                .node_tracked(node)
+                .and_then(|n| {
+                    n.instance.with(|i| {
+                        i.model
+                            .properties
+                            .iter()
+                            .find(|(name, _)| name == "template")
+                            .and_then(|(_, v)| match v {
+                                DataValue::String(s) => Some(s.clone()),
+                                _ => None,
+                            })
+                    })
                 })
-            })
-        }).unwrap_or_default();
-        RwSignal::new(stored)
-    });
+                .unwrap_or_default();
+            RwSignal::new(stored)
+        });
 
     let inputs = Memo::new(move |_| node_preview_inputs(ed, node));
     let preview = Memo::new(move |_| {

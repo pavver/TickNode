@@ -1,9 +1,9 @@
 //! Editor console panel.
 
-use leptos::prelude::*;
 use crate::i18n::t;
 use crate::state::use_editor;
 use crate::ui::*;
+use leptos::prelude::*;
 
 // --- Console ---
 

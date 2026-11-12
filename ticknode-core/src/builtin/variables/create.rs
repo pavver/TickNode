@@ -1,6 +1,6 @@
-use ticknode_shared::*;
+use super::{SCOPE_OPTIONS, format_scope, parse_scope};
 use crate::{Node, NodeContext};
-use super::{format_scope, parse_scope, SCOPE_OPTIONS};
+use ticknode_shared::*;
 
 pub struct VariableCreateNode {
     pub id: NodeId,
@@ -72,7 +72,9 @@ impl Node for VariableCreateNode {
     }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let value = ctx.get_value(PinId(3)).unwrap_or_else(|| ctx.types.default_value(&self.value_type));
+        let value = ctx
+            .get_value(PinId(3))
+            .unwrap_or_else(|| ctx.types.default_value(&self.value_type));
         vec![NodeOutput::Variable(VariableCommand::Create {
             name: self.name.clone(),
             scope: self.scope,
@@ -95,8 +97,14 @@ impl Node for VariableCreateNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("name".to_string(), DataValue::String(self.name.clone())),
-            ("scope".to_string(), DataValue::String(format_scope(self.scope).to_string())),
-            ("value_type".to_string(), DataValue::String(data_type_name(&self.value_type))),
+            (
+                "scope".to_string(),
+                DataValue::String(format_scope(self.scope).to_string()),
+            ),
+            (
+                "value_type".to_string(),
+                DataValue::String(data_type_name(&self.value_type)),
+            ),
         ]
     }
 

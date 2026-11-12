@@ -1,9 +1,9 @@
 //! Pointer-captured node resizing; only the completed gesture is sent to the server.
-use leptos::{ev, html, prelude::*};
-use ticknode_shared::{ClientMessage, NodeId, NodeSize};
 use crate::geometry::resize_size;
 use crate::i18n::t;
 use crate::state::use_editor;
+use leptos::{ev, html, prelude::*};
+use ticknode_shared::{ClientMessage, NodeId, NodeSize};
 
 #[derive(Clone, Copy)]
 struct ResizeDrag {
@@ -21,8 +21,12 @@ pub(super) fn ResizeHandle(id: NodeId) -> impl IntoView {
     let cancel = move || {
         if let Some(active) = drag.get_value() {
             drag.set_value(None);
-            if let Some(node) = ed.node(id) { node.size_preview.set(None); }
-            if let Some(el) = handle.get_untracked() { let _ = el.release_pointer_capture(active.pointer); }
+            if let Some(node) = ed.node(id) {
+                node.size_preview.set(None);
+            }
+            if let Some(el) = handle.get_untracked() {
+                let _ = el.release_pointer_capture(active.pointer);
+            }
         }
     };
     let keys = window_event_listener(ev::keydown, move |ev| {

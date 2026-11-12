@@ -1,5 +1,5 @@
-use ticknode_plugin_sdk::*;
 use std::cell::RefCell;
+use ticknode_plugin_sdk::*;
 
 /// Plugin settings: there is a single plugin instance, so settings live in static state.
 #[derive(Default)]
@@ -35,7 +35,16 @@ impl PluginNode for Greeter {
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
         let text = CONFIG.with(|c| {
             let c = c.borrow();
-            format!("{}|{}|{}", c.greeting, c.mode, if c.token.is_empty() { "no-token" } else { "token" })
+            format!(
+                "{}|{}|{}",
+                c.greeting,
+                c.mode,
+                if c.token.is_empty() {
+                    "no-token"
+                } else {
+                    "token"
+                }
+            )
         });
         vec![Output::Data(PinId(1), text.into())]
     }
@@ -67,7 +76,10 @@ impl PluginNode for Picker {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("choice".into(), self.choice.clone().into()), ("mode".into(), self.mode.clone().into())]
+        vec![
+            ("choice".into(), self.choice.clone().into()),
+            ("mode".into(), self.mode.clone().into()),
+        ]
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
@@ -81,7 +93,10 @@ impl PluginNode for Picker {
     }
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
-        vec![Output::Data(PinId(1), format!("{}:{}", self.mode, self.choice).into())]
+        vec![Output::Data(
+            PinId(1),
+            format!("{}:{}", self.mode, self.choice).into(),
+        )]
     }
 }
 
@@ -89,15 +104,44 @@ impl PluginNode for Picker {
 /// the host limits and clearing on disable). `flood` exceeds the limits on purpose.
 pub(super) fn publish_options(greeting: &str) {
     if greeting == "clock" {
-        host::set_options("clock", &[PropertyOption { value: format!("{}:{}", host::current_tick(), host::tick_duration_ms()),
-            label: "Clock outside execution".into(), detail: String::new(), icon: None }]);
+        host::set_options(
+            "clock",
+            &[PropertyOption {
+                value: format!("{}:{}", host::current_tick(), host::tick_duration_ms()),
+                label: "Clock outside execution".into(),
+                detail: String::new(),
+                icon: None,
+            }],
+        );
     }
-    let option = |value: &str| PropertyOption { value: value.into(), label: value.to_uppercase(), detail: format!("detail {value}"), icon: Some("mdi:hand-wave".into()) };
-    host::set_options("greetings", &if greeting.is_empty() { Vec::new() } else { vec![option(greeting)] });
+    let option = |value: &str| PropertyOption {
+        value: value.into(),
+        label: value.to_uppercase(),
+        detail: format!("detail {value}"),
+        icon: Some("mdi:hand-wave".into()),
+    };
+    host::set_options(
+        "greetings",
+        &if greeting.is_empty() {
+            Vec::new()
+        } else {
+            vec![option(greeting)]
+        },
+    );
     if greeting == "flood" {
         let many: Vec<PropertyOption> = (0..20_005).map(|i| option(&format!("v{i}"))).collect();
         host::set_options("flood", &many);
-        host::set_options("long", &[option(&"x".repeat(600)), option("ok"), PropertyOption { value: String::new(), ..option("empty") }]);
+        host::set_options(
+            "long",
+            &[
+                option(&"x".repeat(600)),
+                option("ok"),
+                PropertyOption {
+                    value: String::new(),
+                    ..option("empty")
+                },
+            ],
+        );
     } else {
         host::set_options("flood", &[]);
         host::set_options("long", &[]);

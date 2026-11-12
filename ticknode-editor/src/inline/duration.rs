@@ -16,7 +16,8 @@ pub(super) fn DurationValue(
 ) -> impl IntoView {
     let ed = use_editor();
     let initial = value.get_untracked();
-    let (initial_text, initial_unit) = presentation(initial.as_ref(), default_minutes.then_some(Unit::Minutes));
+    let (initial_text, initial_unit) =
+        presentation(initial.as_ref(), default_minutes.then_some(Unit::Minutes));
     let draft = RwSignal::new(initial_text);
     let unit = RwSignal::new(initial_unit);
     let saved = RwSignal::new(initial);
@@ -32,15 +33,28 @@ pub(super) fn DurationValue(
         error.set(None);
     });
     let restore = move || {
-        let (Some(current), Some(selected)) = (saved.try_get_untracked(), unit.try_get_untracked()) else { return };
+        let (Some(current), Some(selected)) = (saved.try_get_untracked(), unit.try_get_untracked())
+        else {
+            return;
+        };
         let (text, selected) = presentation(current.as_ref(), Some(selected));
         draft.set(text);
         unit.set(selected);
     };
     let commit = move || {
         // Blur can arrive after node removal or a change of the Constant's type.
-        let (Some(text), Some(selected), Some(current)) = (draft.try_get_untracked(), unit.try_get_untracked(), saved.try_get_untracked()) else { return };
-        let parsed = if wall_only { units::parse_property(&text, selected) } else { parse(&text, selected) };
+        let (Some(text), Some(selected), Some(current)) = (
+            draft.try_get_untracked(),
+            unit.try_get_untracked(),
+            saved.try_get_untracked(),
+        ) else {
+            return;
+        };
+        let parsed = if wall_only {
+            units::parse_property(&text, selected)
+        } else {
+            parse(&text, selected)
+        };
         match parsed {
             Ok(None) if !optional => restore(),
             Ok(next) => {

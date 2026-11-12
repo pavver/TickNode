@@ -24,14 +24,26 @@ pub(super) fn configure(settings: &[(String, DataValue)]) {
         s.status.clear();
         s.tick_url = setting_bool(settings, "http_tick")
             .unwrap_or(false)
-            .then(|| setting_str(settings, "http_url").unwrap_or_default().to_string());
+            .then(|| {
+                setting_str(settings, "http_url")
+                    .unwrap_or_default()
+                    .to_string()
+            });
         if s.tick_url.is_some() {
             return;
         }
-        let Some(url) = setting_str(settings, "http_url") else { return };
-        let count = setting_number(settings, "http_count").map(|n| n as usize).unwrap_or(1).min(10);
+        let Some(url) = setting_str(settings, "http_url") else {
+            return;
+        };
+        let count = setting_number(settings, "http_count")
+            .map(|n| n as usize)
+            .unwrap_or(1)
+            .min(10);
         for _ in 0..count {
-            match host::http(HttpRequest { timeout_ms: 70_000, ..HttpRequest::get(url) }) {
+            match host::http(HttpRequest {
+                timeout_ms: 70_000,
+                ..HttpRequest::get(url)
+            }) {
                 Ok(id) => s.tasks.push(id),
                 Err(e) => s.status = e,
             }

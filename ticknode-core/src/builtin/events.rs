@@ -1,5 +1,5 @@
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
 pub struct ClickButtonNode {
     pub id: NodeId,
@@ -7,7 +7,9 @@ pub struct ClickButtonNode {
 }
 
 impl Node for ClickButtonNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,

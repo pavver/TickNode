@@ -2,9 +2,17 @@ use super::*;
 use ticknode_shared::*;
 
 fn wire() -> DetachedConnection {
-    DetachedConnection { exec: false, end: DetachedEnd::Target, row: 2, connection: ConnectionModel {
-        src_node: NodeId::generate(), src_pin: PinId(1), dst_node: NodeId::generate(), dst_pin: PinId(2),
-    } }
+    DetachedConnection {
+        exec: false,
+        end: DetachedEnd::Target,
+        row: 2,
+        connection: ConnectionModel {
+            src_node: NodeId::generate(),
+            src_pin: PinId(1),
+            dst_node: NodeId::generate(),
+            dst_pin: PinId(2),
+        },
+    }
 }
 
 fn twice(all: &mut Vec<DetachedConnection>, event: ServerMessage) {
@@ -41,9 +49,24 @@ fn reconnect_snapshot_replaces_detached_wires_including_empty_snapshots() {
     let d = wire();
     let init = |detached_connections| ServerMessage::Init {
         node_errors: vec![],
-        definitions: vec![], nodes: vec![], exec_connections: vec![], data_connections: vec![],
-        traces: vec![], types: vec![], plugins: vec![], translations: vec![], property_options: vec![],
-        history: HistoryState::default(), wire_routes: vec![], detached_connections, timers: vec![], frames: vec![], sheets: vec![], open_sheet: None, variables: vec![], server_settings: ServerSettings::default(),
+        definitions: vec![],
+        nodes: vec![],
+        exec_connections: vec![],
+        data_connections: vec![],
+        traces: vec![],
+        types: vec![],
+        plugins: vec![],
+        translations: vec![],
+        property_options: vec![],
+        history: HistoryState::default(),
+        wire_routes: vec![],
+        detached_connections,
+        timers: vec![],
+        frames: vec![],
+        sheets: vec![],
+        open_sheet: None,
+        variables: vec![],
+        server_settings: ServerSettings::default(),
     };
     let mut all = vec![wire()];
     twice(&mut all, init(vec![d, d]));

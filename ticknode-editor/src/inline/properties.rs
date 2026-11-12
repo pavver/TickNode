@@ -1,16 +1,20 @@
 //! Node property rows, including type selectors and dynamic pickers.
 
 use super::*;
-use crate::geometry::{property_rows_connected, is_type_property};
+use crate::geometry::{is_type_property, property_rows_connected};
 use crate::match_editor::stop_on_controls;
 use crate::panels::property_label;
 use crate::picker::PickerField;
 use crate::ui::Switch;
 
 /// Selectable types for `*_type` properties (list elements, object field); custom types are appended from the registry.
-pub(crate) const TYPE_OPTIONS: [&str; 8] = ["number", "string", "bool", "time", "datetime", "duration", "color", "object"];
+pub(crate) const TYPE_OPTIONS: [&str; 8] = [
+    "number", "string", "bool", "time", "datetime", "duration", "color", "object",
+];
 /// Selectable value types for a Constant node.
-const CONST_TYPES: [&str; 7] = ["number", "string", "bool", "time", "datetime", "duration", "color"];
+const CONST_TYPES: [&str; 7] = [
+    "number", "string", "bool", "time", "datetime", "duration", "color",
+];
 
 pub(super) fn default_value(type_name: &str) -> DataValue {
     match parse_data_type(type_name) {
@@ -22,15 +26,23 @@ pub(super) fn default_value(type_name: &str) -> DataValue {
 
 /// `(value, label)` pairs: built-in types followed by custom plugin types (labeled with `title`).
 pub(crate) fn type_options(ed: Editor, builtin: &[&str]) -> Vec<(String, String)> {
-    let mut options: Vec<_> = builtin.iter().map(|o| {
-        let label = match parse_data_type(o) {
-            Some(t @ DataType::List(_)) => i18n::data_type_title(&TypeRegistry::new(), &t),
-            _ => i18n::type_name_label(o),
-        };
-        (o.to_string(), label)
-    }).collect();
+    let mut options: Vec<_> = builtin
+        .iter()
+        .map(|o| {
+            let label = match parse_data_type(o) {
+                Some(t @ DataType::List(_)) => i18n::data_type_title(&TypeRegistry::new(), &t),
+                _ => i18n::type_name_label(o),
+            };
+            (o.to_string(), label)
+        })
+        .collect();
     ed.types.with_untracked(|types| {
-        options.extend(types.definitions().into_iter().map(|d| (d.name.clone(), format!("{} ({})", i18n::type_def_title(&d), d.name))));
+        options.extend(types.definitions().into_iter().map(|d| {
+            (
+                d.name.clone(),
+                format!("{} ({})", i18n::type_def_title(&d), d.name),
+            )
+        }));
     });
     options
 }
@@ -53,11 +65,19 @@ fn InlineSelect(
     let sizing_context = StoredValue::new(localization.clone());
     let selected_label = move || {
         let current = selected.get();
-        sizing_options.with_value(|options| options.iter().find(|(value, _)| *value == current)
-            .map_or(current.clone(), |(value, label)| sizing_context.with_value(|context| match context {
-                Some((owner, name)) => i18n::property_option_label(owner, name, value, label),
-                None => label.clone(),
-            })))
+        sizing_options.with_value(|options| {
+            options.iter().find(|(value, _)| *value == current).map_or(
+                current.clone(),
+                |(value, label)| {
+                    sizing_context.with_value(|context| match context {
+                        Some((owner, name)) => {
+                            i18n::property_option_label(owner, name, value, label)
+                        }
+                        None => label.clone(),
+                    })
+                },
+            )
+        })
     };
     view! {
         <select
@@ -90,21 +110,50 @@ fn InlineSelect(
 #[component]
 pub fn NodeProps(id: NodeId) -> impl IntoView {
     let ed = use_editor();
-    let Some(node) = ed.node(id) else { return ().into_any() };
-    let names = Memo::new(move |_| node.instance.with(|i| {
-        property_rows_connected(&i.definition, &i.model.properties, &ed.data.with(|cs| cs.iter().filter(|c| c.dst_node == id).map(|c| c.dst_pin).collect::<Vec<_>>())).into_iter()
+    let Some(node) = ed.node(id) else {
+        return ().into_any();
+    };
+    let names = Memo::new(move |_| {
+        node.instance.with(|i| {
+            property_rows_connected(
+                &i.definition,
+                &i.model.properties,
+                &ed.data.with(|cs| {
+                    cs.iter()
+                        .filter(|c| c.dst_node == id)
+                        .map(|c| c.dst_pin)
+                        .collect::<Vec<_>>()
+                }),
+            )
+            .into_iter()
             .map(|(n, v)| {
                 // Only a string property can be shown as a drop-down or picker
                 let described = matches!(v, DataValue::String(_))
-                    .then(|| i.definition.properties.iter().find(|p| p.name == *n).cloned())
+                    .then(|| {
+                        i.definition
+                            .properties
+                            .iter()
+                            .find(|p| p.name == *n)
+                            .cloned()
+                    })
                     .flatten();
                 let declared = if i.model.type_name == "const" && n == "value" {
-                    i.definition.pins.iter().find_map(|p| match &p.pin_type { PinType::Data(t) if p.id == PinId(0) => Some(t.clone()), _ => None }).unwrap_or_else(|| v.get_type())
-                } else { v.get_type() };
+                    i.definition
+                        .pins
+                        .iter()
+                        .find_map(|p| match &p.pin_type {
+                            PinType::Data(t) if p.id == PinId(0) => Some(t.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| v.get_type())
+                } else {
+                    v.get_type()
+                };
                 (n.clone(), declared, described)
             })
             .collect::<Vec<_>>()
-    }));
+        })
+    });
     let type_name = move || node.instance.with(|i| i.model.type_name.clone());
     let is_const = move || node.instance.with(|i| i.model.type_name == "const");
     view! {

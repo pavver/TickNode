@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::SettingDefinition;
+use serde::{Deserialize, Serialize};
 
 /// Permissions requested by a plugin in its manifest. Enforced by the host on every plugin call.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -14,10 +14,10 @@ pub enum Capability {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResourceCollection {
-    pub id: String,          // unique within the plugin, [a-z0-9_]
-    pub title: String,       // English fallback
-    pub icon: String,        // "mdi:name", may be empty
-    pub source: String,      // dynamic options source with the items
+    pub id: String,     // unique within the plugin, [a-z0-9_]
+    pub title: String,  // English fallback
+    pub icon: String,   // "mdi:name", may be empty
+    pub source: String, // dynamic options source with the items
     pub actions: Vec<ResourceAction>,
 }
 
@@ -50,14 +50,18 @@ impl ResourceCollection {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResourceAction {
-    pub title: String,               // English fallback, e.g. "State trigger"
-    pub type_name: String,           // node type to create (must belong to this plugin)
-    pub property: String,            // string property that receives the item value
+    pub title: String,                   // English fallback, e.g. "State trigger"
+    pub type_name: String,               // node type to create (must belong to this plugin)
+    pub property: String,                // string property that receives the item value
     pub requires_source: Option<String>, // offer only for items whose value is also in this options source
 }
 
 impl ResourceAction {
-    pub fn new(title: impl Into<String>, type_name: impl Into<String>, property: impl Into<String>) -> Self {
+    pub fn new(
+        title: impl Into<String>,
+        type_name: impl Into<String>,
+        property: impl Into<String>,
+    ) -> Self {
         Self {
             title: title.into(),
             type_name: type_name.into(),

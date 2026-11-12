@@ -6,7 +6,8 @@ pub struct TickBudget {
 
 impl TickBudget {
     pub(crate) fn should_defer(&self, spent: u32, cost: u32) -> bool {
-        self.limit.is_some_and(|limit| spent > 0 && u64::from(spent) + u64::from(cost) > u64::from(limit))
+        self.limit
+            .is_some_and(|limit| spent > 0 && u64::from(spent) + u64::from(cost) > u64::from(limit))
     }
 }
 

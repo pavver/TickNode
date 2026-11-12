@@ -14,48 +14,66 @@ fn test_client_create_set_delete_variable() {
     };
 
     // 1. Create variable
-    actor.apply(ClientMessage::CreateVariable(var.clone()), None, &reply).unwrap();
-    assert_eq!(actor.engine.variables.get(&key).map(|v| &v.value), Some(&DataValue::from(10)));
+    actor
+        .apply(ClientMessage::CreateVariable(var.clone()), None, &reply)
+        .unwrap();
+    assert_eq!(
+        actor.engine.variables.get(&key).map(|v| &v.value),
+        Some(&DataValue::from(10))
+    );
 
     // Duplicate create fails with exists
-    let err = actor.apply(ClientMessage::CreateVariable(var), None, &reply).unwrap_err();
+    let err = actor
+        .apply(ClientMessage::CreateVariable(var), None, &reply)
+        .unwrap_err();
     assert_eq!(err.key, "error-variable-exists");
 
     // 2. Set variable valid
-    actor.apply(
-        ClientMessage::SetVariable {
-            key: key.clone(),
-            value: DataValue::from(20),
-        },
-        None,
-        &reply,
-    ).unwrap();
-    assert_eq!(actor.engine.variables.get(&key).map(|v| &v.value), Some(&DataValue::from(20)));
+    actor
+        .apply(
+            ClientMessage::SetVariable {
+                key: key.clone(),
+                value: DataValue::from(20),
+            },
+            None,
+            &reply,
+        )
+        .unwrap();
+    assert_eq!(
+        actor.engine.variables.get(&key).map(|v| &v.value),
+        Some(&DataValue::from(20))
+    );
 
     // 3. Set variable with inconvertible type fails
-    let err = actor.apply(
-        ClientMessage::SetVariable {
-            key: key.clone(),
-            value: DataValue::from("not_a_number"),
-        },
-        None,
-        &reply,
-    ).unwrap_err();
+    let err = actor
+        .apply(
+            ClientMessage::SetVariable {
+                key: key.clone(),
+                value: DataValue::from("not_a_number"),
+            },
+            None,
+            &reply,
+        )
+        .unwrap_err();
     assert_eq!(err.key, "error-variable-type");
 
     // 4. Set missing variable fails
-    let err = actor.apply(
-        ClientMessage::SetVariable {
-            key: VariableKey::global("nonexistent"),
-            value: DataValue::from(1),
-        },
-        None,
-        &reply,
-    ).unwrap_err();
+    let err = actor
+        .apply(
+            ClientMessage::SetVariable {
+                key: VariableKey::global("nonexistent"),
+                value: DataValue::from(1),
+            },
+            None,
+            &reply,
+        )
+        .unwrap_err();
     assert_eq!(err.key, "error-variable-missing");
 
     // 5. Delete variable
-    actor.apply(ClientMessage::DeleteVariable(key.clone()), None, &reply).unwrap();
+    actor
+        .apply(ClientMessage::DeleteVariable(key.clone()), None, &reply)
+        .unwrap();
     assert!(actor.engine.variables.get(&key).is_none());
 
     // Verify reply receiver has no errors sent directly (errors were returned via Result)
@@ -75,7 +93,9 @@ fn test_persistent_variables_save_on_dirty() {
         value: DataValue::from("nord"),
     };
 
-    actor.apply(ClientMessage::CreateVariable(var), None, &reply).unwrap();
+    actor
+        .apply(ClientMessage::CreateVariable(var), None, &reply)
+        .unwrap();
     assert!(actor.engine.variables.is_persistent_dirty());
 
     actor.save();
@@ -94,7 +114,9 @@ fn test_sheet_deletion_drops_sheet_variables() {
     let mut actor = test_actor(dir.path());
     let (reply, _) = mpsc::unbounded_channel();
 
-    let sheet_id = actor.create_sheet("Scenario".into(), "".into(), &reply).unwrap();
+    let sheet_id = actor
+        .create_sheet("Scenario".into(), "".into(), &reply)
+        .unwrap();
     let key = VariableKey::sheet(sheet_id, "local_var");
     let var = Variable {
         key: key.clone(),
@@ -102,7 +124,9 @@ fn test_sheet_deletion_drops_sheet_variables() {
         value: DataValue::Bool(true),
     };
 
-    actor.apply(ClientMessage::CreateVariable(var), Some(sheet_id), &reply).unwrap();
+    actor
+        .apply(ClientMessage::CreateVariable(var), Some(sheet_id), &reply)
+        .unwrap();
     assert!(actor.engine.variables.get(&key).is_some());
 
     actor.delete_sheet(sheet_id).unwrap();
@@ -117,27 +141,35 @@ fn test_variables_changed_telemetry_filtering_by_sheet() {
     let sheet_id = actor.sheets[0].id;
 
     // Create a sheet variable and a global variable
-    actor.apply(
-        ClientMessage::CreateVariable(Variable {
-            key: VariableKey::sheet(sheet_id, "s_var"),
-            data_type: DataType::Number,
-            value: DataValue::from(1),
-        }),
-        Some(sheet_id),
-        &reply,
-    ).unwrap();
+    actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: VariableKey::sheet(sheet_id, "s_var"),
+                data_type: DataType::Number,
+                value: DataValue::from(1),
+            }),
+            Some(sheet_id),
+            &reply,
+        )
+        .unwrap();
 
-    actor.apply(
-        ClientMessage::CreateVariable(Variable {
-            key: VariableKey::global("g_var"),
-            data_type: DataType::Number,
-            value: DataValue::from(2),
-        }),
-        None,
-        &reply,
-    ).unwrap();
+    actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: VariableKey::global("g_var"),
+                data_type: DataType::Number,
+                value: DataValue::from(2),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap();
 
-    let flush = actor.telemetry.flush(Instant::now() + Duration::from_secs(1), &mut actor.engine, &actor.node_sheet);
+    let flush = actor.telemetry.flush(
+        Instant::now() + Duration::from_secs(1),
+        &mut actor.engine,
+        &actor.node_sheet,
+    );
     let mut sheet_messages = Vec::new();
     let mut global_messages = Vec::new();
 
@@ -167,15 +199,34 @@ fn test_snapshot_init_filters_variables() {
     let (reply, _) = mpsc::unbounded_channel();
 
     let s1 = actor.sheets[0].id;
-    let s2 = actor.create_sheet("Second".into(), "".into(), &reply).unwrap();
+    let s2 = actor
+        .create_sheet("Second".into(), "".into(), &reply)
+        .unwrap();
 
-    actor.engine.variables.create(VariableKey::sheet(s1, "var1"), DataType::Number, DataValue::from(1));
-    actor.engine.variables.create(VariableKey::sheet(s2, "var2"), DataType::Number, DataValue::from(2));
-    actor.engine.variables.create(VariableKey::global("g_var"), DataType::Number, DataValue::from(3));
+    actor.engine.variables.create(
+        VariableKey::sheet(s1, "var1"),
+        DataType::Number,
+        DataValue::from(1),
+    );
+    actor.engine.variables.create(
+        VariableKey::sheet(s2, "var2"),
+        DataType::Number,
+        DataValue::from(2),
+    );
+    actor.engine.variables.create(
+        VariableKey::global("g_var"),
+        DataType::Number,
+        DataValue::from(3),
+    );
 
     // Snapshot for s1
     let snap_s1 = actor.snapshot(Some(s1));
-    let ServerMessage::Init { variables: vars_s1, .. } = snap_s1 else { panic!() };
+    let ServerMessage::Init {
+        variables: vars_s1, ..
+    } = snap_s1
+    else {
+        panic!()
+    };
     let names_s1: Vec<_> = vars_s1.iter().map(|v| v.key.name.as_str()).collect();
     assert!(names_s1.contains(&"var1"));
     assert!(names_s1.contains(&"g_var"));
@@ -183,7 +234,13 @@ fn test_snapshot_init_filters_variables() {
 
     // Snapshot for home page (None)
     let snap_home = actor.snapshot(None);
-    let ServerMessage::Init { variables: vars_home, .. } = snap_home else { panic!() };
+    let ServerMessage::Init {
+        variables: vars_home,
+        ..
+    } = snap_home
+    else {
+        panic!()
+    };
     let names_home: Vec<_> = vars_home.iter().map(|v| v.key.name.as_str()).collect();
     assert!(names_home.contains(&"g_var"));
     assert!(!names_home.contains(&"var1"));

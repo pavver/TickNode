@@ -15,10 +15,10 @@ use futures::{SinkExt, StreamExt};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue, Request};
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
-use tokio_tungstenite::tungstenite::Message;
 
 pub type WsId = u64;
 
@@ -62,7 +62,13 @@ impl WsHub {
     /// `handle` is the runtime for connection tasks; without it the current runtime is used.
     pub fn new(handle: Option<Handle>) -> Self {
         let (inbox_tx, inbox_rx) = mpsc::channel(INBOX_CAPACITY);
-        Self { handle, next_id: 1, connections: HashMap::new(), inbox_tx, inbox_rx }
+        Self {
+            handle,
+            next_id: 1,
+            connections: HashMap::new(),
+            inbox_tx,
+            inbox_rx,
+        }
     }
 
     /// Sets the runtime for new connections. The instance may be created before the engine gets its runtime
@@ -76,10 +82,14 @@ impl WsHub {
     /// Starts connecting. URL scheme and headers are validated here; the host check belongs to the caller.
     pub fn connect(&mut self, url: &str, headers: &[(String, String)]) -> Result<WsId, String> {
         if self.connections.len() >= MAX_CONNECTIONS {
-            return Err(format!("Too many WebSocket connections (maximum {MAX_CONNECTIONS} per plugin)"));
+            return Err(format!(
+                "Too many WebSocket connections (maximum {MAX_CONNECTIONS} per plugin)"
+            ));
         }
         let request = build_request(url, headers)?;
-        let handle = self.handle.clone()
+        let handle = self
+            .handle
+            .clone()
             .or_else(|| Handle::try_current().ok())
             .ok_or("WebSocket unavailable: the engine is running without a tokio runtime")?;
         let id = self.next_id;
@@ -92,10 +102,18 @@ impl WsHub {
 
     pub fn send(&mut self, id: WsId, text: String) -> Result<(), String> {
         if text.len() > MAX_MESSAGE_BYTES {
-            return Err(format!("Message is too large ({} bytes, maximum {MAX_MESSAGE_BYTES})", text.len()));
+            return Err(format!(
+                "Message is too large ({} bytes, maximum {MAX_MESSAGE_BYTES})",
+                text.len()
+            ));
         }
-        let conn = self.connections.get(&id).ok_or_else(|| format!("Unknown or closed WebSocket connection {id}"))?;
-        conn.outbound.send(text).map_err(|_| format!("WebSocket connection {id} is closed"))
+        let conn = self
+            .connections
+            .get(&id)
+            .ok_or_else(|| format!("Unknown or closed WebSocket connection {id}"))?;
+        conn.outbound
+            .send(text)
+            .map_err(|_| format!("WebSocket connection {id} is closed"))
     }
 
     /// Closes the connection. Events it still has queued are discarded by `drain`.
@@ -108,7 +126,9 @@ impl WsHub {
     pub fn drain(&mut self, max: usize) -> Vec<WsEvent> {
         let mut events = Vec::new();
         while events.len() < max {
-            let Ok(event) = self.inbox_rx.try_recv() else { break };
+            let Ok(event) = self.inbox_rx.try_recv() else {
+                break;
+            };
             let id = match &event {
                 WsEvent::Opened(id) | WsEvent::Message(id, _) | WsEvent::Closed(id, _) => *id,
             };
@@ -127,35 +147,56 @@ impl WsHub {
 fn build_request(url: &str, headers: &[(String, String)]) -> Result<Request<()>, String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
     if !matches!(parsed.scheme(), "ws" | "wss") {
-        return Err(format!("Unsupported scheme: {} (expected ws or wss)", parsed.scheme()));
+        return Err(format!(
+            "Unsupported scheme: {} (expected ws or wss)",
+            parsed.scheme()
+        ));
     }
-    let mut request = url.into_client_request().map_err(|e| format!("Invalid WebSocket request: {e}"))?;
+    let mut request = url
+        .into_client_request()
+        .map_err(|e| format!("Invalid WebSocket request: {e}"))?;
     for (name, value) in headers {
-        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|e| format!("Invalid header name {name:?}: {e}"))?;
-        let value = HeaderValue::from_str(value).map_err(|e| format!("Invalid value of header {name}: {e}"))?;
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|e| format!("Invalid header name {name:?}: {e}"))?;
+        let value = HeaderValue::from_str(value)
+            .map_err(|e| format!("Invalid value of header {name}: {e}"))?;
         request.headers_mut().insert(name, value);
     }
     Ok(request)
 }
 
-async fn run(id: WsId, request: Request<()>, mut outbound: mpsc::UnboundedReceiver<String>, inbox: mpsc::Sender<WsEvent>) {
+async fn run(
+    id: WsId,
+    request: Request<()>,
+    mut outbound: mpsc::UnboundedReceiver<String>,
+    inbox: mpsc::Sender<WsEvent>,
+) {
     let reason = connection(id, request, &mut outbound, &inbox).await;
     let _ = inbox.send(WsEvent::Closed(id, reason)).await;
 }
 
 /// Opens a text transport with the plugin's message limits and the default TCP coalescing policy.
-async fn open_stream(request: Request<()>) -> Result<
+async fn open_stream(
+    request: Request<()>,
+) -> Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     tokio_tungstenite::tungstenite::Error,
 > {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE_BYTES))
         .max_frame_size(Some(MAX_MESSAGE_BYTES));
-    tokio_tungstenite::connect_async_with_config(request, Some(config), false).await.map(|(stream, _)| stream)
+    tokio_tungstenite::connect_async_with_config(request, Some(config), false)
+        .await
+        .map(|(stream, _)| stream)
 }
 
 /// Runs the connection until it ends; returns the reason.
-async fn connection(id: WsId, request: Request<()>, outbound: &mut mpsc::UnboundedReceiver<String>, inbox: &mpsc::Sender<WsEvent>) -> String {
+async fn connection(
+    id: WsId,
+    request: Request<()>,
+    outbound: &mut mpsc::UnboundedReceiver<String>,
+    inbox: &mpsc::Sender<WsEvent>,
+) -> String {
     let connecting = open_stream(request);
     let stream = match tokio::time::timeout(CONNECT_TIMEOUT, connecting).await {
         Ok(Ok(stream)) => stream,
@@ -208,12 +249,19 @@ mod tests {
 
     #[test]
     fn connection_limit_and_unknown_ids() {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let mut hub = WsHub::new(Some(rt.handle().clone()));
         for _ in 0..MAX_CONNECTIONS {
             hub.connect("ws://127.0.0.1:1/", &[]).unwrap();
         }
-        assert!(hub.connect("ws://127.0.0.1:1/", &[]).unwrap_err().contains("Too many"));
+        assert!(
+            hub.connect("ws://127.0.0.1:1/", &[])
+                .unwrap_err()
+                .contains("Too many")
+        );
         assert!(hub.send(999, "x".into()).is_err());
         hub.close(1);
         assert!(hub.connect("ws://127.0.0.1:1/", &[]).is_ok());

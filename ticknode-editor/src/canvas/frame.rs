@@ -5,7 +5,7 @@ use ticknode_shared::*;
 
 use crate::geometry::DU;
 use crate::i18n::t;
-use crate::state::{use_editor, Editor, Selection};
+use crate::state::{Editor, Selection, use_editor};
 
 mod resize;
 pub(super) use resize::FrameResizeHandle;
@@ -92,31 +92,56 @@ pub fn frames_fully_inside(
             if Some(*id) == exclude_id {
                 return false;
             }
-            rect_contains(container, (pos.x as f64, pos.y as f64, size.width, size.height))
+            rect_contains(
+                container,
+                (pos.x as f64, pos.y as f64, size.width, size.height),
+            )
         })
         .map(|(id, ..)| id)
         .collect()
 }
 
 /// The frame's own position followed by the frames and nodes fully inside it: what moves with it.
-pub fn frame_contents(ed: Editor, id: FrameId) -> Option<(Vec<(FrameId, Position)>, Vec<(NodeId, Position)>)> {
+pub fn frame_contents(
+    ed: Editor,
+    id: FrameId,
+) -> Option<(Vec<(FrameId, Position)>, Vec<(NodeId, Position)>)> {
     let frame = ed.frames.with_untracked(|all| all.get(&id).cloned())?;
-    let rect = (frame.position.x as f64, frame.position.y as f64, frame.size.width, frame.size.height);
+    let rect = (
+        frame.position.x as f64,
+        frame.position.y as f64,
+        frame.size.width,
+        frame.size.height,
+    );
     let nodes = ed.nodes.with_untracked(|nodes| {
-        nodes.iter().map(|(n_id, node)| {
-            let layout = ed.layout_of(*node);
-            (*n_id, node.pos.get_untracked(), layout.width, layout.height)
-        }).collect::<Vec<_>>()
+        nodes
+            .iter()
+            .map(|(n_id, node)| {
+                let layout = ed.layout_of(*node);
+                (*n_id, node.pos.get_untracked(), layout.width, layout.height)
+            })
+            .collect::<Vec<_>>()
     });
-    let node_origins = nodes_fully_inside(rect, nodes).into_iter()
+    let node_origins = nodes_fully_inside(rect, nodes)
+        .into_iter()
         .filter_map(|n_id| ed.node(n_id).map(|node| (n_id, node.pos.get_untracked())))
         .collect();
     let (frames, mut frame_origins) = ed.frames.with_untracked(|all| {
-        (all.iter().map(|(f_id, f)| (*f_id, f.position, f.size)).collect::<Vec<_>>(), vec![(id, frame.position)])
+        (
+            all.iter()
+                .map(|(f_id, f)| (*f_id, f.position, f.size))
+                .collect::<Vec<_>>(),
+            vec![(id, frame.position)],
+        )
     });
-    frame_origins.extend(frames_fully_inside(rect, Some(id), frames).into_iter().filter_map(|f_id| {
-        ed.frames.with_untracked(|all| all.get(&f_id).map(|f| (f_id, f.position)))
-    }));
+    frame_origins.extend(
+        frames_fully_inside(rect, Some(id), frames)
+            .into_iter()
+            .filter_map(|f_id| {
+                ed.frames
+                    .with_untracked(|all| all.get(&f_id).map(|f| (f_id, f.position)))
+            }),
+    );
     Some((frame_origins, node_origins))
 }
 
@@ -182,13 +207,25 @@ pub fn calculate_new_frame_geometry(
         let h = (max_y - min_y) + 2.0 * FRAME_PAD + FRAME_HEADER_H;
         let width = snap_du_f64(w).max(MIN_FRAME_W);
         let height = snap_du_f64(h).max(MIN_FRAME_H);
-        (Position { x: snap_du_f32(x0), y: snap_du_f32(y0) }, NodeSize { width, height })
+        (
+            Position {
+                x: snap_du_f32(x0),
+                y: snap_du_f32(y0),
+            },
+            NodeSize { width, height },
+        )
     } else {
         let x0 = view_center.0 - DEFAULT_FRAME_W / 2.0;
         let y0 = view_center.1 - DEFAULT_FRAME_H / 2.0;
         (
-            Position { x: snap_du_f32(x0), y: snap_du_f32(y0) },
-            NodeSize { width: snap_du_f64(DEFAULT_FRAME_W), height: snap_du_f64(DEFAULT_FRAME_H) },
+            Position {
+                x: snap_du_f32(x0),
+                y: snap_du_f32(y0),
+            },
+            NodeSize {
+                width: snap_du_f64(DEFAULT_FRAME_W),
+                height: snap_du_f64(DEFAULT_FRAME_H),
+            },
         )
     }
 }
@@ -204,7 +241,9 @@ pub fn create_frame(ed: Editor) {
         for id in selected_ids {
             let Some(node) = ed.node(id) else { continue };
             let pos = node.pos.get_untracked();
-            let Some(layout) = ed.layout(id) else { continue };
+            let Some(layout) = ed.layout(id) else {
+                continue;
+            };
             min_x = min_x.min(pos.x as f64);
             min_y = min_y.min(pos.y as f64);
             max_x = max_x.max(pos.x as f64 + layout.width);
@@ -239,7 +278,8 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
     let ed = use_editor();
     let frame = Memo::new(move |_| ed.frames.with(|all| all.get(&id).cloned()));
     let is_selected = Memo::new(move |_| {
-        ed.selection.with(|s| matches!(s, Some(Selection::Frame(sel_id)) if *sel_id == id))
+        ed.selection
+            .with(|s| matches!(s, Some(Selection::Frame(sel_id)) if *sel_id == id))
     });
 
     let editing = RwSignal::new(false);
@@ -276,35 +316,43 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
         });
     };
 
-    let on_keydown = move |ev: web_sys::KeyboardEvent| {
-        match ev.key().as_str() {
-            "Enter" => {
-                ev.prevent_default();
-                ev.stop_propagation();
-                commit_title();
-            }
-            "Escape" => {
-                ev.prevent_default();
-                ev.stop_propagation();
-                editing.set(false);
-            }
-            _ => {
-                ev.stop_propagation();
-            }
+    let on_keydown = move |ev: web_sys::KeyboardEvent| match ev.key().as_str() {
+        "Enter" => {
+            ev.prevent_default();
+            ev.stop_propagation();
+            commit_title();
+        }
+        "Escape" => {
+            ev.prevent_default();
+            ev.stop_propagation();
+            editing.set(false);
+        }
+        _ => {
+            ev.stop_propagation();
         }
     };
 
     let class = move || {
-        let Some(f) = frame.get() else { return String::new() };
+        let Some(f) = frame.get() else {
+            return String::new();
+        };
         let color_cls = frame_color_class(f.color);
         let sel = if is_selected.get() { " selected" } else { "" };
         format!("canvas-frame {color_cls}{sel}")
     };
 
     let style = move || {
-        let Some(f) = frame.get() else { return String::new() };
-        let pos = ed.frame_pos_previews.with(|p| p.get(&id).copied()).unwrap_or(f.position);
-        let size = ed.frame_size_previews.with(|p| p.get(&id).copied()).unwrap_or(f.size);
+        let Some(f) = frame.get() else {
+            return String::new();
+        };
+        let pos = ed
+            .frame_pos_previews
+            .with(|p| p.get(&id).copied())
+            .unwrap_or(f.position);
+        let size = ed
+            .frame_size_previews
+            .with(|p| p.get(&id).copied())
+            .unwrap_or(f.size);
         format!(
             "left:{}px;top:{}px;width:{}px;height:{}px;",
             pos.x, pos.y, size.width, size.height
@@ -377,25 +425,32 @@ pub fn FrameView(id: FrameId) -> impl IntoView {
 fn ColorPickerPopup(id: FrameId, on_close: Callback<()>) -> impl IntoView {
     let ed = use_editor();
 
-    let key_listener = window_event_listener(leptos::ev::keydown, move |ev: web_sys::KeyboardEvent| {
-        if ev.key() == "Escape" {
-            ev.prevent_default();
-            ev.stop_propagation();
-            on_close.run(());
-        }
-    });
+    let key_listener =
+        window_event_listener(leptos::ev::keydown, move |ev: web_sys::KeyboardEvent| {
+            if ev.key() == "Escape" {
+                ev.prevent_default();
+                ev.stop_propagation();
+                on_close.run(());
+            }
+        });
     on_cleanup(move || key_listener.remove());
 
-    let outside_listener = window_event_listener(leptos::ev::pointerdown, move |ev: web_sys::PointerEvent| {
-        use wasm_bindgen::JsCast;
-        let inside = ev.target()
-            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-            .and_then(|el| el.closest(&format!("#frame-color-popup-{id}, #frame-color-btn-{id}")).ok().flatten())
-            .is_some();
-        if !inside {
-            on_close.run(());
-        }
-    });
+    let outside_listener =
+        window_event_listener(leptos::ev::pointerdown, move |ev: web_sys::PointerEvent| {
+            use wasm_bindgen::JsCast;
+            let inside = ev
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .and_then(|el| {
+                    el.closest(&format!("#frame-color-popup-{id}, #frame-color-btn-{id}"))
+                        .ok()
+                        .flatten()
+                })
+                .is_some();
+            if !inside {
+                on_close.run(());
+            }
+        });
     on_cleanup(move || outside_listener.remove());
 
     let choose = move |color: FrameColor| {

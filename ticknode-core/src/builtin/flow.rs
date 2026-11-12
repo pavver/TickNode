@@ -1,5 +1,5 @@
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
 pub struct ForLoopNode {
     pub id: NodeId,
@@ -8,7 +8,9 @@ pub struct ForLoopNode {
     pub count: i64,
 }
 impl Node for ForLoopNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -61,7 +63,10 @@ impl Node for ForLoopNode {
                 } else {
                     vec![
                         NodeOutput::Execution(PinId(4)),
-                        NodeOutput::Data(PinId(5), DataValue::Number(NumberValue::Int(self.current_index))),
+                        NodeOutput::Data(
+                            PinId(5),
+                            DataValue::Number(NumberValue::Int(self.current_index)),
+                        ),
                     ]
                 }
             } else {

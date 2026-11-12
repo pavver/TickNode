@@ -1,5 +1,5 @@
-use ticknode_plugin_sdk::*;
 use std::cell::RefCell;
+use ticknode_plugin_sdk::*;
 
 /// WebSocket probe state: the single connection (opened from the `ws_url` setting in `configure`)
 /// and the graph ids of live `test/ws_probe` nodes (targets of emissions).
@@ -61,10 +61,19 @@ impl PluginNode for WsProbe {
             Some(id) => host::ws_send(id, &inputs.string(PinId(1))).map(|()| "sent".to_string()),
             None => Err("no connection".to_string()),
         };
-        vec![Output::Data(PinId(4), result.unwrap_or_else(|e| format!("error: {e}")).into())]
+        vec![Output::Data(
+            PinId(4),
+            result.unwrap_or_else(|e| format!("error: {e}")).into(),
+        )]
     }
 }
 
 pub(super) fn ws_emit(outputs: Vec<Output>) -> Vec<Emission> {
-    WS.with(|w| w.borrow().probes.iter().map(|n| Emission::new(*n, outputs.clone())).collect())
+    WS.with(|w| {
+        w.borrow()
+            .probes
+            .iter()
+            .map(|n| Emission::new(*n, outputs.clone()))
+            .collect()
+    })
 }

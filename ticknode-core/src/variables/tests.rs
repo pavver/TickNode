@@ -5,7 +5,11 @@ fn create_and_shared_global_persistent_namespace() {
     let mut store = VariableStore::new();
     assert!(store.create(VariableKey::global("msg"), DataType::String, "hello".into()));
     // Cannot create persistent with same name because namespace is shared
-    assert!(!store.create(VariableKey::persistent("msg"), DataType::String, "world".into()));
+    assert!(!store.create(
+        VariableKey::persistent("msg"),
+        DataType::String,
+        "world".into()
+    ));
     // Cannot create global with same name again
     assert!(!store.create(VariableKey::global("msg"), DataType::String, "again".into()));
     assert_eq!(store.len(), 1);
@@ -21,21 +25,31 @@ fn sheet_shadowing_and_lookups() {
     assert!(store.create(VariableKey::sheet(s1, "val"), DataType::Number, 20.into()));
 
     // Auto lookup on s1 finds sheet variable (shadowing global)
-    let r1 = store.resolve("val", VariableLookup::Auto, Some(s1)).unwrap();
+    let r1 = store
+        .resolve("val", VariableLookup::Auto, Some(s1))
+        .unwrap();
     assert_eq!(r1.scope, VariableScope::Sheet);
     assert_eq!(store.get(&r1).unwrap().value, DataValue::Number(20.into()));
 
     // Auto lookup on s2 finds global variable
-    let r2 = store.resolve("val", VariableLookup::Auto, Some(s2)).unwrap();
+    let r2 = store
+        .resolve("val", VariableLookup::Auto, Some(s2))
+        .unwrap();
     assert_eq!(r2.scope, VariableScope::Global);
     assert_eq!(store.get(&r2).unwrap().value, DataValue::Number(10.into()));
 
     // Explicit global lookup on s1 bypasses shadow
-    let rg = store.resolve("val", VariableLookup::Global, Some(s1)).unwrap();
+    let rg = store
+        .resolve("val", VariableLookup::Global, Some(s1))
+        .unwrap();
     assert_eq!(rg.scope, VariableScope::Global);
 
     // Explicit sheet lookup on s2 is None
-    assert!(store.resolve("val", VariableLookup::Sheet, Some(s2)).is_none());
+    assert!(
+        store
+            .resolve("val", VariableLookup::Sheet, Some(s2))
+            .is_none()
+    );
 }
 
 #[test]

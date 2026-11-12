@@ -8,21 +8,21 @@ use ticknode_shared::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Element, PointerEvent};
 
-use crate::clipboard;
-use crate::geometry::*;
-use crate::state::{Editor, LogKind, Selection, WireKey, WireRoutes};
 use super::paste::move_paste;
 use super::selection::{SelectBox, nodes_in_box};
 use super::wires::WireEnd;
+use crate::clipboard;
+use crate::geometry::*;
+use crate::state::{Editor, LogKind, Selection, WireKey, WireRoutes};
 
-mod motion;
 mod decisions;
-mod start;
+mod motion;
 mod points;
+mod start;
+pub(crate) use decisions::{PointEdit, group_routes};
 pub(crate) use points::edit_route;
-pub(crate) use decisions::{group_routes, PointEdit};
 
-use decisions::{Press, Gesture, press, gesture};
+use decisions::{Gesture, Press, gesture, press};
 
 /// Pointer movement threshold (px) after which a press is treated as a drag rather than a click.
 const DRAG_THRESHOLD: f64 = 3.0;
@@ -32,17 +32,50 @@ const WIRE_PULL_THRESHOLD: f64 = 8.0;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Drag {
     Idle,
-    Pan { start: (f64, f64), origin: Camera, moved: bool },
+    Pan {
+        start: (f64, f64),
+        origin: Camera,
+        moved: bool,
+    },
     /// Dragging selected nodes; `clicked` is the node under the cursor.
-    Nodes { origins: Vec<(NodeId, Position)>, routes: WireRoutes, start_world: (f64, f64), start: (f64, f64), moved: bool, clicked: NodeId },
+    Nodes {
+        origins: Vec<(NodeId, Position)>,
+        routes: WireRoutes,
+        start_world: (f64, f64),
+        start: (f64, f64),
+        moved: bool,
+        clicked: NodeId,
+    },
     /// Dragging route point `index`; `origin` is the route being edited, `before` the route to compare on release.
-    Point { key: WireKey, index: usize, origin: Vec<Position>, before: Vec<Position>, start_world: (f64, f64), start: (f64, f64), moved: bool },
+    Point {
+        key: WireKey,
+        index: usize,
+        origin: Vec<Position>,
+        before: Vec<Position>,
+        start_world: (f64, f64),
+        start: (f64, f64),
+        moved: bool,
+    },
     /// A press on a wire: pulling it sideways past `WIRE_PULL_THRESHOLD` inserts a point and drags it.
-    WirePull { key: WireKey, start: (f64, f64), start_world: (f64, f64) },
-    Wire { from: WireEnd, detached: Option<DetachedConnection> },
-    Pinch { start_dist: f64, start_mid: (f64, f64), origin: Camera },
+    WirePull {
+        key: WireKey,
+        start: (f64, f64),
+        start_world: (f64, f64),
+    },
+    Wire {
+        from: WireEnd,
+        detached: Option<DetachedConnection>,
+    },
+    Pinch {
+        start_dist: f64,
+        start_mid: (f64, f64),
+        origin: Camera,
+    },
     /// Selection marquee (canvas screen coordinates). `additive` is Shift/Ctrl: add to selection.
-    Box { start: (f64, f64), additive: bool },
+    Box {
+        start: (f64, f64),
+        additive: bool,
+    },
     /// Dragging a frame and its enclosed contents.
     Frame {
         frame_id: FrameId,
@@ -76,22 +109,33 @@ fn parse_node_id(s: &str) -> Option<NodeId> {
 }
 
 fn closest(target: Option<web_sys::EventTarget>, selector: &str) -> Option<Element> {
-    target?.dyn_into::<Element>().ok()?.closest(selector).ok().flatten()
+    target?
+        .dyn_into::<Element>()
+        .ok()?
+        .closest(selector)
+        .ok()
+        .flatten()
 }
 
 fn parse_pin(el: &Element) -> Option<WireEnd> {
     Some(WireEnd {
         node: parse_node_id(&el.get_attribute("data-node")?)?,
         pin: PinId(el.get_attribute("data-pin")?.parse().ok()?),
-        dir: if el.get_attribute("data-dir")? == "in" { PinDirection::Input } else { PinDirection::Output },
+        dir: if el.get_attribute("data-dir")? == "in" {
+            PinDirection::Input
+        } else {
+            PinDirection::Output
+        },
         exec: el.get_attribute("data-kind")? == "exec",
     })
 }
 
 fn parse_wire(el: &Element) -> Option<Selection> {
     decisions::wire_selection(
-        &el.get_attribute("data-src")?, &el.get_attribute("data-src-pin")?,
-        &el.get_attribute("data-dst")?, &el.get_attribute("data-dst-pin")?,
+        &el.get_attribute("data-src")?,
+        &el.get_attribute("data-src-pin")?,
+        &el.get_attribute("data-dst")?,
+        &el.get_attribute("data-dst-pin")?,
         &el.get_attribute("data-wire")?,
     )
 }
@@ -107,7 +151,10 @@ impl Interaction {
             .get_untracked()
             .map(|c| {
                 let r = c.get_bounding_client_rect();
-                (ev.client_x() as f64 - r.left(), ev.client_y() as f64 - r.top())
+                (
+                    ev.client_x() as f64 - r.left(),
+                    ev.client_y() as f64 - r.top(),
+                )
             })
             .unwrap_or((0.0, 0.0))
     }
@@ -126,20 +173,49 @@ impl Interaction {
             }
         }
         for (key, origin) in routes {
-            if !ed.wire_exists_untracked(key) { continue; }
-            let points = ed.wire_routes.with_untracked(|all| all.get(&key).cloned().unwrap_or_default());
-            if points != origin { commands.push(ClientMessage::SetWireRoute(WireRoute { exec: key.0, connection: key.1, points })); }
+            if !ed.wire_exists_untracked(key) {
+                continue;
+            }
+            let points = ed
+                .wire_routes
+                .with_untracked(|all| all.get(&key).cloned().unwrap_or_default());
+            if points != origin {
+                commands.push(ClientMessage::SetWireRoute(WireRoute {
+                    exec: key.0,
+                    connection: key.1,
+                    points,
+                }));
+            }
         }
         ed.send_batch(commands);
     }
 
     pub(super) fn pointer_down(self, ev: PointerEvent) {
-        let Self { ed, canvas, drag, panning, pending_wire, pointers, .. } = self;
+        let Self {
+            ed,
+            canvas,
+            drag,
+            panning,
+            pending_wire,
+            pointers,
+            ..
+        } = self;
         crate::canvas::flush_nudge(ed);
         let p = self.local_point(&ev);
-        match press(ed.pending_paste.with_untracked(|p| p.is_some()), &ev.pointer_type(), ev.button()) {
-            Press::Place => { move_paste(ed, p); clipboard::place_paste(ed); return; }
-            Press::Cancel => { clipboard::cancel_paste(ed); return; }
+        match press(
+            ed.pending_paste.with_untracked(|p| p.is_some()),
+            &ev.pointer_type(),
+            ev.button(),
+        ) {
+            Press::Place => {
+                move_paste(ed, p);
+                clipboard::place_paste(ed);
+                return;
+            }
+            Press::Cancel => {
+                clipboard::cancel_paste(ed);
+                return;
+            }
             Press::Ignore => return,
             Press::Continue => {}
         }
@@ -154,20 +230,41 @@ impl Interaction {
         let active: Vec<(f64, f64)> = pointers.with_value(|ps| ps.values().copied().collect());
         if active.len() == 2 {
             match drag.get_value() {
-                Drag::Nodes { origins, routes, moved: true, .. } => self.send_moves(origins, routes),
-                Drag::Frame { frame_id, frame_origins, node_origins, routes, moved: true, .. } => {
-                    self.send_frame_moves(frame_id, frame_origins, node_origins, routes)
-                }
-                Drag::Frame { frame_origins, node_origins, routes, .. } => {
-                    self.cancel_frame_drag(frame_origins, node_origins, routes)
-                }
-                Drag::Point { key, before, moved: true, .. } => self.send_point(key, before),
+                Drag::Nodes {
+                    origins,
+                    routes,
+                    moved: true,
+                    ..
+                } => self.send_moves(origins, routes),
+                Drag::Frame {
+                    frame_id,
+                    frame_origins,
+                    node_origins,
+                    routes,
+                    moved: true,
+                    ..
+                } => self.send_frame_moves(frame_id, frame_origins, node_origins, routes),
+                Drag::Frame {
+                    frame_origins,
+                    node_origins,
+                    routes,
+                    ..
+                } => self.cancel_frame_drag(frame_origins, node_origins, routes),
+                Drag::Point {
+                    key,
+                    before,
+                    moved: true,
+                    ..
+                } => self.send_point(key, before),
                 _ => {}
             }
             pending_wire.set(None);
             drag.set_value(Drag::Pinch {
                 start_dist: distance(active[0], active[1]).max(1.0),
-                start_mid: ((active[0].0 + active[1].0) / 2.0, (active[0].1 + active[1].1) / 2.0),
+                start_mid: (
+                    (active[0].0 + active[1].0) / 2.0,
+                    (active[0].1 + active[1].1) / 2.0,
+                ),
                 origin: ed.view.get_untracked(),
             });
             return;
@@ -175,9 +272,15 @@ impl Interaction {
 
         let target = ev.target();
         let detached_hit = closest(target.clone(), "[data-detached]");
-        let detached = detached_hit.as_ref().and_then(|el| serde_json::from_str::<DetachedConnection>(&el.get_attribute("data-detached")?).ok())
+        let detached = detached_hit
+            .as_ref()
+            .and_then(|el| {
+                serde_json::from_str::<DetachedConnection>(&el.get_attribute("data-detached")?).ok()
+            })
             .filter(|d| ed.detached.with_untracked(|all| all.contains(d)));
-        if ev.button() != 1 && let Some(d) = detached {
+        if ev.button() != 1
+            && let Some(d) = detached
+        {
             ed.selected_point.set(None);
             ed.selection.set(Some(Selection::Detached(d)));
             if ev.button() == 2 {
@@ -185,58 +288,97 @@ impl Interaction {
                 ed.wire_menu.set(None);
                 ed.picker.set(None);
                 ed.wire_context.set(Some(crate::state::WireContext {
-                    detached: Some(d), exec: d.exec, connection: d.connection, index: None,
+                    detached: Some(d),
+                    exec: d.exec,
+                    connection: d.connection,
+                    index: None,
                     world: ed.view.get_untracked().to_world(p.0, p.1),
                     screen: (ev.client_x() as f64, ev.client_y() as f64),
                 }));
             } else if detached_hit.is_some_and(|el| el.has_attribute("data-detached-end")) {
                 let (from, _) = super::detached::ends(d);
-                let live = ed.node(from.node).and_then(|n| n.instance.with_untracked(|i| pin_type(&i.definition, from.pin, from.dir).cloned()));
+                let live = ed.node(from.node).and_then(|n| {
+                    n.instance
+                        .with_untracked(|i| pin_type(&i.definition, from.pin, from.dir).cloned())
+                });
                 if let Some(kind) = live {
-                    let from = WireEnd { exec: matches!(kind, PinType::Exec), ..from };
+                    let from = WireEnd {
+                        exec: matches!(kind, PinType::Exec),
+                        ..from
+                    };
                     ed.wire_menu.set(None);
                     self.cursor.set(ed.view.get_untracked().to_world(p.0, p.1));
                     pending_wire.set(Some(from));
-                    drag.set_value(Drag::Wire { from, detached: Some(d) });
+                    drag.set_value(Drag::Wire {
+                        from,
+                        detached: Some(d),
+                    });
                 }
             }
             return;
         }
         let pin = closest(target.clone(), "[data-pin]").and_then(|el| parse_pin(&el));
         let point = closest(target.clone(), "[data-wire-point]");
-        let index = point.as_ref().and_then(|el| el.get_attribute("data-wire-point")?.parse().ok());
-        let wire = point.or_else(|| closest(target.clone(), "[data-wire]")).and_then(|el| parse_wire(&el));
-        let node = closest(target.clone(), "[data-node]").and_then(|el| el.get_attribute("data-node")).and_then(|s| parse_node_id(&s));
+        let index = point
+            .as_ref()
+            .and_then(|el| el.get_attribute("data-wire-point")?.parse().ok());
+        let wire = point
+            .or_else(|| closest(target.clone(), "[data-wire]"))
+            .and_then(|el| parse_wire(&el));
+        let node = closest(target.clone(), "[data-node]")
+            .and_then(|el| el.get_attribute("data-node"))
+            .and_then(|s| parse_node_id(&s));
         let frame_header = closest(target, ".canvas-frame-header");
-        let frame = frame_header.and_then(|el| el.closest("[data-frame]").ok().flatten())
+        let frame = frame_header
+            .and_then(|el| el.closest("[data-frame]").ok().flatten())
             .and_then(|el| el.get_attribute("data-frame"))
             .and_then(|s| uuid::Uuid::parse_str(&s).ok().map(FrameId));
         let view = ed.view.get_untracked();
         let world = view.to_world(p.0, p.1);
         let action = decisions::route_gesture(ev.button(), node, wire.clone(), index)
             .unwrap_or_else(|| gesture(ev.button(), &ev.pointer_type(), pin, wire, node, frame));
-        if !matches!(action, Gesture::Point { .. } | Gesture::Context { .. }) { ed.selected_point.set(None); }
+        if !matches!(action, Gesture::Point { .. } | Gesture::Context { .. }) {
+            ed.selected_point.set(None);
+        }
         match action {
             Gesture::Pan { moved } => {
-                if moved { ev.prevent_default(); }
-                drag.set_value(Drag::Pan { start: p, origin: view, moved });
+                if moved {
+                    ev.prevent_default();
+                }
+                drag.set_value(Drag::Pan {
+                    start: p,
+                    origin: view,
+                    moved,
+                });
                 panning.set(true);
             }
             Gesture::Wire(from) => self.start_wire(from, world),
             Gesture::Point { wire, index } => self.start_point(wire, index, p, world),
             Gesture::Context { wire, index } => {
                 ev.prevent_default();
-                self.open_context(wire, index, world, (ev.client_x() as f64, ev.client_y() as f64));
+                self.open_context(
+                    wire,
+                    index,
+                    world,
+                    (ev.client_x() as f64, ev.client_y() as f64),
+                );
             }
             Gesture::Select(selection) => {
                 if let Some(key) = points::selection_key(&selection) {
-                    drag.set_value(Drag::WirePull { key, start: p, start_world: world });
+                    drag.set_value(Drag::WirePull {
+                        key,
+                        start: p,
+                        start_world: world,
+                    });
                 }
                 ed.selection.set(Some(selection));
             }
             Gesture::Node(id) => self.start_node_click(id, &ev, p, world),
             Gesture::Frame(id) => self.start_frame_drag(id, p, world),
-            Gesture::Box => drag.set_value(Drag::Box { start: p, additive: additive(&ev) }),
+            Gesture::Box => drag.set_value(Drag::Box {
+                start: p,
+                additive: additive(&ev),
+            }),
             Gesture::Ignore => {}
         }
     }

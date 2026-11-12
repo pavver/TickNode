@@ -133,10 +133,15 @@ fn catalog_symbols_and_aliases_resolve_locally_and_globally_when_unambiguous() {
                     .collect::<Vec<_>>();
                 // Ambiguous symbols resolve only to the single linear unit, if there is one.
                 let linear = occurrences.iter().filter(|a| **a).count();
-                let expected = (occurrences.len() == 1 || (linear == 1 && unit.curve == crate::quantity::UnitCurve::Affine))
+                let expected = (occurrences.len() == 1
+                    || (linear == 1 && unit.curve == crate::quantity::UnitCurve::Affine))
                     .then_some((definition.name.as_str(), unit.id.as_str()));
                 if expected.is_some() || linear != 1 {
-                    assert_eq!(unit_by_symbol(symbol).map(|(n, u)| (n, u.id.as_str())), expected, "{symbol}");
+                    assert_eq!(
+                        unit_by_symbol(symbol).map(|(n, u)| (n, u.id.as_str())),
+                        expected,
+                        "{symbol}"
+                    );
                 }
             }
         }

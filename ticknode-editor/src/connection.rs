@@ -16,7 +16,11 @@ const RECONNECT_DELAY: Duration = Duration::from_millis(1500);
 fn ws_url() -> Option<String> {
     let href = window().location().href().ok()?;
     let url = web_sys::Url::new_with_base("ws", &href).ok()?;
-    url.set_protocol(if url.protocol() == "https:" { "wss:" } else { "ws:" });
+    url.set_protocol(if url.protocol() == "https:" {
+        "wss:"
+    } else {
+        "ws:"
+    });
     url.set_search("");
     url.set_hash("");
     Some(url.href())
@@ -35,11 +39,16 @@ pub fn connect(editor: Editor) {
         editor.log(LogKind::System, "[UI] Connected to server");
     });
     let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |event: MessageEvent| {
-        let Ok(buffer) = event.data().dyn_into::<js_sys::ArrayBuffer>() else { return };
+        let Ok(buffer) = event.data().dyn_into::<js_sys::ArrayBuffer>() else {
+            return;
+        };
         let bytes = js_sys::Uint8Array::new(&buffer).to_vec();
         match postcard::from_bytes::<ServerMessage>(&bytes) {
             Ok(msg) => editor.apply(msg),
-            Err(e) => editor.log(LogKind::Error, format!("[ERROR] Invalid server message: {e}")),
+            Err(e) => editor.log(
+                LogKind::Error,
+                format!("[ERROR] Invalid server message: {e}"),
+            ),
         }
     });
     let on_close = Closure::<dyn FnMut()>::new(move || {
@@ -47,7 +56,10 @@ pub fn connect(editor: Editor) {
         editor.socket.set_value(None);
         editor.status.set(ConnStatus::Offline);
         if was_online {
-            editor.log(LogKind::Error, "[ERROR] Connection to server lost, reconnecting...");
+            editor.log(
+                LogKind::Error,
+                "[ERROR] Connection to server lost, reconnecting...",
+            );
         }
         schedule_reconnect(editor);
     });

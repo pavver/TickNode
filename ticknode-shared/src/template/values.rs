@@ -1,7 +1,7 @@
 //! Value conversion and runtime formatting for templates.
 
-use minijinja::{Value, value::ValueKind};
 use crate::{DataValue, NumberValue};
+use minijinja::{Value, value::ValueKind};
 
 pub fn plain(value: &DataValue) -> Value {
     match value {

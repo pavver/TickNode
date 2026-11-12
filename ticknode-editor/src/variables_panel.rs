@@ -1,36 +1,38 @@
 //! Shared variables list component used on sheet pages (left panel tab) and the home page.
 
+mod create_form;
 pub mod logic;
 pub mod menu;
-mod create_form;
 mod row;
 mod value_editor;
 
-use leptos::prelude::*;
-use ticknode_shared::SheetId;
 use crate::i18n::t;
 use crate::state::use_editor;
 use crate::ui::{TextField, icons};
 use create_form::CreateVariableForm;
+use leptos::prelude::*;
 use logic::group_and_filter_variables;
 use row::VariableRow;
+use ticknode_shared::SheetId;
 
 #[component]
-pub fn VariablesList(
-    sheet: Option<SheetId>,
-) -> impl IntoView {
+pub fn VariablesList(sheet: Option<SheetId>) -> impl IntoView {
     let ed = use_editor();
     let query = RwSignal::new(String::new());
     let is_creating = RwSignal::new(false);
 
-    let all_vars = Memo::new(move |_| ed.variables.with(|vars| vars.values().cloned().collect::<Vec<_>>()));
+    let all_vars = Memo::new(move |_| {
+        ed.variables
+            .with(|vars| vars.values().cloned().collect::<Vec<_>>())
+    });
 
     let total_visible_count = Memo::new(move |_| {
         let vars = all_vars.get();
         vars.iter()
             .filter(|v| match v.key.scope {
                 ticknode_shared::VariableScope::Sheet => sheet.is_some() && v.key.sheet == sheet,
-                ticknode_shared::VariableScope::Global | ticknode_shared::VariableScope::Persistent => true,
+                ticknode_shared::VariableScope::Global
+                | ticknode_shared::VariableScope::Persistent => true,
             })
             .count()
     });
@@ -38,7 +40,8 @@ pub fn VariablesList(
     let groups = Memo::new(move |_| {
         let vars = all_vars.get();
         let q = query.get();
-        ed.types.with(|types| group_and_filter_variables(&vars, sheet, &q, types))
+        ed.types
+            .with(|types| group_and_filter_variables(&vars, sheet, &q, types))
     });
 
     let is_home = sheet.is_none();

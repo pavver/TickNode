@@ -1,5 +1,5 @@
-use ticknode_shared::*;
 use thiserror::Error;
+use ticknode_shared::*;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineError {
@@ -7,7 +7,9 @@ pub enum EngineError {
     CycleDetected(NodeId, NodeId),
     #[error("Incompatible data types: cannot connect {0:?} to {1:?}")]
     TypeMismatch(DataType, DataType),
-    #[error("Invalid pin connection: one or both pins do not exist or have the wrong direction/type")]
+    #[error(
+        "Invalid pin connection: one or both pins do not exist or have the wrong direction/type"
+    )]
     InvalidPinConnection,
     #[error("Node {0:?} not found")]
     NodeNotFound(NodeId),
@@ -25,11 +27,19 @@ impl EngineError {
     pub fn ui_message(&self) -> UiMessage {
         let text = self.to_string();
         match self {
-            Self::CycleDetected(a, b) => UiMessage::new("error-cycle-detected", text).arg("node", format!("{a:?}")).arg("dependency", format!("{b:?}")),
-            Self::TypeMismatch(a, b) => UiMessage::new("error-type-mismatch", text).arg("src", data_type_name(a)).arg("dst", data_type_name(b)),
+            Self::CycleDetected(a, b) => UiMessage::new("error-cycle-detected", text)
+                .arg("node", format!("{a:?}"))
+                .arg("dependency", format!("{b:?}")),
+            Self::TypeMismatch(a, b) => UiMessage::new("error-type-mismatch", text)
+                .arg("src", data_type_name(a))
+                .arg("dst", data_type_name(b)),
             Self::InvalidPinConnection => UiMessage::new("error-invalid-pin-connection", text),
-            Self::NodeNotFound(id) => UiMessage::new("error-node-not-found", text).arg("node", format!("{id:?}")),
-            Self::UnknownNodeType(name) => UiMessage::new("error-unknown-node-type", text).arg("type", name),
+            Self::NodeNotFound(id) => {
+                UiMessage::new("error-node-not-found", text).arg("node", format!("{id:?}"))
+            }
+            Self::UnknownNodeType(name) => {
+                UiMessage::new("error-unknown-node-type", text).arg("type", name)
+            }
             // The stub's own message already says which plugin is missing
             Self::PluginUnavailable(reason) | Self::InvalidProperty(reason) => reason.clone(),
         }

@@ -3,17 +3,16 @@
 use leptos::prelude::*;
 use ticknode_shared::*;
 
-use crate::i18n::{self, t};
-use crate::state::use_editor;
-use crate::categories::category_label;
-use crate::clipboard;
-use crate::geometry::type_color;
-use crate::state::{LogKind, Selection};
-use crate::ui::*;
 use super::execution::ExecutionInfo;
 use super::formatting::instance_pin_label;
 use super::tooltip::InfoButton;
-
+use crate::categories::category_label;
+use crate::clipboard;
+use crate::geometry::type_color;
+use crate::i18n::{self, t};
+use crate::state::use_editor;
+use crate::state::{LogKind, Selection};
+use crate::ui::*;
 
 // --- Inspector ---
 
@@ -79,7 +78,8 @@ fn GraphOverview() -> impl IntoView {
 fn NodeInspector(id: NodeId) -> impl IntoView {
     let ed = use_editor();
     let Some(node) = ed.node(id) else {
-        return view! { <div class="empty">{move || t!("inspector-node-not-found")}</div> }.into_any();
+        return view! { <div class="empty">{move || t!("inspector-node-not-found")}</div> }
+            .into_any();
     };
     let def = Memo::new(move |_| node.instance.with(|i| i.definition.clone()));
 
@@ -167,23 +167,48 @@ fn ConnectionInspector(conn: ConnectionModel, exec: bool) -> impl IntoView {
             })
             .unwrap_or_else(|| format!("#{}", pin.0))
     };
-    let from = move || format!("{} · {}", ed.node_title(conn.src_node), pin_name(conn.src_node, conn.src_pin, PinDirection::Output));
-    let to = move || format!("{} · {}", ed.node_title(conn.dst_node), pin_name(conn.dst_node, conn.dst_pin, PinDirection::Input));
+    let from = move || {
+        format!(
+            "{} · {}",
+            ed.node_title(conn.src_node),
+            pin_name(conn.src_node, conn.src_pin, PinDirection::Output)
+        )
+    };
+    let to = move || {
+        format!(
+            "{} · {}",
+            ed.node_title(conn.dst_node),
+            pin_name(conn.dst_node, conn.dst_pin, PinDirection::Input)
+        )
+    };
     let color = if exec {
         "var(--text-primary)".to_string()
     } else {
         ed.node(conn.src_node)
-            .and_then(|n| n.instance.with_untracked(|i| match crate::geometry::pin_type(&i.definition, conn.src_pin, PinDirection::Output) {
-                Some(PinType::Data(t)) => Some(ed.types.with_untracked(|types| type_color(types, t))),
-                _ => None,
-            }))
+            .and_then(|n| {
+                n.instance.with_untracked(|i| {
+                    match crate::geometry::pin_type(
+                        &i.definition,
+                        conn.src_pin,
+                        PinDirection::Output,
+                    ) {
+                        Some(PinType::Data(t)) => {
+                            Some(ed.types.with_untracked(|types| type_color(types, t)))
+                        }
+                        _ => None,
+                    }
+                })
+            })
             .unwrap_or_else(|| "var(--border-strong)".to_string())
     };
     let disconnect = move |_| {
         ed.send(if exec {
             ClientMessage::DisconnectExec(conn)
         } else {
-            ClientMessage::DisconnectData { dst_node: conn.dst_node, dst_pin: conn.dst_pin }
+            ClientMessage::DisconnectData {
+                dst_node: conn.dst_node,
+                dst_pin: conn.dst_pin,
+            }
         })
     };
     view! {

@@ -7,11 +7,18 @@ pub const FALLBACK: &str = "mdi:bookmark";
 
 /// The domain of an entity id (`light.kitchen` -> `light`).
 pub fn domain_of(entity_id: &str) -> &str {
-    entity_id.split_once('.').map_or(entity_id, |(domain, _)| domain)
+    entity_id
+        .split_once('.')
+        .map_or(entity_id, |(domain, _)| domain)
 }
 
 /// Icon of an entity. `explicit` is its `icon` attribute (used as is when non-empty).
-pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, explicit: Option<&str>) -> String {
+pub fn entity_icon(
+    entity_id: &str,
+    state: &str,
+    device_class: Option<&str>,
+    explicit: Option<&str>,
+) -> String {
     if let Some(icon) = explicit.map(str::trim).filter(|i| !i.is_empty()) {
         return icon.to_string();
     }
@@ -21,14 +28,26 @@ pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, exp
     let name = match domain {
         "binary_sensor" => binary_sensor(class, on),
         "sensor" => sensor(class),
-        "light" => if state == "off" { "lightbulb-off" } else { "lightbulb" },
+        "light" => {
+            if state == "off" {
+                "lightbulb-off"
+            } else {
+                "lightbulb"
+            }
+        }
         "switch" => match (class, state == "off") {
             ("outlet", true) => "power-plug-off",
             ("outlet", false) => "power-plug",
             (_, true) => "toggle-switch-variant-off",
             (_, false) => "toggle-switch-variant",
         },
-        "input_boolean" => if state == "off" { "toggle-switch-off-outline" } else { "toggle-switch-outline" },
+        "input_boolean" => {
+            if state == "off" {
+                "toggle-switch-off-outline"
+            } else {
+                "toggle-switch-outline"
+            }
+        }
         "cover" => cover(class, state),
         "lock" => match state {
             "unlocked" | "open" | "opening" | "unlocking" => "lock-open-variant",
@@ -36,8 +55,20 @@ pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, exp
             "locking" => "lock-clock",
             _ => "lock",
         },
-        "person" | "device_tracker" => if state == "not_home" { "account-arrow-right" } else { "account" },
-        "sun" => if state == "below_horizon" { "weather-night" } else { "white-balance-sunny" },
+        "person" | "device_tracker" => {
+            if state == "not_home" {
+                "account-arrow-right"
+            } else {
+                "account"
+            }
+        }
+        "sun" => {
+            if state == "below_horizon" {
+                "weather-night"
+            } else {
+                "white-balance-sunny"
+            }
+        }
         "weather" => weather(state),
         "climate" => match state {
             "auto" => "thermostat-auto",
@@ -50,12 +81,36 @@ pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, exp
             _ => "thermostat",
         },
         "media_player" => media_player(class, state),
-        "automation" => if state == "off" { "robot-off" } else { "robot" },
+        "automation" => {
+            if state == "off" {
+                "robot-off"
+            } else {
+                "robot"
+            }
+        }
         "script" => "script-text",
         "scene" => "palette",
-        "fan" => if state == "off" { "fan-off" } else { "fan" },
-        "humidifier" => if state == "off" { "air-humidifier-off" } else { "air-humidifier" },
-        "update" => if on { "package-up" } else { "package" },
+        "fan" => {
+            if state == "off" {
+                "fan-off"
+            } else {
+                "fan"
+            }
+        }
+        "humidifier" => {
+            if state == "off" {
+                "air-humidifier-off"
+            } else {
+                "air-humidifier"
+            }
+        }
+        "update" => {
+            if on {
+                "package-up"
+            } else {
+                "package"
+            }
+        }
         "alarm_control_panel" => match state {
             "disarmed" => "shield-off",
             "triggered" => "bell-ring",
@@ -65,7 +120,13 @@ pub fn entity_icon(entity_id: &str, state: &str, device_class: Option<&str>, exp
             "armed_away" | "armed_vacation" | "armed_custom_bypass" => "shield-lock",
             _ => "shield",
         },
-        "vacuum" => if state == "docked" { "robot-vacuum" } else { "robot-vacuum-variant" },
+        "vacuum" => {
+            if state == "docked" {
+                "robot-vacuum"
+            } else {
+                "robot-vacuum-variant"
+            }
+        }
         other => return domain_icon(other).to_string(),
     };
     format!("mdi:{name}")
@@ -180,7 +241,15 @@ fn sensor(class: &str) -> &'static str {
         "illuminance" => "brightness-5",
         "irradiance" => "sun-wireless",
         "monetary" => "cash",
-        "nitrogen_dioxide" | "nitrogen_monoxide" | "nitrous_oxide" | "ozone" | "pm1" | "pm10" | "pm25" | "sulphur_dioxide" | "volatile_organic_compounds" => "molecule",
+        "nitrogen_dioxide"
+        | "nitrogen_monoxide"
+        | "nitrous_oxide"
+        | "ozone"
+        | "pm1"
+        | "pm10"
+        | "pm25"
+        | "sulphur_dioxide"
+        | "volatile_organic_compounds" => "molecule",
         "power_factor" => "angle-acute",
         "precipitation" | "precipitation_intensity" => "weather-rainy",
         "signal_strength" => "wifi",
@@ -242,7 +311,13 @@ fn media_player(class: &str, state: &str) -> &'static str {
         ("receiver", true) => "audio-video-off",
         ("receiver", false) => "audio-video",
         (_, true) => "cast-off",
-        (_, false) => if matches!(state, "playing" | "paused" | "buffering") { "cast-connected" } else { "cast" },
+        (_, false) => {
+            if matches!(state, "playing" | "paused" | "buffering") {
+                "cast-connected"
+            } else {
+                "cast"
+            }
+        }
     }
 }
 
@@ -256,25 +331,55 @@ mod tests {
 
     #[test]
     fn explicit_icon_attribute_wins() {
-        assert_eq!(entity_icon("light.a", "on", None, Some("mdi:ceiling-light")), "mdi:ceiling-light");
+        assert_eq!(
+            entity_icon("light.a", "on", None, Some("mdi:ceiling-light")),
+            "mdi:ceiling-light"
+        );
         // An empty attribute is not an icon
-        assert_eq!(entity_icon("light.a", "on", None, Some("  ")), "mdi:lightbulb");
+        assert_eq!(
+            entity_icon("light.a", "on", None, Some("  ")),
+            "mdi:lightbulb"
+        );
     }
 
     #[test]
     fn binary_sensors_follow_device_class_and_state() {
-        assert_eq!(icon("binary_sensor.door", "on", Some("door")), "mdi:door-open");
-        assert_eq!(icon("binary_sensor.door", "off", Some("door")), "mdi:door-closed");
-        assert_eq!(icon("binary_sensor.m", "on", Some("motion")), "mdi:motion-sensor");
-        assert_eq!(icon("binary_sensor.w", "off", Some("window")), "mdi:window-closed");
-        assert_eq!(icon("binary_sensor.x", "on", None), "mdi:checkbox-marked-circle");
-        assert_eq!(icon("binary_sensor.x", "off", Some("unknown_class")), "mdi:radiobox-blank");
+        assert_eq!(
+            icon("binary_sensor.door", "on", Some("door")),
+            "mdi:door-open"
+        );
+        assert_eq!(
+            icon("binary_sensor.door", "off", Some("door")),
+            "mdi:door-closed"
+        );
+        assert_eq!(
+            icon("binary_sensor.m", "on", Some("motion")),
+            "mdi:motion-sensor"
+        );
+        assert_eq!(
+            icon("binary_sensor.w", "off", Some("window")),
+            "mdi:window-closed"
+        );
+        assert_eq!(
+            icon("binary_sensor.x", "on", None),
+            "mdi:checkbox-marked-circle"
+        );
+        assert_eq!(
+            icon("binary_sensor.x", "off", Some("unknown_class")),
+            "mdi:radiobox-blank"
+        );
     }
 
     #[test]
     fn sensors_use_device_class() {
-        assert_eq!(icon("sensor.t", "21", Some("temperature")), "mdi:thermometer");
-        assert_eq!(icon("sensor.h", "50", Some("humidity")), "mdi:water-percent");
+        assert_eq!(
+            icon("sensor.t", "21", Some("temperature")),
+            "mdi:thermometer"
+        );
+        assert_eq!(
+            icon("sensor.h", "50", Some("humidity")),
+            "mdi:water-percent"
+        );
         assert_eq!(icon("sensor.b", "90", Some("battery")), "mdi:battery");
         assert_eq!(icon("sensor.p", "3", Some("power")), "mdi:flash");
         assert_eq!(icon("sensor.other", "1", None), "mdi:eye");
@@ -285,23 +390,44 @@ mod tests {
         assert_eq!(icon("light.a", "on", None), "mdi:lightbulb");
         assert_eq!(icon("light.a", "off", None), "mdi:lightbulb-off");
         assert_eq!(icon("switch.a", "on", None), "mdi:toggle-switch-variant");
-        assert_eq!(icon("switch.a", "off", Some("outlet")), "mdi:power-plug-off");
+        assert_eq!(
+            icon("switch.a", "off", Some("outlet")),
+            "mdi:power-plug-off"
+        );
         assert_eq!(icon("person.me", "home", None), "mdi:account");
-        assert_eq!(icon("person.me", "not_home", None), "mdi:account-arrow-right");
+        assert_eq!(
+            icon("person.me", "not_home", None),
+            "mdi:account-arrow-right"
+        );
         assert_eq!(icon("sun.sun", "below_horizon", None), "mdi:weather-night");
         assert_eq!(icon("weather.home", "rainy", None), "mdi:weather-rainy");
         assert_eq!(icon("climate.a", "heat", None), "mdi:fire");
         assert_eq!(icon("cover.a", "closed", None), "mdi:window-shutter");
         assert_eq!(icon("cover.a", "open", Some("garage")), "mdi:garage-open");
         assert_eq!(icon("lock.front", "locked", None), "mdi:lock");
-        assert_eq!(icon("lock.front", "unlocked", None), "mdi:lock-open-variant");
-        assert_eq!(icon("media_player.tv", "off", Some("tv")), "mdi:television-off");
-        assert_eq!(icon("media_player.m", "playing", None), "mdi:cast-connected");
+        assert_eq!(
+            icon("lock.front", "unlocked", None),
+            "mdi:lock-open-variant"
+        );
+        assert_eq!(
+            icon("media_player.tv", "off", Some("tv")),
+            "mdi:television-off"
+        );
+        assert_eq!(
+            icon("media_player.m", "playing", None),
+            "mdi:cast-connected"
+        );
         assert_eq!(icon("automation.a", "off", None), "mdi:robot-off");
         assert_eq!(icon("script.a", "off", None), "mdi:script-text");
-        assert_eq!(icon("input_boolean.a", "on", None), "mdi:toggle-switch-outline");
+        assert_eq!(
+            icon("input_boolean.a", "on", None),
+            "mdi:toggle-switch-outline"
+        );
         assert_eq!(icon("input_number.a", "3", None), "mdi:ray-vertex");
-        assert_eq!(icon("input_select.a", "x", None), "mdi:format-list-bulleted");
+        assert_eq!(
+            icon("input_select.a", "x", None),
+            "mdi:format-list-bulleted"
+        );
     }
 
     #[test]

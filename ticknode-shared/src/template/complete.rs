@@ -1,17 +1,17 @@
+use crate::{DataType, TypeRegistry};
 use std::collections::HashSet;
 use std::ops::Range;
-use crate::{DataType, TypeRegistry};
 
 mod catalog;
+#[cfg(test)]
+mod context_tests;
 mod infer;
 pub mod kinds;
 mod scan;
 #[cfg(test)]
-mod context_tests;
-#[cfg(test)]
 mod tests;
 
-pub use kinds::{kind_of, ValueKind};
+pub use kinds::{ValueKind, kind_of};
 
 pub struct CompletionInput<'a> {
     pub source: &'a str,
@@ -93,10 +93,20 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     let (expr_start, is_tag) = match state {
         scan::ScanState::Plain | scan::ScanState::Comment => return None,
-        scan::ScanState::Interpolation { in_str: Some(_), .. }
-        | scan::ScanState::Tag { in_str: Some(_), .. } => return None,
-        scan::ScanState::Interpolation { expr_start, in_str: None } => (expr_start, false),
-        scan::ScanState::Tag { expr_start, in_str: None } => (expr_start, true),
+        scan::ScanState::Interpolation {
+            in_str: Some(_), ..
+        }
+        | scan::ScanState::Tag {
+            in_str: Some(_), ..
+        } => return None,
+        scan::ScanState::Interpolation {
+            expr_start,
+            in_str: None,
+        } => (expr_start, false),
+        scan::ScanState::Tag {
+            expr_start,
+            in_str: None,
+        } => (expr_start, true),
     };
 
     let before_slice = &input.source[expr_start..start];
@@ -111,7 +121,8 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Context 1: after `.`
     if before.ends_with('.') {
-        let items = scan::resolve_dot_context(before, partial, input.inputs, input.types, &for_stack);
+        let items =
+            scan::resolve_dot_context(before, partial, input.inputs, input.types, &for_stack);
         return Some(Completion { range, items });
     }
 
@@ -245,7 +256,8 @@ pub fn expression_at(source: &str, byte: usize) -> bool {
     let (state, _, _) = scan::scan_prefix(source, b, &[], &dummy_types);
     matches!(
         state,
-        scan::ScanState::Interpolation { in_str: None, .. } | scan::ScanState::Tag { in_str: None, .. }
+        scan::ScanState::Interpolation { in_str: None, .. }
+            | scan::ScanState::Tag { in_str: None, .. }
     )
 }
 
@@ -254,7 +266,9 @@ pub(crate) fn filter_and_dedup(items: Vec<CompletionItem>, partial: &str) -> Vec
     let mut seen = HashSet::new();
     let mut result = Vec::new();
     for item in items {
-        if item.label.to_ascii_lowercase().starts_with(&partial_lower) && seen.insert(item.label.clone()) {
+        if item.label.to_ascii_lowercase().starts_with(&partial_lower)
+            && seen.insert(item.label.clone())
+        {
             result.push(item);
         }
     }

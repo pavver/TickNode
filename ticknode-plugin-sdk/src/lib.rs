@@ -66,9 +66,11 @@
 //! explicit cancellation and engine drop abort requests. Time uses `std::time::Instant` (WASI clocks).
 
 pub use ticknode_shared::{
-    Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NumberValue, ObjectField,
-    NodeId, PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind, PropertyOption, ResourceAction, ResourceCollection, SettingDefinition, SettingKind, TypeDefinition, TypeKind,
-    UiMessage, fluent_slug as slug, quantity,
+    Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NodeId,
+    NumberValue, ObjectField, PinDefinition, PinDirection, PinId, PinType, PluginManifest,
+    PropertyDefinition, PropertyKind, PropertyOption, ResourceAction, ResourceCollection,
+    SettingDefinition, SettingKind, TypeDefinition, TypeKind, UiMessage, fluent_slug as slug,
+    quantity,
 };
 
 /// A translatable error for the user: `UiError::new("my-plugin-error-no-token", "Token is not set")`
@@ -91,22 +93,22 @@ mod api;
 #[doc(hidden)]
 pub use api::{PLUGIN_API_SECTION, PLUGIN_API_SECTION_LEN};
 
-mod events;
-mod values;
-mod plugin;
-mod export;
 mod convert;
-mod pins;
+mod events;
+mod export;
 /// Host services. Node-owned tasks arrive in `execute` as [`Trigger::Task`]. HTTP started from
 /// `configure` or `Plugin::tick` belongs to the plugin and arrives as [`PluginEvent::HttpDone`].
 pub mod host;
+mod pins;
+mod plugin;
+mod values;
 
 pub use events::*;
-pub use values::*;
-pub use plugin::*;
-pub use pins::*;
 #[doc(hidden)]
 pub use export::{Exporter, NodeHandle};
+pub use pins::*;
+pub use plugin::*;
+pub use values::*;
 
 #[cfg(test)]
 mod tests;

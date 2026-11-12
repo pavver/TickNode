@@ -1,13 +1,17 @@
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
 pub struct ListCreateNode {
     pub id: NodeId,
     pub element_type: DataType,
 }
 impl Node for ListCreateNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -33,21 +37,31 @@ impl Node for ListCreateNode {
             DataValue::List {
                 element_type: self.element_type.clone(),
                 elements: Vec::new(),
-            }
+            },
         )]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
         super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
+        vec![(
+            "element_type".to_string(),
+            DataValue::String(data_type_name(&self.element_type)),
+        )]
     }
 }
 
-pub struct ListAddNode { pub id: NodeId, pub element_type: DataType }
+pub struct ListAddNode {
+    pub id: NodeId,
+    pub element_type: DataType,
+}
 impl Node for ListAddNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -68,9 +82,22 @@ impl Node for ListAddNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let list_val = ctx.get_value(PinId(0));
         let item_val = ctx.get_value(PinId(1));
-        if let (Some(DataValue::List { element_type, mut elements }), Some(item)) = (list_val, item_val) {
+        if let (
+            Some(DataValue::List {
+                element_type,
+                mut elements,
+            }),
+            Some(item),
+        ) = (list_val, item_val)
+        {
             elements.push(item);
-            vec![NodeOutput::Data(PinId(2), DataValue::List { element_type, elements })]
+            vec![NodeOutput::Data(
+                PinId(2),
+                DataValue::List {
+                    element_type,
+                    elements,
+                },
+            )]
         } else {
             vec![]
         }
@@ -79,14 +106,24 @@ impl Node for ListAddNode {
         super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
+        vec![(
+            "element_type".to_string(),
+            DataValue::String(data_type_name(&self.element_type)),
+        )]
     }
 }
 
-pub struct ListRemoveNode { pub id: NodeId, pub element_type: DataType }
+pub struct ListRemoveNode {
+    pub id: NodeId,
+    pub element_type: DataType,
+}
 impl Node for ListRemoveNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -107,11 +144,21 @@ impl Node for ListRemoveNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let list_val = ctx.get_value(PinId(0));
         let index_val = ctx.get_number(PinId(1), NumberValue::Int(-1)).to_f64() as i64;
-        if let Some(DataValue::List { element_type, mut elements }) = list_val {
+        if let Some(DataValue::List {
+            element_type,
+            mut elements,
+        }) = list_val
+        {
             if index_val >= 0 && index_val < elements.len() as i64 {
                 elements.remove(index_val as usize);
             }
-            vec![NodeOutput::Data(PinId(2), DataValue::List { element_type, elements })]
+            vec![NodeOutput::Data(
+                PinId(2),
+                DataValue::List {
+                    element_type,
+                    elements,
+                },
+            )]
         } else {
             vec![]
         }
@@ -120,14 +167,24 @@ impl Node for ListRemoveNode {
         super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
+        vec![(
+            "element_type".to_string(),
+            DataValue::String(data_type_name(&self.element_type)),
+        )]
     }
 }
 
-pub struct ListGetNode { pub id: NodeId, pub element_type: DataType }
+pub struct ListGetNode {
+    pub id: NodeId,
+    pub element_type: DataType,
+}
 impl Node for ListGetNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -150,7 +207,10 @@ impl Node for ListGetNode {
         let index_val = ctx.get_number(PinId(1), NumberValue::Int(-1)).to_f64() as i64;
         if let Some(DataValue::List { elements, .. }) = list_val {
             if index_val >= 0 && index_val < elements.len() as i64 {
-                vec![NodeOutput::Data(PinId(2), elements[index_val as usize].clone())]
+                vec![NodeOutput::Data(
+                    PinId(2),
+                    elements[index_val as usize].clone(),
+                )]
             } else {
                 vec![]
             }
@@ -162,14 +222,24 @@ impl Node for ListGetNode {
         super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
+        vec![(
+            "element_type".to_string(),
+            DataValue::String(data_type_name(&self.element_type)),
+        )]
     }
 }
 
-pub struct ListLengthNode { pub id: NodeId, pub element_type: DataType }
+pub struct ListLengthNode {
+    pub id: NodeId,
+    pub element_type: DataType,
+}
 impl Node for ListLengthNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -189,15 +259,24 @@ impl Node for ListLengthNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let list_val = ctx.get_value(PinId(0));
         if let Some(DataValue::List { elements, .. }) = list_val {
-            vec![NodeOutput::Data(PinId(1), DataValue::Number(NumberValue::Int(elements.len() as i64)))]
+            vec![NodeOutput::Data(
+                PinId(1),
+                DataValue::Number(NumberValue::Int(elements.len() as i64)),
+            )]
         } else {
-            vec![NodeOutput::Data(PinId(1), DataValue::Number(NumberValue::Int(0)))]
+            vec![NodeOutput::Data(
+                PinId(1),
+                DataValue::Number(NumberValue::Int(0)),
+            )]
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
         super::properties::set_type_property(&mut self.element_type, "element_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("element_type".to_string(), DataValue::String(data_type_name(&self.element_type)))]
+        vec![(
+            "element_type".to_string(),
+            DataValue::String(data_type_name(&self.element_type)),
+        )]
     }
 }

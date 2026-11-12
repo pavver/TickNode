@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 use std::ops::Range;
-use ticknode_shared::template::{highlight, Highlight, TokenClass};
+use ticknode_shared::template::{Highlight, TokenClass, highlight};
 
 /// A rendered segment of template text with its CSS class name.
 #[derive(Debug, Clone, PartialEq, Eq)]

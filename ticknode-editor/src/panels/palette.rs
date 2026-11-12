@@ -1,21 +1,21 @@
 //! Node palette, left panel tabs, drag placement and drag preview.
 
-use std::collections::BTreeMap;
 use leptos::html;
 use leptos::prelude::*;
+use std::collections::BTreeMap;
 use ticknode_shared::*;
 use wasm_bindgen::JsCast;
 use web_sys::PointerEvent;
 
+use super::resources::ResourcesPanel;
+use super::tooltip::InfoButton;
+use super::variables::VariablesPanel;
 use crate::canvas::{CANVAS_ID, view_center};
 use crate::categories::{category_color, category_icon, category_label, category_rank};
 use crate::geometry::{DU, node_width, pin_color};
 use crate::i18n::{self, t};
 use crate::state::{Editor, PaletteDrag, use_editor};
 use crate::ui::*;
-use super::resources::ResourcesPanel;
-use super::tooltip::InfoButton;
-use super::variables::VariablesPanel;
 
 /// Pointer movement threshold (px) before clicking a palette item becomes a drag.
 pub const PALETTE_DRAG_THRESHOLD: f64 = 4.0;
@@ -132,22 +132,36 @@ fn NodesPanel() -> impl IntoView {
             )
             .to_lowercase();
             if q.is_empty() || haystack.contains(&q) {
-                groups.entry((category_rank(&def.category), def.category.clone())).or_default().push(def);
+                groups
+                    .entry((category_rank(&def.category), def.category.clone()))
+                    .or_default()
+                    .push(def);
             }
         }
-        groups.into_iter().map(|((_, category), defs)| (category, defs)).collect::<Vec<_>>()
+        groups
+            .into_iter()
+            .map(|((_, category), defs)| (category, defs))
+            .collect::<Vec<_>>()
     });
     // Category currently scrolled into view (highlighted in the left rail)
     let active = RwSignal::new(None::<String>);
     let list = NodeRef::<html::Div>::new();
 
     let update_active = move || {
-        let Some(list) = list.get_untracked() else { return };
+        let Some(list) = list.get_untracked() else {
+            return;
+        };
         let top = list.scroll_top() as f64 + 2.0 * DU;
         let sections = list.query_selector_all("[data-category]").ok();
         let mut current = None;
         for i in 0..sections.as_ref().map_or(0, |s| s.length()) {
-            let Some(el) = sections.as_ref().and_then(|s| s.item(i)).and_then(|n| n.dyn_into::<web_sys::HtmlElement>().ok()) else { continue };
+            let Some(el) = sections
+                .as_ref()
+                .and_then(|s| s.item(i))
+                .and_then(|n| n.dyn_into::<web_sys::HtmlElement>().ok())
+            else {
+                continue;
+            };
             if (el.offset_top() as f64) <= top || current.is_none() {
                 current = el.get_attribute("data-category");
             }
@@ -159,11 +173,19 @@ fn NodesPanel() -> impl IntoView {
         request_animation_frame(update_active);
     });
     let scroll_to = move |category: String| {
-        let Some(list) = list.get_untracked() else { return };
-        let section = list.query_selector_all("[data-category]").ok().and_then(|s| {
-            (0..s.length()).filter_map(|i| s.item(i)?.dyn_into::<web_sys::HtmlElement>().ok())
-                .find(|el| el.get_attribute("data-category").as_deref() == Some(category.as_str()))
-        });
+        let Some(list) = list.get_untracked() else {
+            return;
+        };
+        let section = list
+            .query_selector_all("[data-category]")
+            .ok()
+            .and_then(|s| {
+                (0..s.length())
+                    .filter_map(|i| s.item(i)?.dyn_into::<web_sys::HtmlElement>().ok())
+                    .find(|el| {
+                        el.get_attribute("data-category").as_deref() == Some(category.as_str())
+                    })
+            });
         if let Some(section) = section {
             list.set_scroll_top(section.offset_top());
             active.set(Some(category));
@@ -174,8 +196,14 @@ fn NodesPanel() -> impl IntoView {
         let (cx, cy) = view_center(ed);
         // Small offset so multiple newly added nodes don't stack directly on top of each other
         let shift = (ed.nodes.with_untracked(|n| n.len()) % 6) as f64 * 4.0 * DU;
-        let position = Position { x: (cx - node_width(&type_name) / 2.0 + shift) as f32, y: (cy - 10.0 * DU + shift) as f32 };
-        ed.send(ClientMessage::AddNode { type_name, position });
+        let position = Position {
+            x: (cx - node_width(&type_name) / 2.0 + shift) as f32,
+            y: (cy - 10.0 * DU + shift) as f32,
+        };
+        ed.send(ClientMessage::AddNode {
+            type_name,
+            position,
+        });
         if ed.narrow.get_untracked() {
             ed.show_palette.set(false);
         }
@@ -240,14 +268,21 @@ fn NodesPanel() -> impl IntoView {
 
 /// Clicking adds the node to the center; dragging drops it at the release position.
 #[component]
-fn PaletteBlock(def: NodeDefinition, color: &'static str, add: impl Fn(String) + Copy + 'static) -> impl IntoView {
+fn PaletteBlock(
+    def: NodeDefinition,
+    color: &'static str,
+    add: impl Fn(String) + Copy + 'static,
+) -> impl IntoView {
     let ed = use_editor();
     let def_drag = def.clone();
     let start_drag = move |ev: PointerEvent| {
         if ev.button() != 0 {
             return;
         }
-        if let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+        if let Some(el) = ev
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
             let _ = el.set_pointer_capture(ev.pointer_id());
         }
         let at = (ev.client_x() as f64, ev.client_y() as f64);
@@ -322,7 +357,10 @@ fn PaletteBlock(def: NodeDefinition, color: &'static str, add: impl Fn(String) +
 pub fn move_palette_drag(ed: Editor, ev: &PointerEvent) {
     ed.palette_drag.update(|drag| {
         if let Some(drag) = drag {
-            drag.update_motion((ev.client_x() as f64, ev.client_y() as f64), PALETTE_DRAG_THRESHOLD);
+            drag.update_motion(
+                (ev.client_x() as f64, ev.client_y() as f64),
+                PALETTE_DRAG_THRESHOLD,
+            );
         }
     });
 }
@@ -335,21 +373,49 @@ pub fn drop_on_canvas(ed: Editor, drag: &PaletteDrag, ev: &PointerEvent) {
         .and_then(|el| el.closest(&format!("#{CANVAS_ID}")).ok().flatten());
     let Some(canvas) = over_canvas else { return };
     let r = canvas.get_bounding_client_rect();
-    let (wx, wy) = ed.view.get_untracked().to_world(x as f64 - r.left(), y as f64 - r.top());
+    let (wx, wy) = ed
+        .view
+        .get_untracked()
+        .to_world(x as f64 - r.left(), y as f64 - r.top());
     let snap = |v: f64| ((v / DU).round() * DU) as f32;
-    let position = Position { x: snap(wx - 8.0 * DU), y: snap(wy - 4.0 * DU) };
+    let position = Position {
+        x: snap(wx - 8.0 * DU),
+        y: snap(wy - 4.0 * DU),
+    };
     match drag {
         PaletteDrag::Node { type_name, .. } => {
-            ed.send(ClientMessage::AddNode { type_name: type_name.clone(), position });
+            ed.send(ClientMessage::AddNode {
+                type_name: type_name.clone(),
+                position,
+            });
             if ed.narrow.get_untracked() {
                 ed.show_palette.set(false);
             }
         }
-        PaletteDrag::Resource { plugin, collection_id, item, actions, .. } => {
-            handle_resource_drop(ed, plugin, collection_id, item, actions, position, (x as f64, y as f64));
+        PaletteDrag::Resource {
+            plugin,
+            collection_id,
+            item,
+            actions,
+            ..
+        } => {
+            handle_resource_drop(
+                ed,
+                plugin,
+                collection_id,
+                item,
+                actions,
+                position,
+                (x as f64, y as f64),
+            );
         }
         PaletteDrag::Variable { variable, .. } => {
-            crate::variables_panel::menu::handle_variable_drop(ed, variable, position, (x as f64, y as f64));
+            crate::variables_panel::menu::handle_variable_drop(
+                ed,
+                variable,
+                position,
+                (x as f64, y as f64),
+            );
         }
     }
 }
@@ -368,7 +434,10 @@ pub fn handle_resource_drop(
         ed.send(ClientMessage::AddNodeWith {
             type_name: action.type_name.clone(),
             position,
-            properties: vec![(action.property.clone(), DataValue::String(item.value.clone()))],
+            properties: vec![(
+                action.property.clone(),
+                DataValue::String(item.value.clone()),
+            )],
         });
         if ed.narrow.get_untracked() {
             ed.show_palette.set(false);
@@ -388,7 +457,10 @@ pub fn handle_resource_click(
 ) {
     let (cx, cy) = view_center(ed);
     let shift = (ed.nodes.with_untracked(|n| n.len()) % 6) as f64 * 4.0 * DU;
-    let position = Position { x: (cx - 12.0 * DU + shift) as f32, y: (cy - 10.0 * DU + shift) as f32 };
+    let position = Position {
+        x: (cx - 12.0 * DU + shift) as f32,
+        y: (cy - 10.0 * DU + shift) as f32,
+    };
     handle_resource_drop(ed, plugin, collection_id, item, actions, position, screen);
 }
 
@@ -406,7 +478,9 @@ pub fn open_resource_menu(
         .map(|a| {
             let title = i18n::resource_action_title(plugin, collection_id, a);
             let category = ed.definitions.with_untracked(|defs| {
-                defs.iter().find(|d| d.type_name == a.type_name).map(|d| d.category.clone())
+                defs.iter()
+                    .find(|d| d.type_name == a.type_name)
+                    .map(|d| d.category.clone())
             });
             crate::resource_menu::ResourceActionChoice {
                 title,
@@ -420,12 +494,13 @@ pub fn open_resource_menu(
     ed.wire_menu.set(None);
     ed.picker.set(None);
     ed.variable_menu.set(None);
-    ed.resource_menu.set(Some(crate::resource_menu::ResourceMenu {
-        position,
-        screen,
-        choices,
-        item_value: item.value.clone(),
-    }));
+    ed.resource_menu
+        .set(Some(crate::resource_menu::ResourceMenu {
+            position,
+            screen,
+            choices,
+            item_value: item.value.clone(),
+        }));
 }
 
 /// Ghost node under the cursor while dragging from the palette or resources.

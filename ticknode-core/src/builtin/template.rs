@@ -85,7 +85,9 @@ impl TemplateNode {
             .filter_map(|name| {
                 let pin = if let Some((_, pin)) = old.iter().find(|(n, _)| *n == name) {
                     *pin
-                } else if let Some((rename_name, pin)) = &rename && rename_name == &name {
+                } else if let Some((rename_name, pin)) = &rename
+                    && rename_name == &name
+                {
                     *pin
                 } else {
                     // Do not allocate from the split-pin range or wrap around.

@@ -1,16 +1,18 @@
 //! A layout-neutral delay indicator, animated between server telemetry updates.
 
-use leptos::prelude::*;
-use ticknode_shared::NodeId;
 use crate::i18n::t;
 use crate::state::{now_ms, use_editor};
+use leptos::prelude::*;
+use ticknode_shared::NodeId;
 
 #[component]
 pub(super) fn TimerBar(id: NodeId) -> impl IntoView {
     let ed = use_editor();
     let timer = Memo::new(move |_| ed.timers.with(|all| all.get(&id).cloned()));
     // Replacing the element restarts its CSS animation when this node's timer changes.
-    {move || timer.get().map(|timer| {
+    {
+        move || {
+            timer.get().map(|timer| {
         let (remaining, fraction) = timer.progress(now_ms());
         let count = timer.timer.count;
         view! {
@@ -19,5 +21,7 @@ pub(super) fn TimerBar(id: NodeId) -> impl IntoView {
                 {(count > 1).then(|| view! { <span class="node-timer-count">{move || t!("node-timer-count", count = count)}</span> })}
             </div>
         }
-    })}
+    })
+        }
+    }
 }

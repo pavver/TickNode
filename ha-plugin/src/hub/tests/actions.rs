@@ -249,13 +249,24 @@ fn node_quantity_snapshot_converts_before_calling_or_comparing_in_both_target_mo
     assert_eq!(rig.calls[0]["service_data"]["value"], 1.5);
     action.set_property("skip_unchanged", "yes".into());
     action.set_property("target", "".into());
-    assert!(action.definition().pins.iter().any(|p| p.id == PinId(2) && p.pin_type == ticknode_shared::PinType::Data(ticknode_shared::DataType::Named("quantity.power".into()))));
-    let same: Inputs = [(PinId(1), "number.power".into()), (PinId(2), 1500.0.into())].into_iter().collect();
+    assert!(action.definition().pins.iter().any(|p| p.id == PinId(2)
+        && p.pin_type
+            == ticknode_shared::PinType::Data(ticknode_shared::DataType::Named(
+                "quantity.power".into()
+            ))));
+    let same: Inputs = [(PinId(1), "number.power".into()), (PinId(2), 1500.0.into())]
+        .into_iter()
+        .collect();
     // Deliver the state revision confirming the previous call before checking for skips.
     rig.recv(vec![cache_event(&rig, "number.power", "1.5")]);
     // Keep the unit metadata in the cache, as in the original snapshot.
-    rig.hub.live.snapshot(&[serde_json::from_value(rig.states[0].clone()).unwrap()]);
-    assert!(has_exec(&action.run(&same, &mut rig.hub, &mut rig.env, rig.now), DONE));
+    rig.hub
+        .live
+        .snapshot(&[serde_json::from_value(rig.states[0].clone()).unwrap()]);
+    assert!(has_exec(
+        &action.run(&same, &mut rig.hub, &mut rig.env, rig.now),
+        DONE
+    ));
     assert_eq!(rig.calls.len(), 1);
     let overridden = [(PinId(1), "number.other".into()), (PinId(2), 1500.0.into())]
         .into_iter()
@@ -263,7 +274,9 @@ fn node_quantity_snapshot_converts_before_calling_or_comparing_in_both_target_mo
     action.run(&overridden, &mut rig.hub, &mut rig.env, rig.now);
     rig.serve();
     assert_eq!(rig.calls[1]["target"]["entity_id"], json!(["number.other"]));
-    let inputs = [(PinId(1), "number.power".into()), (PinId(2), 2000.0.into())].into_iter().collect();
+    let inputs = [(PinId(1), "number.power".into()), (PinId(2), 2000.0.into())]
+        .into_iter()
+        .collect();
     rig.service_error = Some("rejected");
     action.run(&inputs, &mut rig.hub, &mut rig.env, rig.now);
     let emissions = rig.serve();
@@ -304,11 +317,25 @@ fn a_call_awaiting_its_state_update_is_never_skipped_against_the_stale_cache() {
     call(&mut rig, "switch", "turn_on", "switch.psu", json!({}), true);
     assert_eq!(rig.calls.len(), 1);
     // HA has not reported "on" yet: the cache still says "off", so turn_off must still be sent.
-    call(&mut rig, "switch", "turn_off", "switch.psu", json!({}), true);
+    call(
+        &mut rig,
+        "switch",
+        "turn_off",
+        "switch.psu",
+        json!({}),
+        true,
+    );
     assert_eq!(rig.calls.len(), 2);
     // Once the state arrives, skipping resumes.
     rig.recv(vec![cache_event(&rig, "switch.psu", "off")]);
-    call(&mut rig, "switch", "turn_off", "switch.psu", json!({}), true);
+    call(
+        &mut rig,
+        "switch",
+        "turn_off",
+        "switch.psu",
+        json!({}),
+        true,
+    );
     assert_eq!(rig.calls.len(), 2);
 }
 
@@ -320,10 +347,17 @@ fn input_target_set_state_uses_bool_snapshot_and_skip_unchanged() {
     let mut action = ActionNode::new(node(5));
     action.set_property("action", "lock.set_state".into());
     assert_eq!(action.definition().properties[0].input, Some(PinId(1)));
-    let same = [(PinId(1), "lock.door".into()), (PinId(2), true.into())].into_iter().collect();
-    assert!(has_exec(&action.run(&same, &mut rig.hub, &mut rig.env, rig.now), DONE));
+    let same = [(PinId(1), "lock.door".into()), (PinId(2), true.into())]
+        .into_iter()
+        .collect();
+    assert!(has_exec(
+        &action.run(&same, &mut rig.hub, &mut rig.env, rig.now),
+        DONE
+    ));
     assert!(rig.calls.is_empty());
-    let changed = [(PinId(1), "lock.door".into()), (PinId(2), false.into())].into_iter().collect();
+    let changed = [(PinId(1), "lock.door".into()), (PinId(2), false.into())]
+        .into_iter()
+        .collect();
     action.run(&changed, &mut rig.hub, &mut rig.env, rig.now);
     let emissions = rig.serve();
     assert!(has_exec(&emissions[0].outputs, DONE));

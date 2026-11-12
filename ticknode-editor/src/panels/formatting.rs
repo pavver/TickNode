@@ -1,8 +1,8 @@
 //! Value, time and pin labels used by the panels.
 
-use ticknode_shared::*;
 use crate::geometry::match_cases;
 use crate::i18n::{self, t};
+use ticknode_shared::*;
 
 /// Longer values in the inspector are truncated (the full text is shown in the tooltip).
 pub(super) const MAX_VALUE_CHARS: usize = 400;
@@ -21,24 +21,45 @@ pub fn property_label(name: &str) -> String {
         ("interval_ticks", "prop-interval-ticks"),
         ("cases", "prop-cases"),
     ];
-    LABELS.iter().find(|(value, _)| *value == name)
+    LABELS
+        .iter()
+        .find(|(value, _)| *value == name)
         .map_or_else(|| name.to_string(), |(_, key)| t!(*key))
 }
 
 /// Formats a value for display in the inspector: strings are quoted to distinguish `"5"` from `5`.
 pub fn display_value_in(value: &DataValue, declared: &DataType) -> String {
     let runtime = value.get_type();
-    let declared = if *declared == DataType::Any { &runtime } else { declared };
-    if let Some(text) = i18n::identifier_text(value, declared) { return text; }
-    if let Some(text) = i18n::quantity_text(value, declared) { return text; }
+    let declared = if *declared == DataType::Any {
+        &runtime
+    } else {
+        declared
+    };
+    if let Some(text) = i18n::identifier_text(value, declared) {
+        return text;
+    }
+    if let Some(text) = i18n::quantity_text(value, declared) {
+        return text;
+    }
     if let (DataValue::List { elements, .. }, DataType::List(inner)) = (value, declared) {
-        return format!("[{}]", elements.iter().map(|v| display_value_in(v, inner)).collect::<Vec<_>>().join(", "));
+        return format!(
+            "[{}]",
+            elements
+                .iter()
+                .map(|v| display_value_in(v, inner))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     if let DataValue::Object { fields, .. } = value {
-        let fields = fields.iter().map(|(name, f)| {
-            let ty = i18n::declared_field_type(declared, name).unwrap_or(DataType::Any);
-            format!("{name}: {}", display_value_in(&f.value, &ty))
-        }).collect::<Vec<_>>().join(", ");
+        let fields = fields
+            .iter()
+            .map(|(name, f)| {
+                let ty = i18n::declared_field_type(declared, name).unwrap_or(DataType::Any);
+                format!("{name}: {}", display_value_in(&f.value, &ty))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
         return format!("{{{fields}}}");
     }
     display_value(value)
@@ -56,10 +77,20 @@ pub fn display_value(value: &DataValue) -> String {
         DataValue::Ticks(n) => i18n::ticks_text(*n),
         DataValue::Color(c) => format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a),
         DataValue::List { elements, .. } => {
-            format!("[{}]", elements.iter().map(display_value).collect::<Vec<_>>().join(", "))
+            format!(
+                "[{}]",
+                elements
+                    .iter()
+                    .map(display_value)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         }
         DataValue::Object { fields, .. } => {
-            let fields: Vec<_> = fields.iter().map(|(k, f)| format!("{k}: {}", display_value(&f.value))).collect();
+            let fields: Vec<_> = fields
+                .iter()
+                .map(|(k, f)| format!("{k}: {}", display_value(&f.value)))
+                .collect();
             format!("{{{}}}", fields.join(", "))
         }
     }
@@ -84,13 +115,23 @@ pub fn relative_time(ms: f64) -> String {
 }
 
 /// Localized pin label for a node instance on the canvas (including Match case conditions).
-pub(super) fn instance_pin_label(instance: &NodeInstance, pin: PinId, dir: PinDirection, fallback: &str) -> String {
+pub(super) fn instance_pin_label(
+    instance: &NodeInstance,
+    pin: PinId,
+    dir: PinDirection,
+    fallback: &str,
+) -> String {
     if instance.definition.type_name == "match"
         && dir == PinDirection::Output
         && pin != PinId(0)
-        && let Some(case) = match_cases(&instance.model.properties).into_iter().find(|c| c.pin == pin.0)
+        && let Some(case) = match_cases(&instance.model.properties)
+            .into_iter()
+            .find(|c| c.pin == pin.0)
     {
-        return i18n::format_match_case_in(&case, &crate::geometry::match_inputs_of(&instance.model.properties));
+        return i18n::format_match_case_in(
+            &case,
+            &crate::geometry::match_inputs_of(&instance.model.properties),
+        );
     }
     i18n::node_pin_label(&instance.definition.type_name, fallback)
 }

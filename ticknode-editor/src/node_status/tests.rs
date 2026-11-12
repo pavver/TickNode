@@ -3,12 +3,20 @@ use super::*;
 #[test]
 fn trace_lookup_distinguishes_directions_and_missing_values() {
     let trace = NodeTrace {
-        node_id: NodeId::generate(), tick: 7,
+        node_id: NodeId::generate(),
+        tick: 7,
         inputs: vec![(PinId(1), Some(12i64.into())), (PinId(2), None)],
-        outputs: vec![(PinId(1), "output".into())], fired: vec![PinId(3)],
+        outputs: vec![(PinId(1), "output".into())],
+        fired: vec![PinId(3)],
     };
-    assert_eq!(trace_value(&trace, PinId(1), PinDirection::Input), Some(&12i64.into()));
-    assert_eq!(trace_value(&trace, PinId(1), PinDirection::Output), Some(&"output".into()));
+    assert_eq!(
+        trace_value(&trace, PinId(1), PinDirection::Input),
+        Some(&12i64.into())
+    );
+    assert_eq!(
+        trace_value(&trace, PinId(1), PinDirection::Output),
+        Some(&"output".into())
+    );
     assert_eq!(trace_value(&trace, PinId(2), PinDirection::Input), None);
     assert_eq!(trace_value(&trace, PinId(99), PinDirection::Output), None);
 }

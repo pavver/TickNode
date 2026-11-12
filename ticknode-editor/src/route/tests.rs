@@ -15,8 +15,14 @@ fn parse_route_handles_home_variants() {
 fn parse_route_handles_sheet_variants() {
     let uuid_str = "67e55044-10b1-426f-9247-bb680e5fe0c8";
     let id = SheetId(Uuid::parse_str(uuid_str).unwrap());
-    assert_eq!(parse_route(&format!("#/sheet/{uuid_str}")), Route::Sheet(id));
-    assert_eq!(parse_route(&format!("#/sheet/{uuid_str}/")), Route::Sheet(id));
+    assert_eq!(
+        parse_route(&format!("#/sheet/{uuid_str}")),
+        Route::Sheet(id)
+    );
+    assert_eq!(
+        parse_route(&format!("#/sheet/{uuid_str}/")),
+        Route::Sheet(id)
+    );
     assert_eq!(parse_route(&format!("sheet/{uuid_str}")), Route::Sheet(id));
     assert_eq!(parse_route(&format!("/sheet/{uuid_str}")), Route::Sheet(id));
 }

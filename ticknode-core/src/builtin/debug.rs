@@ -1,10 +1,14 @@
-use tracing::info;
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
+use tracing::info;
 
-pub struct ConsoleNode { pub id: NodeId }
+pub struct ConsoleNode {
+    pub id: NodeId,
+}
 impl Node for ConsoleNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -23,7 +27,10 @@ impl Node for ConsoleNode {
     }
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let val = ctx.get_value(PinId(1));
-        let message = val.as_ref().map(format_data_value).unwrap_or_else(|| "None".to_string());
+        let message = val
+            .as_ref()
+            .map(format_data_value)
+            .unwrap_or_else(|| "None".to_string());
         info!(%message, "Console Output");
         ctx.host_state.logs.push((self.id, message));
         vec![]
@@ -37,7 +44,8 @@ pub fn format_data_value(val: &DataValue) -> String {
             format!("[{}]", items.join(", "))
         }
         DataValue::Object { fields, .. } => {
-            let mut items: Vec<String> = fields.iter()
+            let mut items: Vec<String> = fields
+                .iter()
                 .map(|(k, v)| format!("{}: {}", k, format_data_value(&v.value)))
                 .collect();
             items.sort();
@@ -67,7 +75,9 @@ pub struct DebugNode {
 }
 
 impl Node for DebugNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -109,5 +119,8 @@ impl Node for DebugNode {
 }
 
 fn format_log_number(num: NumberValue) -> String {
-    match num { NumberValue::Int(i) => i.to_string(), NumberValue::Float(f) => f.to_string() }
+    match num {
+        NumberValue::Int(i) => i.to_string(),
+        NumberValue::Float(f) => f.to_string(),
+    }
 }

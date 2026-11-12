@@ -22,7 +22,10 @@ fn is_control(ev: &web_sys::MouseEvent) -> bool {
     ev.target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
         .is_some_and(|el| {
-            el.closest("button, input, textarea, select, a, .switch").ok().flatten().is_some()
+            el.closest("button, input, textarea, select, a, .switch")
+                .ok()
+                .flatten()
+                .is_some()
         })
 }
 
@@ -71,13 +74,18 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
     let id = summary.info.id;
     // The card lives as long as its id; its contents follow the latest `Sheets` summary.
     let summary = Memo::new(move |_| {
-        ed.sheets.with(|list| list.iter().find(|s| s.info.id == id).cloned()).unwrap_or_else(|| summary.clone())
+        ed.sheets
+            .with(|list| list.iter().find(|s| s.info.id == id).cloned())
+            .unwrap_or_else(|| summary.clone())
     });
     let mode = RwSignal::new(CardMode::Normal);
     let draft_title = RwSignal::new(summary.with_untracked(|s| s.info.title.clone()));
     let draft_caption = RwSignal::new(summary.with_untracked(|s| s.info.caption.clone()));
 
-    let index = move || ed.sheets.with(|list| list.iter().position(|s| s.info.id == id).unwrap_or(0));
+    let index = move || {
+        ed.sheets
+            .with(|list| list.iter().position(|s| s.info.id == id).unwrap_or(0))
+    };
     let total = move || ed.sheets.with(|list| list.len());
     let can_up = move || can_move_up(index());
     let can_down = move || can_move_down(index(), total());

@@ -1,8 +1,8 @@
 //! Completion popup state, fixed layer, trigger evaluation, and item acceptance.
 
 use leptos::prelude::*;
-use ticknode_shared::template::{Completion, CompletionItem, CompletionKind};
 use ticknode_shared::NodeId;
+use ticknode_shared::template::{Completion, CompletionItem, CompletionKind};
 
 use crate::picker::{placement, viewport};
 use crate::state::{Editor, use_editor};
@@ -69,7 +69,10 @@ pub fn accept_completion_item(
 
         if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
             let id_str = format!("template-textarea-{}", node.0);
-            if let Some(textarea) = doc.get_element_by_id(&id_str).and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok()) {
+            if let Some(textarea) = doc
+                .get_element_by_id(&id_str)
+                .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
+            {
                 let current = textarea.value();
                 let (new_text, new_caret_byte) = apply_completion(&current, range, &item.insert);
                 textarea.set_value(&new_text);
@@ -77,7 +80,8 @@ pub fn accept_completion_item(
                 let _ = textarea.set_selection_range(u16_caret, u16_caret);
                 let _ = textarea.focus();
 
-                if let Some(pre) = doc.get_element_by_id(&format!("template-highlight-{}", node.0)) {
+                if let Some(pre) = doc.get_element_by_id(&format!("template-highlight-{}", node.0))
+                {
                     pre.set_scroll_top(textarea.scroll_top());
                     pre.set_scroll_left(textarea.scroll_left());
                 }
@@ -117,7 +121,11 @@ pub fn TemplateCompletionLayer() -> impl IntoView {
         }
     });
 
-    move || ed.template_completion.get().map(|state| view! { <TemplateCompletionPopup state=state /> })
+    move || {
+        ed.template_completion
+            .get()
+            .map(|state| view! { <TemplateCompletionPopup state=state /> })
+    }
 }
 
 #[component]
@@ -140,9 +148,19 @@ fn TemplateCompletionPopup(state: TemplateCompletionState) -> impl IntoView {
         }
     });
 
-    let place = placement((state.x, state.caret_top, state.x, state.caret_bottom), viewport());
-    let vertical = if place.up { format!("bottom:{}px", place.edge) } else { format!("top:{}px", place.edge) };
-    let style = format!("left:{}px;width:{}px;{vertical};max-height:{}px", place.left, place.width, place.max_height);
+    let place = placement(
+        (state.x, state.caret_top, state.x, state.caret_bottom),
+        viewport(),
+    );
+    let vertical = if place.up {
+        format!("bottom:{}px", place.edge)
+    } else {
+        format!("top:{}px", place.edge)
+    };
+    let style = format!(
+        "left:{}px;width:{}px;{vertical};max-height:{}px",
+        place.left, place.width, place.max_height
+    );
 
     view! {
         <div class="picker-popup template-completion-popup" style=style on:pointerdown=|ev| ev.stop_propagation()>

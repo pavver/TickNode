@@ -7,13 +7,19 @@ pub fn parse_property_duration(input: &str) -> Option<Duration> {
     let input = input.trim();
     if input.contains(':') {
         let parts: Vec<_> = input.split(':').collect();
-        if parts.len() != 3 || parts[..2].iter().any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit())) {
+        if parts.len() != 3
+            || parts[..2]
+                .iter()
+                .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
+        {
             return None;
         }
         let hours: u64 = parts[0].parse().ok()?;
         let minutes: u64 = parts[1].parse().ok()?;
         let seconds: f64 = parts[2].parse().ok()?;
-        if minutes >= 60 || !(0.0..60.0).contains(&seconds) { return None; }
+        if minutes >= 60 || !(0.0..60.0).contains(&seconds) {
+            return None;
+        }
         Duration::from_secs(hours.checked_mul(3600)?.checked_add(minutes * 60)?)
             .checked_add(Duration::try_from_secs_f64(seconds).ok()?)
     } else {

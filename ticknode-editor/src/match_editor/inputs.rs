@@ -1,21 +1,33 @@
 //! Match input rows and their name field.
 
+use super::editing::{remove_input, rename_input, set_input_type, validate_name};
 use super::*;
 use crate::canvas::PinSplitControl;
 use crate::geometry::type_color;
 use crate::inline::PinValue;
 use crate::state::LogKind;
 use crate::ui::{ControlState, flash};
-use super::editing::{validate_name, rename_input, set_input_type, remove_input};
 
 #[component]
-pub(super) fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputTypes>, ii: usize, pin: u32, edit: Callback<EditFn>) -> impl IntoView {
+pub(super) fn InputRow(
+    node: NodeId,
+    state: Memo<MatchState>,
+    types: Memo<InputTypes>,
+    ii: usize,
+    pin: u32,
+    edit: Callback<EditFn>,
+) -> impl IntoView {
     let ed = use_editor();
     let pin_id = PinId(pin);
     let input = Memo::new(move |_| state.with(|s| s.inputs.get(ii).cloned()));
-    let name = Signal::derive(move || input.with(|i| i.as_ref().map(|i| i.name.clone()).unwrap_or_default()));
-    let declared = Memo::new(move |_| input.with(|i| i.as_ref().map_or(DataType::Any, |i| i.value_type.clone())));
-    let effective = Memo::new(move |_| types.with(|t| t.get(ii).map_or(DataType::Any, |(_, t)| t.clone())));
+    let name = Signal::derive(move || {
+        input.with(|i| i.as_ref().map(|i| i.name.clone()).unwrap_or_default())
+    });
+    let declared = Memo::new(move |_| {
+        input.with(|i| i.as_ref().map_or(DataType::Any, |i| i.value_type.clone()))
+    });
+    let effective =
+        Memo::new(move |_| types.with(|t| t.get(ii).map_or(DataType::Any, |(_, t)| t.clone())));
     let connected = Memo::new(move |_| ed.is_input_connected(node, pin_id));
 
     let rename = Callback::new(move |new: String| -> Result<(), String> {
@@ -23,7 +35,8 @@ pub(super) fn InputRow(node: NodeId, state: Memo<MatchState>, types: Memo<InputT
         edit.run(EditFn::new(move |s, _| rename_input(s, ii, new)));
         Ok(())
     });
-    let set_type = move |t: DataType| edit.run(EditFn::new(move |s, env| set_input_type(s, env, ii, t)));
+    let set_type =
+        move |t: DataType| edit.run(EditFn::new(move |s, env| set_input_type(s, env, ii, t)));
     let remove = move |_| edit.run(EditFn::new(move |s, env| remove_input(s, env, ii)));
     let pin_title = move || format!("{}: {}", name.get(), ed.type_title(&effective.get()));
     view! {
@@ -87,7 +100,10 @@ fn TextField(
     let draft = RwSignal::new(String::new());
     Effect::new(move |_| draft.set(value.get()));
     let commit = move || {
-        let (Some(current), Some(saved)) = (draft.try_get_untracked(), value.try_get_untracked()) else { return };
+        let (Some(current), Some(saved)) = (draft.try_get_untracked(), value.try_get_untracked())
+        else {
+            return;
+        };
         if current.trim() == saved {
             return;
         }

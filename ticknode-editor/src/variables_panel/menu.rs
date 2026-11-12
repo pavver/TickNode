@@ -1,13 +1,15 @@
 //! Action menu for dropping or clicking a variable to place configured nodes on the canvas.
 
-use leptos::prelude::*;
-use ticknode_shared::{ClientMessage, DataValue, Position, Variable, VariableScope, data_type_name};
 use crate::canvas::view_center;
 use crate::categories::category_label;
 use crate::geometry::DU;
 use crate::i18n::t;
 use crate::node_menu::{MenuRow, MenuRows, NodeMenuPopup, dismiss_menu};
 use crate::state::{Editor, use_editor};
+use leptos::prelude::*;
+use ticknode_shared::{
+    ClientMessage, DataValue, Position, Variable, VariableScope, data_type_name,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableMenu {
@@ -22,10 +24,22 @@ struct ActionDef {
 }
 
 const ACTIONS: [ActionDef; 4] = [
-    ActionDef { title_key: "variables-action-get", type_name: "variable/get" },
-    ActionDef { title_key: "variables-action-set", type_name: "variable/set" },
-    ActionDef { title_key: "variables-action-changed", type_name: "variable/changed" },
-    ActionDef { title_key: "variables-action-delete", type_name: "variable/delete" },
+    ActionDef {
+        title_key: "variables-action-get",
+        type_name: "variable/get",
+    },
+    ActionDef {
+        title_key: "variables-action-set",
+        type_name: "variable/set",
+    },
+    ActionDef {
+        title_key: "variables-action-changed",
+        type_name: "variable/changed",
+    },
+    ActionDef {
+        title_key: "variables-action-delete",
+        type_name: "variable/delete",
+    },
 ];
 
 pub fn open_variable_menu(ed: Editor, variable: Variable, position: Position, screen: (f64, f64)) {
@@ -40,7 +54,12 @@ pub fn open_variable_menu(ed: Editor, variable: Variable, position: Position, sc
     }));
 }
 
-pub fn handle_variable_drop(ed: Editor, variable: &Variable, position: Position, screen: (f64, f64)) {
+pub fn handle_variable_drop(
+    ed: Editor,
+    variable: &Variable,
+    position: Position,
+    screen: (f64, f64),
+) {
     open_variable_menu(ed, variable.clone(), position, screen);
 }
 
@@ -57,17 +76,24 @@ pub fn handle_variable_click(ed: Editor, variable: &Variable, screen: (f64, f64)
 #[component]
 pub fn VariableMenuLayer() -> impl IntoView {
     let ed = use_editor();
-    dismiss_menu(".variable-menu", Callback::new(move |_| {
-        if ed.variable_menu.get_untracked().is_some() {
-            ed.variable_menu.set(None);
-        }
-    }));
+    dismiss_menu(
+        ".variable-menu",
+        Callback::new(move |_| {
+            if ed.variable_menu.get_untracked().is_some() {
+                ed.variable_menu.set(None);
+            }
+        }),
+    );
     Effect::new(move |_| {
         if ed.pending_paste.with(|p| p.is_some()) {
             ed.variable_menu.set(None);
         }
     });
-    move || ed.variable_menu.get().map(|state| view! { <VariableMenuPopup state=state /> })
+    move || {
+        ed.variable_menu
+            .get()
+            .map(|state| view! { <VariableMenuPopup state=state /> })
+    }
 }
 
 #[component]
@@ -129,14 +155,23 @@ fn VariableMenuPopup(state: VariableMenu) -> impl IntoView {
             };
             let properties = if *type_name == "variable/delete" {
                 vec![
-                    ("name".to_string(), DataValue::String(var_data.key.name.clone())),
+                    (
+                        "name".to_string(),
+                        DataValue::String(var_data.key.name.clone()),
+                    ),
                     ("lookup".to_string(), DataValue::String(lookup.to_string())),
                 ]
             } else {
                 vec![
-                    ("name".to_string(), DataValue::String(var_data.key.name.clone())),
+                    (
+                        "name".to_string(),
+                        DataValue::String(var_data.key.name.clone()),
+                    ),
                     ("lookup".to_string(), DataValue::String(lookup.to_string())),
-                    ("value_type".to_string(), DataValue::String(data_type_name(&var_data.data_type))),
+                    (
+                        "value_type".to_string(),
+                        DataValue::String(data_type_name(&var_data.data_type)),
+                    ),
                 ]
             };
             ed.send(ClientMessage::AddNodeWith {

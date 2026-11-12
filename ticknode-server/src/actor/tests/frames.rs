@@ -26,7 +26,10 @@ fn sample_frame(id: FrameId, title: &str) -> Frame {
         title: title.into(),
         color: FrameColor::Blue,
         position: Position { x: 50.0, y: 70.0 },
-        size: NodeSize { width: 320.0, height: 240.0 },
+        size: NodeSize {
+            width: 320.0,
+            height: 240.0,
+        },
     }
 }
 
@@ -40,7 +43,10 @@ fn set_and_persist_after_reload() {
     let decoded = postcard::from_bytes(&postcard::to_allocvec(&command).unwrap()).unwrap();
     let events = apply(&mut actor, decoded);
     assert_eq!(events[0], ServerMessage::FrameSet(frame.clone()));
-    assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&events[0])).unwrap(), events[0]);
+    assert_eq!(
+        postcard::from_bytes::<ServerMessage>(&encode(&events[0])).unwrap(),
+        events[0]
+    );
     assert_eq!(actor.frames.get(&id), Some(&frame));
 
     actor.save();
@@ -53,7 +59,10 @@ fn set_and_persist_after_reload() {
     let loaded = actor.storage.load(&mut engine).unwrap();
     assert_eq!(loaded.frames.get(&id), Some(&frame));
     actor.storage.save_sheet(sheet_id, &graph).unwrap();
-    assert_eq!(std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap(), first);
+    assert_eq!(
+        std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap(),
+        first
+    );
 }
 
 #[test]
@@ -67,7 +76,10 @@ fn replace_frame() {
     let mut frame2 = sample_frame(id, "Updated");
     frame2.color = FrameColor::Green;
     frame2.position = Position { x: 100.0, y: 150.0 };
-    frame2.size = NodeSize { width: 400.0, height: 300.0 };
+    frame2.size = NodeSize {
+        width: 400.0,
+        height: 300.0,
+    };
 
     let events = apply(&mut actor, ClientMessage::SetFrame(frame2.clone()));
     assert_eq!(events[0], ServerMessage::FrameSet(frame2.clone()));
@@ -102,14 +114,20 @@ fn invalid_frame_rejected() {
     let id = FrameId::generate();
 
     let nonfinite_pos = Frame {
-        position: Position { x: f32::NAN, y: 0.0 },
+        position: Position {
+            x: f32::NAN,
+            y: 0.0,
+        },
         ..sample_frame(id, "NanPos")
     };
     let err = apply_err(&mut actor, ClientMessage::SetFrame(nonfinite_pos));
     assert_eq!(err.key, "error-frame-invalid");
 
     let nonfinite_size = Frame {
-        size: NodeSize { width: f64::INFINITY, height: 100.0 },
+        size: NodeSize {
+            width: f64::INFINITY,
+            height: 100.0,
+        },
         ..sample_frame(id, "InfSize")
     };
     let err = apply_err(&mut actor, ClientMessage::SetFrame(nonfinite_size));
@@ -147,7 +165,10 @@ fn remove_frame() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
     let id = FrameId::generate();
-    apply(&mut actor, ClientMessage::SetFrame(sample_frame(id, "To Remove")));
+    apply(
+        &mut actor,
+        ClientMessage::SetFrame(sample_frame(id, "To Remove")),
+    );
     assert!(actor.frames.contains_key(&id));
 
     let events = apply(&mut actor, ClientMessage::RemoveFrame(id));
@@ -194,30 +215,53 @@ fn undo_redo_of_set_and_remove() {
 fn batch_set_frame_and_move_node_is_one_history_entry() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
-    let node_id = apply(&mut actor, ClientMessage::AddNode { type_name: "const".into(), position: Position { x: 10.0, y: 10.0 } })
-        .into_iter().find_map(|e| match e { ServerMessage::NodeAdded(n) => Some(n.model.id), _ => None }).unwrap();
+    let node_id = apply(
+        &mut actor,
+        ClientMessage::AddNode {
+            type_name: "const".into(),
+            position: Position { x: 10.0, y: 10.0 },
+        },
+    )
+    .into_iter()
+    .find_map(|e| match e {
+        ServerMessage::NodeAdded(n) => Some(n.model.id),
+        _ => None,
+    })
+    .unwrap();
     actor.histories.clear();
 
     let frame_id = FrameId::generate();
     let frame = sample_frame(frame_id, "Batch Frame");
     let batch = ClientMessage::Batch(vec![
         ClientMessage::SetFrame(frame.clone()),
-        ClientMessage::MoveNode { id: node_id, position: Position { x: 50.0, y: 50.0 } },
+        ClientMessage::MoveNode {
+            id: node_id,
+            position: Position { x: 50.0, y: 50.0 },
+        },
     ]);
     let events = apply(&mut actor, batch);
     assert!(events.contains(&ServerMessage::FrameSet(frame.clone())));
-    assert!(events.contains(&ServerMessage::NodeMoved { id: node_id, position: Position { x: 50.0, y: 50.0 } }));
+    assert!(events.contains(&ServerMessage::NodeMoved {
+        id: node_id,
+        position: Position { x: 50.0, y: 50.0 }
+    }));
 
     // One undo restores both
     let events = apply(&mut actor, ClientMessage::Undo);
     assert!(events.contains(&ServerMessage::FrameRemoved(frame_id)));
-    assert!(events.contains(&ServerMessage::NodeMoved { id: node_id, position: Position { x: 10.0, y: 10.0 } }));
+    assert!(events.contains(&ServerMessage::NodeMoved {
+        id: node_id,
+        position: Position { x: 10.0, y: 10.0 }
+    }));
     assert!(!actor.frames.contains_key(&frame_id));
 
     // One redo restores both
     let events = apply(&mut actor, ClientMessage::Redo);
     assert!(events.contains(&ServerMessage::FrameSet(frame.clone())));
-    assert!(events.contains(&ServerMessage::NodeMoved { id: node_id, position: Position { x: 50.0, y: 50.0 } }));
+    assert!(events.contains(&ServerMessage::NodeMoved {
+        id: node_id,
+        position: Position { x: 50.0, y: 50.0 }
+    }));
     assert!(actor.frames.contains_key(&frame_id));
 }
 
@@ -234,10 +278,13 @@ fn paste_gives_new_ids_and_offsets() {
     snippet.frames[0].position = Position { x: 150.0, y: 170.0 };
 
     let events = apply(&mut actor, ClientMessage::Paste(snippet));
-    let pasted_frame = events.iter().find_map(|e| match e {
-        ServerMessage::FrameSet(f) => Some(f.clone()),
-        _ => None,
-    }).unwrap();
+    let pasted_frame = events
+        .iter()
+        .find_map(|e| match e {
+            ServerMessage::FrameSet(f) => Some(f.clone()),
+            _ => None,
+        })
+        .unwrap();
 
     assert_ne!(pasted_frame.id, frame_id);
     assert_eq!(pasted_frame.position, Position { x: 150.0, y: 170.0 });
@@ -260,10 +307,18 @@ fn init_carries_frames() {
     apply(&mut actor, ClientMessage::SetFrame(frame.clone()));
 
     let snapshot = actor.snapshot(Some(actor.sheets[0].id));
-    let ServerMessage::Init { frames, .. } = &snapshot else { panic!("Expected Init") };
+    let ServerMessage::Init { frames, .. } = &snapshot else {
+        panic!("Expected Init")
+    };
     assert_eq!(frames, &vec![frame.clone()]);
 
     let decoded: ServerMessage = postcard::from_bytes(&encode(&snapshot)).unwrap();
-    let ServerMessage::Init { frames: decoded_frames, .. } = decoded else { panic!("Expected Init") };
+    let ServerMessage::Init {
+        frames: decoded_frames,
+        ..
+    } = decoded
+    else {
+        panic!("Expected Init")
+    };
     assert_eq!(decoded_frames, vec![frame]);
 }

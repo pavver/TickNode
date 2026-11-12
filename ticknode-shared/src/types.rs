@@ -19,7 +19,13 @@ pub struct FieldDefinition {
 
 impl FieldDefinition {
     pub fn new(name: &str, title: &str, data_type: DataType) -> Self {
-        Self { name: name.into(), title: title.into(), description: String::new(), data_type, optional: false }
+        Self {
+            name: name.into(),
+            title: title.into(),
+            description: String::new(),
+            data_type,
+            optional: false,
+        }
     }
 
     pub fn optional(mut self) -> Self {
@@ -43,11 +49,17 @@ pub struct EnumValue {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TypeKind {
-    Struct { fields: Vec<FieldDefinition> },
-    Enum { values: Vec<EnumValue> },
+    Struct {
+        fields: Vec<FieldDefinition>,
+    },
+    Enum {
+        values: Vec<EnumValue>,
+    },
     Quantity(crate::quantity::QuantityKind),
     /// Opaque signed integer; labels refer to an option source of the owning plugin.
-    Identifier { labels: Option<String> },
+    Identifier {
+        labels: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -66,26 +78,56 @@ pub struct TypeDefinition {
 
 impl TypeDefinition {
     pub fn new_struct(name: &str, title: &str, fields: Vec<FieldDefinition>) -> Self {
-        Self { name: name.into(), title: title.into(), description: String::new(), color: None, plugin: None, kind: TypeKind::Struct { fields } }
+        Self {
+            name: name.into(),
+            title: title.into(),
+            description: String::new(),
+            color: None,
+            plugin: None,
+            kind: TypeKind::Struct { fields },
+        }
     }
 
     /// `values` — (value, label) pairs.
     pub fn new_enum(name: &str, title: &str, values: &[(&str, &str)]) -> Self {
-        let values = values.iter().map(|(v, t)| EnumValue { value: (*v).into(), title: (*t).into() }).collect();
-        Self { name: name.into(), title: title.into(), description: String::new(), color: None, plugin: None, kind: TypeKind::Enum { values } }
+        let values = values
+            .iter()
+            .map(|(v, t)| EnumValue {
+                value: (*v).into(),
+                title: (*t).into(),
+            })
+            .collect();
+        Self {
+            name: name.into(),
+            title: title.into(),
+            description: String::new(),
+            color: None,
+            plugin: None,
+            kind: TypeKind::Enum { values },
+        }
     }
 
     pub fn identifier(name: &str, title: &str, description: &str) -> Self {
-        Self { name: name.into(), title: title.into(), description: description.into(), color: None,
-            kind: TypeKind::Identifier { labels: None }, plugin: None }
+        Self {
+            name: name.into(),
+            title: title.into(),
+            description: description.into(),
+            color: None,
+            kind: TypeKind::Identifier { labels: None },
+            plugin: None,
+        }
     }
 
     pub fn labels(mut self, source: &str) -> Self {
-        if let TypeKind::Identifier { labels } = &mut self.kind { *labels = Some(source.into()); }
+        if let TypeKind::Identifier { labels } = &mut self.kind {
+            *labels = Some(source.into());
+        }
         self
     }
 
-    pub fn is_identifier(&self) -> bool { matches!(self.kind, TypeKind::Identifier { .. }) }
+    pub fn is_identifier(&self) -> bool {
+        matches!(self.kind, TypeKind::Identifier { .. })
+    }
 
     pub fn described(mut self, description: &str) -> Self {
         self.description = description.into();
@@ -116,7 +158,10 @@ impl TypeDefinition {
     }
 
     pub fn quantity(&self) -> Option<&crate::quantity::QuantityKind> {
-        match &self.kind { TypeKind::Quantity(q) => Some(q), _ => None }
+        match &self.kind {
+            TypeKind::Quantity(q) => Some(q),
+            _ => None,
+        }
     }
 
     pub fn is_enum(&self) -> bool {
@@ -129,7 +174,10 @@ impl TypeDefinition {
 pub fn is_type_name(s: &str) -> bool {
     s.contains('.')
         && s.split('.').all(|seg| {
-            !seg.is_empty() && seg.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+            !seg.is_empty()
+                && seg
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
         })
 }
 
@@ -142,10 +190,16 @@ pub enum Conversion {
     NumberToBool,
     BoolToNumber,
     StringToEnum(Vec<String>),
-    List { element_type: DataType, conversion: Box<Conversion> },
+    List {
+        element_type: DataType,
+        conversion: Box<Conversion>,
+    },
     CanonicalNumber,
     ParseQuantity(crate::quantity::QuantityKind),
-    FormatQuantity { name: String, kind: crate::quantity::QuantityKind },
+    FormatQuantity {
+        name: String,
+        kind: crate::quantity::QuantityKind,
+    },
 }
 
 impl Conversion {
@@ -153,24 +207,60 @@ impl Conversion {
         self.apply_with_labels(value, &crate::quantity::CanonicalLabels)
     }
 
-    pub fn apply_with_labels(&self, value: DataValue, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+    pub fn apply_with_labels(
+        &self,
+        value: DataValue,
+        labels: &dyn crate::quantity::QuantityLabels,
+    ) -> Option<DataValue> {
         self.apply_with_display(value, &Default::default(), labels)
     }
 
-    pub fn apply_with_display(&self, value: DataValue, rules: &crate::DisplayRules, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+    pub fn apply_with_display(
+        &self,
+        value: DataValue,
+        rules: &crate::DisplayRules,
+        labels: &dyn crate::quantity::QuantityLabels,
+    ) -> Option<DataValue> {
         match (self, value) {
-            (Self::CanonicalNumber, DataValue::Number(n)) if n.to_f64().is_finite() => Some(DataValue::Number(n)),
-            (Self::ParseQuantity(q), DataValue::String(s)) => crate::quantity::parse_quantity(&s, q).map(DataValue::from),
-            (Self::FormatQuantity { name, kind: q }, DataValue::Number(n)) => Some(DataValue::String(crate::to_text::quantity_text(n.to_f64(), name, q, &Default::default(), rules, labels))),
+            (Self::CanonicalNumber, DataValue::Number(n)) if n.to_f64().is_finite() => {
+                Some(DataValue::Number(n))
+            }
+            (Self::ParseQuantity(q), DataValue::String(s)) => {
+                crate::quantity::parse_quantity(&s, q).map(DataValue::from)
+            }
+            (Self::FormatQuantity { name, kind: q }, DataValue::Number(n)) => {
+                Some(DataValue::String(crate::to_text::quantity_text(
+                    n.to_f64(),
+                    name,
+                    q,
+                    &Default::default(),
+                    rules,
+                    labels,
+                )))
+            }
             (Self::Parse(dst), DataValue::String(s)) => text::parse_value(&s, dst).ok(),
-            (Self::Format(src), value) if value.get_type() == *src => Some(DataValue::String(text::format_value(&value))),
+            (Self::Format(src), value) if value.get_type() == *src => {
+                Some(DataValue::String(text::format_value(&value)))
+            }
             (Self::StringToBool, DataValue::String(s)) => {
                 parse_switch_state(&s).map(DataValue::Bool)
             }
-            (Self::NumberToBool, DataValue::Number(n)) if n.to_f64().is_finite() => Some(DataValue::Bool(n.to_f64() != 0.0)),
-            (Self::BoolToNumber, DataValue::Bool(b)) => Some(DataValue::Number(NumberValue::Int(i64::from(b)))),
-            (Self::StringToEnum(values), DataValue::String(s)) => values.contains(&s).then_some(DataValue::String(s)),
-            (Self::List { element_type, conversion }, DataValue::List { elements, .. }) => convert_list(element_type, conversion, elements, rules, labels),
+            (Self::NumberToBool, DataValue::Number(n)) if n.to_f64().is_finite() => {
+                Some(DataValue::Bool(n.to_f64() != 0.0))
+            }
+            (Self::BoolToNumber, DataValue::Bool(b)) => {
+                Some(DataValue::Number(NumberValue::Int(i64::from(b))))
+            }
+            (Self::StringToEnum(values), DataValue::String(s)) => {
+                values.contains(&s).then_some(DataValue::String(s))
+            }
+            (
+                Self::List {
+                    element_type,
+                    conversion,
+                },
+                DataValue::List { elements, .. },
+            ) => convert_list(element_type, conversion, elements, rules, labels),
             _ => None,
         }
     }
@@ -188,7 +278,9 @@ impl TypeRegistry {
     }
 
     pub fn from_definitions(defs: impl IntoIterator<Item = TypeDefinition>) -> Self {
-        Self { types: defs.into_iter().map(|d| (d.name.clone(), d)).collect() }
+        Self {
+            types: defs.into_iter().map(|d| (d.name.clone(), d)).collect(),
+        }
     }
 
     pub fn get(&self, name: &str) -> Option<&TypeDefinition> {
@@ -222,10 +314,16 @@ impl TypeRegistry {
         let mut next = self.clone();
         for def in defs {
             if def.name.starts_with("quantity.") || def.quantity().is_some() {
-                return Err(format!("Data type {} uses the reserved quantity namespace or kind", def.name));
+                return Err(format!(
+                    "Data type {} uses the reserved quantity namespace or kind",
+                    def.name
+                ));
             }
             if !is_type_name(&def.name) {
-                return Err(format!("Invalid type name {:?}: expected something like \"plugin.type\"", def.name));
+                return Err(format!(
+                    "Invalid type name {:?}: expected something like \"plugin.type\"",
+                    def.name
+                ));
             }
             if next.types.insert(def.name.clone(), def.clone()).is_some() {
                 return Err(format!("Data type {} is already registered", def.name));
@@ -243,8 +341,12 @@ impl TypeRegistry {
             TypeKind::Struct { fields } => self.validate_fields(&def.name, fields),
             TypeKind::Enum { values } => validate_enum(&def.name, values),
             TypeKind::Quantity(_) => Ok(()),
-            TypeKind::Identifier { labels: Some(source) } if source.is_empty() || source.len() > crate::MAX_OPTION_STRING_LEN =>
-                Err(format!("Type {}: empty or oversized identifier label source", def.name)),
+            TypeKind::Identifier {
+                labels: Some(source),
+            } if source.is_empty() || source.len() > crate::MAX_OPTION_STRING_LEN => Err(format!(
+                "Type {}: empty or oversized identifier label source",
+                def.name
+            )),
             TypeKind::Identifier { .. } => Ok(()),
         }
     }
@@ -253,10 +355,14 @@ impl TypeRegistry {
         let mut seen = Vec::new();
         for field in fields {
             if field.name.is_empty() || seen.contains(&field.name) {
-                return Err(format!("Type {name}: empty or duplicate field name {:?}", field.name));
+                return Err(format!(
+                    "Type {name}: empty or duplicate field name {:?}",
+                    field.name
+                ));
             }
             seen.push(field.name.clone());
-            self.check_known(&field.data_type).map_err(|e| format!("Type {name}, field {}: {e}", field.name))?;
+            self.check_known(&field.data_type)
+                .map_err(|e| format!("Type {name}, field {}: {e}", field.name))?;
         }
         Ok(())
     }
@@ -264,7 +370,9 @@ impl TypeRegistry {
     /// All `Named` types inside `t` must be registered.
     pub fn check_known(&self, t: &DataType) -> Result<(), String> {
         match t {
-            DataType::Named(name) if !self.types.contains_key(name) => Err(format!("unknown data type {name}")),
+            DataType::Named(name) if !self.types.contains_key(name) => {
+                Err(format!("unknown data type {name}"))
+            }
             DataType::List(inner) => self.check_known(inner),
             _ => Ok(()),
         }
@@ -273,7 +381,9 @@ impl TypeRegistry {
     /// Human-readable type name: `title` for a custom type, otherwise the technical name.
     pub fn title_of(&self, t: &DataType) -> String {
         match t {
-            DataType::Named(name) => self.get(name).map_or_else(|| name.clone(), |d| d.title.clone()),
+            DataType::Named(name) => self
+                .get(name)
+                .map_or_else(|| name.clone(), |d| d.title.clone()),
             DataType::List(inner) => format!("list<{}>", self.title_of(inner)),
             other => crate::data_type_name(other),
         }
@@ -285,9 +395,15 @@ impl TypeRegistry {
             (DataType::Any, _) | (_, DataType::Any) => true,
             (DataType::List(a), DataType::List(b)) => self.compatible(a, b),
             (DataType::Named(a), DataType::Named(b)) => a == b,
-            (DataType::Named(a), DataType::Number) => self.get(a).is_some_and(|d| d.quantity().is_some()),
-            (DataType::Named(a), DataType::Object) => self.get(a).is_some_and(TypeDefinition::is_struct),
-            (DataType::Named(a), DataType::String) => self.get(a).is_some_and(TypeDefinition::is_enum),
+            (DataType::Named(a), DataType::Number) => {
+                self.get(a).is_some_and(|d| d.quantity().is_some())
+            }
+            (DataType::Named(a), DataType::Object) => {
+                self.get(a).is_some_and(TypeDefinition::is_struct)
+            }
+            (DataType::Named(a), DataType::String) => {
+                self.get(a).is_some_and(TypeDefinition::is_enum)
+            }
             (DataType::Named(_), _) | (_, DataType::Named(_)) => false,
             (a, b) => a == b,
         }
@@ -301,15 +417,29 @@ impl TypeRegistry {
             return None;
         }
         Some(match (src, dst) {
-            (Number, Named(name)) if self.get(name)?.quantity().is_some() => Conversion::CanonicalNumber,
-            (Named(name), String) if self.get(name)?.quantity().is_some() => Conversion::FormatQuantity { name: name.clone(), kind: self.get(name)?.quantity()?.clone() },
+            (Number, Named(name)) if self.get(name)?.quantity().is_some() => {
+                Conversion::CanonicalNumber
+            }
+            (Named(name), String) if self.get(name)?.quantity().is_some() => {
+                Conversion::FormatQuantity {
+                    name: name.clone(),
+                    kind: self.get(name)?.quantity()?.clone(),
+                }
+            }
             (String, Named(name)) => {
                 let def = self.get(name)?;
-                if let Some(q) = def.quantity() { return Some(Conversion::ParseQuantity(q.clone())); }
-                if !def.is_enum() { return None; }
+                if let Some(q) = def.quantity() {
+                    return Some(Conversion::ParseQuantity(q.clone()));
+                }
+                if !def.is_enum() {
+                    return None;
+                }
                 Conversion::StringToEnum(def.values().iter().map(|v| v.value.clone()).collect())
             }
-            (List(a), List(b)) => Conversion::List { element_type: (**b).clone(), conversion: Box::new(self.convertible(a, b)?) },
+            (List(a), List(b)) => Conversion::List {
+                element_type: (**b).clone(),
+                conversion: Box::new(self.convertible(a, b)?),
+            },
             _ => scalar_conversion(src, dst)?,
         })
     }
@@ -317,32 +447,61 @@ impl TypeRegistry {
     /// Checks integer representations wherever a declared type contains identifiers.
     pub fn identifier_value_fits(&self, t: &DataType, value: &DataValue) -> bool {
         match (t, value) {
-            (DataType::Named(name), value) if self.get(name).is_some_and(TypeDefinition::is_identifier) =>
-                matches!(value, DataValue::Number(NumberValue::Int(_))),
-            (DataType::List(inner), DataValue::List { elements, .. }) =>
-                elements.iter().all(|v| self.identifier_value_fits(inner, v)),
-            (DataType::Named(name), DataValue::Object { fields, .. }) => self.get(name).is_none_or(|d|
-                d.fields().iter().all(|f| fields.get(&f.name).is_none_or(|v| self.identifier_value_fits(&f.data_type, &v.value)))),
+            (DataType::Named(name), value)
+                if self.get(name).is_some_and(TypeDefinition::is_identifier) =>
+            {
+                matches!(value, DataValue::Number(NumberValue::Int(_)))
+            }
+            (DataType::List(inner), DataValue::List { elements, .. }) => elements
+                .iter()
+                .all(|v| self.identifier_value_fits(inner, v)),
+            (DataType::Named(name), DataValue::Object { fields, .. }) => {
+                self.get(name).is_none_or(|d| {
+                    d.fields().iter().all(|f| {
+                        fields
+                            .get(&f.name)
+                            .is_none_or(|v| self.identifier_value_fits(&f.data_type, &v.value))
+                    })
+                })
+            }
             _ => true,
         }
     }
 
     /// Registry-aware initial value for editable named types.
     pub fn default_value(&self, t: &DataType) -> DataValue {
-        if self.definition_of(t).is_some_and(TypeDefinition::is_identifier) { return 0i64.into(); }
-        self.default_enum(t).map(DataValue::String).unwrap_or_else(|| text::default_of(t))
+        if self
+            .definition_of(t)
+            .is_some_and(TypeDefinition::is_identifier)
+        {
+            return 0i64.into();
+        }
+        self.default_enum(t)
+            .map(DataValue::String)
+            .unwrap_or_else(|| text::default_of(t))
     }
 
     /// Default value for enum `t` — the first value in the enumeration.
     pub fn default_enum(&self, t: &DataType) -> Option<String> {
-        self.definition_of(t).and_then(|d| d.values().first()).map(|v| v.value.clone())
+        self.definition_of(t)
+            .and_then(|d| d.values().first())
+            .map(|v| v.value.clone())
     }
 }
 
-fn convert_list(element_type: &DataType, conversion: &Conversion, elements: Vec<DataValue>, rules: &crate::DisplayRules, labels: &dyn crate::quantity::QuantityLabels) -> Option<DataValue> {
+fn convert_list(
+    element_type: &DataType,
+    conversion: &Conversion,
+    elements: Vec<DataValue>,
+    rules: &crate::DisplayRules,
+    labels: &dyn crate::quantity::QuantityLabels,
+) -> Option<DataValue> {
     Some(DataValue::List {
         element_type: element_type.clone(),
-        elements: elements.into_iter().map(|value| conversion.apply_with_display(value, rules, labels)).collect::<Option<Vec<_>>>()?,
+        elements: elements
+            .into_iter()
+            .map(|value| conversion.apply_with_display(value, rules, labels))
+            .collect::<Option<Vec<_>>>()?,
     })
 }
 
@@ -350,7 +509,9 @@ fn scalar_conversion(src: &DataType, dst: &DataType) -> Option<Conversion> {
     use DataType::*;
     Some(match (src, dst) {
         (String, Number | Time | DateTime | Duration | Color) => Conversion::Parse(dst.clone()),
-        (Number | Bool | Time | DateTime | Duration | Color, String) => Conversion::Format(src.clone()),
+        (Number | Bool | Time | DateTime | Duration | Color, String) => {
+            Conversion::Format(src.clone())
+        }
         (String, Bool) => Conversion::StringToBool,
         (Number, Bool) => Conversion::NumberToBool,
         (Bool, Number) => Conversion::BoolToNumber,
@@ -360,14 +521,18 @@ fn scalar_conversion(src: &DataType, dst: &DataType) -> Option<Conversion> {
 
 fn parse_switch_state(text: &str) -> Option<bool> {
     match text.trim().to_ascii_lowercase().as_str() {
-        "on" | "true" | "yes" | "1" | "open" | "home" | "playing" | "locked" | "detected" | "active" | "occupied" | "connected" => Some(true),
-        "off" | "false" | "no" | "0" | "closed" | "not_home" | "paused" | "unlocked" | "clear" | "inactive" | "unoccupied" | "disconnected" => Some(false),
+        "on" | "true" | "yes" | "1" | "open" | "home" | "playing" | "locked" | "detected"
+        | "active" | "occupied" | "connected" => Some(true),
+        "off" | "false" | "no" | "0" | "closed" | "not_home" | "paused" | "unlocked" | "clear"
+        | "inactive" | "unoccupied" | "disconnected" => Some(false),
         _ => None,
     }
 }
 
 fn validate_enum(name: &str, values: &[EnumValue]) -> Result<(), String> {
-    if values.is_empty() { return Err(format!("Type {name}: empty enumeration")); }
+    if values.is_empty() {
+        return Err(format!("Type {name}: empty enumeration"));
+    }
     let mut seen = Vec::new();
     for value in values {
         if seen.contains(&&value.value) {
@@ -379,6 +544,6 @@ fn validate_enum(name: &str, values: &[EnumValue]) -> Result<(), String> {
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod identifier_tests;
+#[cfg(test)]
+mod tests;

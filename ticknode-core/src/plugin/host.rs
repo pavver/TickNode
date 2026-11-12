@@ -1,14 +1,14 @@
+use super::options::sanitize_options;
+use super::{OptionStore, bindings, lock, wit};
+use crate::host::{HostState, HttpRequest, TaskId};
+use crate::ws::WsHub;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use ticknode_shared::*;
 use tracing::warn;
-use wasmtime::component::ResourceTable;
 use wasmtime::StoreLimits;
+use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-use crate::host::{HostState, HttpRequest, TaskId};
-use crate::ws::WsHub;
-use super::{bindings, lock, wit, OptionStore};
-use super::options::sanitize_options;
 
 /// Capabilities granted to the plugin at load time.
 #[derive(Default)]
@@ -40,13 +40,19 @@ pub(super) struct PluginState {
 
 impl WasiView for PluginState {
     fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
 impl PluginState {
     fn call(&mut self) -> Result<&mut CallCtx, String> {
-        self.call.as_mut().filter(|c| !c.node_id.0.is_nil()).ok_or_else(|| "Only available during execute/poll".to_string())
+        self.call
+            .as_mut()
+            .filter(|c| !c.node_id.0.is_nil())
+            .ok_or_else(|| "Only available during execute/poll".to_string())
     }
 }
 
@@ -54,7 +60,8 @@ impl wit::Host for PluginState {}
 
 impl bindings::ticknode::plugin::host::Host for PluginState {
     fn log(&mut self, level: wit::LogLevel, message: String) {
-        let error = matches!(level, wit::LogLevel::Error).then(|| UiMessage::plain(message.clone()));
+        let error =
+            matches!(level, wit::LogLevel::Error).then(|| UiMessage::plain(message.clone()));
         let message = match level {
             wit::LogLevel::Debug | wit::LogLevel::Info => message,
             wit::LogLevel::Warn => format!("[WARN] {message}"),
@@ -71,13 +78,24 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
 
     fn node_error(&mut self, message: wit::UiError, log: bool) {
         let allowed = crate::translations::AllowedIds::new(&self.grants.name, &[], &[]);
-        let message = crate::translations::sanitize_ui_message(UiMessage {
-            key: message.key, args: message.args, fallback: message.fallback,
-        }, &allowed);
+        let message = crate::translations::sanitize_ui_message(
+            UiMessage {
+                key: message.key,
+                args: message.args,
+                fallback: message.fallback,
+            },
+            &allowed,
+        );
         if let Some(c) = &mut self.call {
-            if log { c.host.log(c.node_id, format!("[ERROR] {}", message.fallback)); }
-            if c.node_id.0.is_nil() { self.settings_error = Some(message); }
-            else { c.host.report_error(c.node_id, message); }
+            if log {
+                c.host
+                    .log(c.node_id, format!("[ERROR] {}", message.fallback));
+            }
+            if c.node_id.0.is_nil() {
+                self.settings_error = Some(message);
+            } else {
+                c.host.report_error(c.node_id, message);
+            }
         }
     }
 
@@ -86,7 +104,9 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     }
 
     fn tick_duration_ms(&mut self) -> u32 {
-        self.call.as_ref().map_or(0, |c| c.host.tick_duration.as_millis() as u32)
+        self.call
+            .as_ref()
+            .map_or(0, |c| c.host.tick_duration.as_millis() as u32)
     }
 
     fn delay(&mut self, ticks: u64) -> Result<TaskId, String> {
@@ -100,8 +120,15 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
             return Err(format!("Unsupported scheme: {}", url.scheme()));
         }
         let host = url.host_str().unwrap_or_default();
-        if !self.grants.http_domains.iter().any(|d| domain_allowed(host, d)) {
-            return Err(format!("The plugin is not allowed to make HTTP requests to {host}"));
+        if !self
+            .grants
+            .http_domains
+            .iter()
+            .any(|d| domain_allowed(host, d))
+        {
+            return Err(format!(
+                "The plugin is not allowed to make HTTP requests to {host}"
+            ));
         }
         let request = HttpRequest {
             method: request.method,
@@ -123,14 +150,23 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
         }
     }
 
-    fn ws_connect(&mut self, url: String, headers: Vec<(String, String)>) -> Result<wit::WsId, String> {
+    fn ws_connect(
+        &mut self,
+        url: String,
+        headers: Vec<(String, String)>,
+    ) -> Result<wit::WsId, String> {
         let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
         if !matches!(parsed.scheme(), "ws" | "wss") {
-            return Err(format!("Unsupported scheme: {} (expected ws or wss)", parsed.scheme()));
+            return Err(format!(
+                "Unsupported scheme: {} (expected ws or wss)",
+                parsed.scheme()
+            ));
         }
         let host = parsed.host_str().unwrap_or_default();
         if !self.grants.ws_hosts.iter().any(|d| domain_allowed(host, d)) {
-            return Err(format!("The plugin is not allowed to open WebSocket connections to {host}"));
+            return Err(format!(
+                "The plugin is not allowed to open WebSocket connections to {host}"
+            ));
         }
         self.ws.connect(&url, &headers)
     }
@@ -146,7 +182,8 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
     fn set_options(&mut self, source: String, options: Vec<wit::PropertyOption>) {
         let (accepted, warnings) = {
             let store = lock(&self.options);
-            let source_count_ok = store.sources.contains_key(&source) || store.sources.len() < MAX_OPTION_SOURCES;
+            let source_count_ok =
+                store.sources.contains_key(&source) || store.sources.len() < MAX_OPTION_SOURCES;
             sanitize_options(source_count_ok, &source, options)
         };
         for w in warnings {

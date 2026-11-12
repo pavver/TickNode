@@ -18,22 +18,43 @@ impl ClientError {
 }
 
 pub(super) fn applies(msg: &ServerMessage) -> bool {
-    matches!(msg, ServerMessage::Init { .. } | ServerMessage::NodeErrors { .. } | ServerMessage::NodeRemoved(_))
+    matches!(
+        msg,
+        ServerMessage::Init { .. }
+            | ServerMessage::NodeErrors { .. }
+            | ServerMessage::NodeRemoved(_)
+    )
 }
 
 pub(super) fn apply(all: &mut NodeErrors, msg: &ServerMessage, now: f64) {
     let set = match msg {
-        ServerMessage::Init { node_errors, .. } => { all.clear(); node_errors }
+        ServerMessage::Init { node_errors, .. } => {
+            all.clear();
+            node_errors
+        }
         ServerMessage::NodeErrors { set, cleared } => {
-            for id in cleared { all.remove(id); }
+            for id in cleared {
+                all.remove(id);
+            }
             set
         }
-        ServerMessage::NodeRemoved(id) => { all.remove(id); return; }
+        ServerMessage::NodeRemoved(id) => {
+            all.remove(id);
+            return;
+        }
         _ => return,
     };
     for error in set {
-        if all.get(&error.node).is_some_and(|old| old.error == *error) { continue; }
-        all.insert(error.node, ClientError { error: error.clone(), received_at: now });
+        if all.get(&error.node).is_some_and(|old| old.error == *error) {
+            continue;
+        }
+        all.insert(
+            error.node,
+            ClientError {
+                error: error.clone(),
+                received_at: now,
+            },
+        );
     }
 }
 

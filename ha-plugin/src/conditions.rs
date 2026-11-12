@@ -56,12 +56,24 @@ impl Kind {
                 "Checks local time and weekdays in Home Assistant",
                 "After is inclusive; Before is exclusive. Equal After/Before times cover the full day. A window crossing midnight uses either side of midnight; weekdays always refer to the current local day. Choose weekdays with the day buttons; stored mon,tue,wed,thu,fri,sat,sun values remain supported. Empty fields impose no restriction. Uses get_config time_zone and a live HA-rendered UTC offset, never the WASI host timezone. HA refreshes the offset every minute: a timezone/DST change can lag by up to one minute plus event delivery. Until timezone data arrives the result is No.",
                 vec![
-                    PropertyDefinition::time("after", "After").described("Optional local HH:MM[:SS], inclusive"),
-                    PropertyDefinition::time("before", "Before").described("Optional local HH:MM[:SS], exclusive"),
-                    PropertyDefinition::multi_select("weekday", "Weekdays", &[
-                        ("mon", "Monday"), ("tue", "Tuesday"), ("wed", "Wednesday"),
-                        ("thu", "Thursday"), ("fri", "Friday"), ("sat", "Saturday"), ("sun", "Sunday"),
-                    ]).described("Optional weekdays; empty means every day"),
+                    PropertyDefinition::time("after", "After")
+                        .described("Optional local HH:MM[:SS], inclusive"),
+                    PropertyDefinition::time("before", "Before")
+                        .described("Optional local HH:MM[:SS], exclusive"),
+                    PropertyDefinition::multi_select(
+                        "weekday",
+                        "Weekdays",
+                        &[
+                            ("mon", "Monday"),
+                            ("tue", "Tuesday"),
+                            ("wed", "Wednesday"),
+                            ("thu", "Thursday"),
+                            ("fri", "Friday"),
+                            ("sat", "Saturday"),
+                            ("sun", "Sunday"),
+                        ],
+                    )
+                    .described("Optional weekdays; empty means every day"),
                 ],
             ),
             Self::Sun => (
@@ -92,8 +104,10 @@ impl Kind {
                 "Template condition",
                 "Evaluates a Jinja condition asynchronously in Home Assistant",
                 "On In starts a render_template subscription in Home Assistant and uses its first result, then unsubscribes. Result and Yes/No arrive a few ticks later. Only boolean true or text true (case-insensitive) is true, matching HA template conditions; other values are false. A render error, disconnected connection or 30-second timeout yields No and an English warning. Each In has its own request (up to 64 in flight per plugin); changing properties or deleting the node cancels its pending requests.",
-                vec![PropertyDefinition::multiline("value_template", "Value template")
-                    .described("Home Assistant Jinja template whose result is boolean")],
+                vec![
+                    PropertyDefinition::multiline("value_template", "Value template")
+                        .described("Home Assistant Jinja template whose result is boolean"),
+                ],
             ),
         };
         NodeDefinition {

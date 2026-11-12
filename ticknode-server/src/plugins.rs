@@ -28,7 +28,11 @@ fn not_found(name: &str) -> UiMessage {
 }
 
 fn not_loaded(name: &str) -> UiMessage {
-    UiMessage::new("error-plugin-not-loaded", format!("Plugin {name} is not loaded")).arg("plugin", name)
+    UiMessage::new(
+        "error-plugin-not-loaded",
+        format!("Plugin {name} is not loaded"),
+    )
+    .arg("plugin", name)
 }
 
 struct Entry {
@@ -76,24 +80,37 @@ impl Plugins {
     }
 
     pub fn infos(&self, engine: &TickEngine) -> Vec<PluginInfo> {
-        self.entries.keys().filter_map(|name| self.info(engine, name)).collect()
+        self.entries
+            .keys()
+            .filter_map(|name| self.info(engine, name))
+            .collect()
     }
 
     pub fn info(&self, engine: &TickEngine, name: &str) -> Option<PluginInfo> {
         let entry = self.entries.get(name)?;
         let manifest = engine.plugin_manifest(name).filter(|_| entry.loaded);
         let settings = manifest.map(|m| m.settings.clone()).unwrap_or_default();
-        let effective = manifest.map(|m| effective_settings(m, &stored(m, &entry.config))).unwrap_or_default();
+        let effective = manifest
+            .map(|m| effective_settings(m, &stored(m, &entry.config)))
+            .unwrap_or_default();
         // Secrets never leave the server: only whether each secret is set
-        let values = settings.iter().map(|def| {
-            let value = effective.iter().find(|(k, _)| *k == def.key).map(|(_, v)| v.clone());
-            let view = match (def.is_secret(), value) {
-                (true, v) => SettingValueView::Secret { is_set: v.is_some() },
-                (false, Some(v)) => SettingValueView::Value(v),
-                (false, None) => SettingValueView::Unset,
-            };
-            (def.key.clone(), view)
-        }).collect();
+        let values = settings
+            .iter()
+            .map(|def| {
+                let value = effective
+                    .iter()
+                    .find(|(k, _)| *k == def.key)
+                    .map(|(_, v)| v.clone());
+                let view = match (def.is_secret(), value) {
+                    (true, v) => SettingValueView::Secret {
+                        is_set: v.is_some(),
+                    },
+                    (false, Some(v)) => SettingValueView::Value(v),
+                    (false, None) => SettingValueView::Unset,
+                };
+                (def.key.clone(), view)
+            })
+            .collect();
         let state = if entry.error.is_some() {
             PluginState::Error
         } else if engine.plugin_active(name) {
@@ -109,7 +126,9 @@ impl Plugins {
             state,
             error: entry.error.clone(),
             settings_error: engine.plugin_settings_error(name),
-            capabilities: manifest.map(|m| m.requested_capabilities.clone()).unwrap_or_default(),
+            capabilities: manifest
+                .map(|m| m.requested_capabilities.clone())
+                .unwrap_or_default(),
             settings,
             values,
             resources: manifest.map(|m| m.resources.clone()).unwrap_or_default(),
@@ -117,32 +136,49 @@ impl Plugins {
     }
 
     /// Enables or disables a plugin on the fly. Returns `Err` on rejection (dependencies, type conflicts) without changing state.
-    pub fn set_enabled(&mut self, engine: &mut TickEngine, name: &str, enabled: bool) -> Result<Outcome, UiMessage> {
+    pub fn set_enabled(
+        &mut self,
+        engine: &mut TickEngine,
+        name: &str,
+        enabled: bool,
+    ) -> Result<Outcome, UiMessage> {
         let entry = self.entries.get(name).ok_or_else(|| not_found(name))?;
         if !entry.loaded {
             // The reason the plugin failed to load is the more useful message
             return Err(entry.error.clone().unwrap_or_else(|| not_loaded(name)));
         }
-        let manifest = engine.plugin_manifest(name).cloned().ok_or_else(|| not_loaded(name))?;
+        let manifest = engine
+            .plugin_manifest(name)
+            .cloned()
+            .ok_or_else(|| not_loaded(name))?;
         let mut config = entry.config.clone();
         config.enabled = enabled;
         let change = self.change_enabled(engine, &manifest, &config)?;
-        let entry = self.entries.get_mut(name).expect("the entry was just found");
+        let entry = self
+            .entries
+            .get_mut(name)
+            .expect("the entry was just found");
         entry.error = None;
         entry.config = config.clone();
-        let warning = self.write_config(name, &config)
-            .err()
-            .map(|e| UiMessage::new(
+        let warning = self.write_config(name, &config).err().map(|e| {
+            UiMessage::new(
                 "error-plugin-config-not-saved",
                 format!("The plugin state was changed, but the config was not saved: {e:#}"),
-            ).arg("details", format!("{e:#}")));
+            )
+            .arg("details", format!("{e:#}"))
+        });
         if let Some(w) = &warning {
             warn!("{w}");
         }
         Ok(Outcome { change, warning })
     }
 
-    fn change_enabled(&mut self, engine: &mut TickEngine, manifest: &PluginManifest, config: &PluginConfig) -> Result<PluginChange, UiMessage> {
+    fn change_enabled(
+        &mut self,
+        engine: &mut TickEngine,
+        manifest: &PluginManifest,
+        config: &PluginConfig,
+    ) -> Result<PluginChange, UiMessage> {
         let name = &manifest.name;
         let enabled = config.enabled;
         Ok(match (enabled, engine.plugin_active(name)) {
@@ -152,7 +188,10 @@ impl Plugins {
                     Ok(change) => change,
                     Err(e) => {
                         // Keep the error state visible in the panel until enabling succeeds
-                        self.entries.get_mut(name).expect("the entry was just found").error = Some(e.clone());
+                        self.entries
+                            .get_mut(name)
+                            .expect("the entry was just found")
+                            .error = Some(e.clone());
                         return Err(e);
                     }
                 }
@@ -164,23 +203,46 @@ impl Plugins {
 
     /// Saves settings and applies them to the plugin (if enabled). A `configure` rejection
     /// is not an error of this action: it is recorded in `PluginInfo::settings_error`.
-    pub fn configure(&mut self, engine: &mut TickEngine, name: &str, values: Vec<(String, SettingUpdate)>) -> Result<(), UiMessage> {
+    pub fn configure(
+        &mut self,
+        engine: &mut TickEngine,
+        name: &str,
+        values: Vec<(String, SettingUpdate)>,
+    ) -> Result<(), UiMessage> {
         let entry = self.entries.get(name).ok_or_else(|| not_found(name))?;
-        let manifest = engine.plugin_manifest(name).filter(|_| entry.loaded).cloned()
+        let manifest = engine
+            .plugin_manifest(name)
+            .filter(|_| entry.loaded)
+            .cloned()
             .ok_or_else(|| not_loaded(name))?;
         let mut config = entry.config.clone();
         // Overwrite a corrupted config file when saving new settings
         if config_corrupt(&entry.error) {
-            config = PluginConfig { enabled: false, ..PluginConfig::default() };
+            config = PluginConfig {
+                enabled: false,
+                ..PluginConfig::default()
+            };
         }
         apply_setting_updates(name, &manifest, &mut config, values)?;
-        self.write_config(name, &config).map_err(|e| UiMessage::new("error-settings-not-saved", format!("Failed to save the settings: {e:#}")).arg("details", format!("{e:#}")))?;
-        let entry = self.entries.get_mut(name).expect("the entry was just found");
+        self.write_config(name, &config).map_err(|e| {
+            UiMessage::new(
+                "error-settings-not-saved",
+                format!("Failed to save the settings: {e:#}"),
+            )
+            .arg("details", format!("{e:#}"))
+        })?;
+        let entry = self
+            .entries
+            .get_mut(name)
+            .expect("the entry was just found");
         if config_corrupt(&entry.error) {
             entry.error = None;
         }
         entry.config = config.clone();
-        if let Err(e) = engine.configure_plugin(name, &effective_settings(&manifest, &stored(&manifest, &config))) {
+        if let Err(e) = engine.configure_plugin(
+            name,
+            &effective_settings(&manifest, &stored(&manifest, &config)),
+        ) {
             warn!(name, "Plugin settings error: {e}");
         }
         Ok(())
@@ -190,19 +252,34 @@ impl Plugins {
 #[cfg(test)]
 mod tests;
 
-fn apply_setting_updates(name: &str, manifest: &PluginManifest, config: &mut PluginConfig, values: Vec<(String, SettingUpdate)>) -> Result<(), UiMessage> {
-        for (key, update) in values {
-            let def = manifest.settings.iter().find(|d| d.key == key).ok_or_else(|| UiMessage::new("error-setting-unknown", format!("Unknown setting \"{key}\"")).arg("setting", &key))?;
-            match update {
-                SettingUpdate::Set(value) => {
-                    def.check(name, &value)?;
-                    config.settings.insert(key, value);
-                }
-                SettingUpdate::Keep => {}
-                SettingUpdate::Clear => {
-                    config.settings.remove(&key);
-                }
+fn apply_setting_updates(
+    name: &str,
+    manifest: &PluginManifest,
+    config: &mut PluginConfig,
+    values: Vec<(String, SettingUpdate)>,
+) -> Result<(), UiMessage> {
+    for (key, update) in values {
+        let def = manifest
+            .settings
+            .iter()
+            .find(|d| d.key == key)
+            .ok_or_else(|| {
+                UiMessage::new(
+                    "error-setting-unknown",
+                    format!("Unknown setting \"{key}\""),
+                )
+                .arg("setting", &key)
+            })?;
+        match update {
+            SettingUpdate::Set(value) => {
+                def.check(name, &value)?;
+                config.settings.insert(key, value);
+            }
+            SettingUpdate::Keep => {}
+            SettingUpdate::Clear => {
+                config.settings.remove(&key);
             }
         }
+    }
     Ok(())
 }

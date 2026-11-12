@@ -7,7 +7,10 @@ fn test_frame(id: FrameId, title: &str) -> Frame {
         title: title.to_string(),
         color: FrameColor::Gray,
         position: Position { x: 100.0, y: 100.0 },
-        size: NodeSize { width: 400.0, height: 240.0 },
+        size: NodeSize {
+            width: 400.0,
+            height: 240.0,
+        },
     }
 }
 
@@ -88,7 +91,10 @@ fn init_replaces_all_frames_including_empty_snapshot() {
         server_settings: ServerSettings::default(),
     };
 
-    apply_twice(&mut all, snapshot(vec![test_frame(id1, "One"), test_frame(id2, "Two")]));
+    apply_twice(
+        &mut all,
+        snapshot(vec![test_frame(id1, "One"), test_frame(id2, "Two")]),
+    );
     assert_eq!(all.len(), 2);
     assert!(all.contains_key(&id1));
     assert!(all.contains_key(&id2));

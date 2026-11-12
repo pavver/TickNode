@@ -129,7 +129,13 @@ impl HostState {
     /// The task will complete at tick `current_tick + ticks` (no earlier than the next tick).
     pub fn start_delay(&mut self, node_id: NodeId, ticks: u64) -> TaskId {
         let due_tick = self.current_tick.saturating_add(ticks.max(1));
-        self.insert(node_id, TaskState::Delay { start_tick: self.current_tick, due_tick })
+        self.insert(
+            node_id,
+            TaskState::Delay {
+                start_tick: self.current_tick,
+                due_tick,
+            },
+        )
     }
 
     /// One timer per node and its first task ID, for telemetry change detection.
@@ -137,25 +143,43 @@ impl HostState {
     pub fn delay_timers_with_tasks(&self) -> Vec<(TaskId, NodeTimer)> {
         let mut first = std::collections::BTreeMap::new();
         for (&id, task) in &self.active_tasks {
-            let TaskState::Delay { start_tick, due_tick } = task.state else { continue };
-            let entry = first.entry(task.node_id).or_insert((start_tick, id, due_tick, 0u32));
+            let TaskState::Delay {
+                start_tick,
+                due_tick,
+            } = task.state
+            else {
+                continue;
+            };
+            let entry = first
+                .entry(task.node_id)
+                .or_insert((start_tick, id, due_tick, 0u32));
             entry.3 = entry.3.saturating_add(1);
             if (start_tick, id) < (entry.0, entry.1) {
                 *entry = (start_tick, id, due_tick, entry.3);
             }
         }
         let ms = self.tick_duration.as_millis().min(u128::from(u64::MAX)) as u64;
-        first.into_iter().map(|(node, (start, id, due, count))| (id, NodeTimer {
-            node,
-            total_ms: due.saturating_sub(start).saturating_mul(ms),
-            remaining_ms: due.saturating_sub(self.current_tick).saturating_mul(ms),
-            count,
-        })).collect()
+        first
+            .into_iter()
+            .map(|(node, (start, id, due, count))| {
+                (
+                    id,
+                    NodeTimer {
+                        node,
+                        total_ms: due.saturating_sub(start).saturating_mul(ms),
+                        remaining_ms: due.saturating_sub(self.current_tick).saturating_mul(ms),
+                        count,
+                    },
+                )
+            })
+            .collect()
     }
 
     /// Spawns an HTTP request in the background. Domain permissions are checked by the caller (plugin host).
     pub fn start_http(&mut self, node_id: NodeId, request: HttpRequest) -> Result<TaskId, String> {
-        let runtime = self.runtime.clone()
+        let runtime = self
+            .runtime
+            .clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
             .ok_or("HTTP unavailable: the engine is running without a tokio runtime")?;
         let handle = spawn_http(&runtime, request)?;
@@ -164,7 +188,11 @@ impl HostState {
 
     /// Cancels a task if it belongs to `node_id`.
     pub fn cancel_task(&mut self, node_id: NodeId, id: TaskId) -> bool {
-        if self.active_tasks.get(&id).is_some_and(|t| t.node_id == node_id) {
+        if self
+            .active_tasks
+            .get(&id)
+            .is_some_and(|t| t.node_id == node_id)
+        {
             if let Some(task) = self.active_tasks.remove(&id) {
                 abort(task);
             }
@@ -175,7 +203,12 @@ impl HostState {
     }
 
     pub fn cancel_node_tasks(&mut self, node_id: NodeId) {
-        let ids: Vec<_> = self.active_tasks.iter().filter(|(_, t)| t.node_id == node_id).map(|(id, _)| *id).collect();
+        let ids: Vec<_> = self
+            .active_tasks
+            .iter()
+            .filter(|(_, t)| t.node_id == node_id)
+            .map(|(id, _)| *id)
+            .collect();
         for id in ids {
             self.cancel_task(node_id, id);
         }
@@ -184,7 +217,9 @@ impl HostState {
     /// Drains tasks completed up to and including the current tick, in start order.
     pub(crate) fn take_finished(&mut self) -> Vec<(NodeId, TaskId, TaskResult)> {
         let tick = self.current_tick;
-        let mut ready: Vec<TaskId> = self.active_tasks.iter()
+        let mut ready: Vec<TaskId> = self
+            .active_tasks
+            .iter()
             .filter(|(_, t)| match &t.state {
                 TaskState::Delay { due_tick, .. } => *due_tick <= tick,
                 TaskState::Spawned(task) => task.0.as_ref().is_some_and(|h| h.is_finished()),
@@ -192,14 +227,17 @@ impl HostState {
             .map(|(id, _)| *id)
             .collect();
         ready.sort_unstable();
-        ready.into_iter()
+        ready
+            .into_iter()
             .filter_map(|id| self.active_tasks.remove(&id).map(|t| (id, t)))
             .map(|(id, task)| {
                 let result = match task.state {
                     TaskState::Delay { .. } => Ok(TaskOutput::Delay),
                     // The task has already finished, so block_on does not wait.
-                    TaskState::Spawned(mut task) => futures::executor::block_on(task.0.take().expect("task handle exists"))
-                        .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {}", e))),
+                    TaskState::Spawned(mut task) => {
+                        futures::executor::block_on(task.0.take().expect("task handle exists"))
+                            .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {}", e)))
+                    }
                 };
                 (task.node_id, id, result)
             })
@@ -209,10 +247,16 @@ impl HostState {
 
 struct HttpTask(Option<tokio::task::JoinHandle<TaskResult>>);
 impl Drop for HttpTask {
-    fn drop(&mut self) { if let Some(task) = &self.0 { task.abort(); } }
+    fn drop(&mut self) {
+        if let Some(task) = &self.0 {
+            task.abort();
+        }
+    }
 }
 
-fn abort(task: HostTask) { drop(task); }
+fn abort(task: HostTask) {
+    drop(task);
+}
 
 #[cfg(test)]
 mod tests;

@@ -1,10 +1,15 @@
 use crate::{HostState, TaskId, TaskResult};
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
-pub struct ClockNode { pub id: NodeId, pub interval_ticks: u64 }
+pub struct ClockNode {
+    pub id: NodeId,
+    pub interval_ticks: u64,
+}
 impl Node for ClockNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -25,7 +30,9 @@ impl Node for ClockNode {
     fn execute(&mut self, _: Option<PinId>, _: &mut NodeContext) -> Vec<NodeOutput> {
         vec![NodeOutput::Execution(PinId(0))]
     }
-    fn polls(&self) -> bool { true }
+    fn polls(&self) -> bool {
+        true
+    }
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
         (host.current_tick % self.interval_ticks.max(1) == 0).then_some(PinId(0))
     }
@@ -37,13 +44,20 @@ impl Node for ClockNode {
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("interval_ticks".to_string(), DataValue::Number(NumberValue::Int(self.interval_ticks as i64)))]
+        vec![(
+            "interval_ticks".to_string(),
+            DataValue::Number(NumberValue::Int(self.interval_ticks as i64)),
+        )]
     }
 }
 
-pub struct SleepNode { pub id: NodeId }
+pub struct SleepNode {
+    pub id: NodeId,
+}
 impl Node for SleepNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -63,13 +77,21 @@ impl Node for SleepNode {
     }
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         if trigger_pin == Some(PinId(0)) {
-            let ticks = ctx.get_value(PinId(1))
-                .as_ref().and_then(|value| ctx.host_state.ticks_for_value(value)).unwrap_or(1);
+            let ticks = ctx
+                .get_value(PinId(1))
+                .as_ref()
+                .and_then(|value| ctx.host_state.ticks_for_value(value))
+                .unwrap_or(1);
             ctx.host_state.start_delay(self.id, ticks);
         }
         vec![]
     }
-    fn on_task(&mut self, _task: TaskId, _result: TaskResult, _ctx: &mut NodeContext) -> Vec<NodeOutput> {
+    fn on_task(
+        &mut self,
+        _task: TaskId,
+        _result: TaskResult,
+        _ctx: &mut NodeContext,
+    ) -> Vec<NodeOutput> {
         vec![NodeOutput::Execution(PinId(4))]
     }
 }

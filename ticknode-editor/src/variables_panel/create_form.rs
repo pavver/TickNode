@@ -1,20 +1,17 @@
 //! Inline form for creating a new variable.
 
-use leptos::prelude::*;
-use ticknode_shared::{
-    ClientMessage, DataType, SheetId, Variable, VariableKey, VariableScope,
-    parse_data_type, text, valid_variable_name,
-};
+use super::value_editor::VariableValueEditor;
 use crate::i18n::t;
 use crate::inline::properties::{TYPE_OPTIONS, type_options};
 use crate::state::use_editor;
-use super::value_editor::VariableValueEditor;
+use leptos::prelude::*;
+use ticknode_shared::{
+    ClientMessage, DataType, SheetId, Variable, VariableKey, VariableScope, parse_data_type, text,
+    valid_variable_name,
+};
 
 #[component]
-pub fn CreateVariableForm(
-    sheet: Option<SheetId>,
-    on_close: Callback<()>,
-) -> impl IntoView {
+pub fn CreateVariableForm(sheet: Option<SheetId>, on_close: Callback<()>) -> impl IntoView {
     let ed = use_editor();
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
@@ -28,7 +25,10 @@ pub fn CreateVariableForm(
     let name_error = RwSignal::new(None::<String>);
 
     let available_types = type_options(ed, &TYPE_OPTIONS);
-    let initial_type_name = available_types.first().map(|(val, _)| val.clone()).unwrap_or_else(|| "number".to_string());
+    let initial_type_name = available_types
+        .first()
+        .map(|(val, _)| val.clone())
+        .unwrap_or_else(|| "number".to_string());
     let selected_type_name = RwSignal::new(initial_type_name.clone());
 
     let initial_data_type = parse_data_type(&initial_type_name).unwrap_or(DataType::Number);
@@ -39,7 +39,10 @@ pub fn CreateVariableForm(
         let val = event_target_value(&ev);
         selected_type_name.set(val.clone());
         if let Some(parsed_ty) = parse_data_type(&val) {
-            value.set(ed.types.with_untracked(|types| types.default_value(&parsed_ty)));
+            value.set(
+                ed.types
+                    .with_untracked(|types| types.default_value(&parsed_ty)),
+            );
             data_type.set(parsed_ty);
         }
     };

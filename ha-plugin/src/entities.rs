@@ -227,10 +227,16 @@ pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption
             .cloned()
             .collect()
     };
-    let timed: Vec<_> = states.iter().filter(|state| state.entity_id.starts_with("input_datetime.")
-        || (state.entity_id.starts_with("sensor.")
-            && state.attributes.get_as::<String>("device_class").as_deref() == Some("timestamp")))
-        .cloned().collect();
+    let timed: Vec<_> = states
+        .iter()
+        .filter(|state| {
+            state.entity_id.starts_with("input_datetime.")
+                || (state.entity_id.starts_with("sensor.")
+                    && state.attributes.get_as::<String>("device_class").as_deref()
+                        == Some("timestamp"))
+        })
+        .cloned()
+        .collect();
     vec![
         ("persons", subset(&["person.", "device_tracker."])),
         ("zones", subset(&["zone."])),
@@ -259,12 +265,35 @@ mod tests {
 
     #[test]
     fn options_use_friendly_name_id_and_icons() {
-        let door = entity_option(&test_state("binary_sensor.front_door", "on", json!({"friendly_name": "Front door", "device_class": "door"})));
-        assert_eq!(door, PropertyOption { value: "binary_sensor.front_door".into(), label: "Front door".into(), detail: "binary_sensor.front_door".into(), icon: Some("mdi:door-open".into()) });
+        let door = entity_option(&test_state(
+            "binary_sensor.front_door",
+            "on",
+            json!({"friendly_name": "Front door", "device_class": "door"}),
+        ));
+        assert_eq!(
+            door,
+            PropertyOption {
+                value: "binary_sensor.front_door".into(),
+                label: "Front door".into(),
+                detail: "binary_sensor.front_door".into(),
+                icon: Some("mdi:door-open".into())
+            }
+        );
         // No friendly name: the id is the label; an explicit icon attribute wins
-        let bare = entity_option(&test_state("light.hall", "off", json!({"icon": "mdi:ceiling-light"})));
-        assert_eq!((bare.label.as_str(), bare.icon.as_deref()), ("light.hall", Some("mdi:ceiling-light")));
-        let temp = entity_option(&test_state("sensor.t", "21.5", json!({"friendly_name": "T", "device_class": "temperature", "unit_of_measurement": "°C"})));
+        let bare = entity_option(&test_state(
+            "light.hall",
+            "off",
+            json!({"icon": "mdi:ceiling-light"}),
+        ));
+        assert_eq!(
+            (bare.label.as_str(), bare.icon.as_deref()),
+            ("light.hall", Some("mdi:ceiling-light"))
+        );
+        let temp = entity_option(&test_state(
+            "sensor.t",
+            "21.5",
+            json!({"friendly_name": "T", "device_class": "temperature", "unit_of_measurement": "°C"}),
+        ));
         assert_eq!(temp.icon.as_deref(), Some("mdi:thermometer"));
         let odd = entity_option(&test_state("mystery.x", "1", json!({})));
         assert_eq!(odd.icon.as_deref(), Some("mdi:bookmark"));
@@ -278,48 +307,98 @@ mod tests {
             test_state("switch.c", "on", json!({"friendly_name": "Attic"})),
             test_state("sensor.z", "1", json!({})),
         ];
-        let order: Vec<String> = entity_options(&states).into_iter().map(|o| o.value).collect();
+        let order: Vec<String> = entity_options(&states)
+            .into_iter()
+            .map(|o| o.value)
+            .collect();
         assert_eq!(order, ["light.a", "switch.c", "light.b", "sensor.z"]);
     }
 
     #[test]
     fn specialized_sources_keep_options_and_order_from_the_catalog() {
         let states = [
-            test_state("person.me","home",json!({"friendly_name":"Alice"})),
-            test_state("device_tracker.phone","home",json!({"friendly_name":"Phone"})),
-            test_state("zone.home","1",json!({"friendly_name":"Home"})),
-            test_state("calendar.work","on",json!({"friendly_name":"Work"})),
-            test_state("light.hall","on",json!({})),
+            test_state("person.me", "home", json!({"friendly_name":"Alice"})),
+            test_state(
+                "device_tracker.phone",
+                "home",
+                json!({"friendly_name":"Phone"}),
+            ),
+            test_state("zone.home", "1", json!({"friendly_name":"Home"})),
+            test_state("calendar.work", "on", json!({"friendly_name":"Work"})),
+            test_state("light.hall", "on", json!({})),
         ];
-        let sets: std::collections::HashMap<_,_> = option_sources(&states).into_iter().collect();
-        for (source,ids) in [("persons",vec!["person.me","device_tracker.phone"]),("zones",vec!["zone.home"]),("calendars",vec!["calendar.work"])] {
-            assert_eq!(sets[source].iter().map(|o|o.value.as_str()).collect::<Vec<_>>(),ids);
-            for option in &sets[source] { assert!(sets[ENTITIES_SOURCE].contains(option)); }
+        let sets: std::collections::HashMap<_, _> = option_sources(&states).into_iter().collect();
+        for (source, ids) in [
+            ("persons", vec!["person.me", "device_tracker.phone"]),
+            ("zones", vec!["zone.home"]),
+            ("calendars", vec!["calendar.work"]),
+        ] {
+            assert_eq!(
+                sets[source]
+                    .iter()
+                    .map(|o| o.value.as_str())
+                    .collect::<Vec<_>>(),
+                ids
+            );
+            for option in &sets[source] {
+                assert!(sets[ENTITIES_SOURCE].contains(option));
+            }
         }
-        assert_eq!(sets[ENTITIES_SOURCE].len(),5);
-        assert!(option_sources(&[]).iter().all(|(_,options)|options.is_empty()));
+        assert_eq!(sets[ENTITIES_SOURCE].len(), 5);
+        assert!(
+            option_sources(&[])
+                .iter()
+                .all(|(_, options)| options.is_empty())
+        );
     }
 
     #[test]
     fn options_are_prioritized_by_rank_putting_actuators_first_and_noise_last() {
         let states = [
-            test_state("update.firmware", "on", json!({"friendly_name": "Firmware update"})),
-            test_state("sensor.plug_rssi", "-65", json!({"friendly_name": "Plug signal", "device_class": "signal_strength"})),
-            test_state("sensor.temperature", "21.0", json!({"friendly_name": "Living room temp", "device_class": "temperature"})),
-            test_state("binary_sensor.door", "off", json!({"friendly_name": "Front door", "device_class": "door"})),
-            test_state("input_boolean.vacation", "off", json!({"friendly_name": "Vacation mode"})),
-            test_state("light.kitchen", "on", json!({"friendly_name": "Kitchen light"})),
+            test_state(
+                "update.firmware",
+                "on",
+                json!({"friendly_name": "Firmware update"}),
+            ),
+            test_state(
+                "sensor.plug_rssi",
+                "-65",
+                json!({"friendly_name": "Plug signal", "device_class": "signal_strength"}),
+            ),
+            test_state(
+                "sensor.temperature",
+                "21.0",
+                json!({"friendly_name": "Living room temp", "device_class": "temperature"}),
+            ),
+            test_state(
+                "binary_sensor.door",
+                "off",
+                json!({"friendly_name": "Front door", "device_class": "door"}),
+            ),
+            test_state(
+                "input_boolean.vacation",
+                "off",
+                json!({"friendly_name": "Vacation mode"}),
+            ),
+            test_state(
+                "light.kitchen",
+                "on",
+                json!({"friendly_name": "Kitchen light"}),
+            ),
         ];
-        let order: Vec<String> = entity_options(&states).into_iter().map(|o| o.value).collect();
+        let order: Vec<String> = entity_options(&states)
+            .into_iter()
+            .map(|o| o.value)
+            .collect();
         assert_eq!(
             order,
             [
-                "light.kitchen",               // Rank 0 (actuator)
-                "input_boolean.vacation",      // Rank 1 (helper)
-                "binary_sensor.door",          // Rank 2 (door sensor, "Front door")
-                "sensor.temperature",          // Rank 2 (temp sensor, "Living room temp")
-                "update.firmware",             // Rank 4 (noise: update, "Firmware update")
-                "sensor.plug_rssi",            // Rank 4 (noise: signal, "Plug signal")
+                "light.kitchen",          // Rank 0 (actuator)
+                "input_boolean.vacation", // Rank 1 (helper)
+                "binary_sensor.door",     // Rank 2 (door sensor, "Front door")
+                "sensor.temperature",     // Rank 2 (temp sensor, "Living room temp")
+                "update.firmware",        // Rank 4 (noise: update, "Firmware update")
+                "sensor.plug_rssi",       // Rank 4 (noise: signal, "Plug signal")
             ]
         );
     }
@@ -331,8 +410,16 @@ mod tests {
             "switch": {"turn_on": {"name": "Turn on", "target": {"entity": [{"domain": "switch"}]}}}
         }));
         let states = [
-            test_state("light.kitchen", "on", json!({"friendly_name": "Kitchen light"})),
-            test_state("sensor.temperature", "21.0", json!({"friendly_name": "Temperature", "device_class": "temperature"})),
+            test_state(
+                "light.kitchen",
+                "on",
+                json!({"friendly_name": "Kitchen light"}),
+            ),
+            test_state(
+                "sensor.temperature",
+                "21.0",
+                json!({"friendly_name": "Temperature", "device_class": "temperature"}),
+            ),
             test_state("switch.fan", "off", json!({"friendly_name": "Ceiling fan"})),
         ];
         let targets: Vec<String> = action_target_options(&states, &services)
@@ -351,14 +438,34 @@ mod time_tests {
     #[test]
     fn time_source_offers_datetime_helpers_and_only_timestamp_sensors() {
         let states = [
-            test_state("sensor.alarm", "2026-11-11T10:00:00Z", json!({"device_class":"timestamp", "friendly_name":"Alarm"})),
-            test_state("input_datetime.wakeup", "07:30:00", json!({"friendly_name":"Wake up"})),
-            test_state("sensor.temperature", "20", json!({"device_class":"temperature"})),
+            test_state(
+                "sensor.alarm",
+                "2026-11-11T10:00:00Z",
+                json!({"device_class":"timestamp", "friendly_name":"Alarm"}),
+            ),
+            test_state(
+                "input_datetime.wakeup",
+                "07:30:00",
+                json!({"friendly_name":"Wake up"}),
+            ),
+            test_state(
+                "sensor.temperature",
+                "20",
+                json!({"device_class":"temperature"}),
+            ),
             test_state("light.hall", "on", json!({})),
         ];
-        let sources: std::collections::HashMap<_,_> = option_sources(&states).into_iter().collect();
-        assert_eq!(sources["time_entities"].iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
-            ["input_datetime.wakeup", "sensor.alarm"]);
-        for option in &sources["time_entities"] { assert!(sources[ENTITIES_SOURCE].contains(option)); }
+        let sources: std::collections::HashMap<_, _> =
+            option_sources(&states).into_iter().collect();
+        assert_eq!(
+            sources["time_entities"]
+                .iter()
+                .map(|o| o.value.as_str())
+                .collect::<Vec<_>>(),
+            ["input_datetime.wakeup", "sensor.alarm"]
+        );
+        for option in &sources["time_entities"] {
+            assert!(sources[ENTITIES_SOURCE].contains(option));
+        }
     }
 }

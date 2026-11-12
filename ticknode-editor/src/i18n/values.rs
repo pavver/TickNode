@@ -1,9 +1,9 @@
 //! Translated UI messages, value hints and Match condition presentation.
 
+use super::{lookup, slug, t, try_translate, type_def_title};
 use fluent_bundle::{FluentArgs, FluentValue};
 use ticknode_shared::condition::{CompareOp, Join, MatchCase, Operand};
 use ticknode_shared::*;
-use super::{lookup, slug, t, try_translate, type_def_title};
 
 /// Text of a message for the user: the translation of its key (searched in the editor's own and the
 /// server-provided texts, arguments substituted), otherwise the English fallback.
@@ -11,8 +11,14 @@ pub fn ui_text(message: &UiMessage) -> String {
     if !message.key.is_empty() {
         let mut args = FluentArgs::new();
         // A setting error names the setting by its translated title (`setting-<plugin>-<key>-title`)
-        let setting_title = message.args.iter().find(|(n, _)| n == "plugin").zip(message.args.iter().find(|(n, _)| n == "key"))
-            .and_then(|((_, plugin), (_, key))| lookup(&format!("setting-{}-{}-title", slug(plugin), slug(key))));
+        let setting_title = message
+            .args
+            .iter()
+            .find(|(n, _)| n == "plugin")
+            .zip(message.args.iter().find(|(n, _)| n == "key"))
+            .and_then(|((_, plugin), (_, key))| {
+                lookup(&format!("setting-{}-{}-title", slug(plugin), slug(key)))
+            });
         for (name, value) in &message.args {
             let value = match (&setting_title, name.as_str()) {
                 (Some(title), "setting") => title.clone(),
@@ -48,13 +54,17 @@ pub fn type_name_label(name: &str) -> String {
         ("any", "type-any"),
         ("auto", "type-auto"),
     ];
-    LABELS.iter().find(|(value, _)| *value == name)
+    LABELS
+        .iter()
+        .find(|(value, _)| *value == name)
         .map_or_else(|| name.to_string(), |(_, key)| t!(*key))
 }
 
 pub fn data_type_title(types: &TypeRegistry, t: &DataType) -> String {
     match t {
-        DataType::Named(name) => types.get(name).map_or_else(|| t!("type-unavailable"), type_def_title),
+        DataType::Named(name) => types
+            .get(name)
+            .map_or_else(|| t!("type-unavailable"), type_def_title),
         DataType::List(inner) => t!("type-list-of", inner = data_type_title(types, inner)),
         other => type_name_label(&data_type_name(other)),
     }
@@ -72,7 +82,9 @@ pub fn type_hint(t: &DataType) -> String {
 
 /// Date-times are entered and shown in the browser time zone; values stay UTC instants.
 pub fn local_datetime_text(dt: &chrono::DateTime<chrono::Utc>) -> String {
-    dt.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string()
+    dt.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
 }
 
 /// Text for an editable field: like `text::format_value`, but date-times in the browser time zone.
@@ -90,21 +102,46 @@ pub fn parse_local_datetime(input: &str) -> Option<chrono::DateTime<chrono::Utc>
     if chrono::DateTime::parse_from_rfc3339(t).is_ok() {
         return text::parse_datetime(t);
     }
-    let naive = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"]
-        .iter()
-        .find_map(|f| NaiveDateTime::parse_from_str(t, f).ok())
-        .or_else(|| chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)))?;
-    Local.from_local_datetime(&naive).earliest().map(|dt| dt.with_timezone(&Utc))
+    let naive = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+    ]
+    .iter()
+    .find_map(|f| NaiveDateTime::parse_from_str(t, f).ok())
+    .or_else(|| {
+        chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d")
+            .ok()
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+    })?;
+    Local
+        .from_local_datetime(&naive)
+        .earliest()
+        .map(|dt| dt.with_timezone(&Utc))
 }
 
 pub fn parse_value_localized(input: &str, t: &DataType) -> Result<DataValue, String> {
     let trimmed = input.trim();
     let parsed = match t {
-        DataType::DateTime => parse_local_datetime(input).map(DataValue::DateTime).ok_or(()),
-        _ => super::TYPES.with(|types| text::parse_value_in(&types.borrow(), input, t)).map_err(|_| ()),
+        DataType::DateTime => parse_local_datetime(input)
+            .map(DataValue::DateTime)
+            .ok_or(()),
+        _ => super::TYPES
+            .with(|types| text::parse_value_in(&types.borrow(), input, t))
+            .map_err(|_| ()),
     };
     parsed.map_err(|_| match t {
-        DataType::Named(_) if super::TYPES.with(|types| types.borrow().definition_of(t).is_some_and(TypeDefinition::is_identifier)) => t!("parse-error-identifier", value = trimmed),
+        DataType::Named(_)
+            if super::TYPES.with(|types| {
+                types
+                    .borrow()
+                    .definition_of(t)
+                    .is_some_and(TypeDefinition::is_identifier)
+            }) =>
+        {
+            t!("parse-error-identifier", value = trimmed)
+        }
         DataType::Number => t!("parse-error-number", value = trimmed),
         DataType::Bool => t!("parse-error-bool", value = trimmed),
         DataType::Time => t!("parse-error-time", value = trimmed),

@@ -137,7 +137,10 @@ impl Platform {
             PropertyDefinition::dynamic("entity_id", "Entity", source)
                 .described("Choose an entity or type its entity id")
         };
-        let duration = || PropertyDefinition::duration("for", "For", false).described("Optional non-negative duration: 90, 1h 30m or 00:05:00");
+        let duration = || {
+            PropertyDefinition::duration("for", "For", false)
+                .described("Optional non-negative duration: 90, 1h 30m or 00:05:00")
+        };
         let offset = || {
             PropertyDefinition::duration("offset", "Offset", true)
                 .described("Optional signed duration; -30m means thirty minutes earlier")
@@ -146,11 +149,10 @@ impl Platform {
             PropertyDefinition::select(name, title, options).described(description)
         };
         match self {
-            Self::Time => vec![PropertyDefinition::dynamic(
-                "at",
-                "At",
-                "time_entities",
-            ).described("HH:MM[:SS], an input_datetime entity or a timestamp sensor entity")],
+            Self::Time => vec![
+                PropertyDefinition::dynamic("at", "At", "time_entities")
+                    .described("HH:MM[:SS], an input_datetime entity or a timestamp sensor entity"),
+            ],
             Self::TimePattern => vec![
                 text("hours", "Hours", "0–23, * or a step such as /2"),
                 text("minutes", "Minutes", "0–59, * or a step such as /5"),
@@ -180,10 +182,8 @@ impl Platform {
             ],
             Self::Event => vec![
                 text("event_type", "Event type", "Home Assistant bus event name"),
-                PropertyDefinition::multiline(
-                    "event_data",
-                    "Event data",
-                ).described("Optional JSON object used to filter event fields"),
+                PropertyDefinition::multiline("event_data", "Event data")
+                    .described("Optional JSON object used to filter event fields"),
             ],
             Self::HomeAssistant => {
                 vec![select(
@@ -231,15 +231,13 @@ impl Platform {
                 "Tag ID",
                 "The Home Assistant tag identifier",
             )],
-            Self::Conversation => vec![PropertyDefinition::multiline(
-                "command",
-                "Sentence",
-            ).described("Sentence patterns separated by semicolons or newlines")],
+            Self::Conversation => vec![
+                PropertyDefinition::multiline("command", "Sentence")
+                    .described("Sentence patterns separated by semicolons or newlines"),
+            ],
             Self::Template => vec![
-                PropertyDefinition::multiline(
-                    "value_template",
-                    "Value template",
-                ).described("Home Assistant Jinja template that becomes true"),
+                PropertyDefinition::multiline("value_template", "Value template")
+                    .described("Home Assistant Jinja template that becomes true"),
                 duration(),
             ],
         }

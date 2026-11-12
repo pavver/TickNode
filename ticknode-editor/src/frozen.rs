@@ -17,18 +17,32 @@ pub fn change_text(ed: Editor, def: &NodeDefinition, change: &PinChange) -> Stri
     format_change(&def.type_name, change, |ty| ed.type_title(ty))
 }
 
-fn format_change(type_name: &str, change: &PinChange, type_title: impl Fn(&DataType) -> String) -> String {
+fn format_change(
+    type_name: &str,
+    change: &PinChange,
+    type_title: impl Fn(&DataType) -> String,
+) -> String {
     let kind = |pin: &PinSignature| match &pin.kind {
         PinType::Exec => t!("type-exec"),
         PinType::Data(ty) => type_title(ty),
     };
     let name = |pin: &PinSignature| i18n::node_pin_label(type_name, &pin.name);
     match change {
-        PinChange::Removed { pin } => t!("pin-change-removed", direction = direction(pin.direction), name = name(pin), kind = kind(pin)),
-        PinChange::Changed { old, new } => t!("pin-change-changed", name = name(old),
+        PinChange::Removed { pin } => t!(
+            "pin-change-removed",
+            direction = direction(pin.direction),
+            name = name(pin),
+            kind = kind(pin)
+        ),
+        PinChange::Changed { old, new } => t!(
+            "pin-change-changed",
+            name = name(old),
             old = format!("{} · {}", direction(old.direction), kind(old)),
-            new = format!("{} · {}", direction(new.direction), kind(new))),
-        PinChange::RequiredAdded { pin } => t!("pin-change-required", name = name(pin), kind = kind(pin)),
+            new = format!("{} · {}", direction(new.direction), kind(new))
+        ),
+        PinChange::RequiredAdded { pin } => {
+            t!("pin-change-required", name = name(pin), kind = kind(pin))
+        }
     }
 }
 
@@ -55,7 +69,9 @@ pub fn FrozenInfo(id: NodeId) -> impl IntoView {
     move || {
         let node = ed.node_tracked(id)?;
         let instance = node.instance.get();
-        if instance.frozen.is_empty() { return None; }
+        if instance.frozen.is_empty() {
+            return None;
+        }
         Some(view! {
             <div class="section-title">{move || t!("node-frozen-title")}</div>
             <div class="panel-section frozen-info">

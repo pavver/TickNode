@@ -18,7 +18,9 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
     let mut events = engine.subscribe();
     let (reply_tx, mut reply_rx) = mpsc::unbounded_channel::<ServerMessage>();
 
-    let Some(snapshot) = engine.snapshot(None).await else { return };
+    let Some(snapshot) = engine.snapshot(None).await else {
+        return;
+    };
     let mut open_sheet: Option<SheetId> = match &snapshot {
         ServerMessage::Init { open_sheet, .. } => *open_sheet,
         _ => None,

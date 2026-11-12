@@ -16,7 +16,9 @@ pub(super) fn IdentifierValue(
     let ed = use_editor();
     let key = NodeId::generate();
     let state = RwSignal::new(ControlState::Idle);
-    let raw = Signal::derive(move || value.with(|v| v.as_ref().map(text::format_value).unwrap_or_default()));
+    let raw = Signal::derive(move || {
+        value.with(|v| v.as_ref().map(text::format_value).unwrap_or_default())
+    });
     let ty = value_type.clone();
     let pick = Callback::new(move |input: String| {
         if input.trim().is_empty() && optional {
@@ -29,7 +31,10 @@ pub(super) fn IdentifierValue(
         }
     });
     let toggle = move |ev: web_sys::MouseEvent| {
-        if ed.picker.with_untracked(|p| p.as_ref().is_some_and(|p| p.node == key)) {
+        if ed
+            .picker
+            .with_untracked(|p| p.as_ref().is_some_and(|p| p.node == key))
+        {
             ed.picker.set(None);
             return;
         }
@@ -51,7 +56,11 @@ pub(super) fn IdentifierValue(
         }));
     };
     on_cleanup(move || {
-        if ed.picker.try_with_untracked(|p| p.as_ref().is_some_and(|p| p.node == key)).unwrap_or(false) {
+        if ed
+            .picker
+            .try_with_untracked(|p| p.as_ref().is_some_and(|p| p.node == key))
+            .unwrap_or(false)
+        {
             ed.picker.try_set(None);
         }
     });

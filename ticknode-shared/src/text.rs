@@ -13,18 +13,28 @@ use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 use crate::{Color, DataType, DataValue, NumberValue, TypeRegistry};
 
 pub fn parse_number(text: &str) -> Option<NumberValue> {
-    if let Ok(n) = text.trim().parse::<i64>() { return Some(NumberValue::Int(n)); }
+    if let Ok(n) = text.trim().parse::<i64>() {
+        return Some(NumberValue::Int(n));
+    }
     let trimmed = text.trim();
     let f: f64 = trimmed.replace(',', ".").parse().ok()?;
     // Out-of-range integer literals must remain floats; normalization could clamp a rounded boundary.
     let digits = trimmed.strip_prefix(['-', '+']).unwrap_or(trimmed);
     let out_of_range_integer = !digits.is_empty() && digits.bytes().all(|c| c.is_ascii_digit());
-    f.is_finite().then(|| if out_of_range_integer { NumberValue::Float(f) } else { NumberValue::Float(f).normalize() })
+    f.is_finite().then(|| {
+        if out_of_range_integer {
+            NumberValue::Float(f)
+        } else {
+            NumberValue::Float(f).normalize()
+        }
+    })
 }
 
 pub fn parse_time(text: &str) -> Option<NaiveTime> {
     let t = text.trim();
-    NaiveTime::parse_from_str(t, "%H:%M:%S").or_else(|_| NaiveTime::parse_from_str(t, "%H:%M")).ok()
+    NaiveTime::parse_from_str(t, "%H:%M:%S")
+        .or_else(|_| NaiveTime::parse_from_str(t, "%H:%M"))
+        .ok()
 }
 
 pub fn parse_datetime(text: &str) -> Option<DateTime<Utc>> {
@@ -32,11 +42,20 @@ pub fn parse_datetime(text: &str) -> Option<DateTime<Utc>> {
     if let Ok(dt) = DateTime::parse_from_rfc3339(t) {
         return Some(dt.with_timezone(&Utc));
     }
-    ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"]
-        .iter()
-        .find_map(|f| NaiveDateTime::parse_from_str(t, f).ok())
-        .or_else(|| chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)))
-        .map(|n| n.and_utc())
+    [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+    ]
+    .iter()
+    .find_map(|f| NaiveDateTime::parse_from_str(t, f).ok())
+    .or_else(|| {
+        chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d")
+            .ok()
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+    })
+    .map(|n| n.and_utc())
 }
 
 /// `90` / `1.5` — seconds; otherwise a sequence of "number unit" pairs: `1h 30m`, `45s`, `500ms`.
@@ -70,7 +89,9 @@ pub fn parse_duration_value(text: &str) -> Option<DataValue> {
         if let Some(number) = lower.strip_suffix(suffix) {
             let number = number.trim();
             return (!number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
-                .then(|| number.parse().ok()).flatten().map(DataValue::Ticks);
+                .then(|| number.parse().ok())
+                .flatten()
+                .map(DataValue::Ticks);
         }
     }
     parse_duration(text).map(DataValue::Duration)
@@ -79,7 +100,10 @@ pub fn parse_duration_value(text: &str) -> Option<DataValue> {
 fn duration_part(chars: &[char], position: &mut usize) -> Option<f64> {
     let mut i = *position;
     let start = i;
-    while chars.get(i).is_some_and(|ch| ch.is_ascii_digit() || *ch == '.') {
+    while chars
+        .get(i)
+        .is_some_and(|ch| ch.is_ascii_digit() || *ch == '.')
+    {
         i += 1;
     }
     let number: f64 = chars[start..i].iter().collect::<String>().parse().ok()?;
@@ -90,7 +114,10 @@ fn duration_part(chars: &[char], position: &mut usize) -> Option<f64> {
     while chars.get(i).is_some_and(|ch| ch.is_alphabetic()) {
         i += 1;
     }
-    let unit: String = chars[unit_start..i].iter().collect::<String>().to_lowercase();
+    let unit: String = chars[unit_start..i]
+        .iter()
+        .collect::<String>()
+        .to_lowercase();
     let scale = duration_scale(&unit)?;
     *position = i;
     Some(number * scale)
@@ -117,7 +144,12 @@ pub fn parse_color(text: &str) -> Option<Color> {
 
 fn color_from_hex(hex: &str) -> Option<Color> {
     let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-    Some(Color { r: byte(0)?, g: byte(2)?, b: byte(4)?, a: if hex.len() == 8 { byte(6)? } else { 255 } })
+    Some(Color {
+        r: byte(0)?,
+        g: byte(2)?,
+        b: byte(4)?,
+        a: if hex.len() == 8 { byte(6)? } else { 255 },
+    })
 }
 
 pub fn format_duration(d: Duration) -> String {
@@ -149,9 +181,19 @@ pub fn format_duration(d: Duration) -> String {
 /// Text representation of a value for an input field (unquoted for strings). `parse_value` parses it back.
 pub fn format_value(value: &DataValue) -> String {
     match value {
-        DataValue::List { elements, .. } => format!("[{}]", elements.iter().map(format_value).collect::<Vec<_>>().join(", ")),
+        DataValue::List { elements, .. } => format!(
+            "[{}]",
+            elements
+                .iter()
+                .map(format_value)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         DataValue::Object { fields, .. } => {
-            let fields: Vec<_> = fields.iter().map(|(k, f)| format!("{k}: {}", format_value(&f.value))).collect();
+            let fields: Vec<_> = fields
+                .iter()
+                .map(|(k, f)| format!("{k}: {}", format_value(&f.value)))
+                .collect();
             format!("{{{}}}", fields.join(", "))
         }
         _ => format_scalar(value).expect("a non-collection is a scalar"),
@@ -173,11 +215,19 @@ fn format_scalar(value: &DataValue) -> Option<String> {
 }
 
 fn format_number(n: NumberValue) -> String {
-    match n { NumberValue::Int(i) => i.to_string(), NumberValue::Float(f) => f.to_string() }
+    match n {
+        NumberValue::Int(i) => i.to_string(),
+        NumberValue::Float(f) => f.to_string(),
+    }
 }
 
 fn format_time(time: NaiveTime) -> String {
-    time.format(if time.format("%S").to_string() == "00" { "%H:%M" } else { "%H:%M:%S" }).to_string()
+    time.format(if time.format("%S").to_string() == "00" {
+        "%H:%M"
+    } else {
+        "%H:%M:%S"
+    })
+    .to_string()
 }
 
 fn format_color(color: Color) -> String {
@@ -209,14 +259,23 @@ pub fn parse_any(text: &str) -> DataValue {
 pub fn is_text_type(t: &DataType) -> bool {
     matches!(
         t,
-        DataType::Number | DataType::String | DataType::Bool | DataType::Time | DataType::DateTime
-            | DataType::Duration | DataType::Color | DataType::Any
+        DataType::Number
+            | DataType::String
+            | DataType::Bool
+            | DataType::Time
+            | DataType::DateTime
+            | DataType::Duration
+            | DataType::Color
+            | DataType::Any
     )
 }
 
 /// Registry-aware text types also include enums and physical quantities.
 pub fn is_text_type_in(types: &TypeRegistry, t: &DataType) -> bool {
-    is_text_type(t) || types.definition_of(t).is_some_and(|d| d.is_enum() || d.is_identifier() || d.quantity().is_some())
+    is_text_type(t)
+        || types
+            .definition_of(t)
+            .is_some_and(|d| d.is_enum() || d.is_identifier() || d.quantity().is_some())
 }
 
 /// Placeholder hint for an input field of this type.
@@ -238,10 +297,21 @@ pub fn default_of(t: &DataType) -> DataValue {
         DataType::Time => DataValue::Time(NaiveTime::MIN),
         DataType::DateTime => DataValue::DateTime(DateTime::<Utc>::UNIX_EPOCH),
         DataType::Duration => DataValue::Duration(Duration::from_secs(1)),
-        DataType::Color => DataValue::Color(Color { r: 255, g: 255, b: 255, a: 255 }),
-        DataType::List(inner) => DataValue::List { element_type: (**inner).clone(), elements: Vec::new() },
+        DataType::Color => DataValue::Color(Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        }),
+        DataType::List(inner) => DataValue::List {
+            element_type: (**inner).clone(),
+            elements: Vec::new(),
+        },
         DataType::Named(name) if crate::quantity::kind(name).is_some() => DataValue::from(0),
-        DataType::Object | DataType::Named(_) => DataValue::Object { fields: Default::default(), type_name: None },
+        DataType::Object | DataType::Named(_) => DataValue::Object {
+            fields: Default::default(),
+            type_name: None,
+        },
         DataType::Number | DataType::Any => DataValue::Number(NumberValue::Int(0)),
     }
 }
@@ -259,15 +329,38 @@ type TextParser = fn(&str) -> Option<DataValue>;
 
 fn parse_typed_text(text: &str, t: &DataType) -> Result<DataValue, String> {
     const PARSERS: &[(DataType, TextParser, &str)] = &[
-        (DataType::Number, |s| parse_number(s).map(DataValue::Number), "a number"),
+        (
+            DataType::Number,
+            |s| parse_number(s).map(DataValue::Number),
+            "a number",
+        ),
         (DataType::Bool, parse_bool, "true/false"),
-        (DataType::Time, |s| parse_time(s).map(DataValue::Time), "a time (HH:MM or HH:MM:SS)"),
-        (DataType::DateTime, |s| parse_datetime(s).map(DataValue::DateTime), "a date-time (YYYY-MM-DD HH:MM)"),
-        (DataType::Duration, parse_duration_value, "a duration (10t, 90, 1h 30m, 500ms)"),
-        (DataType::Color, |s| parse_color(s).map(DataValue::Color), "a color (#rrggbb)"),
+        (
+            DataType::Time,
+            |s| parse_time(s).map(DataValue::Time),
+            "a time (HH:MM or HH:MM:SS)",
+        ),
+        (
+            DataType::DateTime,
+            |s| parse_datetime(s).map(DataValue::DateTime),
+            "a date-time (YYYY-MM-DD HH:MM)",
+        ),
+        (
+            DataType::Duration,
+            parse_duration_value,
+            "a duration (10t, 90, 1h 30m, 500ms)",
+        ),
+        (
+            DataType::Color,
+            |s| parse_color(s).map(DataValue::Color),
+            "a color (#rrggbb)",
+        ),
     ];
     let Some((_, parser, description)) = PARSERS.iter().find(|(ty, _, _)| ty == t) else {
-        return Err(format!("a value of type {} cannot be entered as text", crate::data_type_name(t)));
+        return Err(format!(
+            "a value of type {} cannot be entered as text",
+            crate::data_type_name(t)
+        ));
     };
     parser(text).ok_or_else(|| format!("\"{}\" is not {description}", text.trim()))
 }
@@ -284,22 +377,36 @@ fn parse_bool(text: &str) -> Option<DataValue> {
 /// (matched by value or label), while a struct cannot be entered as text.
 pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<DataValue, String> {
     match types.definition_of(t) {
-        Some(def) if def.is_identifier() => text.trim().parse::<i64>().map(DataValue::from)
+        Some(def) if def.is_identifier() => text
+            .trim()
+            .parse::<i64>()
+            .map(DataValue::from)
             .map_err(|_| format!("\"{}\" is not a signed 64-bit integer", text.trim())),
-        Some(def) if def.quantity().is_some() => crate::quantity::parse_quantity(text, def.quantity().unwrap())
-            .map(DataValue::from).ok_or_else(|| format!("\"{}\" is not a value of {}", text.trim(), def.title)),
+        Some(def) if def.quantity().is_some() => {
+            crate::quantity::parse_quantity(text, def.quantity().unwrap())
+                .map(DataValue::from)
+                .ok_or_else(|| format!("\"{}\" is not a value of {}", text.trim(), def.title))
+        }
         Some(def) if def.is_enum() => {
             let wanted = text.trim();
-            def.values().iter()
+            def.values()
+                .iter()
                 .find(|v| v.value == wanted)
                 .or_else(|| def.values().iter().find(|v| v.title == wanted))
                 .map(|v| DataValue::String(v.value.clone()))
                 .ok_or_else(|| {
                     let all: Vec<_> = def.values().iter().map(|v| v.value.as_str()).collect();
-                    format!("\"{wanted}\" is not a value of {} (allowed: {})", def.title, all.join(", "))
+                    format!(
+                        "\"{wanted}\" is not a value of {} (allowed: {})",
+                        def.title,
+                        all.join(", ")
+                    )
                 })
         }
-        Some(def) => Err(format!("a value of type {} cannot be entered as text", def.title)),
+        Some(def) => Err(format!(
+            "a value of type {} cannot be entered as text",
+            def.title
+        )),
         None => parse_value(text, t),
     }
 }
@@ -308,11 +415,18 @@ pub fn parse_value_in(types: &TypeRegistry, text: &str, t: &DataType) -> Result<
 /// number → duration (seconds). Otherwise returns `value` as-is.
 pub fn coerce_to(value: DataValue, like: &DataType) -> DataValue {
     match (&value, like) {
-        (DataValue::String(s), DataType::Number | DataType::Bool | DataType::Time | DataType::DateTime | DataType::Duration | DataType::Color) => {
-            parse_value(s, like).unwrap_or(value)
-        }
+        (
+            DataValue::String(s),
+            DataType::Number
+            | DataType::Bool
+            | DataType::Time
+            | DataType::DateTime
+            | DataType::Duration
+            | DataType::Color,
+        ) => parse_value(s, like).unwrap_or(value),
         // Infinity, negative, or out-of-range numbers remain numbers — comparison will yield a type mismatch
-        (DataValue::Number(n), DataType::Duration) => match Duration::try_from_secs_f64(n.to_f64()) {
+        (DataValue::Number(n), DataType::Duration) => match Duration::try_from_secs_f64(n.to_f64())
+        {
             Ok(d) => DataValue::Duration(d),
             Err(_) => value,
         },
@@ -322,7 +436,9 @@ pub fn coerce_to(value: DataValue, like: &DataType) -> DataValue {
 
 /// Registry-aware constant coercion, including strings with quantity units.
 pub fn coerce_to_in(types: &TypeRegistry, value: DataValue, like: &DataType) -> DataValue {
-    if let DataValue::String(s) = &value && types.definition_of(like).is_some() {
+    if let DataValue::String(s) = &value
+        && types.definition_of(like).is_some()
+    {
         return parse_value_in(types, s, like).unwrap_or(value);
     }
     coerce_to(value, like)
@@ -369,9 +485,18 @@ mod tests {
         assert!(parse_value("25:00", &DataType::Time).is_err());
         assert!(parse_value("red", &DataType::Color).is_err());
         assert!(parse_value("x", &DataType::Number).is_err());
-        assert_eq!(coerce_to(DataValue::String("07:30".into()), &DataType::Time), DataValue::Time(parse_time("07:30").unwrap()));
-        assert_eq!(coerce_to(DataValue::Number(NumberValue::Int(60)), &DataType::Duration), DataValue::Duration(Duration::from_secs(60)));
-        assert_eq!(coerce_to(DataValue::String("abc".into()), &DataType::Time), DataValue::String("abc".into()));
+        assert_eq!(
+            coerce_to(DataValue::String("07:30".into()), &DataType::Time),
+            DataValue::Time(parse_time("07:30").unwrap())
+        );
+        assert_eq!(
+            coerce_to(DataValue::Number(NumberValue::Int(60)), &DataType::Duration),
+            DataValue::Duration(Duration::from_secs(60))
+        );
+        assert_eq!(
+            coerce_to(DataValue::String("abc".into()), &DataType::Time),
+            DataValue::String("abc".into())
+        );
         // Infinity and out-of-range numbers are not converted (and do not panic)
         for n in [f64::INFINITY, 1e30, -1.0] {
             let v = DataValue::Number(NumberValue::Float(n));
@@ -380,6 +505,12 @@ mod tests {
         assert_eq!(parse_duration("1e30"), None);
         assert_eq!(parse_duration("99999999999999999999999d"), None);
         assert_eq!(parse_any("\"5\""), DataValue::String("5".into()));
-        assert_eq!(parse_datetime("2026-10-29T10:00:00+02:00").unwrap().format("%H").to_string(), "08");
+        assert_eq!(
+            parse_datetime("2026-10-29T10:00:00+02:00")
+                .unwrap()
+                .format("%H")
+                .to_string(),
+            "08"
+        );
     }
 }

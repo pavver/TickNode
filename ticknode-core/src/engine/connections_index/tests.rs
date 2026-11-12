@@ -6,8 +6,18 @@ fn add_and_remove_exec_keeps_lookups_consistent() {
     let n1 = NodeId::generate();
     let n2 = NodeId::generate();
     let n3 = NodeId::generate();
-    let c1 = ConnectionModel { src_node: n1, src_pin: PinId(0), dst_node: n2, dst_pin: PinId(0) };
-    let c2 = ConnectionModel { src_node: n1, src_pin: PinId(0), dst_node: n3, dst_pin: PinId(0) };
+    let c1 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(0),
+        dst_node: n2,
+        dst_pin: PinId(0),
+    };
+    let c2 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(0),
+        dst_node: n3,
+        dst_pin: PinId(0),
+    };
 
     index.add_exec(c1);
     index.add_exec(c2);
@@ -49,8 +59,18 @@ fn set_data_replaces_old_source_and_keeps_lookups_consistent() {
     let pin_in1 = PinId(1);
     let pin_in2 = PinId(2);
 
-    let c1 = ConnectionModel { src_node: src1, src_pin: PinId(0), dst_node: dst, dst_pin: pin_in1 };
-    let c2 = ConnectionModel { src_node: src1, src_pin: PinId(1), dst_node: dst, dst_pin: pin_in2 };
+    let c1 = ConnectionModel {
+        src_node: src1,
+        src_pin: PinId(0),
+        dst_node: dst,
+        dst_pin: pin_in1,
+    };
+    let c2 = ConnectionModel {
+        src_node: src1,
+        src_pin: PinId(1),
+        dst_node: dst,
+        dst_pin: pin_in2,
+    };
 
     // Initially nothing connected
     assert_eq!(index.data(), &[]);
@@ -71,7 +91,12 @@ fn set_data_replaces_old_source_and_keeps_lookups_consistent() {
     assert_eq!(index.data_source(dst, pin_in2), Some(c2));
 
     // Replace source for pin_in1 with src2
-    let c1_replaced = ConnectionModel { src_node: src2, src_pin: PinId(5), dst_node: dst, dst_pin: pin_in1 };
+    let c1_replaced = ConnectionModel {
+        src_node: src2,
+        src_pin: PinId(5),
+        dst_node: dst,
+        dst_pin: pin_in1,
+    };
     assert_eq!(index.set_data(c1_replaced), Some(c1));
 
     // Order semantics: old c1 removed, c1_replaced appended
@@ -106,13 +131,43 @@ fn retain_filters_and_rebuilds_indices() {
     let n2 = NodeId::generate();
     let n3 = NodeId::generate();
 
-    let e1 = ConnectionModel { src_node: n1, src_pin: PinId(0), dst_node: n2, dst_pin: PinId(0) };
-    let e2 = ConnectionModel { src_node: n2, src_pin: PinId(0), dst_node: n3, dst_pin: PinId(0) };
-    let e3 = ConnectionModel { src_node: n1, src_pin: PinId(1), dst_node: n3, dst_pin: PinId(1) };
+    let e1 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(0),
+        dst_node: n2,
+        dst_pin: PinId(0),
+    };
+    let e2 = ConnectionModel {
+        src_node: n2,
+        src_pin: PinId(0),
+        dst_node: n3,
+        dst_pin: PinId(0),
+    };
+    let e3 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(1),
+        dst_node: n3,
+        dst_pin: PinId(1),
+    };
 
-    let d1 = ConnectionModel { src_node: n1, src_pin: PinId(2), dst_node: n2, dst_pin: PinId(1) };
-    let d2 = ConnectionModel { src_node: n2, src_pin: PinId(2), dst_node: n3, dst_pin: PinId(1) };
-    let d3 = ConnectionModel { src_node: n1, src_pin: PinId(3), dst_node: n3, dst_pin: PinId(2) };
+    let d1 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(2),
+        dst_node: n2,
+        dst_pin: PinId(1),
+    };
+    let d2 = ConnectionModel {
+        src_node: n2,
+        src_pin: PinId(2),
+        dst_node: n3,
+        dst_pin: PinId(1),
+    };
+    let d3 = ConnectionModel {
+        src_node: n1,
+        src_pin: PinId(3),
+        dst_node: n3,
+        dst_pin: PinId(2),
+    };
 
     index.add_exec(e1);
     index.add_exec(e2);

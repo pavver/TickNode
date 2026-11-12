@@ -1,19 +1,30 @@
-use crate::{NodeDefinition, DataValue, Trigger, Inputs, Output, PinId, PluginManifest, NodeId, TypeDefinition, UiError, PluginEvent, Emission};
+use crate::{
+    DataValue, Emission, Inputs, NodeDefinition, NodeId, Output, PinId, PluginEvent,
+    PluginManifest, Trigger, TypeDefinition, UiError,
+};
 
 /// A plugin node. One instance corresponds to one node in the graph.
 pub trait PluginNode: 'static {
     /// Pins may depend on properties.
     fn definition(&self) -> NodeDefinition;
     /// Properties used to reconstruct the node (graph persistence, plugin restart).
-    fn properties(&self) -> Vec<(String, DataValue)> { Vec::new() }
+    fn properties(&self) -> Vec<(String, DataValue)> {
+        Vec::new()
+    }
     /// Validates interactive edits; stored state restoration bypasses this hook.
-    fn validate_property(&self, _name: &str, _value: &DataValue) -> Result<(), UiError> { Ok(()) }
+    fn validate_property(&self, _name: &str, _value: &DataValue) -> Result<(), UiError> {
+        Ok(())
+    }
     fn set_property(&mut self, _name: &str, _value: DataValue) {}
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output>;
     /// For event source nodes: called at the start of every tick when `polls()` is `true`.
-    fn poll(&mut self, _tick: u64) -> Option<PinId> { None }
+    fn poll(&mut self, _tick: u64) -> Option<PinId> {
+        None
+    }
     /// Whether this node is an event source and the host should call `poll` every tick.
-    fn polls(&self) -> bool { false }
+    fn polls(&self) -> bool {
+        false
+    }
 }
 
 pub trait Plugin: 'static {
@@ -25,7 +36,9 @@ pub trait Plugin: 'static {
     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>>;
     /// Custom plugin data types (structs and enums); node pins can reference them
     /// via `DataType::Named`. The host automatically generates Make/Break nodes for each struct.
-    fn types() -> Vec<TypeDefinition> { Vec::new() }
+    fn types() -> Vec<TypeDefinition> {
+        Vec::new()
+    }
     /// Translations shipped by the plugin: `(locale code, Fluent source)` pairs, usually
     /// `include_str!("../locales/uk.ftl")`. See the crate docs for key conventions and validation.
     /// The English texts live in the definitions, so an `en` resource is optional.
@@ -35,12 +48,16 @@ pub trait Plugin: 'static {
     /// (crash). There is one instance per plugin, so settings are typically stored in static state
     /// (`thread_local!`). `Err` is shown to the user (translated through its key; the key must start
     /// with the plugin name slug) while the plugin remains loaded. Texts logged here stay English.
-    fn configure(_settings: &[(String, DataValue)]) -> Result<(), UiError> { Ok(()) }
+    fn configure(_settings: &[(String, DataValue)]) -> Result<(), UiError> {
+        Ok(())
+    }
     /// Called once per tick for the whole plugin, even without events (so it can drive timers and
     /// keep-alives), after finished tasks are delivered and before event sources are polled. `events` are
     /// WebSocket events and plugin-owned HTTP completions since the previous tick (at most 1000 per tick). The returned
     /// emissions are applied to the plugin's nodes. Runs under the per-call fuel limit.
-    fn tick(_events: Vec<PluginEvent>) -> Vec<Emission> { Vec::new() }
+    fn tick(_events: Vec<PluginEvent>) -> Vec<Emission> {
+        Vec::new()
+    }
 }
 
 /// Looks up a setting value by key.

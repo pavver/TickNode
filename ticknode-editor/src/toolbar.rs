@@ -1,20 +1,26 @@
 //! Workspace toolbar.
 
-use leptos::prelude::*;
-use ticknode_shared::ClientMessage;
 use crate::canvas::fit_view;
 use crate::i18n::t;
 use crate::logo::Logo;
 use crate::route::{Route, navigate};
 use crate::state::{ConnStatus, Theme, use_editor};
 use crate::ui::{IconButton, StatusDot, icons};
+use leptos::prelude::*;
+use ticknode_shared::ClientMessage;
 
 #[component]
 pub fn Header() -> impl IntoView {
     let ed = use_editor();
     let status = move || match ed.status.get() {
-        ConnStatus::Online if ed.open_sheet.with(Option::is_none) => ("online", t!("status-online-home", count = ed.sheets.with(Vec::len))),
-        ConnStatus::Online => ("online", t!("status-online", count = ed.nodes.with(|n| n.len()))),
+        ConnStatus::Online if ed.open_sheet.with(Option::is_none) => (
+            "online",
+            t!("status-online-home", count = ed.sheets.with(Vec::len)),
+        ),
+        ConnStatus::Online => (
+            "online",
+            t!("status-online", count = ed.nodes.with(|n| n.len())),
+        ),
         ConnStatus::Connecting => ("connecting", t!("status-connecting")),
         ConnStatus::Offline => ("offline", t!("status-offline")),
     };
@@ -23,17 +29,18 @@ pub fn Header() -> impl IntoView {
 
     let current_sheet = move || {
         ed.open_sheet.get().and_then(|id| {
-            ed.sheets.with(|list| list.iter().find(|s| s.info.id == id).cloned())
+            ed.sheets
+                .with(|list| list.iter().find(|s| s.info.id == id).cloned())
         })
     };
 
     let sheet_title = move || {
-        current_sheet().map(|s| s.info.title).unwrap_or_else(|| "TickNode".to_string())
+        current_sheet()
+            .map(|s| s.info.title)
+            .unwrap_or_else(|| "TickNode".to_string())
     };
 
-    let is_sheet_disabled = move || {
-        current_sheet().is_some_and(|s| !s.info.enabled)
-    };
+    let is_sheet_disabled = move || current_sheet().is_some_and(|s| !s.info.enabled);
 
     view! {
         <header class="header">

@@ -1,55 +1,115 @@
+use crate::{
+    ConnectionModel, DataValue, DetachedConnection, Frame, FrameId, GraphModel, NodeDefinition,
+    NodeId, NodeInstance, NodeSize, PinId, PluginInfo, Position, PropertyOption, PropertyOptionSet,
+    ServerSettings, SettingUpdate, SheetId, SheetInfo, SheetSummary, Translations, TypeDefinition,
+    UiMessage, Variable, VariableKey, WireRoute,
+};
 use serde::{Deserialize, Serialize};
-use crate::{NodeSize, DetachedConnection, WireRoute, NodeId, PinId, Position, DataValue, ConnectionModel, GraphModel, SettingUpdate, NodeDefinition, NodeInstance, TypeDefinition, PluginInfo, Translations, PropertyOptionSet, PropertyOption, UiMessage, Frame, FrameId, SheetId, SheetInfo, SheetSummary, Variable, VariableKey, ServerSettings};
 
 // --- Server <-> editor protocol (postcard over WebSocket) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ClientMessage {
-    AddNode { type_name: String, position: Position },
+    AddNode {
+        type_name: String,
+        position: Position,
+    },
     RemoveNode(NodeId),
-    MoveNode { id: NodeId, position: Position },
-    SetProperty { id: NodeId, name: String, value: DataValue },
+    MoveNode {
+        id: NodeId,
+        position: Position,
+    },
+    SetProperty {
+        id: NodeId,
+        name: String,
+        value: DataValue,
+    },
     ConnectExec(ConnectionModel),
     DisconnectExec(ConnectionModel),
     ConnectData(ConnectionModel),
-    DisconnectData { dst_node: NodeId, dst_pin: PinId },
-    TriggerNode { id: NodeId, pin: PinId },
+    DisconnectData {
+        dst_node: NodeId,
+        dst_pin: PinId,
+    },
+    TriggerNode {
+        id: NodeId,
+        pin: PinId,
+    },
     /// Value of an unconnected data input; `None` clears it (the node falls back to its default).
-    SetInputValue { id: NodeId, pin: PinId, value: Option<DataValue> },
+    SetInputValue {
+        id: NodeId,
+        pin: PinId,
+        value: Option<DataValue>,
+    },
     /// Paste a graph fragment (copy/duplicate). Nodes receive new IDs;
     /// positions are taken from the fragment as-is.
     Paste(GraphModel),
     /// Enable or disable a plugin on the fly (without restarting the server).
-    SetPluginEnabled { name: String, enabled: bool },
+    SetPluginEnabled {
+        name: String,
+        enabled: bool,
+    },
     /// Save plugin settings. Keys not present in the list remain unchanged.
-    ConfigurePlugin { name: String, values: Vec<(String, SettingUpdate)> },
+    ConfigurePlugin {
+        name: String,
+        values: Vec<(String, SettingUpdate)>,
+    },
     /// Replace a named struct pin with its fields, or restore the original pin.
-    SetPinSplit { node: NodeId, pin: PinId, split: bool },
+    SetPinSplit {
+        node: NodeId,
+        pin: PinId,
+        split: bool,
+    },
     Undo,
     Redo,
     /// Applies graph edits as one shared history entry. History, runtime and plugin commands are rejected.
     Batch(Vec<ClientMessage>),
     /// Replaces all stored settings of an existing node of the same type.
-    PasteSettings { id: NodeId, type_name: String, properties: Vec<(String, DataValue)> },
+    PasteSettings {
+        id: NodeId,
+        type_name: String,
+        properties: Vec<(String, DataValue)>,
+    },
     /// Creates and connects a node as one atomic graph edit.
-    AddNodeConnected { type_name: String, position: Position, from: ConnectionEnd, pin: PinId },
+    AddNodeConnected {
+        type_name: String,
+        position: Position,
+        from: ConnectionEnd,
+        pin: PinId,
+    },
     /// Replaces layout points of an existing connection; an empty list clears the route.
     SetWireRoute(WireRoute),
     ConfirmPins(NodeId),
     RemoveDetached(DetachedConnection),
     /// Sets layout dimensions; None restores automatic sizing.
-    ResizeNode { id: NodeId, size: Option<NodeSize> },
-    AddNodeWith { type_name: String, position: Position, properties: Vec<(String, DataValue)> },
+    ResizeNode {
+        id: NodeId,
+        size: Option<NodeSize>,
+    },
+    AddNodeWith {
+        type_name: String,
+        position: Position,
+        properties: Vec<(String, DataValue)>,
+    },
     SetFrame(Frame),
     RemoveFrame(FrameId),
     OpenSheet(Option<SheetId>),
-    CreateSheet { title: String, caption: String },
+    CreateSheet {
+        title: String,
+        caption: String,
+    },
     UpdateSheet(SheetInfo),
     DeleteSheet(SheetId),
-    MoveSheet { id: SheetId, index: u32 },
+    MoveSheet {
+        id: SheetId,
+        index: u32,
+    },
     DuplicateSheet(SheetId),
     CreateVariable(Variable),
-    SetVariable { key: VariableKey, value: DataValue },
+    SetVariable {
+        key: VariableKey,
+        value: DataValue,
+    },
     DeleteVariable(VariableKey),
     SetServerSettings(ServerSettings),
 }
@@ -140,26 +200,43 @@ pub enum ServerMessage {
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
-    NodeMoved { id: NodeId, position: Position },
+    NodeMoved {
+        id: NodeId,
+        position: Position,
+    },
     /// Properties changed (the definition may have changed as well).
     NodeUpdated(NodeInstance),
     ExecConnected(ConnectionModel),
     ExecDisconnected(ConnectionModel),
     DataConnected(ConnectionModel),
-    DataDisconnected { dst_node: NodeId, dst_pin: PinId },
+    DataDisconnected {
+        dst_node: NodeId,
+        dst_pin: PinId,
+    },
     /// Nodes executed on the latest tick, with their inputs and outputs.
     Executed(Vec<NodeTrace>),
     /// Sent only to the initiator of `AddNode` / `AddNodeConnected` / `Paste`: IDs of created nodes (to select them).
     /// Arrives after the corresponding `NodeAdded` messages.
     Created(Vec<NodeId>),
-    Log { node_id: NodeId, message: String },
+    Log {
+        node_id: NodeId,
+        message: String,
+    },
     /// Plugin state or settings changed.
     PluginUpdated(PluginInfo),
     /// The set of node and data types changed (plugin enabled or disabled): new definitions for the palette.
     /// Affected nodes arrive separately as `NodeUpdated`.
-    Catalog { definitions: Vec<NodeDefinition>, types: Vec<TypeDefinition>, translations: Translations },
+    Catalog {
+        definitions: Vec<NodeDefinition>,
+        types: Vec<TypeDefinition>,
+        translations: Translations,
+    },
     /// A plugin replaced the options of a dynamic property source (an empty list removes it).
-    PropertyOptions { plugin: String, source: String, options: Vec<PropertyOption> },
+    PropertyOptions {
+        plugin: String,
+        source: String,
+        options: Vec<PropertyOption>,
+    },
     /// Error for the client that caused it; translatable.
     Error(UiMessage),
     History(HistoryState),
@@ -168,13 +245,22 @@ pub enum ServerMessage {
     DetachedRemoved(DetachedConnection),
     /// Full current list, emitted only when the first delay or count changes.
     Timers(Vec<NodeTimer>),
-    NodeResized { id: NodeId, size: Option<NodeSize> },
+    NodeResized {
+        id: NodeId,
+        size: Option<NodeSize>,
+    },
     /// Runtime error changes accumulated since the previous telemetry interval.
-    NodeErrors { set: Vec<NodeError>, cleared: Vec<NodeId> },
+    NodeErrors {
+        set: Vec<NodeError>,
+        cleared: Vec<NodeId>,
+    },
     FrameSet(Frame),
     FrameRemoved(FrameId),
     Sheets(Vec<SheetSummary>),
     SheetCreated(SheetId),
-    VariablesChanged { set: Vec<Variable>, removed: Vec<VariableKey> },
+    VariablesChanged {
+        set: Vec<Variable>,
+        removed: Vec<VariableKey>,
+    },
     ServerSettingsChanged(ServerSettings),
 }

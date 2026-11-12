@@ -1,7 +1,10 @@
 //! Pure unit tests for template field helpers (no browser required).
 
 use super::caret::{apply_completion, byte_to_utf16, utf16_to_byte};
-use super::preview::{collect_preview_inputs, evaluate_preview, resolve_input_value, PinPreviewInputSource, PreviewStatus};
+use super::preview::{
+    PinPreviewInputSource, PreviewStatus, collect_preview_inputs, evaluate_preview,
+    resolve_input_value,
+};
 use ticknode_shared::{DataType, DataValue, PinId};
 
 #[test]
@@ -134,8 +137,14 @@ fn collect_preview_inputs_maps_pin_list() {
 
     let result = collect_preview_inputs(&sources);
     assert_eq!(result.len(), 3);
-    assert_eq!(result[0], ("first".to_string(), Some(own), DataType::String));
-    assert_eq!(result[1], ("second".to_string(), Some(src), DataType::Number));
+    assert_eq!(
+        result[0],
+        ("first".to_string(), Some(own), DataType::String)
+    );
+    assert_eq!(
+        result[1],
+        ("second".to_string(), Some(src), DataType::Number)
+    );
     assert_eq!(result[2], ("third".to_string(), None, DataType::Bool));
 }
 
@@ -163,7 +172,11 @@ fn evaluate_preview_empty_rendered_text() {
 
 #[test]
 fn evaluate_preview_renders_valid_template() {
-    let inputs = vec![("name".to_string(), Some(DataValue::from("World")), DataType::String)];
+    let inputs = vec![(
+        "name".to_string(),
+        Some(DataValue::from("World")),
+        DataType::String,
+    )];
     let status = evaluate_preview("Hello {{ name }}!", &inputs);
     assert_eq!(status, PreviewStatus::Text("Hello World!".to_string()));
 }
@@ -193,7 +206,7 @@ fn hover_token_at_plain_text_returns_none() {
 
 #[test]
 fn hover_token_at_single_variable_over_each_char() {
-    use super::hover::{token_at, HoverToken};
+    use super::hover::{HoverToken, token_at};
     let source = "{{ value }}";
     let val_start = source.find("value").unwrap();
     let val_end = val_start + "value".len();
@@ -210,7 +223,7 @@ fn hover_token_at_single_variable_over_each_char() {
 
 #[test]
 fn hover_token_at_dotted_path_over_u_and_name() {
-    use super::hover::{token_at, HoverToken};
+    use super::hover::{HoverToken, token_at};
     let source = "{{ u.name }}";
     let u_pos = source.find('u').unwrap();
     assert_eq!(
@@ -236,7 +249,7 @@ fn hover_token_at_dotted_path_over_u_and_name() {
 
 #[test]
 fn hover_token_at_cyrillic_text_before_expression() {
-    use super::hover::{token_at, HoverToken};
+    use super::hover::{HoverToken, token_at};
     let source = "Привіт, світ! {{ val }}";
     let val_pos = source.find("val").unwrap();
     // Over Cyrillic text
@@ -265,7 +278,7 @@ fn hover_token_at_string_literal_returns_none() {
 
 #[test]
 fn hover_token_at_text_prefix_gives_two_segments() {
-    use super::hover::{token_at, HoverToken};
+    use super::hover::{HoverToken, token_at};
     let source = "{{ text.x }}";
     let x_pos = source.rfind('x').unwrap();
     assert_eq!(
@@ -289,8 +302,8 @@ fn hover_find_expression_tokens() {
 #[test]
 fn hover_field_resolution_and_formatting() {
     use super::hover::{format_field_tooltip, resolve_field_path_type, resolve_field_path_value};
-    use ticknode_shared::types::{FieldDefinition, TypeDefinition, TypeKind};
     use ticknode_shared::TypeRegistry;
+    use ticknode_shared::types::{FieldDefinition, TypeDefinition, TypeKind};
 
     let struct_type = TypeDefinition {
         name: "test.user".to_string(),
@@ -359,12 +372,26 @@ fn hover_field_resolution_and_formatting() {
 #[test]
 fn evaluate_preview_waits_when_a_missing_input_breaks_rendering() {
     let inputs = vec![
-        ("value".to_string(), Some(DataValue::from("world")), DataType::String),
+        (
+            "value".to_string(),
+            Some(DataValue::from("world")),
+            DataType::String,
+        ),
         ("msg".to_string(), None, DataType::Any),
     ];
-    assert_eq!(evaluate_preview("{{ value }} {{ msg.chat.id }}", &inputs), PreviewStatus::Waiting);
-    let complete = vec![("value".to_string(), Some(DataValue::from("world")), DataType::String)];
-    assert!(matches!(evaluate_preview("{{ value.a.b }}", &complete), PreviewStatus::RenderError(_)));
+    assert_eq!(
+        evaluate_preview("{{ value }} {{ msg.chat.id }}", &inputs),
+        PreviewStatus::Waiting
+    );
+    let complete = vec![(
+        "value".to_string(),
+        Some(DataValue::from("world")),
+        DataType::String,
+    )];
+    assert!(matches!(
+        evaluate_preview("{{ value.a.b }}", &complete),
+        PreviewStatus::RenderError(_)
+    ));
 }
 
 #[test]

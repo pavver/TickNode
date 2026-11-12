@@ -47,7 +47,8 @@ Do not start that migration unless asked, but keep new UI code compatible with i
 ### Rust
 * No `.unwrap()` or `.expect()` in non-test code.
 * Run `cargo clippy` (host crates, and the editor with `--target wasm32-unknown-unknown`) on the changed crates before committing; changed code must be warning-free.
-* `cargo fmt` is pending a one-off formatting pass of the whole workspace (the code is not rustfmt-clean yet, and formatting may push files over the 500-line limit); until then do not reformat untouched code.
+* Run `cargo fmt --all` with the standard rustfmt settings (no `rustfmt.toml`) before committing; `cargo fmt --all --check` must pass.
+* When formatting pushes a file over 500 lines, split it into focused modules; never change formatting rules to stay under the limit.
 
 ### Releases
 * Before every release (version bump, add-on version change, tag or published image), run a ub-mode pass over the changes since the previous release: the reduced principles First Make it Work, Then Make it Right, Follow Practice (Claude Code: the `ub-mode` skill).

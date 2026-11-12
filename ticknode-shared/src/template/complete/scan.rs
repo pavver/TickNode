@@ -1,6 +1,6 @@
-use crate::{DataType, TypeKind, TypeRegistry};
 use super::catalog;
-use super::{filter_and_dedup, type_label, CompletionItem, CompletionKind};
+use super::{CompletionItem, CompletionKind, filter_and_dedup, type_label};
+use crate::{DataType, TypeKind, TypeRegistry};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForScope {
@@ -11,8 +11,14 @@ pub(crate) struct ForScope {
 pub(crate) enum ScanState {
     Plain,
     Comment,
-    Interpolation { expr_start: usize, in_str: Option<u8> },
-    Tag { expr_start: usize, in_str: Option<u8> },
+    Interpolation {
+        expr_start: usize,
+        in_str: Option<u8>,
+    },
+    Tag {
+        expr_start: usize,
+        in_str: Option<u8>,
+    },
 }
 
 pub(crate) fn is_ident_char(b: u8) -> bool {
@@ -47,13 +53,19 @@ pub(crate) fn scan_prefix(
                     if i < len && (bytes[i] == b'-' || bytes[i] == b'+') {
                         i += 1;
                     }
-                    state = ScanState::Interpolation { expr_start: i, in_str: None };
+                    state = ScanState::Interpolation {
+                        expr_start: i,
+                        in_str: None,
+                    };
                 } else if bytes[i..].starts_with(b"{%") {
                     i += 2;
                     if i < len && (bytes[i] == b'-' || bytes[i] == b'+') {
                         i += 1;
                     }
-                    state = ScanState::Tag { expr_start: i, in_str: None };
+                    state = ScanState::Tag {
+                        expr_start: i,
+                        in_str: None,
+                    };
                 } else {
                     i += 1;
                 }
@@ -75,14 +87,20 @@ pub(crate) fn scan_prefix(
                         i += 2;
                     } else if bytes[i] == quote {
                         i += 1;
-                        state = ScanState::Interpolation { expr_start, in_str: None };
+                        state = ScanState::Interpolation {
+                            expr_start,
+                            in_str: None,
+                        };
                     } else {
                         i += 1;
                     }
                 } else if bytes[i] == b'\'' || bytes[i] == b'"' {
                     let quote = bytes[i];
                     i += 1;
-                    state = ScanState::Interpolation { expr_start, in_str: Some(quote) };
+                    state = ScanState::Interpolation {
+                        expr_start,
+                        in_str: Some(quote),
+                    };
                 } else if bytes[i..].starts_with(b"-}}") || bytes[i..].starts_with(b"+}}") {
                     i += 3;
                     state = ScanState::Plain;
@@ -99,14 +117,20 @@ pub(crate) fn scan_prefix(
                         i += 2;
                     } else if bytes[i] == quote {
                         i += 1;
-                        state = ScanState::Tag { expr_start, in_str: None };
+                        state = ScanState::Tag {
+                            expr_start,
+                            in_str: None,
+                        };
                     } else {
                         i += 1;
                     }
                 } else if bytes[i] == b'\'' || bytes[i] == b'"' {
                     let quote = bytes[i];
                     i += 1;
-                    state = ScanState::Tag { expr_start, in_str: Some(quote) };
+                    state = ScanState::Tag {
+                        expr_start,
+                        in_str: Some(quote),
+                    };
                 } else if bytes[i..].starts_with(b"-%}") || bytes[i..].starts_with(b"+%}") {
                     let tag_text = &source[expr_start..i];
                     process_closed_tag(tag_text, inputs, types, &mut for_stack, &mut set_vars);
@@ -130,17 +154,21 @@ pub(crate) fn scan_prefix(
 pub(crate) fn strip_is_or_is_not(before: &str) -> Option<&str> {
     let s = before.trim_end();
     if let Some(rest) = s.strip_suffix("not")
-        && (rest.is_empty() || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
+        && (rest.is_empty()
+            || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
     {
         let rest2 = rest.trim_end();
         if let Some(rest3) = rest2.strip_suffix("is")
-            && (rest3.is_empty() || rest3.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
+            && (rest3.is_empty()
+                || rest3
+                    .ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
         {
             return Some(rest3);
         }
     }
     if let Some(rest) = s.strip_suffix("is")
-        && (rest.is_empty() || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
+        && (rest.is_empty()
+            || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
     {
         return Some(rest);
     }
@@ -148,7 +176,10 @@ pub(crate) fn strip_is_or_is_not(before: &str) -> Option<&str> {
 }
 
 pub(crate) fn is_for_in_iterator(before_slice: &str) -> bool {
-    let s = before_slice.trim_start().trim_start_matches(['-', '+']).trim_start();
+    let s = before_slice
+        .trim_start()
+        .trim_start_matches(['-', '+'])
+        .trim_start();
     let Some(rest) = s.strip_prefix("for") else {
         return false;
     };
@@ -199,14 +230,19 @@ pub(crate) fn parse_dotted_path(mut s: &str) -> Option<Vec<String>> {
     Some(segments)
 }
 
-pub(crate) fn resolve_struct_field(current_type: &DataType, field_name: &str, types: &TypeRegistry) -> Option<DataType> {
+pub(crate) fn resolve_struct_field(
+    current_type: &DataType,
+    field_name: &str,
+    types: &TypeRegistry,
+) -> Option<DataType> {
     match current_type {
         DataType::Named(name) => {
             let def = types.get(name)?;
             match &def.kind {
-                TypeKind::Struct { fields } => {
-                    fields.iter().find(|f| f.name == field_name).map(|f| f.data_type.clone())
-                }
+                TypeKind::Struct { fields } => fields
+                    .iter()
+                    .find(|f| f.name == field_name)
+                    .map(|f| f.data_type.clone()),
                 _ => None,
             }
         }
@@ -255,7 +291,11 @@ pub(crate) fn resolve_dot_context(
         return Vec::new();
     }
 
-    let root_type = if let Some(scope) = for_stack.iter().rev().find(|s| s.vars.iter().any(|v| v == root)) {
+    let root_type = if let Some(scope) = for_stack
+        .iter()
+        .rev()
+        .find(|s| s.vars.iter().any(|v| v == root))
+    {
         scope.var_type.clone()
     } else if let Some((_, ty)) = inputs.iter().find(|(name, _)| name == root) {
         Some(ty.clone())
@@ -311,7 +351,10 @@ fn resolve_iter_type(
     let mut current_type = if let Some((_, ty)) = inputs.iter().find(|(name, _)| name == root) {
         ty.clone()
     } else {
-        let for_scope = for_stack.iter().rev().find(|s| s.vars.iter().any(|v| v == root))?;
+        let for_scope = for_stack
+            .iter()
+            .rev()
+            .find(|s| s.vars.iter().any(|v| v == root))?;
         for_scope.var_type.clone()?
     };
 
@@ -335,9 +378,12 @@ fn parse_for_tag(
     let rest = s.strip_prefix("for")?.trim_start();
     let mut in_pos = None;
     for (idx, _) in rest.match_indices("in") {
-        let before_ok = idx == 0 || rest[..idx].ends_with(char::is_whitespace) || rest[..idx].ends_with(')');
+        let before_ok =
+            idx == 0 || rest[..idx].ends_with(char::is_whitespace) || rest[..idx].ends_with(')');
         let after_idx = idx + 2;
-        let after_ok = after_idx == rest.len() || rest[after_idx..].starts_with(char::is_whitespace) || rest[after_idx..].starts_with('(');
+        let after_ok = after_idx == rest.len()
+            || rest[after_idx..].starts_with(char::is_whitespace)
+            || rest[after_idx..].starts_with('(');
         if before_ok && after_ok {
             in_pos = Some(idx);
             break;
@@ -369,7 +415,9 @@ fn parse_for_tag(
 
 fn parse_set_tag(s: &str) -> Option<String> {
     let rest = s.strip_prefix("set")?.trim_start();
-    let end = rest.find(|c: char| c.is_whitespace() || c == '=').unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| c.is_whitespace() || c == '=')
+        .unwrap_or(rest.len());
     let ident = &rest[..end];
     if !ident.is_empty() && ident.bytes().all(is_ident_char) {
         Some(ident.to_string())
@@ -388,7 +436,10 @@ fn process_closed_tag(
     let s = tag_text.trim().trim_start_matches(['-', '+']).trim();
     if s.starts_with("for ") || s == "for" {
         // Push a scope even for an unparsable header so the matching `endfor` stays balanced.
-        let scope = parse_for_tag(s, inputs, types, for_stack).unwrap_or(ForScope { vars: Vec::new(), var_type: None });
+        let scope = parse_for_tag(s, inputs, types, for_stack).unwrap_or(ForScope {
+            vars: Vec::new(),
+            var_type: None,
+        });
         for_stack.push(scope);
     } else if s.starts_with("endfor") {
         for_stack.pop();

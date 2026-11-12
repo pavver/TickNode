@@ -11,9 +11,17 @@ pub(crate) fn spawn_http(
         .no_proxy()
         .build()
         .map_err(|e| e.to_string())?;
-    let timeout = if request.timeout.is_zero() { DEFAULT_HTTP_TIMEOUT } else { request.timeout.min(MAX_HTTP_TIMEOUT) };
-    let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| e.to_string())?;
-    let mut req = client.request(method, &request.url).timeout(timeout).body(request.body);
+    let timeout = if request.timeout.is_zero() {
+        DEFAULT_HTTP_TIMEOUT
+    } else {
+        request.timeout.min(MAX_HTTP_TIMEOUT)
+    };
+    let method =
+        reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| e.to_string())?;
+    let mut req = client
+        .request(method, &request.url)
+        .timeout(timeout)
+        .body(request.body);
     for (name, value) in request.headers {
         req = req.header(name, value);
     }
@@ -27,9 +35,15 @@ pub(crate) fn spawn_http(
             .collect();
         let mut body = Vec::new();
         while body.len() < MAX_HTTP_BODY {
-            let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? else { break };
+            let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? else {
+                break;
+            };
             body.extend_from_slice(&chunk[..chunk.len().min(MAX_HTTP_BODY - body.len())]);
         }
-        Ok(TaskOutput::Http(HttpResponse { status, headers, body }))
+        Ok(TaskOutput::Http(HttpResponse {
+            status,
+            headers,
+            body,
+        }))
     }))
 }

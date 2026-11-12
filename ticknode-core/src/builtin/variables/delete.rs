@@ -1,6 +1,6 @@
-use ticknode_shared::*;
+use super::{LOOKUP_OPTIONS, format_lookup, parse_lookup};
 use crate::{Node, NodeContext};
-use super::{format_lookup, parse_lookup, LOOKUP_OPTIONS};
+use ticknode_shared::*;
 
 pub struct VariableDeleteNode {
     pub id: NodeId,
@@ -65,7 +65,10 @@ impl Node for VariableDeleteNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("name".to_string(), DataValue::String(self.name.clone())),
-            ("lookup".to_string(), DataValue::String(format_lookup(self.lookup).to_string())),
+            (
+                "lookup".to_string(),
+                DataValue::String(format_lookup(self.lookup).to_string()),
+            ),
         ]
     }
 

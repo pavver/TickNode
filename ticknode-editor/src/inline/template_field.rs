@@ -51,7 +51,9 @@ pub fn TemplateField(
                 i.definition
                     .pins
                     .iter()
-                    .filter(|p| p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_)))
+                    .filter(|p| {
+                        p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_))
+                    })
                     .map(|p| p.name.clone())
                     .collect()
             })
@@ -62,7 +64,9 @@ pub fn TemplateField(
         Some(DataValue::String(s)) => s,
         _ => String::new(),
     };
-    let draft = use_context::<TemplateDraft>().map(|d| d.0).unwrap_or_else(|| RwSignal::new(initial_value));
+    let draft = use_context::<TemplateDraft>()
+        .map(|d| d.0)
+        .unwrap_or_else(|| RwSignal::new(initial_value));
 
     // When not focused, server updates overwrite draft
     Effect::new(move |_| {
@@ -96,7 +100,11 @@ pub fn TemplateField(
             let current_text = draft.get_untracked();
             let u16_start = textarea.selection_start().ok().flatten().unwrap_or(0) as usize;
             let caret_byte = utf16_to_byte(&current_text, u16_start);
-            let prefix = if caret_byte <= current_text.len() { &current_text[..caret_byte] } else { &current_text };
+            let prefix = if caret_byte <= current_text.len() {
+                &current_text[..caret_byte]
+            } else {
+                &current_text
+            };
 
             if !is_completion_trigger_char(prefix, _is_explicit) {
                 // A stale popup would accept an item over an outdated range on the next Enter.
@@ -108,10 +116,18 @@ pub fn TemplateField(
 
             let input_pins = ed.node_tracked(id).map_or(Vec::new(), |node| {
                 node.instance.with(|i| {
-                    i.definition.pins.iter()
-                        .filter(|p| p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_)))
+                    i.definition
+                        .pins
+                        .iter()
+                        .filter(|p| {
+                            p.direction == PinDirection::Input
+                                && matches!(p.pin_type, PinType::Data(_))
+                        })
                         .map(|p| {
-                            let default_ty = match &p.pin_type { PinType::Data(t) => t.clone(), _ => DataType::Any };
+                            let default_ty = match &p.pin_type {
+                                PinType::Data(t) => t.clone(),
+                                _ => DataType::Any,
+                            };
                             let ty = ed.source_type(id, p.id).unwrap_or(default_ty);
                             (p.name.clone(), ty)
                         })
@@ -120,16 +136,19 @@ pub fn TemplateField(
             });
 
             // Borrow the registry: it holds the whole quantity catalog, too large to clone per keystroke.
-            let completion = ed.types.with_untracked(|types| ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
-                source: &current_text,
-                caret: caret_byte,
-                inputs: &input_pins,
-                types,
-            }));
+            let completion = ed.types.with_untracked(|types| {
+                ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
+                    source: &current_text,
+                    caret: caret_byte,
+                    inputs: &input_pins,
+                    types,
+                })
+            });
 
             if let Some(completion) = completion
                 && !completion.items.is_empty()
-                && let Some((x, caret_bottom, caret_top)) = measure_caret_screen_pos(&textarea, caret_byte, &current_text)
+                && let Some((x, caret_bottom, caret_top)) =
+                    measure_caret_screen_pos(&textarea, caret_byte, &current_text)
             {
                 ed.template_completion.set(Some(TemplateCompletionState {
                     node: id,
@@ -147,7 +166,9 @@ pub fn TemplateField(
 
     let keydown = move |ev: web_sys::KeyboardEvent| {
         let key = ev.key();
-        let is_open = ed.template_completion.with_untracked(|c| c.as_ref().is_some_and(|s| s.node == id));
+        let is_open = ed
+            .template_completion
+            .with_untracked(|c| c.as_ref().is_some_and(|s| s.node == id));
 
         if (ev.ctrl_key() || ev.meta_key()) && ev.code() == "Space" {
             ev.prevent_default();
@@ -157,13 +178,17 @@ pub fn TemplateField(
         }
 
         if is_open {
-            let count = ed.template_completion.with_untracked(|c| c.as_ref().map_or(0, |s| s.completion.items.len()));
+            let count = ed
+                .template_completion
+                .with_untracked(|c| c.as_ref().map_or(0, |s| s.completion.items.len()));
             match key.as_str() {
                 "ArrowDown" if count > 0 => {
                     ev.prevent_default();
                     ev.stop_propagation();
                     ed.template_completion.update(|opt| {
-                        if let Some(s) = opt { s.selected = (s.selected + 1) % count; }
+                        if let Some(s) = opt {
+                            s.selected = (s.selected + 1) % count;
+                        }
                     });
                     return;
                 }
@@ -171,7 +196,13 @@ pub fn TemplateField(
                     ev.prevent_default();
                     ev.stop_propagation();
                     ed.template_completion.update(|opt| {
-                        if let Some(s) = opt { s.selected = if s.selected == 0 { count - 1 } else { s.selected - 1 }; }
+                        if let Some(s) = opt {
+                            s.selected = if s.selected == 0 {
+                                count - 1
+                            } else {
+                                s.selected - 1
+                            };
+                        }
                     });
                     return;
                 }
@@ -179,7 +210,9 @@ pub fn TemplateField(
                     ev.prevent_default();
                     ev.stop_propagation();
                     ed.template_completion.update(|opt| {
-                        if let Some(s) = opt { s.selected = (s.selected + 8).min(count - 1); }
+                        if let Some(s) = opt {
+                            s.selected = (s.selected + 8).min(count - 1);
+                        }
                     });
                     return;
                 }
@@ -187,7 +220,9 @@ pub fn TemplateField(
                     ev.prevent_default();
                     ev.stop_propagation();
                     ed.template_completion.update(|opt| {
-                        if let Some(s) = opt { s.selected = s.selected.saturating_sub(8); }
+                        if let Some(s) = opt {
+                            s.selected = s.selected.saturating_sub(8);
+                        }
                     });
                     return;
                 }
@@ -195,7 +230,13 @@ pub fn TemplateField(
                     ev.prevent_default();
                     ev.stop_propagation();
                     let chosen = ed.template_completion.with_untracked(|c| {
-                        c.as_ref().and_then(|s| s.completion.items.get(s.selected).cloned().map(|item| (item, s.completion.range.clone())))
+                        c.as_ref().and_then(|s| {
+                            s.completion
+                                .items
+                                .get(s.selected)
+                                .cloned()
+                                .map(|item| (item, s.completion.range.clone()))
+                        })
                     });
                     if let Some((item, range)) = chosen {
                         completion::accept_completion_item(ed, id, &item, range);
@@ -237,7 +278,8 @@ pub fn TemplateField(
         }
     };
 
-    let has_syntax_error = Memo::new(move |_| draft.with(|d| ticknode_shared::template::validate(d).is_err()));
+    let has_syntax_error =
+        Memo::new(move |_| draft.with(|d| ticknode_shared::template::validate(d).is_err()));
 
     view! {
         <div class="template-editor">

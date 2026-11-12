@@ -1,6 +1,6 @@
+use crate::{Node, builtin::*};
 use std::collections::HashMap;
 use ticknode_shared::*;
-use crate::{Node, builtin::*};
 
 pub type NodeCreator = Box<dyn Fn(NodeId) -> Box<dyn Node> + Send + Sync>;
 
@@ -32,12 +32,16 @@ impl NodeRegistry {
     /// Registers a node type on behalf of a plugin (so it can be unregistered when the plugin is disabled).
     pub fn register_owned(&mut self, owner: &str, creator: NodeCreator) {
         let definition = creator(NodeId(uuid::Uuid::nil())).definition();
-        self.owners.insert(definition.type_name.clone(), owner.to_string());
+        self.owners
+            .insert(definition.type_name.clone(), owner.to_string());
         self.register_definition(definition, creator);
     }
 
     fn register_definition(&mut self, definition: NodeDefinition, creator: NodeCreator) {
-        assert!(definition.pins.iter().all(|p| !is_virtual_pin(p.id)), "Real pins must not use reserved virtual ids");
+        assert!(
+            definition.pins.iter().all(|p| !is_virtual_pin(p.id)),
+            "Real pins must not use reserved virtual ids"
+        );
         let type_name = definition.type_name.clone();
         self.definitions.insert(type_name.clone(), definition);
         self.creators.insert(type_name, creator);
@@ -48,12 +52,21 @@ impl NodeRegistry {
     }
 
     pub fn types_owned_by(&self, owner: &str) -> Vec<String> {
-        self.owners.iter().filter(|(_, o)| *o == owner).map(|(t, _)| t.clone()).collect()
+        self.owners
+            .iter()
+            .filter(|(_, o)| *o == owner)
+            .map(|(t, _)| t.clone())
+            .collect()
     }
 
     /// Unregisters all node types owned by the plugin and returns their names.
     pub fn unregister_owner(&mut self, owner: &str) -> Vec<String> {
-        let names: Vec<String> = self.owners.iter().filter(|(_, o)| *o == owner).map(|(t, _)| t.clone()).collect();
+        let names: Vec<String> = self
+            .owners
+            .iter()
+            .filter(|(_, o)| *o == owner)
+            .map(|(t, _)| t.clone())
+            .collect();
         for name in &names {
             self.owners.remove(name);
             self.definitions.remove(name);
@@ -77,17 +90,30 @@ impl NodeRegistry {
     }
 
     fn register_defaults(&mut self) {
-        self.register(Box::new(|id| Box::new(ClockNode { id, interval_ticks: 10 })));
+        self.register(Box::new(|id| {
+            Box::new(ClockNode {
+                id,
+                interval_ticks: 10,
+            })
+        }));
         self.register(Box::new(|id| Box::new(ConsoleNode { id })));
-        self.register(Box::new(|id| Box::new(ConstNode { id, value: DataValue::Number(NumberValue::Int(0)), value_type: None })));
+        self.register(Box::new(|id| {
+            Box::new(ConstNode {
+                id,
+                value: DataValue::Number(NumberValue::Int(0)),
+                value_type: None,
+            })
+        }));
         for op in [MathOp::Add, MathOp::Sub, MathOp::Mul, MathOp::Div] {
             self.register(Box::new(move |id| Box::new(PureMathNode::new(id, op))));
         }
-        self.register(Box::new(|id| Box::new(MathExpressionNode {
-            id,
-            expression: "a + b".to_string(),
-            variable_mapping: expression_variables("a + b"),
-        })));
+        self.register(Box::new(|id| {
+            Box::new(MathExpressionNode {
+                id,
+                expression: "a + b".to_string(),
+                variable_mapping: expression_variables("a + b"),
+            })
+        }));
         for op in [LogOp::And, LogOp::Or, LogOp::Not] {
             self.register(Box::new(move |id| Box::new(LogicalNode { id, op })));
         }
@@ -102,22 +128,82 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(ConvertNode::new(id))));
         self.register(Box::new(|id| Box::new(CompareNode::new(id))));
         self.register(Box::new(|id| Box::new(HysteresisNode::new(id))));
-        self.register(Box::new(|id| Box::new(ForLoopNode { id, active: false, current_index: 0, count: 0 })));
+        self.register(Box::new(|id| {
+            Box::new(ForLoopNode {
+                id,
+                active: false,
+                current_index: 0,
+                count: 0,
+            })
+        }));
         self.register(Box::new(|id| Box::new(SleepNode { id })));
-        self.register(Box::new(|id| Box::new(ListCreateNode { id, element_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ListAddNode { id, element_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ListRemoveNode { id, element_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ListGetNode { id, element_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ListLengthNode { id, element_type: DataType::Number })));
+        self.register(Box::new(|id| {
+            Box::new(ListCreateNode {
+                id,
+                element_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ListAddNode {
+                id,
+                element_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ListRemoveNode {
+                id,
+                element_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ListGetNode {
+                id,
+                element_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ListLengthNode {
+                id,
+                element_type: DataType::Number,
+            })
+        }));
         self.register(Box::new(|id| Box::new(ObjectCreateNode { id })));
-        self.register(Box::new(|id| Box::new(ObjectSetFieldNode { id, field_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ObjectGetFieldNode { id, field_type: DataType::Number })));
-        self.register(Box::new(|id| Box::new(ObjectUnpackNode { id, fields_list: String::new(), parsed_fields: Vec::new() })));
-        self.register(Box::new(|id| Box::new(ClickButtonNode { id, label: "Button".to_string() })));
-        self.register(Box::new(|id| Box::new(DebugNode { id, prefix: String::new() })));
+        self.register(Box::new(|id| {
+            Box::new(ObjectSetFieldNode {
+                id,
+                field_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ObjectGetFieldNode {
+                id,
+                field_type: DataType::Number,
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ObjectUnpackNode {
+                id,
+                fields_list: String::new(),
+                parsed_fields: Vec::new(),
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(ClickButtonNode {
+                id,
+                label: "Button".to_string(),
+            })
+        }));
+        self.register(Box::new(|id| {
+            Box::new(DebugNode {
+                id,
+                prefix: String::new(),
+            })
+        }));
     }
 }
 
 impl Default for NodeRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

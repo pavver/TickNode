@@ -1,6 +1,6 @@
-use ticknode_shared::*;
+use super::{LOOKUP_OPTIONS, format_lookup, parse_lookup};
 use crate::{Node, NodeContext};
-use super::{format_lookup, parse_lookup, LOOKUP_OPTIONS};
+use ticknode_shared::*;
 
 pub struct VariableGetNode {
     pub id: NodeId,
@@ -63,7 +63,14 @@ impl Node for VariableGetNode {
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         if let Some(var) = ctx.variable(&self.name, self.lookup) {
-            if let Some(val) = fit_typed_variable_value(ctx.types, var.value.clone(), &var.data_type, &self.value_type, &ctx.host_state.display, crate::quantity::labels(&ctx.host_state.locale)) {
+            if let Some(val) = fit_typed_variable_value(
+                ctx.types,
+                var.value.clone(),
+                &var.data_type,
+                &self.value_type,
+                &ctx.host_state.display,
+                crate::quantity::labels(&ctx.host_state.locale),
+            ) {
                 return vec![
                     NodeOutput::Data(PinId(0), val),
                     NodeOutput::Data(PinId(1), DataValue::Bool(true)),
@@ -90,8 +97,14 @@ impl Node for VariableGetNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("name".to_string(), DataValue::String(self.name.clone())),
-            ("lookup".to_string(), DataValue::String(format_lookup(self.lookup).to_string())),
-            ("value_type".to_string(), DataValue::String(data_type_name(&self.value_type))),
+            (
+                "lookup".to_string(),
+                DataValue::String(format_lookup(self.lookup).to_string()),
+            ),
+            (
+                "value_type".to_string(),
+                DataValue::String(data_type_name(&self.value_type)),
+            ),
         ]
     }
 

@@ -1,12 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
+use crate::actor::routes::{self, Routes};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use ticknode_core::TickEngine;
-use ticknode_shared::{Frame, FrameId, GraphModel, NodeId, NodeSize, Position, ServerSettings, SheetId, SheetInfo, Variable, VariableScope};
+use ticknode_shared::{
+    Frame, FrameId, GraphModel, NodeId, NodeSize, Position, ServerSettings, SheetId, SheetInfo,
+    Variable, VariableScope,
+};
 use tracing::{info, warn};
-use crate::actor::routes::{self, Routes};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VariablesFile {
@@ -98,7 +101,10 @@ impl Storage {
         Self::load_settings_from(&self.settings_json_path(), &|k| std::env::var(k).ok())
     }
 
-    pub fn load_settings_from(path: &Path, env: &dyn Fn(&str) -> Option<String>) -> anyhow::Result<ServerSettings> {
+    pub fn load_settings_from(
+        path: &Path,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> anyhow::Result<ServerSettings> {
         let (file_tick_ms, file_tick_budget, locale, display) = if path.exists() {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("failed to read {}", path.display()))?;
@@ -117,13 +123,26 @@ impl Storage {
             .or_else(|| env("TICKNODE_TICK_BUDGET").and_then(|v| v.trim().parse().ok()))
             .unwrap_or(ticknode_shared::DEFAULT_TICK_BUDGET);
 
-        if !["en", "uk"].contains(&locale.as_str()) { tracing::warn!(%locale, "Invalid formatting locale; using en"); }
-        display.validate().map_err(|e| anyhow::anyhow!(e.fallback))?;
-        Ok(ServerSettings { tick_ms, tick_budget, locale, display }.validated())
+        if !["en", "uk"].contains(&locale.as_str()) {
+            tracing::warn!(%locale, "Invalid formatting locale; using en");
+        }
+        display
+            .validate()
+            .map_err(|e| anyhow::anyhow!(e.fallback))?;
+        Ok(ServerSettings {
+            tick_ms,
+            tick_budget,
+            locale,
+            display,
+        }
+        .validated())
     }
 
     pub fn save_settings(&self, settings: &ServerSettings) -> anyhow::Result<()> {
-        write_atomic(&self.settings_json_path(), &(serde_json::to_string_pretty(settings)? + "\n"))
+        write_atomic(
+            &self.settings_json_path(),
+            &(serde_json::to_string_pretty(settings)? + "\n"),
+        )
     }
 
     pub fn load_variables(&self) -> anyhow::Result<Vec<Variable>> {
@@ -139,11 +158,19 @@ impl Storage {
     }
 
     pub fn save_variables(&self, variables: &[Variable]) -> anyhow::Result<()> {
-        let mut sorted: Vec<_> = variables.iter().filter(|v| v.key.scope == VariableScope::Persistent).cloned().collect();
+        let mut sorted: Vec<_> = variables
+            .iter()
+            .filter(|v| v.key.scope == VariableScope::Persistent)
+            .cloned()
+            .collect();
         sorted.sort_by(|a, b| a.key.name.cmp(&b.key.name));
         let file = VariablesFile { variables: sorted };
         let path = self.variables_json_path();
-        crate::plugins::config::write_private(&self.data_dir, &path, &(serde_json::to_string_pretty(&file)? + "\n"))
+        crate::plugins::config::write_private(
+            &self.data_dir,
+            &path,
+            &(serde_json::to_string_pretty(&file)? + "\n"),
+        )
     }
 
     pub fn trash_dir(&self) -> PathBuf {
@@ -155,8 +182,12 @@ impl Storage {
 
         let sheets_text = std::fs::read_to_string(self.sheets_json_path())
             .with_context(|| format!("failed to read {}", self.sheets_json_path().display()))?;
-        let sheets_file: SheetsFile = serde_json::from_str(&sheets_text)
-            .with_context(|| format!("invalid sheets JSON in {}", self.sheets_json_path().display()))?;
+        let sheets_file: SheetsFile = serde_json::from_str(&sheets_text).with_context(|| {
+            format!(
+                "invalid sheets JSON in {}",
+                self.sheets_json_path().display()
+            )
+        })?;
 
         let mut node_sheet = HashMap::new();
         let mut frame_sheet = HashMap::new();
@@ -185,7 +216,9 @@ impl Storage {
             merged_graph.exec_connections.extend(graph.exec_connections);
             merged_graph.data_connections.extend(graph.data_connections);
             merged_graph.wire_routes.extend(graph.wire_routes);
-            merged_graph.detached_connections.extend(graph.detached_connections);
+            merged_graph
+                .detached_connections
+                .extend(graph.detached_connections);
             merged_graph.frames.extend(graph.frames);
         }
 
@@ -202,7 +235,8 @@ impl Storage {
 
         for sheet in &sheets_file.sheets {
             if !sheet.enabled {
-                let disabled = node_sheet.iter()
+                let disabled = node_sheet
+                    .iter()
                     .filter(|(_, s)| **s == sheet.id)
                     .map(|(n, _)| *n);
                 engine.set_disabled(disabled, true);
@@ -215,12 +249,23 @@ impl Storage {
             if let Some(valid) = frame.validated() {
                 frames.insert(valid.id, valid);
             } else {
-                warn!("Dropping invalid frame {}: non-finite position or size", id.0);
+                warn!(
+                    "Dropping invalid frame {}: non-finite position or size",
+                    id.0
+                );
             }
         }
 
-        let positions = merged_graph.nodes.iter().map(|n| (n.id, n.position)).collect();
-        let sizes = merged_graph.nodes.iter().filter_map(|n| Some((n.id, n.size?.validated()?))).collect();
+        let positions = merged_graph
+            .nodes
+            .iter()
+            .map(|n| (n.id, n.position))
+            .collect();
+        let sizes = merged_graph
+            .nodes
+            .iter()
+            .filter_map(|n| Some((n.id, n.size?.validated()?)))
+            .collect();
         let routes = routes::from_routes(engine, &merged_graph.wire_routes);
 
         info!(
@@ -258,8 +303,12 @@ impl Storage {
             (GraphModel::default(), false)
         };
 
-        std::fs::create_dir_all(self.sheets_dir())
-            .with_context(|| format!("failed to create sheets dir {}", self.sheets_dir().display()))?;
+        std::fs::create_dir_all(self.sheets_dir()).with_context(|| {
+            format!(
+                "failed to create sheets dir {}",
+                self.sheets_dir().display()
+            )
+        })?;
 
         let main_id = SheetId::generate();
         let main_sheet = SheetInfo {
@@ -275,12 +324,20 @@ impl Storage {
 
         let sheet_path = self.sheet_path(main_id);
         write_atomic(&sheet_path, &(serde_json::to_string_pretty(&graph)? + "\n"))?;
-        write_atomic(&sheets_json, &(serde_json::to_string_pretty(&sheets_file)? + "\n"))?;
+        write_atomic(
+            &sheets_json,
+            &(serde_json::to_string_pretty(&sheets_file)? + "\n"),
+        )?;
 
         if should_migrate_old {
             let migrated = self.data_dir.join("graph.json.migrated");
-            std::fs::rename(&old_graph, &migrated)
-                .with_context(|| format!("failed to rename {} to {}", old_graph.display(), migrated.display()))?;
+            std::fs::rename(&old_graph, &migrated).with_context(|| {
+                format!(
+                    "failed to rename {} to {}",
+                    old_graph.display(),
+                    migrated.display()
+                )
+            })?;
             info!("Migrated graph.json to sheets layout and renamed to graph.json.migrated");
         }
 
@@ -288,13 +345,21 @@ impl Storage {
     }
 
     pub fn save_sheets_meta(&self, sheets: &[SheetInfo]) -> anyhow::Result<()> {
-        let file = SheetsFile { sheets: sheets.to_vec() };
-        write_atomic(&self.sheets_json_path(), &(serde_json::to_string_pretty(&file)? + "\n"))
+        let file = SheetsFile {
+            sheets: sheets.to_vec(),
+        };
+        write_atomic(
+            &self.sheets_json_path(),
+            &(serde_json::to_string_pretty(&file)? + "\n"),
+        )
     }
 
     pub fn save_sheet(&self, id: SheetId, graph: &GraphModel) -> anyhow::Result<()> {
         std::fs::create_dir_all(self.sheets_dir())?;
-        write_atomic(&self.sheet_path(id), &(serde_json::to_string_pretty(graph)? + "\n"))
+        write_atomic(
+            &self.sheet_path(id),
+            &(serde_json::to_string_pretty(graph)? + "\n"),
+        )
     }
 
     pub fn delete_sheet(&self, id: SheetId) -> anyhow::Result<()> {
@@ -307,8 +372,13 @@ impl Storage {
                 .unwrap_or_default()
                 .as_secs();
             let dest = trash_dir.join(format!("{}-{}.json", id.0, now_secs));
-            std::fs::rename(&src, &dest)
-                .with_context(|| format!("failed to move {} to trash {}", src.display(), dest.display()))?;
+            std::fs::rename(&src, &dest).with_context(|| {
+                format!(
+                    "failed to move {} to trash {}",
+                    src.display(),
+                    dest.display()
+                )
+            })?;
         }
         Ok(())
     }
@@ -325,4 +395,6 @@ fn write_atomic(path: &Path, contents: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests;
 
-fn default_settings_locale() -> String { "en".into() }
+fn default_settings_locale() -> String {
+    "en".into()
+}

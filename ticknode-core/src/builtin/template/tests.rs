@@ -371,12 +371,32 @@ fn a_new_node_has_a_value_input_while_stored_templates_are_restored_as_written()
     let mut engine = TickEngine::new();
     let id = NodeId::generate();
     engine.create_node(id, "text/template", &[]).unwrap();
-    assert_eq!(pins(&engine, id).into_iter().map(|(n, _)| n).collect::<Vec<_>>(), ["value"]);
+    assert_eq!(
+        pins(&engine, id)
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect::<Vec<_>>(),
+        ["value"]
+    );
     assert!(engine.node_definition(id).unwrap().adaptive);
     let empty = NodeId::generate();
-    engine.create_node(empty, "text/template", &[("template".into(), "".into())]).unwrap();
+    engine
+        .create_node(empty, "text/template", &[("template".into(), "".into())])
+        .unwrap();
     assert!(pins(&engine, empty).is_empty());
     let stored = NodeId::generate();
-    engine.create_node(stored, "text/template", &[("template".into(), "{{ a }}".into())]).unwrap();
-    assert_eq!(pins(&engine, stored).into_iter().map(|(n, _)| n).collect::<Vec<_>>(), ["a"]);
+    engine
+        .create_node(
+            stored,
+            "text/template",
+            &[("template".into(), "{{ a }}".into())],
+        )
+        .unwrap();
+    assert_eq!(
+        pins(&engine, stored)
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect::<Vec<_>>(),
+        ["a"]
+    );
 }

@@ -1,11 +1,11 @@
 //! Hover token hit-testing and tooltip resolution for template fields.
 
-use std::ops::Range;
-use leptos::prelude::*;
-use ticknode_shared::template::complete::expression_at;
-use ticknode_shared::*;
 use crate::i18n::t;
 use crate::state::Editor;
+use leptos::prelude::*;
+use std::ops::Range;
+use ticknode_shared::template::complete::expression_at;
+use ticknode_shared::*;
 
 /// Dotted identifier token chain inside a template expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,8 +109,10 @@ pub fn hit_test_token(
     source: &str,
 ) -> Option<HoverToken> {
     let ta_rect = textarea.get_bounding_client_rect();
-    if client_x < ta_rect.left() || client_x > ta_rect.right()
-        || client_y < ta_rect.top() || client_y > ta_rect.bottom()
+    if client_x < ta_rect.left()
+        || client_x > ta_rect.right()
+        || client_y < ta_rect.top()
+        || client_y > ta_rect.bottom()
     {
         return None;
     }
@@ -125,7 +127,11 @@ pub fn hit_test_token(
     let mut spans = Vec::new();
     for token_range in &tokens {
         if token_range.start > last_end {
-            let _ = mirror.div.append_child(&mirror.document.create_text_node(&source[last_end..token_range.start]));
+            let _ = mirror.div.append_child(
+                &mirror
+                    .document
+                    .create_text_node(&source[last_end..token_range.start]),
+            );
         }
         if let Ok(span) = mirror.document.create_element("span") {
             span.set_text_content(Some(&source[token_range.clone()]));
@@ -135,7 +141,9 @@ pub fn hit_test_token(
         last_end = token_range.end;
     }
     if last_end < source.len() {
-        let _ = mirror.div.append_child(&mirror.document.create_text_node(&source[last_end..]));
+        let _ = mirror
+            .div
+            .append_child(&mirror.document.create_text_node(&source[last_end..]));
     }
     let frame = mirror.frame(textarea);
     let hit = spans.iter().find_map(|(start, span)| {
@@ -169,7 +177,9 @@ pub fn resolve_field_path_type(
             DataType::Named(name) => {
                 let def = types.get(name)?;
                 match &def.kind {
-                    TypeKind::Struct { fields: struct_fields } => {
+                    TypeKind::Struct {
+                        fields: struct_fields,
+                    } => {
                         let f = struct_fields.iter().find(|sf| sf.name == *field)?;
                         current = f.data_type.clone();
                     }
@@ -189,7 +199,9 @@ pub fn resolve_field_path_value(
 ) -> Option<DataValue> {
     for field in fields {
         match current {
-            Some(DataValue::Object { fields: obj_fields, .. }) => {
+            Some(DataValue::Object {
+                fields: obj_fields, ..
+            }) => {
                 current = obj_fields.get(field).map(|f| &f.value);
             }
             _ => return None,
@@ -227,7 +239,9 @@ pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, path: &[String]) -> Optio
     if root == "text" && path.len() == 2 {
         let input_name = &path[1];
         let pin = client_node.instance.with(|i| {
-            i.definition.pins.iter()
+            i.definition
+                .pins
+                .iter()
                 .find(|p| p.direction == PinDirection::Input && p.name == *input_name)
                 .cloned()
         })?;
@@ -237,14 +251,21 @@ pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, path: &[String]) -> Optio
     }
 
     let pin = client_node.instance.with(|i| {
-        i.definition.pins.iter()
+        i.definition
+            .pins
+            .iter()
             .find(|p| p.direction == PinDirection::Input && p.name == *root)
             .cloned()
     })?;
 
     // Case 1: root is an input name and the path has one segment
     if path.len() == 1 {
-        return Some(crate::canvas::pin_title_text(ed, node, &pin, PinDirection::Input));
+        return Some(crate::canvas::pin_title_text(
+            ed,
+            node,
+            &pin,
+            PinDirection::Input,
+        ));
     }
 
     // Case 3: root is an input and the path has fields
@@ -254,11 +275,21 @@ pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, path: &[String]) -> Optio
     };
     let eff_type = crate::canvas::display_type(&declared_ty, ed.source_type(node, pin.id));
     let fields = &path[1..];
-    let field_type = ed.types.with(|types| resolve_field_path_type(&eff_type, fields, types))?;
+    let field_type = ed
+        .types
+        .with(|types| resolve_field_path_type(&eff_type, fields, types))?;
 
     let preview_inputs = crate::inline::template_field::preview::node_preview_inputs(ed, node);
-    let input_val = preview_inputs.into_iter().find(|(name, _, _)| name == root).and_then(|(_, v, _)| v);
+    let input_val = preview_inputs
+        .into_iter()
+        .find(|(name, _, _)| name == root)
+        .and_then(|(_, v, _)| v);
     let field_val = resolve_field_path_value(input_val.as_ref(), fields);
     let type_title = ed.type_title(&field_type);
-    Some(format_field_tooltip(path, &field_type, field_val.as_ref(), &type_title))
+    Some(format_field_tooltip(
+        path,
+        &field_type,
+        field_val.as_ref(),
+        &type_title,
+    ))
 }

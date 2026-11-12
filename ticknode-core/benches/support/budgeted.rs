@@ -20,7 +20,10 @@ pub(super) fn burst_budgeted(c: &mut Criterion) {
     engine.budget.limit = Some(1_000);
     enqueue(&mut engine, &triggers);
     let (ticks, maximum) = drain_budgeted(&mut engine);
-    assert_eq!(ticks, 40, "four work units per automation, including pure pulls");
+    assert_eq!(
+        ticks, 40,
+        "four work units per automation, including pure pulls"
+    );
     assert_eq!(engine.variables.len(), count.div_ceil(2));
     assert!(engine.variables.values().all(|value| *value == number(1)));
     eprintln!("burst_budgeted/10000: {ticks} ticks, max single tick {maximum:?} (validation run)");
@@ -46,5 +49,7 @@ pub(super) fn burst_budgeted(c: &mut Criterion) {
         });
     });
     group.finish();
-    eprintln!("burst_budgeted/10000: {ticks} ticks per burst, max measured single tick {measured_maximum:?}");
+    eprintln!(
+        "burst_budgeted/10000: {ticks} ticks per burst, max measured single tick {measured_maximum:?}"
+    );
 }

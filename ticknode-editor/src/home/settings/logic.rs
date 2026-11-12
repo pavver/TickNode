@@ -1,4 +1,4 @@
-use ticknode_shared::{ServerSettings, MAX_TICK_BUDGET, MAX_TICK_MS, MIN_TICK_BUDGET, MIN_TICK_MS};
+use ticknode_shared::{MAX_TICK_BUDGET, MAX_TICK_MS, MIN_TICK_BUDGET, MIN_TICK_MS, ServerSettings};
 
 /// Draft representation of server-wide engine settings edited in the UI.
 #[derive(Debug, Clone, PartialEq)]
@@ -46,26 +46,43 @@ impl EngineSettingsDraft {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.display.parse().is_some() && self.is_tick_valid() && self.is_budget_valid() && ["en", "uk"].contains(&self.locale.as_str())
+        self.display.parse().is_some()
+            && self.is_tick_valid()
+            && self.is_budget_valid()
+            && ["en", "uk"].contains(&self.locale.as_str())
     }
 
     pub fn is_dirty(&self, server: ServerSettings) -> bool {
-        self.display != super::display::logic::DisplayDraft::new(&server.display) || self.locale != server.locale || self.tick_ms.trim() != server.tick_ms.to_string()
+        self.display != super::display::logic::DisplayDraft::new(&server.display)
+            || self.locale != server.locale
+            || self.tick_ms.trim() != server.tick_ms.to_string()
             || self.tick_budget.trim() != server.tick_budget.to_string()
     }
 
     pub fn can_save(&self, server: ServerSettings) -> bool {
         self.is_valid()
             && match (self.parse_tick_ms(), self.parse_budget()) {
-                (Ok(tick), Ok(budget)) => self.display.parse().as_ref() != Some(&server.display) || self.locale != server.locale || tick != server.tick_ms || budget != server.tick_budget,
+                (Ok(tick), Ok(budget)) => {
+                    self.display.parse().as_ref() != Some(&server.display)
+                        || self.locale != server.locale
+                        || tick != server.tick_ms
+                        || budget != server.tick_budget
+                }
                 _ => false,
             }
     }
 
     pub fn to_server_settings(&self) -> Option<ServerSettings> {
-        if !self.is_valid() { return None; }
+        if !self.is_valid() {
+            return None;
+        }
         match (self.parse_tick_ms(), self.parse_budget()) {
-            (Ok(tick_ms), Ok(tick_budget)) => Some(ServerSettings { tick_ms, tick_budget, locale: self.locale.clone(), display: self.display.parse()? }),
+            (Ok(tick_ms), Ok(tick_budget)) => Some(ServerSettings {
+                tick_ms,
+                tick_budget,
+                locale: self.locale.clone(),
+                display: self.display.parse()?,
+            }),
             _ => None,
         }
     }

@@ -1,15 +1,15 @@
+use super::convert::{decode_value, encode_value, from_wit_definition};
+use super::host::{CallCtx, PluginState};
+use super::outputs::validate_emission_outputs;
+use super::runtime::{Runtime, short_error};
+use super::{NodesApi, lock, wit};
+use crate::host::{HostState, TaskId, TaskOutput, TaskResult};
+use crate::{Node, NodeContext};
 use std::sync::{Arc, Mutex};
 use ticknode_shared::*;
 use tracing::warn;
-use wasmtime::component::ResourceAny;
 use wasmtime::Store;
-use crate::host::{HostState, TaskId, TaskOutput, TaskResult};
-use crate::{Node, NodeContext};
-use super::{lock, wit, NodesApi};
-use super::runtime::{Runtime, short_error};
-use super::host::{CallCtx, PluginState};
-use super::convert::{encode_value, decode_value, from_wit_definition};
-use super::outputs::validate_emission_outputs;
+use wasmtime::component::ResourceAny;
 
 pub struct WasmNode {
     id: NodeId,
@@ -43,7 +43,9 @@ fn trap_error(e: wasmtime::Error) -> CallError {
 impl CallError {
     fn ui_message(&self) -> UiMessage {
         match self {
-            Self::Trap(reason) => UiMessage::new("error-plugin-node-crashed", self.to_string()).arg("reason", reason),
+            Self::Trap(reason) => {
+                UiMessage::new("error-plugin-node-crashed", self.to_string()).arg("reason", reason)
+            }
             Self::Rejected(_) => UiMessage::plain(self.to_string()),
         }
     }
@@ -59,9 +61,25 @@ impl std::fmt::Display for CallError {
 }
 
 impl WasmNode {
-    pub(super) fn new(id: NodeId, definition: NodeDefinition, polls: bool, runtime: Arc<Mutex<Runtime>>) -> Self {
+    pub(super) fn new(
+        id: NodeId,
+        definition: NodeDefinition,
+        polls: bool,
+        runtime: Arc<Mutex<Runtime>>,
+    ) -> Self {
         let plugin = lock(&runtime).grants.name.clone();
-        Self { id, type_name: definition.type_name.clone(), runtime, handle: None, definition, definition_revision: 0, polls, properties: Vec::new(), failed: false, plugin }
+        Self {
+            id,
+            type_name: definition.type_name.clone(),
+            runtime,
+            handle: None,
+            definition,
+            definition_revision: 0,
+            polls,
+            properties: Vec::new(),
+            failed: false,
+            plugin,
+        }
     }
 
     /// Calls a method on the node resource. If `host` is passed, it is moved into the plugin for the
@@ -72,7 +90,9 @@ impl WasmNode {
         f: impl FnOnce(&mut Store<PluginState>, &NodesApi, ResourceAny) -> wasmtime::Result<R>,
     ) -> Result<R, CallError> {
         if self.failed {
-            return Err(CallError::Rejected("The node is stopped after a plugin error; change a property to restart it".into()));
+            return Err(CallError::Rejected(
+                "The node is stopped after a plugin error; change a property to restart it".into(),
+            ));
         }
         let runtime = self.runtime.clone();
         let mut rt = lock(&runtime);
@@ -105,29 +125,45 @@ impl WasmNode {
 
     fn refresh(&mut self) -> Result<(), CallError> {
         let (definition, properties) = self.call(None, |store, api, node| {
-            Ok((api.node().call_definition(&mut *store, node)?, api.node().call_properties(&mut *store, node)?))
+            Ok((
+                api.node().call_definition(&mut *store, node)?,
+                api.node().call_properties(&mut *store, node)?,
+            ))
         })?;
         (self.definition, self.polls) = from_wit_definition(definition, &self.plugin);
         self.definition_revision = self.definition_revision.wrapping_add(1);
-        self.properties = properties.into_iter().filter_map(|p| Some((p.name, decode_value(&p.value)?))).collect();
+        self.properties = properties
+            .into_iter()
+            .filter_map(|p| Some((p.name, decode_value(&p.value)?)))
+            .collect();
         Ok(())
     }
 
     fn run(&mut self, trigger: wit::Trigger, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let inputs: Vec<(u32, wit::Value)> = ctx.inputs.iter()
+        let inputs: Vec<(u32, wit::Value)> = ctx
+            .inputs
+            .iter()
             .filter_map(|(pin, value)| Some((pin.0, encode_value(value.as_ref()?))))
             .collect();
-        let result = self.call(Some(ctx.host_state), |store, api, node| api.node().call_execute(store, node, &trigger, &inputs));
+        let result = self.call(Some(ctx.host_state), |store, api, node| {
+            api.node().call_execute(store, node, &trigger, &inputs)
+        });
         match result {
             Ok(outputs) => {
-                let (valid, errors) = validate_emission_outputs(ctx.types, &self.definition, outputs);
+                let (valid, errors) =
+                    validate_emission_outputs(ctx.types, &self.definition, outputs);
                 for error in errors {
-                    ctx.host_state.error(self.id, super::outputs::ui_error(&error), format!("[ERROR] {error}"));
+                    ctx.host_state.error(
+                        self.id,
+                        super::outputs::ui_error(&error),
+                        format!("[ERROR] {error}"),
+                    );
                 }
                 valid
             }
             Err(e) => {
-                ctx.host_state.error(self.id, e.ui_message(), format!("[ERROR] {e}"));
+                ctx.host_state
+                    .error(self.id, e.ui_message(), format!("[ERROR] {e}"));
                 Vec::new()
             }
         }
@@ -135,16 +171,27 @@ impl WasmNode {
 }
 
 fn call_with_host<R>(
-    store: &mut Store<PluginState>, api: &NodesApi, resource: ResourceAny, node_id: NodeId,
+    store: &mut Store<PluginState>,
+    api: &NodesApi,
+    resource: ResourceAny,
+    node_id: NodeId,
     mut host: Option<&mut HostState>,
     f: impl FnOnce(&mut Store<PluginState>, &NodesApi, ResourceAny) -> wasmtime::Result<R>,
 ) -> Result<R, CallError> {
     if let Some(h) = &mut host {
-        store.data_mut().call = Some(CallCtx { node_id, host: std::mem::take(*h) });
+        store.data_mut().call = Some(CallCtx {
+            node_id,
+            host: std::mem::take(*h),
+        });
     }
     let result = f(store, api, resource);
     if let Some(h) = host {
-        *h = store.data_mut().call.take().expect("the call context is in place").host;
+        *h = store
+            .data_mut()
+            .call
+            .take()
+            .expect("the call context is in place")
+            .host;
     }
     result.map_err(trap_error)
 }
@@ -156,17 +203,28 @@ fn create_resource(
     id: NodeId,
     properties: &[(String, DataValue)],
 ) -> Result<ResourceAny, CallError> {
-    let node = api.call_create_node(&mut *store, type_name, id.0.as_u64_pair()).map_err(trap_error)?.map_err(CallError::Rejected)?;
+    let node = api
+        .call_create_node(&mut *store, type_name, id.0.as_u64_pair())
+        .map_err(trap_error)?
+        .map_err(CallError::Rejected)?;
     for (name, value) in properties {
-        api.node().call_set_property(&mut *store, node, name, &encode_value(value)).map_err(trap_error)?;
+        api.node()
+            .call_set_property(&mut *store, node, name, &encode_value(value))
+            .map_err(trap_error)?;
     }
     Ok(node)
 }
 
 impl Node for WasmNode {
-    fn id(&self) -> NodeId { self.id }
-    fn definition(&self) -> NodeDefinition { self.definition.clone() }
-    fn definition_revision(&self) -> u64 { self.definition_revision }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn definition(&self) -> NodeDefinition {
+        self.definition.clone()
+    }
+    fn definition_revision(&self) -> u64 {
+        self.definition_revision
+    }
 
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         match trigger_pin {
@@ -175,20 +233,33 @@ impl Node for WasmNode {
         }
     }
 
-    fn on_task(&mut self, task: TaskId, result: TaskResult, ctx: &mut NodeContext) -> Vec<NodeOutput> {
+    fn on_task(
+        &mut self,
+        task: TaskId,
+        result: TaskResult,
+        ctx: &mut NodeContext,
+    ) -> Vec<NodeOutput> {
         let result = result.map(|output| match output {
             TaskOutput::Delay => wit::TaskOutput::Delay,
-            TaskOutput::Http(r) => wit::TaskOutput::Http(wit::HttpResponse { status: r.status, headers: r.headers, body: r.body }),
+            TaskOutput::Http(r) => wit::TaskOutput::Http(wit::HttpResponse {
+                status: r.status,
+                headers: r.headers,
+                body: r.body,
+            }),
         });
         self.run(wit::Trigger::Task(wit::TaskDone { id: task, result }), ctx)
     }
 
-    fn polls(&self) -> bool { self.polls }
+    fn polls(&self) -> bool {
+        self.polls
+    }
 
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
         let tick = host.current_tick;
         let id = self.id;
-        match self.call(Some(&mut *host), |store, api, node| api.node().call_poll(store, node, tick)) {
+        match self.call(Some(&mut *host), |store, api, node| {
+            api.node().call_poll(store, node, tick)
+        }) {
             Ok(pin) => pin.map(PinId),
             Err(CallError::Rejected(_)) => None,
             Err(e) => {
@@ -200,16 +271,26 @@ impl Node for WasmNode {
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiMessage> {
         let mut rt = lock(&self.runtime);
-        let generation = rt.instantiate().map_err(trap_error).map_err(|e| e.ui_message())?;
+        let generation = rt
+            .instantiate()
+            .map_err(trap_error)
+            .map_err(|e| e.ui_message())?;
         let (store, api) = rt.api().map_err(trap_error).map_err(|e| e.ui_message())?;
-        let existing = self.handle.filter(|(g, _)| *g == generation).map(|(_, r)| r);
+        let existing = self
+            .handle
+            .filter(|(g, _)| *g == generation)
+            .map(|(_, r)| r);
         let resource = match existing {
             Some(resource) => resource,
             None => create_resource(store, api, &self.type_name, self.id, &self.properties)
                 .map_err(|e| e.ui_message())?,
         };
-        let result = api.node().call_validate_property(&mut *store, resource, name, &encode_value(value));
-        if existing.is_none() { let _ = resource.resource_drop(&mut *store); }
+        let result =
+            api.node()
+                .call_validate_property(&mut *store, resource, name, &encode_value(value));
+        if existing.is_none() {
+            let _ = resource.resource_drop(&mut *store);
+        }
         match result {
             Ok(result) => result.map_err(|e| rt.ui_error(e)),
             Err(e) => {
@@ -227,14 +308,19 @@ impl Node for WasmNode {
         }
         self.failed = false;
         let encoded = encode_value(&value);
-        let result = self.call(None, |store, api, node| api.node().call_set_property(store, node, name, &encoded))
+        let result = self
+            .call(None, |store, api, node| {
+                api.node().call_set_property(store, node, name, &encoded)
+            })
             .and_then(|()| self.refresh());
         if let Err(e) = result {
             warn!(node = ?self.id, r#type = %self.type_name, "The plugin did not accept property {name}: {e}");
         }
     }
 
-    fn properties(&self) -> Vec<(String, DataValue)> { self.properties.clone() }
+    fn properties(&self) -> Vec<(String, DataValue)> {
+        self.properties.clone()
+    }
 
     /// A node created without properties (from the palette) would otherwise expose none until the first
     /// `set_property`: read the plugin's full set, defaults included, so the editor can show and edit them.
@@ -246,7 +332,9 @@ impl Node for WasmNode {
         }
     }
 
-    fn needs_live(&self) -> bool { true }
+    fn needs_live(&self) -> bool {
+        true
+    }
 
     fn ensure_live(&mut self) {
         if self.failed {
@@ -259,10 +347,14 @@ impl Node for WasmNode {
 
 impl Drop for WasmNode {
     fn drop(&mut self) {
-        let Some((generation, resource)) = self.handle else { return };
+        let Some((generation, resource)) = self.handle else {
+            return;
+        };
         let mut rt = lock(&self.runtime);
         // The resource lives only in its own instance; do not instantiate a new one just to drop it.
-        if rt.generation == generation && let Some((store, _)) = rt.instance.as_mut() {
+        if rt.generation == generation
+            && let Some((store, _)) = rt.instance.as_mut()
+        {
             let _ = resource.resource_drop(store);
         }
     }

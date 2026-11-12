@@ -1,16 +1,16 @@
+use super::convert::encode_value;
+use super::host::{CallCtx, Grants, PluginState};
+use super::lifecycle::crash_message;
+use super::{NodesApi, OptionStore, bindings, wit};
+use crate::host::HostState;
+use crate::translations::{AllowedIds, sanitize_ui_message};
+use crate::ws::{self, WsHub};
 use std::sync::{Arc, Mutex, OnceLock};
 use ticknode_shared::*;
 use tracing::warn;
 use wasmtime::component::ResourceTable;
 use wasmtime::{Config, Engine, Store, StoreLimitsBuilder};
 use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
-use crate::host::HostState;
-use crate::translations::{AllowedIds, sanitize_ui_message};
-use crate::ws::{self, WsHub};
-use super::{bindings, wit, NodesApi, OptionStore};
-use super::host::{CallCtx, Grants, PluginState};
-use super::lifecycle::crash_message;
-use super::convert::encode_value;
 
 /// Instruction budget per plugin call (guards against infinite loops).
 const FUEL_PER_CALL: u64 = 2_000_000_000;
@@ -75,7 +75,11 @@ impl Runtime {
             // A recreated instance after a crash receives settings first — otherwise it would lose its config
             if let Some(settings) = &self.settings {
                 store.set_fuel(FUEL_PER_CALL)?;
-                self.configure_error = plugin.ticknode_plugin_nodes().call_configure(&mut store, settings)?.err().map(|e| self.ui_error(e));
+                self.configure_error = plugin
+                    .ticknode_plugin_nodes()
+                    .call_configure(&mut store, settings)?
+                    .err()
+                    .map(|e| self.ui_error(e));
             }
             self.instance = Some((store, plugin));
             self.generation += 1;
@@ -85,7 +89,10 @@ impl Runtime {
 
     pub(super) fn api(&mut self) -> wasmtime::Result<(&mut Store<PluginState>, &NodesApi)> {
         self.instantiate()?;
-        let (store, plugin) = self.instance.as_mut().expect("the instance was just created");
+        let (store, plugin) = self
+            .instance
+            .as_mut()
+            .expect("the instance was just created");
         store.data_mut().ws.set_runtime(self.tokio.clone());
         store.data_mut().http.runtime = self.tokio.clone();
         store.set_fuel(FUEL_PER_CALL)?;
@@ -94,14 +101,23 @@ impl Runtime {
 
     /// Stores settings and applies them: to an existing instance via `configure`,
     /// while a new instance receives them upon creation. `Err` is the plugin's response (or a trap).
-    pub(super) fn configure(&mut self, settings: &[(String, DataValue)], tokio: Option<tokio::runtime::Handle>) -> Result<(), UiMessage> {
+    pub(super) fn configure(
+        &mut self,
+        settings: &[(String, DataValue)],
+        tokio: Option<tokio::runtime::Handle>,
+    ) -> Result<(), UiMessage> {
         self.tokio = tokio;
-        let props: Vec<wit::Property> = settings.iter()
-            .map(|(name, value)| wit::Property { name: name.clone(), value: encode_value(value) })
+        let props: Vec<wit::Property> = settings
+            .iter()
+            .map(|(name, value)| wit::Property {
+                name: name.clone(),
+                value: encode_value(value),
+            })
             .collect();
         self.settings = Some(props.clone());
         let fresh = self.instance.is_none();
-        self.instantiate().map_err(|e| crash_message(&short_error(&e)))?;
+        self.instantiate()
+            .map_err(|e| crash_message(&short_error(&e)))?;
         if fresh {
             return self.configure_error.clone().map_or(Ok(()), Err);
         }
@@ -109,7 +125,7 @@ impl Runtime {
             Ok((store, api)) => {
                 store.data_mut().settings_error = None;
                 api.call_configure(store, &props)
-            },
+            }
             Err(e) => Err(e),
         };
         match outcome {
@@ -129,7 +145,10 @@ impl Runtime {
 
     /// Delivers connection events and HTTP completions and collects the plugin's emissions. On a trap the instance is discarded
     /// (its connections close, `configure` runs again on the next instance).
-    pub(super) fn plugin_tick(&mut self, host: &mut HostState) -> Result<Vec<wit::Emission>, String> {
+    pub(super) fn plugin_tick(
+        &mut self,
+        host: &mut HostState,
+    ) -> Result<Vec<wit::Emission>, String> {
         if host.current_tick < self.tick_backoff_until {
             return Ok(Vec::new());
         }
@@ -137,17 +156,33 @@ impl Runtime {
         let outcome = self.api().map(|_| ()).and_then(|()| {
             let (store, plugin) = self.instance.as_mut().expect("api() creates the instance");
             let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);
-            let mut events: Vec<wit::WsEvent> = store.data_mut().ws.drain(ws::MAX_EVENTS_PER_TICK.saturating_sub(http_events.len())).into_iter().map(|e| match e {
-                ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
-                ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
-                ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
-            }).collect();
+            let mut events: Vec<wit::WsEvent> = store
+                .data_mut()
+                .ws
+                .drain(ws::MAX_EVENTS_PER_TICK.saturating_sub(http_events.len()))
+                .into_iter()
+                .map(|e| match e {
+                    ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
+                    ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
+                    ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
+                })
+                .collect();
             events.extend(http_events);
             store.set_fuel(FUEL_PER_CALL)?;
             // Plugin-level logs are not tied to a node: they carry the nil node id
-            store.data_mut().call = Some(CallCtx { node_id: NodeId(uuid::Uuid::nil()), host: std::mem::take(host) });
-            let result = plugin.ticknode_plugin_nodes().call_plugin_tick(&mut *store, &events);
-            *host = store.data_mut().call.take().expect("the call context is in place").host;
+            store.data_mut().call = Some(CallCtx {
+                node_id: NodeId(uuid::Uuid::nil()),
+                host: std::mem::take(host),
+            });
+            let result = plugin
+                .ticknode_plugin_nodes()
+                .call_plugin_tick(&mut *store, &events);
+            *host = store
+                .data_mut()
+                .call
+                .take()
+                .expect("the call context is in place")
+                .host;
             result
         });
         outcome.map_err(|e| {
@@ -160,7 +195,11 @@ impl Runtime {
 
     /// A `configure` error from the plugin; its key is restricted to the plugin's own namespace.
     pub(super) fn ui_error(&self, e: wit::UiError) -> UiMessage {
-        let message = UiMessage { key: e.key, args: e.args, fallback: e.fallback };
+        let message = UiMessage {
+            key: e.key,
+            args: e.args,
+            fallback: e.fallback,
+        };
         sanitize_ui_message(message, &self.allowed)
     }
 
@@ -174,8 +213,12 @@ impl Runtime {
 
 pub(super) fn short_error(e: &wasmtime::Error) -> String {
     match e.downcast_ref::<wasmtime::Trap>() {
-        Some(wasmtime::Trap::OutOfFuel) => "per-call compute limit exceeded (infinite loop?)".to_string(),
-        Some(wasmtime::Trap::UnreachableCodeReached) => "panic in the plugin (see the server log for details)".to_string(),
+        Some(wasmtime::Trap::OutOfFuel) => {
+            "per-call compute limit exceeded (infinite loop?)".to_string()
+        }
+        Some(wasmtime::Trap::UnreachableCodeReached) => {
+            "panic in the plugin (see the server log for details)".to_string()
+        }
         Some(trap) => trap.to_string(),
         None => e.root_cause().to_string(),
     }

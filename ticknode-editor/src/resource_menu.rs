@@ -1,11 +1,11 @@
 //! Action choice popup for dropping or clicking a resource with multiple available actions.
 
-use leptos::prelude::*;
-use ticknode_shared::{ClientMessage, DataValue, Position};
 use crate::categories::category_label;
 use crate::i18n::t;
 use crate::node_menu::{MenuRow, MenuRows, NodeMenuPopup, dismiss_menu};
 use crate::state::use_editor;
+use leptos::prelude::*;
+use ticknode_shared::{ClientMessage, DataValue, Position};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResourceActionChoice {
@@ -26,17 +26,24 @@ pub struct ResourceMenu {
 #[component]
 pub fn ResourceMenuLayer() -> impl IntoView {
     let ed = use_editor();
-    dismiss_menu(".resource-menu", Callback::new(move |_| {
-        if ed.resource_menu.get_untracked().is_some() {
-            ed.resource_menu.set(None);
-        }
-    }));
+    dismiss_menu(
+        ".resource-menu",
+        Callback::new(move |_| {
+            if ed.resource_menu.get_untracked().is_some() {
+                ed.resource_menu.set(None);
+            }
+        }),
+    );
     Effect::new(move |_| {
         if ed.pending_paste.with(|p| p.is_some()) {
             ed.resource_menu.set(None);
         }
     });
-    move || ed.resource_menu.get().map(|state| view! { <ResourceMenuPopup state=state /> })
+    move || {
+        ed.resource_menu
+            .get()
+            .map(|state| view! { <ResourceMenuPopup state=state /> })
+    }
 }
 
 #[component]
@@ -52,8 +59,13 @@ fn ResourceMenuPopup(state: ResourceMenu) -> impl IntoView {
                 if q.is_empty() {
                     true
                 } else {
-                    let cat_label = c.category.as_deref().map(category_label).unwrap_or_default();
-                    let haystack = format!("{} {} {}", c.title, c.type_name, cat_label).to_lowercase();
+                    let cat_label = c
+                        .category
+                        .as_deref()
+                        .map(category_label)
+                        .unwrap_or_default();
+                    let haystack =
+                        format!("{} {} {}", c.title, c.type_name, cat_label).to_lowercase();
                     q.split_whitespace().all(|term| haystack.contains(term))
                 }
             })
@@ -78,7 +90,10 @@ fn ResourceMenuPopup(state: ResourceMenu) -> impl IntoView {
             ed.send(ClientMessage::AddNodeWith {
                 type_name: choice.type_name.clone(),
                 position: state.position,
-                properties: vec![(choice.property.clone(), DataValue::String(state.item_value.clone()))],
+                properties: vec![(
+                    choice.property.clone(),
+                    DataValue::String(state.item_value.clone()),
+                )],
             });
             if ed.narrow.get_untracked() {
                 ed.show_palette.set(false);

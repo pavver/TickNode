@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{DataType, DataValue, PropertyDefinition, TypeDefinition, TypeRegistry, text};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PinId(pub u32);
@@ -56,15 +56,24 @@ pub struct NodeDefinition {
     pub adaptive: bool,
 }
 
-fn default_cost() -> u32 { 1 }
+fn default_cost() -> u32 {
+    1
+}
 
 /// Lets plugin code fill only the fields it cares about (`..Default::default()`), so adding a
 /// field to definitions does not break existing plugins at the source level. The cost defaults to 1.
 impl Default for NodeDefinition {
     fn default() -> Self {
         Self {
-            type_name: String::new(), title: String::new(), category: String::new(), description: String::new(),
-            help: String::new(), pins: Vec::new(), properties: Vec::new(), cost: default_cost(), adaptive: false,
+            type_name: String::new(),
+            title: String::new(),
+            category: String::new(),
+            description: String::new(),
+            help: String::new(),
+            pins: Vec::new(),
+            properties: Vec::new(),
+            cost: default_cost(),
+            adaptive: false,
         }
     }
 }
@@ -86,7 +95,10 @@ pub fn input_value_property(pin: PinId) -> String {
 }
 
 pub fn parse_input_value_property(name: &str) -> Option<PinId> {
-    name.strip_prefix(INPUT_VALUE_PREFIX)?.parse().ok().map(PinId)
+    name.strip_prefix(INPUT_VALUE_PREFIX)?
+        .parse()
+        .ok()
+        .map(PinId)
 }
 
 /// The 0x8000_0000..=0xbfff_ffff range belongs to engine-generated struct field pins.
@@ -104,8 +116,10 @@ pub fn split_field_pin(pin: PinId, index: usize) -> Option<PinId> {
 }
 
 pub fn split_field_parent(pin: PinId) -> Option<(PinId, usize)> {
-    is_virtual_pin(pin)
-        .then_some((PinId((pin.0 & !VIRTUAL_PIN_MASK) >> 8), (pin.0 & 255) as usize))
+    is_virtual_pin(pin).then_some((
+        PinId((pin.0 & !VIRTUAL_PIN_MASK) >> 8),
+        (pin.0 & 255) as usize,
+    ))
 }
 
 pub fn split_pin_property(pin: PinId) -> String {
@@ -117,10 +131,16 @@ pub fn parse_split_pin_property(name: &str) -> Option<PinId> {
 }
 
 /// Only nonempty structs representable in the reserved id range can be split.
-pub fn splittable_type<'a>(types: &'a TypeRegistry, pin: &PinDefinition) -> Option<&'a TypeDefinition> {
-    let PinType::Data(t) = &pin.pin_type else { return None };
+pub fn splittable_type<'a>(
+    types: &'a TypeRegistry,
+    pin: &PinDefinition,
+) -> Option<&'a TypeDefinition> {
+    let PinType::Data(t) = &pin.pin_type else {
+        return None;
+    };
     let def = types.definition_of(t).filter(|d| d.is_struct())?;
-    (!def.fields().is_empty() && split_field_pin(pin.id, def.fields().len() - 1).is_some()).then_some(def)
+    (!def.fields().is_empty() && split_field_pin(pin.id, def.fields().len() - 1).is_some())
+        .then_some(def)
 }
 
 /// Whether an input of this type can be given a value directly on the node (entered as text, see `text`;
@@ -132,14 +152,19 @@ pub fn input_value_editable(types: &TypeRegistry, t: &DataType) -> bool {
 /// Whether `value` is valid as an inline input value of type `t` on a node.
 pub fn input_value_fits(types: &TypeRegistry, t: &DataType, value: &DataValue) -> bool {
     if let Some(def) = types.definition_of(t) {
-        if def.is_identifier() { return matches!(value, DataValue::Number(crate::NumberValue::Int(_))); }
-        if def.quantity().is_some() { return matches!(value, DataValue::Number(n) if n.to_f64().is_finite()); }
+        if def.is_identifier() {
+            return matches!(value, DataValue::Number(crate::NumberValue::Int(_)));
+        }
+        if def.quantity().is_some() {
+            return matches!(value, DataValue::Number(n) if n.to_f64().is_finite());
+        }
         return matches!(value, DataValue::String(s) if def.values().iter().any(|v| &v.value == s));
     }
     let value_type = value.get_type();
-    input_value_editable(types, t) && text::is_text_type(&value_type) && types.compatible(&value_type, t)
+    input_value_editable(types, t)
+        && text::is_text_type(&value_type)
+        && types.compatible(&value_type, t)
 }
-
 
 #[cfg(test)]
 mod tests;

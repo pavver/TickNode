@@ -1,5 +1,5 @@
+use crate::{DataValue, NodeDefinition, PinChange, PinId, PinSignature, UiMessage, Uuid};
 use serde::{Deserialize, Serialize};
-use crate::{Uuid, PinId, DataValue, NodeDefinition, UiMessage, PinSignature, PinChange};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub Uuid);
@@ -26,7 +26,17 @@ impl std::fmt::Display for FrameId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum FrameColor { #[default] Gray, Red, Orange, Yellow, Green, Teal, Blue, Purple }
+pub enum FrameColor {
+    #[default]
+    Gray,
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Teal,
+    Blue,
+    Purple,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Frame {
@@ -148,7 +158,10 @@ pub struct NodeInstance {
 
 /// The endpoint whose old pin no longer accepts the connection.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum DetachedEnd { Source, Target }
+pub enum DetachedEnd {
+    Source,
+    Target,
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct DetachedConnection {

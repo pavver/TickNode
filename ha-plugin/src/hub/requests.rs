@@ -48,7 +48,8 @@ impl Hub {
         };
         let ids = crate::actions::entity_ids(entity).unwrap_or_default();
         let stamp = |live: &crate::live::Live, id: &str| live.revision(id);
-        self.commanded.retain(|id, c| now < c.at + COMMAND_SETTLE && stamp(&self.live, id) == c.seen);
+        self.commanded
+            .retain(|id, c| now < c.at + COMMAND_SETTLE && stamp(&self.live, id) == c.seen);
         let settled = ids.iter().all(|id| !self.commanded.contains_key(*id));
         if skip_unchanged
             && settled
@@ -74,7 +75,8 @@ impl Hub {
         }
         for id in &ids {
             let seen = stamp(&self.live, id);
-            self.commanded.insert((*id).to_string(), Commanded { at: now, seen });
+            self.commanded
+                .insert((*id).to_string(), Commanded { at: now, seen });
         }
         let mut reply = match self
             .link

@@ -1,16 +1,16 @@
 //! Home page: scenario sheets, plugins and system log.
 
 pub mod logic;
-mod sheets;
 mod settings;
+mod sheets;
 
-use leptos::prelude::*;
 use crate::i18n::t;
 use crate::plugins_panel::PluginCard;
 use crate::state::use_editor;
 use crate::ui::{IconButton, Terminal, icons};
-use sheets::SheetsSection;
+use leptos::prelude::*;
 use settings::SettingsSection;
+use sheets::SheetsSection;
 
 const HOME_SECTION_KEY: &str = "ticknode.home-section";
 
@@ -137,7 +137,10 @@ fn HomeVariables() -> impl IntoView {
 #[component]
 fn HomePlugins() -> impl IntoView {
     let ed = use_editor();
-    let names = Memo::new(move |_| ed.plugins.with(|p| p.iter().map(|i| i.name.clone()).collect::<Vec<_>>()));
+    let names = Memo::new(move |_| {
+        ed.plugins
+            .with(|p| p.iter().map(|i| i.name.clone()).collect::<Vec<_>>())
+    });
     view! {
         <div class="home-plugins-section">
             {move || names.with(Vec::is_empty).then(|| view! {

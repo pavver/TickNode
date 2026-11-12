@@ -1,18 +1,18 @@
+use crate::{HostState, Node, NodeRegistry, VariableStore, plugin};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use ticknode_shared::*;
-use crate::{HostState, Node, NodeRegistry, plugin, VariableStore};
 
-mod nodes;
 mod connections;
 mod connections_index;
-mod persistence;
-mod execution;
-mod reconcile;
-mod frozen;
-mod errors;
 #[cfg(test)]
 mod disabled_tests;
+mod errors;
+mod execution;
+mod frozen;
+mod nodes;
+mod persistence;
+mod reconcile;
 
 pub use reconcile::GraphReconcile;
 
@@ -73,7 +73,9 @@ pub struct TickEngine {
 }
 
 impl Default for TickEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TickEngine {

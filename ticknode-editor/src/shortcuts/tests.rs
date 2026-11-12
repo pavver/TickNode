@@ -31,8 +31,14 @@ fn paste_blocks_history_but_leaves_other_shortcuts_available() {
         assert_eq!(shortcut(true, true, key, false), Some(Shortcut::Redo));
     }
     assert_eq!(shortcut(true, false, "d", true), Some(Shortcut::Duplicate));
-    assert_eq!(shortcut(false, false, "Escape", true), Some(Shortcut::Escape));
+    assert_eq!(
+        shortcut(false, false, "Escape", true),
+        Some(Shortcut::Escape)
+    );
     assert_eq!(shortcut(false, false, "c", true), None);
     assert_eq!(shortcut(false, true, "f", false), Some(Shortcut::Fit));
-    assert_eq!(shortcut(false, true, "c", false), Some(Shortcut::CreateFrame));
+    assert_eq!(
+        shortcut(false, true, "c", false),
+        Some(Shortcut::CreateFrame)
+    );
 }

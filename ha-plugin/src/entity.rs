@@ -1,8 +1,8 @@
 //! Typed entity event source, fed by the hub's ordered subscription emissions.
 
 mod value;
-pub use value::{ValueType, infer_value_type, typed_value};
 pub(crate) use value::unit_mismatch;
+pub use value::{ValueType, infer_value_type, typed_value};
 
 use ha_core_client::{State, StateChange};
 use std::time::Instant;
@@ -136,9 +136,15 @@ impl PluginNode for Entity {
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
         crate::validation::schema(&self.definition(), name, value)?;
-        if name == "entity_id" && let DataValue::String(text) = value
-            && !text.is_empty() && !crate::validation::entity_id(text) {
-            return Err(crate::validation::error("entity-id", "Enter an entity ID as domain.object_id"));
+        if name == "entity_id"
+            && let DataValue::String(text) = value
+            && !text.is_empty()
+            && !crate::validation::entity_id(text)
+        {
+            return Err(crate::validation::error(
+                "entity-id",
+                "Enter an entity ID as domain.object_id",
+            ));
         }
         Ok(())
     }

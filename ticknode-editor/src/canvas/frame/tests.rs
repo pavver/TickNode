@@ -1,5 +1,5 @@
 use super::*;
-use crate::i18n::{with_locale, Locale};
+use crate::i18n::{Locale, with_locale};
 
 #[test]
 fn frame_geometry_without_selection_centers_default_size() {
@@ -124,9 +124,30 @@ fn nodes_and_frames_inside_filters_accurately() {
     let f_inner = FrameId::generate();
     let f_outer = FrameId::generate();
     let frames = [
-        (f_self, Position { x: 0.0, y: 0.0 }, NodeSize { width: 400.0, height: 300.0 }),
-        (f_inner, Position { x: 20.0, y: 20.0 }, NodeSize { width: 200.0, height: 150.0 }),
-        (f_outer, Position { x: 300.0, y: 200.0 }, NodeSize { width: 200.0, height: 150.0 }),
+        (
+            f_self,
+            Position { x: 0.0, y: 0.0 },
+            NodeSize {
+                width: 400.0,
+                height: 300.0,
+            },
+        ),
+        (
+            f_inner,
+            Position { x: 20.0, y: 20.0 },
+            NodeSize {
+                width: 200.0,
+                height: 150.0,
+            },
+        ),
+        (
+            f_outer,
+            Position { x: 300.0, y: 200.0 },
+            NodeSize {
+                width: 200.0,
+                height: 150.0,
+            },
+        ),
     ];
     let inside_frames = frames_fully_inside(container, Some(f_self), frames);
     assert_eq!(inside_frames, vec![f_inner]);
@@ -134,21 +155,33 @@ fn nodes_and_frames_inside_filters_accurately() {
 
 #[test]
 fn frame_resize_snaps_and_clamps() {
-    let origin = NodeSize { width: 200.0, height: 160.0 };
+    let origin = NodeSize {
+        width: 200.0,
+        height: 160.0,
+    };
     // Snaps to DU (4.0)
     assert_eq!(
         resize_frame_size(origin, (7.0, 9.0)),
-        NodeSize { width: 208.0, height: 168.0 }
+        NodeSize {
+            width: 208.0,
+            height: 168.0
+        }
     );
     // Clamps to min
     assert_eq!(
         resize_frame_size(origin, (-9999.0, -9999.0)),
-        NodeSize { width: MIN_FRAME_W, height: MIN_FRAME_H }
+        NodeSize {
+            width: MIN_FRAME_W,
+            height: MIN_FRAME_H
+        }
     );
     // Clamps to max
     assert_eq!(
         resize_frame_size(origin, (99999.0, 99999.0)),
-        NodeSize { width: MAX_FRAME_SIZE, height: MAX_FRAME_SIZE }
+        NodeSize {
+            width: MAX_FRAME_SIZE,
+            height: MAX_FRAME_SIZE
+        }
     );
 }
 
@@ -160,17 +193,23 @@ fn build_frame_move_batch_translates_frames_nodes_and_routes() {
         title: "Test".into(),
         color: FrameColor::Blue,
         position: Position { x: 100.0, y: 80.0 },
-        size: NodeSize { width: 300.0, height: 200.0 },
+        size: NodeSize {
+            width: 300.0,
+            height: 200.0,
+        },
     };
     let n_id = NodeId::generate();
     let node_pos = Position { x: 120.0, y: 100.0 };
 
-    let wire_key = (true, ConnectionModel {
-        src_node: n_id,
-        src_pin: PinId(0),
-        dst_node: n_id,
-        dst_pin: PinId(1),
-    });
+    let wire_key = (
+        true,
+        ConnectionModel {
+            src_node: n_id,
+            src_pin: PinId(0),
+            dst_node: n_id,
+            dst_pin: PinId(1),
+        },
+    );
     let routes = [(wire_key, vec![Position { x: 150.0, y: 150.0 }])];
 
     let delta = Position { x: 40.0, y: -20.0 };
@@ -183,7 +222,10 @@ fn build_frame_move_batch_translates_frames_nodes_and_routes() {
             title: "Test".into(),
             color: FrameColor::Blue,
             position: Position { x: 140.0, y: 60.0 },
-            size: NodeSize { width: 300.0, height: 200.0 },
+            size: NodeSize {
+                width: 300.0,
+                height: 200.0
+            },
         })
     );
     assert_eq!(

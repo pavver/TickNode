@@ -197,6 +197,12 @@ fn match_resolves_ambiguous_suffixes_using_the_declared_input_type() {
 
 #[test]
 fn linear_units_win_over_non_linear_aliases() {
-    assert_eq!(crate::quantity::unit_by_symbol("W").map(|(n, _)| n), Some("quantity.power"));
-    assert_eq!(crate::quantity::unit_by_symbol("mW").map(|(n, _)| n), Some("quantity.power"));
+    assert_eq!(
+        crate::quantity::unit_by_symbol("W").map(|(n, _)| n),
+        Some("quantity.power")
+    );
+    assert_eq!(
+        crate::quantity::unit_by_symbol("mW").map(|(n, _)| n),
+        Some("quantity.power")
+    );
 }

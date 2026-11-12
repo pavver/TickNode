@@ -33,18 +33,38 @@ pub struct SettingDefinition {
 
 impl SettingDefinition {
     fn new(key: &str, title: &str, kind: SettingKind) -> Self {
-        Self { key: key.into(), title: title.into(), description: String::new(), kind, required: false, default: None }
+        Self {
+            key: key.into(),
+            title: title.into(),
+            description: String::new(),
+            kind,
+            required: false,
+            default: None,
+        }
     }
 
-    pub fn text(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Text) }
-    pub fn number(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Number) }
-    pub fn bool(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Bool) }
-    pub fn secret(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Secret) }
-    pub fn url(key: &str, title: &str) -> Self { Self::new(key, title, SettingKind::Url) }
+    pub fn text(key: &str, title: &str) -> Self {
+        Self::new(key, title, SettingKind::Text)
+    }
+    pub fn number(key: &str, title: &str) -> Self {
+        Self::new(key, title, SettingKind::Number)
+    }
+    pub fn bool(key: &str, title: &str) -> Self {
+        Self::new(key, title, SettingKind::Bool)
+    }
+    pub fn secret(key: &str, title: &str) -> Self {
+        Self::new(key, title, SettingKind::Secret)
+    }
+    pub fn url(key: &str, title: &str) -> Self {
+        Self::new(key, title, SettingKind::Url)
+    }
 
     /// `options` — (value, label) pairs.
     pub fn select(key: &str, title: &str, options: &[(&str, &str)]) -> Self {
-        let options = options.iter().map(|(v, t)| ((*v).into(), (*t).into())).collect();
+        let options = options
+            .iter()
+            .map(|(v, t)| ((*v).into(), (*t).into()))
+            .collect();
         Self::new(key, title, SettingKind::Select(options))
     }
 
@@ -71,13 +91,21 @@ impl SettingDefinition {
             (SettingKind::Url, DataValue::String(s)) => valid_setting_url(s),
             (SettingKind::Number, DataValue::Number(_)) => true,
             (SettingKind::Bool, DataValue::Bool(_)) => true,
-            (SettingKind::Select(options), DataValue::String(s)) => options.iter().any(|(v, _)| v == s),
+            (SettingKind::Select(options), DataValue::String(s)) => {
+                options.iter().any(|(v, _)| v == s)
+            }
             _ => false,
         };
         if ok {
             Ok(())
         } else {
-            Err(UiMessage::new("error-setting-invalid", format!("Setting \"{}\": invalid value", self.title)).arg("setting", &self.title).arg("plugin", plugin).arg("key", &self.key))
+            Err(UiMessage::new(
+                "error-setting-invalid",
+                format!("Setting \"{}\": invalid value", self.title),
+            )
+            .arg("setting", &self.title)
+            .arg("plugin", plugin)
+            .arg("key", &self.key))
         }
     }
 
@@ -101,7 +129,9 @@ pub enum SettingUpdate {
 pub enum SettingValueView {
     Value(DataValue),
     /// Secret: only whether it is set.
-    Secret { is_set: bool },
+    Secret {
+        is_set: bool,
+    },
     /// Neither a saved value nor a default exists.
     Unset,
 }
@@ -141,31 +171,60 @@ mod tests {
     #[test]
     fn setting_values_are_checked_against_the_schema() {
         let url = SettingDefinition::url("url", "URL");
-        assert!(url.check("p", &DataValue::String("http://homeassistant.local:8123".into())).is_ok());
-        assert!(url.check("p", &DataValue::String("ftp://x".into())).is_err());
+        assert!(
+            url.check(
+                "p",
+                &DataValue::String("http://homeassistant.local:8123".into())
+            )
+            .is_ok()
+        );
+        assert!(
+            url.check("p", &DataValue::String("ftp://x".into()))
+                .is_err()
+        );
         let select = SettingDefinition::select("mode", "Mode", &[("a", "A"), ("b", "B")]);
         assert!(select.check("p", &DataValue::String("a".into())).is_ok());
         assert!(select.check("p", &DataValue::String("c".into())).is_err());
-        assert!(SettingDefinition::number("n", "N").check("p", &DataValue::String("1".into())).is_err());
-        assert!(SettingDefinition::bool("b", "B").check("p", &DataValue::Bool(true)).is_ok());
+        assert!(
+            SettingDefinition::number("n", "N")
+                .check("p", &DataValue::String("1".into()))
+                .is_err()
+        );
+        assert!(
+            SettingDefinition::bool("b", "B")
+                .check("p", &DataValue::Bool(true))
+                .is_ok()
+        );
         assert!(SettingDefinition::secret("t", "T").is_secret());
     }
 
     #[test]
     fn plugin_info_roundtrips_through_postcard() {
         let info = PluginInfo {
-            name: "p".into(), version: "1".into(), author: "a".into(), file: "p.wasm".into(),
-            state: PluginState::Enabled, error: None, settings_error: Some(UiMessage::new("p-error", "e").arg("a", "b")),
+            name: "p".into(),
+            version: "1".into(),
+            author: "a".into(),
+            file: "p.wasm".into(),
+            state: PluginState::Enabled,
+            error: None,
+            settings_error: Some(UiMessage::new("p-error", "e").arg("a", "b")),
             capabilities: vec![Capability::Storage],
             settings: vec![SettingDefinition::secret("token", "Token").required()],
             values: vec![("token".into(), SettingValueView::Secret { is_set: true })],
-            resources: vec![ResourceCollection::new("entities", "Entities", "entities").icon("mdi:home-assistant")],
+            resources: vec![
+                ResourceCollection::new("entities", "Entities", "entities")
+                    .icon("mdi:home-assistant"),
+            ],
         };
-        let back: PluginInfo = postcard::from_bytes(&postcard::to_allocvec(&info).unwrap()).unwrap();
+        let back: PluginInfo =
+            postcard::from_bytes(&postcard::to_allocvec(&info).unwrap()).unwrap();
         assert_eq!(back, info);
     }
 }
 
 fn valid_setting_url(s: &str) -> bool {
-    s.is_empty() || ["http://", "https://", "ws://", "wss://"].iter().any(|prefix| s.starts_with(prefix))
+    s.is_empty()
+        || ["http://", "https://", "ws://", "wss://"]
+            .iter()
+            .any(|prefix| s.starts_with(prefix))
 }

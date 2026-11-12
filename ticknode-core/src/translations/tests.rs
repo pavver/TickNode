@@ -9,7 +9,9 @@ impl Write for LogWriter {
         self.0.lock().unwrap().extend_from_slice(bytes);
         Ok(bytes.len())
     }
-    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -17,21 +19,43 @@ fn core_c_translation_warnings_name_only_rejected_messages_and_terms() {
     let allowed = AllowedIds::new("example", &["example/node".into()], &[]);
     let writer = LogWriter(Arc::default());
     let output = writer.0.clone();
-    let subscriber = tracing_subscriber::fmt().without_time().with_ansi(false).with_writer(move || writer.clone()).finish();
+    let subscriber = tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .finish();
     tracing::subscriber::with_default(subscriber, || {
         let source = "# Documentation\n\nnode-example-node-title = Title\nforeign-title = Foreign\n-example-term = Own\n-foreign-term = Foreign\n";
         let filtered = filter_plugin_resource("example", "en", source, &allowed).unwrap();
         assert_eq!(message_ids(&filtered), ["node-example-node-title"]);
         assert!(filtered.contains("-example-term = Own"));
-        assert!(!filtered.contains("Documentation"), "comments are omitted from delivered resources");
+        assert!(
+            !filtered.contains("Documentation"),
+            "comments are omitted from delivered resources"
+        );
         let log = String::from_utf8(output.lock().unwrap().clone()).unwrap();
-        assert!(log.contains("foreign-title") && log.contains("-foreign-term"), "{log}");
-        assert!(!log.contains("node-example-node-title") && !log.contains("-example-term"), "{log}");
+        assert!(
+            log.contains("foreign-title") && log.contains("-foreign-term"),
+            "{log}"
+        );
+        assert!(
+            !log.contains("node-example-node-title") && !log.contains("-example-term"),
+            "{log}"
+        );
         output.lock().unwrap().clear();
-        let filtered = filter_plugin_resource("example", "en", "example-error = Kept\n-example-term = Kept\n", &allowed).unwrap();
+        let filtered = filter_plugin_resource(
+            "example",
+            "en",
+            "example-error = Kept\n-example-term = Kept\n",
+            &allowed,
+        )
+        .unwrap();
         assert_eq!(message_ids(&filtered), ["example-error"]);
         assert!(filtered.contains("-example-term = Kept"));
-        assert!(output.lock().unwrap().is_empty(), "valid resources must not produce a rejection warning");
+        assert!(
+            output.lock().unwrap().is_empty(),
+            "valid resources must not produce a rejection warning"
+        );
     });
 }
 
@@ -39,15 +63,25 @@ fn core_c_translation_warnings_name_only_rejected_messages_and_terms() {
 fn core_c_merged_resources_omit_comments_and_preserve_messages_and_terms() {
     let merged = merge_resources([
         ("en", "# Documentation\n\na = First\n-term = First term\n"),
-        ("en", "## More documentation\n\na = Duplicate\n-term = Duplicate\nb = Second\n"),
+        (
+            "en",
+            "## More documentation\n\na = Duplicate\n-term = Duplicate\nb = Second\n",
+        ),
     ]);
     assert_eq!(merged.len(), 1);
     assert_eq!(merged[0].0, "en");
     let source = &merged[0].1;
     assert_eq!(message_ids(source), ["a", "b"]);
-    assert!(source.contains("a = First") && source.contains("b = Second") && source.contains("-term = First term"));
+    assert!(
+        source.contains("a = First")
+            && source.contains("b = Second")
+            && source.contains("-term = First term")
+    );
     assert!(!source.contains("Duplicate"));
-    assert!(!source.contains('#'), "comments are omitted from delivered resources: {source}");
+    assert!(
+        !source.contains('#'),
+        "comments are omitted from delivered resources: {source}"
+    );
 }
 
 #[test]
@@ -65,19 +99,35 @@ fn quantity_catalog_has_titles_descriptions_and_unit_symbols_in_both_locales() {
     for (locale, source) in CORE_TRANSLATIONS {
         let ids = message_ids(source);
         let labels = crate::quantity::labels(locale);
-        assert_eq!(labels.decimal_separator(), if locale == "uk" { "," } else { "." });
+        assert_eq!(
+            labels.decimal_separator(),
+            if locale == "uk" { "," } else { "." }
+        );
         for d in ticknode_shared::quantity::builtin_quantities() {
             for suffix in ["title", "description"] {
                 let key = format!("type-{}-{suffix}", fluent_slug(&d.name));
                 assert!(ids.contains(&key));
                 if locale == "en" {
-                    let expected = if suffix == "title" { &d.title } else { &d.description };
-                    assert!(source.lines().any(|line| line == format!("{key} = {expected}")), "{key}");
+                    let expected = if suffix == "title" {
+                        &d.title
+                    } else {
+                        &d.description
+                    };
+                    assert!(
+                        source
+                            .lines()
+                            .any(|line| line == format!("{key} = {expected}")),
+                        "{key}"
+                    );
                 }
             }
             for u in &d.quantity().unwrap().units {
-                let symbol = labels.unit_symbol(&u.id).expect("every unit has a localized symbol");
-                if locale == "en" { assert_eq!(symbol, u.symbol); }
+                let symbol = labels
+                    .unit_symbol(&u.id)
+                    .expect("every unit has a localized symbol");
+                if locale == "en" {
+                    assert_eq!(symbol, u.symbol);
+                }
             }
         }
     }
@@ -89,8 +139,13 @@ fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
     use ticknode_shared::{DataType, NodeId, quantity::QuantityLabels};
     for (locale, source) in CORE_TRANSLATIONS {
         let ids = message_ids(source);
-        for ty in [DataType::Number, DataType::Bool, DataType::Duration, DataType::DateTime,
-            DataType::Named("quantity.power".into())] {
+        for ty in [
+            DataType::Number,
+            DataType::Bool,
+            DataType::Duration,
+            DataType::DateTime,
+            DataType::Named("quantity.power".into()),
+        ] {
             let mut node = ToTextNode::new(NodeId::generate());
             node.set_property("value_type", ticknode_shared::data_type_name(&ty).into());
             for p in node.definition().properties {
@@ -99,17 +154,37 @@ fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
                 }
                 if let ticknode_shared::PropertyKind::Select(options) = p.kind {
                     for (value, _) in options {
-                        if p.name == "unit" && value != "auto" { continue; }
-                        assert!(ids.contains(&format!("node-text-to-text-prop-{}-option-{}", p.name, value)));
+                        if p.name == "unit" && value != "auto" {
+                            continue;
+                        }
+                        assert!(ids.contains(&format!(
+                            "node-text-to-text-prop-{}-option-{}",
+                            p.name, value
+                        )));
                     }
                 }
             }
         }
         let labels = crate::quantity::labels(locale);
-        assert_eq!(labels.bool_text(true), if locale == "uk" { "так" } else { "true" });
+        assert_eq!(
+            labels.bool_text(true),
+            if locale == "uk" { "так" } else { "true" }
+        );
         let duration = ticknode_shared::DataValue::Duration(std::time::Duration::from_secs(5400));
-        assert_eq!(ticknode_shared::to_text::to_text(&duration, &DataType::Duration, &Default::default(), &Default::default(), labels),
-            if locale == "uk" { "1 год 30 хв" } else { "1h 30m" });
+        assert_eq!(
+            ticknode_shared::to_text::to_text(
+                &duration,
+                &DataType::Duration,
+                &Default::default(),
+                &Default::default(),
+                labels
+            ),
+            if locale == "uk" {
+                "1 год 30 хв"
+            } else {
+                "1h 30m"
+            }
+        );
     }
 }
 
@@ -117,8 +192,17 @@ fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
 fn convert_properties_and_fixed_options_cover_every_input_type() {
     use crate::{Node, builtin::ConvertNode};
     use ticknode_shared::{DataType, NodeId, PropertyKind, TypeRegistry, convert};
-    let mut inputs = vec![DataType::Any, DataType::Number, DataType::DateTime, DataType::Duration];
-    inputs.extend(ticknode_shared::quantity::catalog().iter().map(|d| DataType::Named(d.name.clone())));
+    let mut inputs = vec![
+        DataType::Any,
+        DataType::Number,
+        DataType::DateTime,
+        DataType::Duration,
+    ];
+    inputs.extend(
+        ticknode_shared::quantity::catalog()
+            .iter()
+            .map(|d| DataType::Named(d.name.clone())),
+    );
     for (locale, source) in CORE_TRANSLATIONS {
         let ids = message_ids(source);
         for input in &inputs {
@@ -126,22 +210,39 @@ fn convert_properties_and_fixed_options_cover_every_input_type() {
             node.set_property("value_type", ticknode_shared::data_type_name(input).into());
             let mut targets = convert::targets(input, &TypeRegistry::default());
             // Include the unselected form with an empty target list.
-            targets.push(convert::ConversionTarget { id: String::new(), title: String::new(), output: DataType::Any, unit_of: None });
+            targets.push(convert::ConversionTarget {
+                id: String::new(),
+                title: String::new(),
+                output: DataType::Any,
+                unit_of: None,
+            });
             for target in targets {
                 node.set_property("target", target.id.into());
                 for prop in node.definition().properties {
-                    for (suffix, text) in [("title", &prop.title), ("description", &prop.description)] {
+                    for (suffix, text) in
+                        [("title", &prop.title), ("description", &prop.description)]
+                    {
                         let key = format!("node-convert-prop-{}-{suffix}", prop.name);
                         assert!(ids.contains(&key), "{locale}: {key}");
-                        if locale == "en" { assert!(source.lines().any(|l| l == format!("{key} = {text}"))); }
+                        if locale == "en" {
+                            assert!(source.lines().any(|l| l == format!("{key} = {text}")));
+                        }
                     }
                     if let PropertyKind::Select(options) = prop.kind {
                         for (value, label) in options {
                             // Quantity titles and unit symbols use the generic editor fallback.
-                            if prop.name == "unit" || value.starts_with("quantity:") { continue; }
-                            let key = format!("node-convert-prop-{}-option-{}", prop.name, fluent_slug(&value));
+                            if prop.name == "unit" || value.starts_with("quantity:") {
+                                continue;
+                            }
+                            let key = format!(
+                                "node-convert-prop-{}-option-{}",
+                                prop.name,
+                                fluent_slug(&value)
+                            );
                             assert!(ids.contains(&key), "{locale}: {key}");
-                            if locale == "en" { assert!(source.lines().any(|l| l == format!("{key} = {label}"))); }
+                            if locale == "en" {
+                                assert!(source.lines().any(|l| l == format!("{key} = {label}")));
+                            }
                         }
                     }
                 }

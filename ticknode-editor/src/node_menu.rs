@@ -30,18 +30,36 @@ pub fn dismiss_menu(selector: &'static str, close: Callback<()>) {
     let ed = use_editor();
     Effect::new(move |first: Option<()>| {
         ed.view.track();
-        if first.is_some() { close.run(()); }
+        if first.is_some() {
+            close.run(());
+        }
     });
-    let outside = Closure::<dyn Fn(web_sys::PointerEvent)>::new(move |ev: web_sys::PointerEvent| {
-        let inside = ev.target().and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-            .and_then(|el| el.closest(selector).ok().flatten()).is_some();
-        if !inside { close.run(()); }
-    });
-    let _ = window().add_event_listener_with_callback_and_bool("pointerdown", outside.as_ref().unchecked_ref(), true);
+    let outside =
+        Closure::<dyn Fn(web_sys::PointerEvent)>::new(move |ev: web_sys::PointerEvent| {
+            let inside = ev
+                .target()
+                .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                .and_then(|el| el.closest(selector).ok().flatten())
+                .is_some();
+            if !inside {
+                close.run(());
+            }
+        });
+    let _ = window().add_event_listener_with_callback_and_bool(
+        "pointerdown",
+        outside.as_ref().unchecked_ref(),
+        true,
+    );
     let outside = StoredValue::new_local(outside);
-    on_cleanup(move || outside.with_value(|listener| {
-        let _ = window().remove_event_listener_with_callback_and_bool("pointerdown", listener.as_ref().unchecked_ref(), true);
-    }));
+    on_cleanup(move || {
+        outside.with_value(|listener| {
+            let _ = window().remove_event_listener_with_callback_and_bool(
+                "pointerdown",
+                listener.as_ref().unchecked_ref(),
+                true,
+            );
+        })
+    });
 }
 
 #[component]
@@ -58,13 +76,18 @@ pub fn NodeMenuPopup(
     let active = RwSignal::new(0usize);
     let input = NodeRef::<leptos::html::Input>::new();
     Effect::new(move |_| {
-        if let Some(el) = input.get() { let _ = el.focus(); }
+        if let Some(el) = input.get() {
+            let _ = el.focus();
+        }
     });
     let found = Memo::new(move |_| rows.run(query.get()));
     let on_key = move |ev: web_sys::KeyboardEvent| {
         let count = found.with_untracked(|r| r.shown.len());
         let action = key_action(&ev.key(), active.get_untracked(), count);
-        if action != KeyAction::Ignore { ev.prevent_default(); ev.stop_propagation(); }
+        if action != KeyAction::Ignore {
+            ev.prevent_default();
+            ev.stop_propagation();
+        }
         match action {
             KeyAction::Move(next) => {
                 active.set(next);
@@ -75,7 +98,11 @@ pub fn NodeMenuPopup(
                 }
             }
             KeyAction::Pick => {
-                if let Some(index) = found.with_untracked(|r| r.shown.get(active.get_untracked()).map(|r| r.index)) { pick.run(index); }
+                if let Some(index) =
+                    found.with_untracked(|r| r.shown.get(active.get_untracked()).map(|r| r.index))
+                {
+                    pick.run(index);
+                }
             }
             KeyAction::Close => close.run(()),
             KeyAction::Handled | KeyAction::Ignore => {}
@@ -83,8 +110,15 @@ pub fn NodeMenuPopup(
     };
     let (x, y) = screen;
     let place = placement((x, y, x, y), viewport());
-    let vertical = if place.up { format!("bottom:{}px", place.edge) } else { format!("top:{}px", place.edge) };
-    let style = format!("left:{}px;width:{}px;{vertical};max-height:{}px", place.left, place.width, place.max_height);
+    let vertical = if place.up {
+        format!("bottom:{}px", place.edge)
+    } else {
+        format!("top:{}px", place.edge)
+    };
+    let style = format!(
+        "left:{}px;width:{}px;{vertical};max-height:{}px",
+        place.left, place.width, place.max_height
+    );
     view! {
         <div class=class style=style on:pointerdown=|ev| ev.stop_propagation()>
             <input node_ref=input class="picker-search" type="text" spellcheck="false" autocomplete="off"

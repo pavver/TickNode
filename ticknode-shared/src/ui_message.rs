@@ -23,7 +23,11 @@ pub struct UiMessage {
 
 impl UiMessage {
     pub fn new(key: impl Into<String>, fallback: impl Into<String>) -> Self {
-        Self { key: key.into(), args: Vec::new(), fallback: fallback.into() }
+        Self {
+            key: key.into(),
+            args: Vec::new(),
+            fallback: fallback.into(),
+        }
     }
 
     /// A message without a translation key: only the English text.
@@ -45,18 +49,28 @@ impl std::fmt::Display for UiMessage {
 }
 
 impl From<String> for UiMessage {
-    fn from(fallback: String) -> Self { Self::plain(fallback) }
+    fn from(fallback: String) -> Self {
+        Self::plain(fallback)
+    }
 }
 
 impl From<&str> for UiMessage {
-    fn from(fallback: &str) -> Self { Self::plain(fallback) }
+    fn from(fallback: &str) -> Self {
+        Self::plain(fallback)
+    }
 }
 
 /// Fluent identifier fragment: lowercase, every character outside `[a-z0-9-]` (including `/`, `.`, `_`)
 /// becomes `-`. `math/add` → `math-add`, `ha.state` → `ha-state`, `Control Flow` → `control-flow`.
 pub fn fluent_slug(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect()
 }
 

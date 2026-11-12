@@ -17,9 +17,9 @@ use unic_langid::LanguageIdentifier;
 mod definitions;
 mod engine;
 pub use engine::set_server_settings;
-mod values;
-mod quantities;
 mod identifiers;
+mod quantities;
+mod values;
 pub use identifiers::*;
 pub use quantities::*;
 
@@ -46,9 +46,13 @@ impl Locale {
         }
     }
 
-    pub fn code(self) -> &'static str { self.labels().0 }
+    pub fn code(self) -> &'static str {
+        self.labels().0
+    }
 
-    pub fn badge(self) -> &'static str { self.labels().1 }
+    pub fn badge(self) -> &'static str {
+        self.labels().1
+    }
 
     pub fn toggle(self) -> Self {
         match self {
@@ -76,13 +80,19 @@ struct Bundles {
 
 /// Builds a bundle: the editor's own `ui.ftl` first (strict), then server-provided resources
 /// (lenient: broken entries are skipped and ids already defined keep their first definition).
-fn build_bundle(code: &str, ui: &str, runtime: &[(String, String)]) -> FluentBundle<FluentResource> {
+fn build_bundle(
+    code: &str,
+    ui: &str,
+    runtime: &[(String, String)],
+) -> FluentBundle<FluentResource> {
     let langid: LanguageIdentifier = code.parse().expect("a valid language identifier");
     let mut bundle = FluentBundle::new(vec![langid]);
     // Disable Unicode bidi isolation characters (U+2068/U+2069) around interpolated values
     bundle.set_use_isolating(false);
     let res = FluentResource::try_new(ui.to_string()).expect("a valid FTL resource");
-    bundle.add_resource(res).expect("FTL resources without duplicate ids");
+    bundle
+        .add_resource(res)
+        .expect("FTL resources without duplicate ids");
     for (_, source) in runtime.iter().filter(|(l, _)| l == code) {
         // A resource with syntax errors keeps its valid entries (the server rejects broken ones anyway)
         let res = FluentResource::try_new(source.clone()).unwrap_or_else(|(res, _)| res);
@@ -93,7 +103,10 @@ fn build_bundle(code: &str, ui: &str, runtime: &[(String, String)]) -> FluentBun
 }
 
 fn build_bundles(runtime: &[(String, String)]) -> Bundles {
-    Bundles { uk: build_bundle("uk", UK_UI_FTL, runtime), en: build_bundle("en", EN_UI_FTL, runtime) }
+    Bundles {
+        uk: build_bundle("uk", UK_UI_FTL, runtime),
+        en: build_bundle("en", EN_UI_FTL, runtime),
+    }
 }
 
 thread_local! {
@@ -200,7 +213,11 @@ pub fn try_translate(key: &str, args: Option<&FluentArgs<'_>>) -> Option<String>
         let format = |bundle: &FluentBundle<FluentResource>| {
             let pattern = bundle.get_message(key)?.value()?;
             let mut errors = Vec::new();
-            Some(bundle.format_pattern(pattern, args, &mut errors).into_owned())
+            Some(
+                bundle
+                    .format_pattern(pattern, args, &mut errors)
+                    .into_owned(),
+            )
         };
         let (primary, secondary) = match locale {
             Locale::Uk => (&bundles.uk, &bundles.en),

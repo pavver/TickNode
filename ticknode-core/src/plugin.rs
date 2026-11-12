@@ -6,31 +6,31 @@
 //! properties on the next call. The node that caused the failure is halted until a property changes
 //! so it does not trap on every tick.
 
+use crate::RemovedConnections;
 use std::sync::{Arc, Mutex, MutexGuard};
 use ticknode_shared::*;
-use crate::RemovedConnections;
 
 mod api;
 mod bindings;
+mod catalog;
+mod convert;
+mod emissions;
 mod host;
 mod http;
 pub(crate) mod identifiers;
-mod runtime;
-mod options;
-mod node;
-mod outputs;
-mod convert;
-mod loading;
 mod lifecycle;
-mod catalog;
-mod emissions;
+mod loading;
+mod node;
+mod options;
+mod outputs;
+mod runtime;
 
 use bindings::exports::ticknode::plugin::nodes::Guest as NodesApi;
 use bindings::ticknode::plugin::types as wit;
-use runtime::Runtime;
-pub(crate) use options::OptionStore;
-pub use node::WasmNode;
 pub use lifecycle::{effective_settings, missing_required};
+pub use node::WasmNode;
+pub(crate) use options::OptionStore;
+use runtime::Runtime;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())

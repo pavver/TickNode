@@ -90,7 +90,10 @@ impl Node for ToTextNode {
         };
         let text = to_text_with_identifiers(
             &value,
-            ctx.input_types.get(&PinId(1)).filter(|_| self.value_type == DataType::Any).unwrap_or(&self.value_type),
+            ctx.input_types
+                .get(&PinId(1))
+                .filter(|_| self.value_type == DataType::Any)
+                .unwrap_or(&self.value_type),
             &self.options,
             &ctx.host_state.display,
             crate::quantity::labels(locale),

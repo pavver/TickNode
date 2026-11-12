@@ -218,10 +218,17 @@ fn condition_properties_restore_and_interactive_selects_reject_unknown_options()
         assert_eq!(original.properties(), restored.properties());
         let saved = restored.properties();
         if *kind == Kind::Sun {
-            assert!(restored.validate_property("before", &DataValue::from("invalid")).is_err());
+            assert!(
+                restored
+                    .validate_property("before", &DataValue::from("invalid"))
+                    .is_err()
+            );
             assert_eq!(saved, restored.properties());
             restored.set_property("before", "invalid".into());
-            assert!(restored.polls(), "legacy invalid options stay visible as runtime errors");
+            assert!(
+                restored.polls(),
+                "legacy invalid options stay visible as runtime errors"
+            );
         }
     }
 }

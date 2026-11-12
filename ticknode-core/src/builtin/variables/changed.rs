@@ -1,6 +1,6 @@
-use ticknode_shared::*;
+use super::{LOOKUP_OPTIONS, format_lookup, parse_lookup};
 use crate::{HostState, Node, NodeContext};
-use super::{format_lookup, parse_lookup, LOOKUP_OPTIONS};
+use ticknode_shared::*;
 
 pub struct VariableChangedNode {
     pub id: NodeId,
@@ -81,7 +81,10 @@ impl Node for VariableChangedNode {
             }
             VariableLookup::Auto => {
                 if let Some(sheet) = self.sheet {
-                    if host.active_sheet_variables.contains(&(sheet, self.name.clone())) {
+                    if host
+                        .active_sheet_variables
+                        .contains(&(sheet, self.name.clone()))
+                    {
                         let key = VariableKey::sheet(sheet, &self.name);
                         host.changed_variables.contains(&key)
                     } else {
@@ -96,17 +99,20 @@ impl Node for VariableChangedNode {
                 }
             }
         };
-        if changed {
-            Some(PinId(0))
-        } else {
-            None
-        }
+        if changed { Some(PinId(0)) } else { None }
     }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let mut outputs = vec![NodeOutput::Execution(PinId(0))];
         if let Some(var) = ctx.variable(&self.name, self.lookup) {
-            if let Some(val) = fit_typed_variable_value(ctx.types, var.value.clone(), &var.data_type, &self.value_type, &ctx.host_state.display, crate::quantity::labels(&ctx.host_state.locale)) {
+            if let Some(val) = fit_typed_variable_value(
+                ctx.types,
+                var.value.clone(),
+                &var.data_type,
+                &self.value_type,
+                &ctx.host_state.display,
+                crate::quantity::labels(&ctx.host_state.locale),
+            ) {
                 outputs.push(NodeOutput::Data(PinId(1), val));
             } else {
                 outputs.push(NodeOutput::Clear(PinId(1)));
@@ -131,8 +137,14 @@ impl Node for VariableChangedNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("name".to_string(), DataValue::String(self.name.clone())),
-            ("lookup".to_string(), DataValue::String(format_lookup(self.lookup).to_string())),
-            ("value_type".to_string(), DataValue::String(data_type_name(&self.value_type))),
+            (
+                "lookup".to_string(),
+                DataValue::String(format_lookup(self.lookup).to_string()),
+            ),
+            (
+                "value_type".to_string(),
+                DataValue::String(data_type_name(&self.value_type)),
+            ),
         ]
     }
 

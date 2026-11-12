@@ -11,7 +11,8 @@ thread_local! {
 
 /// Update formatting labels and display rules from Init and live settings broadcasts.
 pub fn set_server_settings(settings: &ServerSettings) {
-    ENGINE_LOCALE.with(|locale| locale.set(Locale::from_tag(&settings.locale).unwrap_or(Locale::En)));
+    ENGINE_LOCALE
+        .with(|locale| locale.set(Locale::from_tag(&settings.locale).unwrap_or(Locale::En)));
     // This also notifies reactive labels through the shared translations version.
     super::set_display_rules(&settings.display);
 }

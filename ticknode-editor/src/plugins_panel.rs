@@ -21,15 +21,25 @@ fn draft_of(view: &SettingValueView) -> String {
 }
 
 /// Update to send to the server for a field: `Err` if the text fails type validation.
-fn update_of(plugin: &str, def: &SettingDefinition, draft: &str, cleared: bool) -> Result<SettingUpdate, String> {
+fn update_of(
+    plugin: &str,
+    def: &SettingDefinition,
+    draft: &str,
+    cleared: bool,
+) -> Result<SettingUpdate, String> {
     Ok(match &def.kind {
         SettingKind::Secret if cleared => SettingUpdate::Clear,
         SettingKind::Secret if draft.is_empty() => SettingUpdate::Keep,
         SettingKind::Bool => SettingUpdate::Set(DataValue::Bool(draft == "true")),
         SettingKind::Number if draft.trim().is_empty() => SettingUpdate::Clear,
         SettingKind::Number => SettingUpdate::Set(
-            i18n::parse_value_localized(draft, &DataType::Number)
-                .map_err(|e| t!("plugins-field-error", field = i18n::setting_title(plugin, def), error = e))?,
+            i18n::parse_value_localized(draft, &DataType::Number).map_err(|e| {
+                t!(
+                    "plugins-field-error",
+                    field = i18n::setting_title(plugin, def),
+                    error = e
+                )
+            })?,
         ),
         _ if draft.is_empty() => SettingUpdate::Clear,
         _ => SettingUpdate::Set(DataValue::String(draft.to_string())),
@@ -38,11 +48,20 @@ fn update_of(plugin: &str, def: &SettingDefinition, draft: &str, cleared: bool) 
 
 fn capability_text(c: &Capability) -> String {
     match c {
-        Capability::Http { allowed_domains } if allowed_domains.iter().any(|d| d == "*") => t!("plugins-cap-http-any"),
-        Capability::Http { allowed_domains } => t!("plugins-cap-http-domains", domains = allowed_domains.join(", ")),
+        Capability::Http { allowed_domains } if allowed_domains.iter().any(|d| d == "*") => {
+            t!("plugins-cap-http-any")
+        }
+        Capability::Http { allowed_domains } => t!(
+            "plugins-cap-http-domains",
+            domains = allowed_domains.join(", ")
+        ),
         Capability::Storage => t!("plugins-cap-storage"),
-        Capability::WebSocket { allowed_hosts } if allowed_hosts.iter().any(|d| d == "*") => t!("plugins-cap-ws-any"),
-        Capability::WebSocket { allowed_hosts } => t!("plugins-cap-ws-hosts", hosts = allowed_hosts.join(", ")),
+        Capability::WebSocket { allowed_hosts } if allowed_hosts.iter().any(|d| d == "*") => {
+            t!("plugins-cap-ws-any")
+        }
+        Capability::WebSocket { allowed_hosts } => {
+            t!("plugins-cap-ws-hosts", hosts = allowed_hosts.join(", "))
+        }
     }
 }
 
@@ -50,8 +69,13 @@ fn capability_text(c: &Capability) -> String {
 pub fn PluginCard(name: String) -> impl IntoView {
     let ed = use_editor();
     let lookup = name.clone();
-    let info = Memo::new(move |_| ed.plugins.with(|p| p.iter().find(|i| i.name == lookup).cloned()));
-    let Some(initial) = info.get_untracked() else { return ().into_any() };
+    let info = Memo::new(move |_| {
+        ed.plugins
+            .with(|p| p.iter().find(|i| i.name == lookup).cloned())
+    });
+    let Some(initial) = info.get_untracked() else {
+        return ().into_any();
+    };
 
     let expanded = RwSignal::new(false);
     let toggling = RwSignal::new(ControlState::Idle);
@@ -60,12 +84,20 @@ pub fn PluginCard(name: String) -> impl IntoView {
     // Server response (or error) resolves the pending state of the toggle and "Save" button
     Effect::new(move |_| {
         ed.plugins.track();
-        let settings_failed = info.with_untracked(|i| i.as_ref().is_some_and(|i| i.settings_error.is_some()));
+        let settings_failed =
+            info.with_untracked(|i| i.as_ref().is_some_and(|i| i.settings_error.is_some()));
         if toggling.get_untracked() == ControlState::Pending {
             toggling.set(ControlState::Idle);
         }
         if saving.get_untracked() == ControlState::Pending {
-            flash(saving, if settings_failed { ControlState::Error } else { ControlState::Success });
+            flash(
+                saving,
+                if settings_failed {
+                    ControlState::Error
+                } else {
+                    ControlState::Success
+                },
+            );
         }
     });
     Effect::new(move |_| {
@@ -81,10 +113,16 @@ pub fn PluginCard(name: String) -> impl IntoView {
     // Form drafts: reset when the server confirms updated values
     let drafts = RwSignal::new(BTreeMap::<String, String>::new());
     let cleared = RwSignal::new(BTreeSet::<String>::new());
-    let values = Memo::new(move |_| info.with(|i| i.as_ref().map(|i| i.values.clone()).unwrap_or_default()));
+    let values =
+        Memo::new(move |_| info.with(|i| i.as_ref().map(|i| i.values.clone()).unwrap_or_default()));
     Effect::new(move |_| {
         let values = values.get();
-        drafts.set(values.iter().map(|(k, v)| (k.clone(), draft_of(v))).collect());
+        drafts.set(
+            values
+                .iter()
+                .map(|(k, v)| (k.clone(), draft_of(v)))
+                .collect(),
+        );
         cleared.set(BTreeSet::new());
     });
 
@@ -96,13 +134,18 @@ pub fn PluginCard(name: String) -> impl IntoView {
     let toggle_name = name.clone();
     let on_toggle = Callback::new(move |enabled: bool| {
         toggling.set(ControlState::Pending);
-        ed.send(ClientMessage::SetPluginEnabled { name: toggle_name.clone(), enabled });
+        ed.send(ClientMessage::SetPluginEnabled {
+            name: toggle_name.clone(),
+            enabled,
+        });
     });
 
     let save_name = name.clone();
     let save_defs = initial.settings.clone();
     let save = Callback::new(move |()| {
-        let updates = drafts.with_untracked(|drafts| cleared.with_untracked(|cleared| form_updates(&save_name, &save_defs, drafts, cleared)));
+        let updates = drafts.with_untracked(|drafts| {
+            cleared.with_untracked(|cleared| form_updates(&save_name, &save_defs, drafts, cleared))
+        });
         let updates = match updates {
             Ok(updates) => updates,
             Err(error) => {
@@ -112,7 +155,10 @@ pub fn PluginCard(name: String) -> impl IntoView {
             }
         };
         saving.set(ControlState::Pending);
-        ed.send(ClientMessage::ConfigurePlugin { name: save_name.clone(), values: updates });
+        ed.send(ClientMessage::ConfigurePlugin {
+            name: save_name.clone(),
+            values: updates,
+        });
     });
 
     let fields = initial.settings.iter().cloned().map(|def| view! { <SettingField plugin=name.clone() def=def drafts=drafts cleared=cleared values=values /> }).collect_view();
@@ -172,15 +218,31 @@ fn state_chip(state: PluginState) -> (ControlState, String) {
 }
 
 fn plugin_caption(info: &PluginInfo) -> String {
-    let no_manifest = info.version.is_empty() && info.settings.is_empty() && info.capabilities.is_empty() && info.author.is_empty();
-    if no_manifest { info.file.clone() } else { format!("v{} · {}", info.version, info.author) }
+    let no_manifest = info.version.is_empty()
+        && info.settings.is_empty()
+        && info.capabilities.is_empty()
+        && info.author.is_empty();
+    if no_manifest {
+        info.file.clone()
+    } else {
+        format!("v{} · {}", info.version, info.author)
+    }
 }
 
-fn form_updates(plugin: &str, definitions: &[SettingDefinition], drafts: &BTreeMap<String, String>, cleared: &BTreeSet<String>) -> Result<Vec<(String, SettingUpdate)>, String> {
-    definitions.iter().map(|def| {
-        let draft = drafts.get(&def.key).map_or("", String::as_str);
-        update_of(plugin, def, draft, cleared.contains(&def.key)).map(|update| (def.key.clone(), update))
-    }).collect()
+fn form_updates(
+    plugin: &str,
+    definitions: &[SettingDefinition],
+    drafts: &BTreeMap<String, String>,
+    cleared: &BTreeSet<String>,
+) -> Result<Vec<(String, SettingUpdate)>, String> {
+    definitions
+        .iter()
+        .map(|def| {
+            let draft = drafts.get(&def.key).map_or("", String::as_str);
+            update_of(plugin, def, draft, cleared.contains(&def.key))
+                .map(|update| (def.key.clone(), update))
+        })
+        .collect()
 }
 
 /// Single form field rendered according to the setting kind.
@@ -199,7 +261,11 @@ fn SettingField(
     };
     let set_draft = {
         let key = key.clone();
-        move |v: String| drafts.update(|d| { d.insert(key.clone(), v); })
+        move |v: String| {
+            drafts.update(|d| {
+                d.insert(key.clone(), v);
+            })
+        }
     };
     let control = match def.kind.clone() {
         SettingKind::Bool => view! {

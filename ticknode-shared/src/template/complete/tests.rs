@@ -34,7 +34,11 @@ fn test_basic_variable_completion() {
     let (source, res) = complete_at("Hi {{ va|^| }}", &inputs, &types);
     let c = res.expect("should find completion in expression");
     assert_eq!(&source[c.range.clone()], "va");
-    let item = c.items.iter().find(|i| i.label == "value").expect("must offer value");
+    let item = c
+        .items
+        .iter()
+        .find(|i| i.label == "value")
+        .expect("must offer value");
     assert_eq!(item.kind, CompletionKind::Variable);
     assert_eq!(item.detail, "Number");
     assert_eq!(item.insert, "value");
@@ -52,10 +56,16 @@ fn test_outside_and_comments_and_strings_return_none() {
     assert!(res2.is_none(), "inside comment must return None");
 
     let (_, res3) = complete_at("{{ 'va|^|' }}", &inputs, &types);
-    assert!(res3.is_none(), "inside single-quoted string must return None");
+    assert!(
+        res3.is_none(),
+        "inside single-quoted string must return None"
+    );
 
     let (_, res4) = complete_at("{{ \"va|^|\" }}", &inputs, &types);
-    assert!(res4.is_none(), "inside double-quoted string must return None");
+    assert!(
+        res4.is_none(),
+        "inside double-quoted string must return None"
+    );
 }
 
 #[test]
@@ -110,7 +120,11 @@ fn test_nested_struct_completion() {
         "User",
         vec![
             FieldDefinition::new("name", "Name", DataType::String),
-            FieldDefinition::new("address", "Address", DataType::Named("test.address".to_string())),
+            FieldDefinition::new(
+                "address",
+                "Address",
+                DataType::Named("test.address".to_string()),
+            ),
         ],
     );
     let types = TypeRegistry::from_definitions([address_struct, user_struct]);
@@ -196,7 +210,11 @@ fn test_tag_keyword_completion() {
 
     let (_, res1) = complete_at("{% |^|", &inputs, &types);
     let c1 = res1.expect("first word of tag offers keywords");
-    assert!(c1.items.iter().any(|i| i.label == "for" && i.kind == CompletionKind::Keyword));
+    assert!(
+        c1.items
+            .iter()
+            .any(|i| i.label == "for" && i.kind == CompletionKind::Keyword)
+    );
 
     let (source2, res2) = complete_at("{%- fo|^| %}", &inputs, &types);
     let c2 = res2.expect("tag keyword with prefix");
@@ -222,23 +240,19 @@ fn test_for_loop_and_loop_attributes() {
     )];
 
     // item. inside for loop offers fields of test.user
-    let (_, res1) = complete_at(
-        "{% for item in items %}{{ item.|^| }}",
-        &inputs,
-        &types,
-    );
+    let (_, res1) = complete_at("{% for item in items %}{{ item.|^| }}", &inputs, &types);
     let c1 = res1.expect("item fields should be offered");
     let labels1: Vec<_> = c1.items.iter().map(|i| i.label.as_str()).collect();
     assert_eq!(labels1, vec!["id", "name"]);
 
     // loop. inside for loop offers loop attributes
-    let (_, res2) = complete_at(
-        "{% for item in items %}{{ loop.|^| }}",
-        &inputs,
-        &types,
-    );
+    let (_, res2) = complete_at("{% for item in items %}{{ loop.|^| }}", &inputs, &types);
     let c2 = res2.expect("loop. should offer loop attributes");
-    assert!(c2.items.iter().any(|i| i.label == "index" && i.kind == CompletionKind::Attribute));
+    assert!(
+        c2.items
+            .iter()
+            .any(|i| i.label == "index" && i.kind == CompletionKind::Attribute)
+    );
     assert!(c2.items.iter().any(|i| i.label == "first"));
 
     // after {% endfor %}: neither item nor loop offered
@@ -267,7 +281,11 @@ fn test_set_variable_completion() {
     let (source, res) = complete_at("{% set total = 1 %}{{ to|^| }}", &inputs, &types);
     let c = res.expect("assigned set variable should be offered");
     assert_eq!(&source[c.range], "to");
-    assert!(c.items.iter().any(|i| i.label == "total" && i.kind == CompletionKind::Variable));
+    assert!(
+        c.items
+            .iter()
+            .any(|i| i.label == "total" && i.kind == CompletionKind::Variable)
+    );
 }
 
 #[test]
@@ -332,9 +350,18 @@ fn test_every_filter_and_test_exists_in_minijinja() {
 #[test]
 fn unparsable_for_header_keeps_endfor_balanced() {
     let types = TypeRegistry::new();
-    let inputs = vec![("items".to_string(), DataType::List(Box::new(DataType::Number)))];
+    let inputs = vec![(
+        "items".to_string(),
+        DataType::List(Box::new(DataType::Number)),
+    )];
     let source = "{% for a in items %}{% for in %}{% endfor %}{{ ";
-    let result = complete(&CompletionInput { source, caret: source.len(), inputs: &inputs, types: &types }).unwrap();
+    let result = complete(&CompletionInput {
+        source,
+        caret: source.len(),
+        inputs: &inputs,
+        types: &types,
+    })
+    .unwrap();
     assert!(result.items.iter().any(|i| i.label == "a"));
     assert!(result.items.iter().any(|i| i.label == "loop"));
 }

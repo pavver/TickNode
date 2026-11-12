@@ -141,15 +141,31 @@ impl PluginNode for ActionNode {
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        if !matches!(name, "target" | "action" | "skip_unchanged") { return Ok(()); }
+        if !matches!(name, "target" | "action" | "skip_unchanged") {
+            return Ok(());
+        }
         crate::validation::schema(&self.definition(), name, value)?;
-        let DataValue::String(text) = value else { return Ok(()) };
+        let DataValue::String(text) = value else {
+            return Ok(());
+        };
         let valid = match name {
-            "target" => text.is_empty() || text.split(',').all(|id| crate::validation::entity_id(id.trim())),
+            "target" => {
+                text.is_empty()
+                    || text
+                        .split(',')
+                        .all(|id| crate::validation::entity_id(id.trim()))
+            }
             "action" => text.is_empty() || crate::validation::entity_id(text),
             _ => true,
         };
-        if valid { Ok(()) } else { Err(crate::validation::error("entity-id", "Enter an entity ID as domain.object_id")) }
+        if valid {
+            Ok(())
+        } else {
+            Err(crate::validation::error(
+                "entity-id",
+                "Enter an entity ID as domain.object_id",
+            ))
+        }
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {

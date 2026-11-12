@@ -12,16 +12,16 @@
 
 use crate::{DataType, DataValue};
 
-mod operators;
-mod parsing;
-mod lexer;
-mod evaluation;
 mod display;
 mod error;
+mod evaluation;
+mod lexer;
+mod operators;
+mod parsing;
 
-pub use operators::{CompareOp, ops_for, ops_in};
-pub use evaluation::loosely_equal;
 pub use error::{ConditionError, Expected};
+pub use evaluation::loosely_equal;
+pub use operators::{CompareOp, ops_for, ops_in};
 
 /// Condition operand: a node input or a constant.
 #[derive(Debug, Clone, PartialEq)]
@@ -31,7 +31,10 @@ pub enum Operand {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Join { And, Or }
+pub enum Join {
+    And,
+    Or,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Condition {
@@ -53,10 +56,13 @@ pub struct MatchCase {
 impl MatchCase {
     /// Input names referenced by the conditions.
     pub fn inputs(&self) -> impl Iterator<Item = &str> {
-        self.conditions.iter().flat_map(|c| std::iter::once(&c.left).chain(c.right.as_ref())).filter_map(|o| match o {
-            Operand::Input(name) => Some(name.as_str()),
-            Operand::Value(_) => None,
-        })
+        self.conditions
+            .iter()
+            .flat_map(|c| std::iter::once(&c.left).chain(c.right.as_ref()))
+            .filter_map(|o| match o {
+                Operand::Input(name) => Some(name.as_str()),
+                Operand::Value(_) => None,
+            })
     }
 
     /// Renames an input across all conditions.
@@ -81,7 +87,9 @@ pub struct MatchInput {
 }
 
 /// Types selectable for a Match input (names match `input_type_name`).
-pub const INPUT_TYPES: [&str; 10] = ["any", "number", "string", "bool", "time", "datetime", "duration", "color", "list", "object"];
+pub const INPUT_TYPES: [&str; 10] = [
+    "any", "number", "string", "bool", "time", "datetime", "duration", "color", "list", "object",
+];
 
 pub fn input_type_name(t: &DataType) -> String {
     match t {
@@ -99,7 +107,10 @@ pub fn parse_input_type(s: &str) -> Option<DataType> {
 
 /// Inputs for legacy Match nodes (without an `inputs` property): sorted condition input names, type `Any`, pins `1..`.
 pub fn match_inputs(cases: &[MatchCase]) -> Vec<String> {
-    let mut names: Vec<String> = cases.iter().flat_map(|c| c.inputs().map(str::to_string)).collect();
+    let mut names: Vec<String> = cases
+        .iter()
+        .flat_map(|c| c.inputs().map(str::to_string))
+        .collect();
     names.sort();
     names.dedup();
     names

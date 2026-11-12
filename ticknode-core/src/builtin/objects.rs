@@ -1,12 +1,14 @@
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
 // Helper to parse fields_list
 fn parse_fields_list(s: &str) -> Vec<(String, DataType)> {
     let mut fields = Vec::new();
     for part in s.split(',') {
         let part = part.trim();
-        if part.is_empty() { continue; }
+        if part.is_empty() {
+            continue;
+        }
         if let Some((name, ty_str)) = part.split_once(':') {
             let name = name.trim().to_string();
             let ty = parse_data_type(ty_str).unwrap_or(DataType::String);
@@ -18,10 +20,16 @@ fn parse_fields_list(s: &str) -> Vec<(String, DataType)> {
     fields
 }
 
-pub struct ObjectCreateNode { pub id: NodeId }
+pub struct ObjectCreateNode {
+    pub id: NodeId,
+}
 impl Node for ObjectCreateNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -38,14 +46,27 @@ impl Node for ObjectCreateNode {
         }
     }
     fn execute(&mut self, _: Option<PinId>, _: &mut NodeContext) -> Vec<NodeOutput> {
-        vec![NodeOutput::Data(PinId(0), DataValue::Object { fields: std::collections::BTreeMap::new(), type_name: None })]
+        vec![NodeOutput::Data(
+            PinId(0),
+            DataValue::Object {
+                fields: std::collections::BTreeMap::new(),
+                type_name: None,
+            },
+        )]
     }
 }
 
-pub struct ObjectSetFieldNode { pub id: NodeId, pub field_type: DataType }
+pub struct ObjectSetFieldNode {
+    pub id: NodeId,
+    pub field_type: DataType,
+}
 impl Node for ObjectSetFieldNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -70,13 +91,27 @@ impl Node for ObjectSetFieldNode {
         let obj_val = ctx.get_value(PinId(0));
         let name_val = ctx.get_value(PinId(1));
         let val = ctx.get_value(PinId(2));
-        if let (Some(DataValue::Object { mut fields, .. }), Some(DataValue::String(name)), Some(v)) = (obj_val, name_val, val) {
-            fields.insert(name.clone(), ObjectField {
-                name,
-                description: String::new(),
-                value: v,
-            });
-            vec![NodeOutput::Data(PinId(3), DataValue::Object { fields, type_name: None })]
+        if let (
+            Some(DataValue::Object { mut fields, .. }),
+            Some(DataValue::String(name)),
+            Some(v),
+        ) = (obj_val, name_val, val)
+        {
+            fields.insert(
+                name.clone(),
+                ObjectField {
+                    name,
+                    description: String::new(),
+                    value: v,
+                },
+            );
+            vec![NodeOutput::Data(
+                PinId(3),
+                DataValue::Object {
+                    fields,
+                    type_name: None,
+                },
+            )]
         } else {
             vec![]
         }
@@ -85,14 +120,24 @@ impl Node for ObjectSetFieldNode {
         super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("field_type".to_string(), DataValue::String(data_type_name(&self.field_type)))]
+        vec![(
+            "field_type".to_string(),
+            DataValue::String(data_type_name(&self.field_type)),
+        )]
     }
 }
 
-pub struct ObjectGetFieldNode { pub id: NodeId, pub field_type: DataType }
+pub struct ObjectGetFieldNode {
+    pub id: NodeId,
+    pub field_type: DataType,
+}
 impl Node for ObjectGetFieldNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: false,
@@ -116,7 +161,9 @@ impl Node for ObjectGetFieldNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let obj_val = ctx.get_value(PinId(0));
         let name_val = ctx.get_value(PinId(1));
-        if let (Some(DataValue::Object { fields, .. }), Some(DataValue::String(name))) = (obj_val, name_val) {
+        if let (Some(DataValue::Object { fields, .. }), Some(DataValue::String(name))) =
+            (obj_val, name_val)
+        {
             if let Some(field) = fields.get(&name) {
                 vec![
                     NodeOutput::Data(PinId(2), field.value.clone()),
@@ -133,7 +180,10 @@ impl Node for ObjectGetFieldNode {
         super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("field_type".to_string(), DataValue::String(data_type_name(&self.field_type)))]
+        vec![(
+            "field_type".to_string(),
+            DataValue::String(data_type_name(&self.field_type)),
+        )]
     }
 }
 
@@ -143,18 +193,28 @@ pub struct ObjectUnpackNode {
     pub parsed_fields: Vec<(String, DataType)>,
 }
 impl Node for ObjectUnpackNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
-        let mut pins = vec![
-            PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
-        ];
+        let mut pins = vec![PinDefinition {
+            id: PinId(0),
+            name: "Obj".to_string(),
+            pin_type: PinType::Data(DataType::Object),
+            direction: PinDirection::Input,
+            required: false,
+        }];
         for (i, (name, ty)) in self.parsed_fields.iter().enumerate() {
             pins.push(PinDefinition {
                 id: PinId((i + 1) as u32),
                 name: name.clone(),
                 pin_type: PinType::Data(ty.clone()),
-                direction: PinDirection::Output, required: false });
+                direction: PinDirection::Output,
+                required: false,
+            });
         }
         NodeDefinition {
             adaptive: false,
@@ -189,13 +249,28 @@ impl Node for ObjectUnpackNode {
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("fields_list".to_string(), DataValue::String(self.fields_list.clone()))]
+        vec![(
+            "fields_list".to_string(),
+            DataValue::String(self.fields_list.clone()),
+        )]
     }
 }
 
 fn field_inputs() -> Vec<PinDefinition> {
     vec![
-        PinDefinition { id: PinId(0), name: "Obj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Input, required: false },
-        PinDefinition { id: PinId(1), name: "Name".to_string(), pin_type: PinType::Data(DataType::String), direction: PinDirection::Input, required: false },
+        PinDefinition {
+            id: PinId(0),
+            name: "Obj".to_string(),
+            pin_type: PinType::Data(DataType::Object),
+            direction: PinDirection::Input,
+            required: false,
+        },
+        PinDefinition {
+            id: PinId(1),
+            name: "Name".to_string(),
+            pin_type: PinType::Data(DataType::String),
+            direction: PinDirection::Input,
+            required: false,
+        },
     ]
 }

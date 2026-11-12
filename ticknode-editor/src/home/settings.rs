@@ -1,15 +1,15 @@
 //! Settings page: interface preferences and engine configuration.
 
-pub mod logic;
 mod display;
+pub mod logic;
 
-use leptos::prelude::*;
-use ticknode_shared::ClientMessage;
-use crate::i18n::{t, Locale};
+use crate::i18n::{Locale, t};
 use crate::node_status;
-use crate::state::{use_editor, Theme};
-use crate::ui::{icons, ActionButton, ControlState, Switch};
+use crate::state::{Theme, use_editor};
+use crate::ui::{ActionButton, ControlState, Switch, icons};
+use leptos::prelude::*;
 use logic::EngineSettingsDraft;
+use ticknode_shared::ClientMessage;
 
 #[cfg(test)]
 mod tests;

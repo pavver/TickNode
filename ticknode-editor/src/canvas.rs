@@ -10,33 +10,33 @@ use crate::i18n::t;
 use crate::state::{Selection, use_editor};
 
 mod camera;
-mod quick_add;
 mod detached;
+mod frame;
 mod interaction;
 mod node;
+mod nudge;
 mod paste;
 mod pins;
+mod quick_add;
 mod selection;
 mod wires;
-mod frame;
-mod nudge;
 
 pub use camera::{fit_view, view_center};
 pub use frame::{
-    build_frame_move_batch, create_frame, frame_color_class, frame_contents, frames_fully_inside,
-    nodes_fully_inside, FrameView,
+    FrameView, build_frame_move_batch, create_frame, frame_color_class, frame_contents,
+    frames_fully_inside, nodes_fully_inside,
 };
 pub use node::trigger_pin;
 pub use pins::*;
 
 use interaction::{Drag, Interaction};
+pub(crate) use interaction::{PointEdit, edit_route};
 use node::NodeView;
+pub(crate) use nudge::{NudgeState, flush_nudge, nudge, nudge_step};
 use paste::PastePreview;
 use selection::{SelectBox, SelectionBounds};
-use wires::{PendingConnection, PendingWire, Wire};
 pub(crate) use wires::WireEnd;
-pub(crate) use interaction::{edit_route, PointEdit};
-pub(crate) use nudge::{flush_nudge, nudge, nudge_step, NudgeState};
+use wires::{PendingConnection, PendingWire, Wire};
 
 pub const CANVAS_ID: &str = "ticknode-canvas";
 const GRID: f64 = 5.0 * DU;
@@ -53,12 +53,27 @@ pub fn Canvas() -> impl IntoView {
     let select_box = RwSignal::new(None::<SelectBox>);
     let pointers = StoredValue::new(HashMap::<i32, (f64, f64)>::new());
 
-    let interaction = Interaction { ed, canvas, drag, panning, cursor, pending_wire, select_box, pointers };
+    let interaction = Interaction {
+        ed,
+        canvas,
+        drag,
+        panning,
+        cursor,
+        pending_wire,
+        select_box,
+        pointers,
+    };
     let pointer = StoredValue::new(None::<(f64, f64)>);
     let over = StoredValue::new(false);
     let keys = window_event_listener(leptos::ev::keydown, move |ev| {
         if ev.key() == "Escape" {
-            if let Drag::Frame { frame_origins, node_origins, routes, .. } = drag.get_value() {
+            if let Drag::Frame {
+                frame_origins,
+                node_origins,
+                routes,
+                ..
+            } = drag.get_value()
+            {
                 ev.prevent_default();
                 drag.set_value(Drag::Idle);
                 interaction.cancel_frame_drag(frame_origins, node_origins, routes);
@@ -72,7 +87,10 @@ pub fn Canvas() -> impl IntoView {
     let grid_style = move || {
         let v = ed.view.get();
         let size = GRID * v.zoom;
-        format!("background-size:{size}px {size}px;background-position:{}px {}px", v.x, v.y)
+        format!(
+            "background-size:{size}px {size}px;background-position:{}px {}px",
+            v.x, v.y
+        )
     };
     let viewport_style = move || {
         let v = ed.view.get();

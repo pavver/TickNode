@@ -87,17 +87,33 @@ pub fn kind(name: &str) -> Option<&'static QuantityKind> {
 pub fn unit_by_symbol(symbol: &str) -> Option<(&'static str, &'static UnitDefinition)> {
     let symbol = symbol.trim();
     let find = |fold: bool| -> Vec<(&'static str, &'static UnitDefinition)> {
-        catalog().iter().flat_map(|d| {
-            d.quantity().into_iter().flat_map(move |q| q.units.iter()
-                .filter(move |u| std::iter::once(&u.symbol).chain(&u.aliases).any(|s| {
-                    if fold { s.to_lowercase() == symbol.to_lowercase() } else { s == symbol }
-                }))
-                .map(move |u| (d.name.as_str(), u)))
-        }).collect()
+        catalog()
+            .iter()
+            .flat_map(|d| {
+                d.quantity().into_iter().flat_map(move |q| {
+                    q.units
+                        .iter()
+                        .filter(move |u| {
+                            std::iter::once(&u.symbol).chain(&u.aliases).any(|s| {
+                                if fold {
+                                    s.to_lowercase() == symbol.to_lowercase()
+                                } else {
+                                    s == symbol
+                                }
+                            })
+                        })
+                        .map(move |u| (d.name.as_str(), u))
+                })
+            })
+            .collect()
     };
     let mut found = find(false);
-    if found.is_empty() { found = find(true); }
-    if found.len() > 1 { found.retain(|(_, u)| u.curve == UnitCurve::Affine); }
+    if found.is_empty() {
+        found = find(true);
+    }
+    if found.len() > 1 {
+        found.retain(|(_, u)| u.curve == UnitCurve::Affine);
+    }
     (found.len() == 1).then(|| found[0])
 }
 

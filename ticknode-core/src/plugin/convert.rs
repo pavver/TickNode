@@ -1,13 +1,15 @@
+use super::wit;
 use ticknode_shared::*;
 use tracing::warn;
-use super::wit;
 
 pub(super) fn encode_value(value: &DataValue) -> wit::Value {
     postcard::to_allocvec(value).expect("DataValue always serializes")
 }
 
 pub(super) fn decode_value(bytes: &[u8]) -> Option<DataValue> {
-    postcard::from_bytes(bytes).inspect_err(|e| warn!("The plugin returned an invalid value: {e}")).ok()
+    postcard::from_bytes(bytes)
+        .inspect_err(|e| warn!("The plugin returned an invalid value: {e}"))
+        .ok()
 }
 
 pub(super) fn from_wit_data_type(t: wit::DataType) -> DataType {
@@ -39,16 +41,25 @@ pub(super) fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition
         kind: match t.kind {
             wit::TypeKind::Identifier(labels) => TypeKind::Identifier { labels },
             wit::TypeKind::Structure(fields) => TypeKind::Struct {
-                fields: fields.into_iter().map(|f| FieldDefinition {
-                    name: f.name,
-                    title: f.title,
-                    description: f.description,
-                    data_type: from_wit_data_type(f.data_type),
-                    optional: f.optional,
-                }).collect(),
+                fields: fields
+                    .into_iter()
+                    .map(|f| FieldDefinition {
+                        name: f.name,
+                        title: f.title,
+                        description: f.description,
+                        data_type: from_wit_data_type(f.data_type),
+                        optional: f.optional,
+                    })
+                    .collect(),
             },
             wit::TypeKind::Enumeration(values) => TypeKind::Enum {
-                values: values.into_iter().map(|v| EnumValue { value: v.value, title: v.title }).collect(),
+                values: values
+                    .into_iter()
+                    .map(|v| EnumValue {
+                        value: v.value,
+                        title: v.title,
+                    })
+                    .collect(),
             },
         },
     }
@@ -59,44 +70,63 @@ pub(super) fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (Node
     let definition = NodeDefinition {
         adaptive: false,
         cost: d.cost,
-        properties: d.properties.into_iter().map(|p| PropertyDefinition {
-            input: p.input.map(PinId),
-            name: p.name,
-            title: p.title,
-            description: p.description,
-            kind: match p.kind {
-                wit::PropertyKind::Duration(signed) => PropertyKind::Duration { signed },
-                wit::PropertyKind::Time => PropertyKind::Time,
-                wit::PropertyKind::MultiSelect(options) => PropertyKind::MultiSelect(options),
-                wit::PropertyKind::Multiline => PropertyKind::Multiline,
-                wit::PropertyKind::Hidden => PropertyKind::Hidden,
-                wit::PropertyKind::Text => PropertyKind::Text,
-                wit::PropertyKind::Select(options) => PropertyKind::Select(options),
-                wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic { source, plugin: plugin.to_string() },
-            },
-        }).collect(),
+        properties: d
+            .properties
+            .into_iter()
+            .map(|p| PropertyDefinition {
+                input: p.input.map(PinId),
+                name: p.name,
+                title: p.title,
+                description: p.description,
+                kind: match p.kind {
+                    wit::PropertyKind::Duration(signed) => PropertyKind::Duration { signed },
+                    wit::PropertyKind::Time => PropertyKind::Time,
+                    wit::PropertyKind::MultiSelect(options) => PropertyKind::MultiSelect(options),
+                    wit::PropertyKind::Multiline => PropertyKind::Multiline,
+                    wit::PropertyKind::Hidden => PropertyKind::Hidden,
+                    wit::PropertyKind::Text => PropertyKind::Text,
+                    wit::PropertyKind::Select(options) => PropertyKind::Select(options),
+                    wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic {
+                        source,
+                        plugin: plugin.to_string(),
+                    },
+                },
+            })
+            .collect(),
         type_name: d.type_name,
         title: d.title,
         category: d.category,
         description: d.description,
         help: d.help,
-        pins: d.pins.into_iter().filter(|p| {
-            if is_virtual_pin(PinId(p.id)) {
-                tracing::warn!(plugin, pin = p.id, "Ignoring plugin pin in reserved virtual id range");
-                false
-            } else { true }
-        }).map(|p| PinDefinition {
-            id: PinId(p.id),
-            required: p.required,
-            name: p.name,
-            pin_type: match p.pin_type {
-                wit::PinType::Exec => PinType::Exec,
-                wit::PinType::Data(t) => PinType::Data(from_wit_data_type(t)),
-            },
-            direction: match p.direction {
-                wit::PinDirection::Input => PinDirection::Input,
-                wit::PinDirection::Output => PinDirection::Output,
-            } }).collect(),
+        pins: d
+            .pins
+            .into_iter()
+            .filter(|p| {
+                if is_virtual_pin(PinId(p.id)) {
+                    tracing::warn!(
+                        plugin,
+                        pin = p.id,
+                        "Ignoring plugin pin in reserved virtual id range"
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
+            .map(|p| PinDefinition {
+                id: PinId(p.id),
+                required: p.required,
+                name: p.name,
+                pin_type: match p.pin_type {
+                    wit::PinType::Exec => PinType::Exec,
+                    wit::PinType::Data(t) => PinType::Data(from_wit_data_type(t)),
+                },
+                direction: match p.direction {
+                    wit::PinDirection::Input => PinDirection::Input,
+                    wit::PinDirection::Output => PinDirection::Output,
+                },
+            })
+            .collect(),
     };
     (definition, d.polls)
 }
@@ -106,13 +136,23 @@ pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
         name: m.name,
         version: m.version,
         author: m.author,
-        requested_capabilities: m.capabilities.into_iter().map(|c| match c {
-            wit::Capability::Http(allowed_domains) => Capability::Http { allowed_domains },
-            wit::Capability::Storage => Capability::Storage,
-            wit::Capability::Websocket(allowed_hosts) => Capability::WebSocket { allowed_hosts },
-        }).collect(),
+        requested_capabilities: m
+            .capabilities
+            .into_iter()
+            .map(|c| match c {
+                wit::Capability::Http(allowed_domains) => Capability::Http { allowed_domains },
+                wit::Capability::Storage => Capability::Storage,
+                wit::Capability::Websocket(allowed_hosts) => {
+                    Capability::WebSocket { allowed_hosts }
+                }
+            })
+            .collect(),
         settings: m.settings.into_iter().map(from_wit_setting).collect(),
-        resources: m.resources.into_iter().map(from_wit_resource_collection).collect(),
+        resources: m
+            .resources
+            .into_iter()
+            .map(from_wit_resource_collection)
+            .collect(),
     }
 }
 
@@ -122,7 +162,11 @@ fn from_wit_resource_collection(c: wit::ResourceCollection) -> ResourceCollectio
         title: c.title,
         icon: c.icon,
         source: c.source,
-        actions: c.actions.into_iter().map(from_wit_resource_action).collect(),
+        actions: c
+            .actions
+            .into_iter()
+            .map(from_wit_resource_action)
+            .collect(),
     }
 }
 

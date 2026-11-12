@@ -12,10 +12,22 @@ pub enum VariableError {
 impl VariableError {
     pub fn ui_message(&self) -> UiMessage {
         match self {
-            Self::Missing(name) => UiMessage::new("error-variable-missing", format!("Variable \"{name}\" not found")).arg("name", name),
-            Self::TypeMismatch(name) => UiMessage::new("error-variable-type", format!("Value does not fit the type of variable \"{name}\"")).arg("name", name),
+            Self::Missing(name) => UiMessage::new(
+                "error-variable-missing",
+                format!("Variable \"{name}\" not found"),
+            )
+            .arg("name", name),
+            Self::TypeMismatch(name) => UiMessage::new(
+                "error-variable-type",
+                format!("Value does not fit the type of variable \"{name}\""),
+            )
+            .arg("name", name),
             Self::LimitReached => UiMessage::new("error-variable-limit", "Variable limit reached"),
-            Self::InvalidName(name) => UiMessage::new("error-variable-name", format!("Invalid variable name \"{name}\"")).arg("name", name),
+            Self::InvalidName(name) => UiMessage::new(
+                "error-variable-name",
+                format!("Invalid variable name \"{name}\""),
+            )
+            .arg("name", name),
         }
     }
 
@@ -65,7 +77,12 @@ impl VariableStore {
     }
 
     /// Resolves a variable name to its key according to the lookup scope.
-    pub fn resolve(&self, name: &str, lookup: VariableLookup, sheet: Option<SheetId>) -> Option<VariableKey> {
+    pub fn resolve(
+        &self,
+        name: &str,
+        lookup: VariableLookup,
+        sheet: Option<SheetId>,
+    ) -> Option<VariableKey> {
         match lookup {
             VariableLookup::Auto => {
                 if let Some(s) = sheet {
@@ -104,7 +121,12 @@ impl VariableStore {
     }
 
     /// Checks if a variable with `name` exists in the target scope's namespace.
-    pub fn exists_in_scope_namespace(&self, name: &str, scope: VariableScope, sheet: Option<SheetId>) -> bool {
+    pub fn exists_in_scope_namespace(
+        &self,
+        name: &str,
+        scope: VariableScope,
+        sheet: Option<SheetId>,
+    ) -> bool {
         match scope {
             VariableScope::Sheet => {
                 sheet.is_some_and(|s| self.variables.contains_key(&VariableKey::sheet(s, name)))
@@ -166,7 +188,9 @@ impl VariableStore {
 
     /// Drops all sheet variables for the given sheet.
     pub fn remove_sheet(&mut self, sheet: SheetId) {
-        let to_remove: Vec<VariableKey> = self.variables.keys()
+        let to_remove: Vec<VariableKey> = self
+            .variables
+            .keys()
             .filter(|k| k.scope == VariableScope::Sheet && k.sheet == Some(sheet))
             .cloned()
             .collect();
@@ -198,7 +222,9 @@ impl VariableStore {
     }
 
     pub fn persistent_variables(&self) -> Vec<Variable> {
-        let mut vars: Vec<_> = self.variables.values()
+        let mut vars: Vec<_> = self
+            .variables
+            .values()
             .filter(|v| v.key.scope == VariableScope::Persistent)
             .cloned()
             .collect();
@@ -207,20 +233,26 @@ impl VariableStore {
     }
 
     pub fn for_sheet_and_global(&self, sheet: Option<SheetId>) -> Vec<Variable> {
-        self.variables.values()
+        self.variables
+            .values()
             .filter(|v| {
                 v.key.scope == VariableScope::Global
                     || v.key.scope == VariableScope::Persistent
-                    || (v.key.scope == VariableScope::Sheet && sheet.is_some() && v.key.sheet == sheet)
+                    || (v.key.scope == VariableScope::Sheet
+                        && sheet.is_some()
+                        && v.key.sheet == sheet)
             })
             .cloned()
             .collect()
     }
 
     pub fn active_sheet_variables(&self) -> HashSet<(SheetId, String)> {
-        self.variables.keys()
+        self.variables
+            .keys()
             .filter_map(|k| {
-                if k.scope == VariableScope::Sheet && let Some(s) = k.sheet {
+                if k.scope == VariableScope::Sheet
+                    && let Some(s) = k.sheet
+                {
                     Some((s, k.name.clone()))
                 } else {
                     None

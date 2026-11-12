@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use ticknode_core::{EngineError, RemovedConnections, TickBudget, TickEngine};
 use ticknode_shared::{
-    ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeTrace, NodeSize,
-    Position, ServerMessage, ServerSettings, SheetId, SheetInfo, SheetSummary, UiMessage,
+    ClientMessage, Frame, FrameId, NodeId, NodeInstance, NodeSize, NodeTrace, Position,
+    ServerMessage, ServerSettings, SheetId, SheetInfo, SheetSummary, UiMessage,
 };
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{error, info};
@@ -53,22 +53,34 @@ impl EngineHandle {
         self.events.subscribe()
     }
 
-    pub fn send(&self, msg: ClientMessage, sheet: Option<SheetId>, reply: mpsc::UnboundedSender<ServerMessage>) {
+    pub fn send(
+        &self,
+        msg: ClientMessage,
+        sheet: Option<SheetId>,
+        reply: mpsc::UnboundedSender<ServerMessage>,
+    ) {
         let _ = self.commands.send(Command::Client { msg, sheet, reply });
     }
 
     pub async fn snapshot(&self, sheet: Option<SheetId>) -> Option<ServerMessage> {
         let (tx, rx) = oneshot::channel();
-        self.commands.send(Command::Snapshot { sheet, reply: tx }).ok()?;
+        self.commands
+            .send(Command::Snapshot { sheet, reply: tx })
+            .ok()?;
         rx.await.ok()
     }
 
     pub async fn open_sheet(&self, sheet: Option<SheetId>) -> Result<ServerMessage, UiMessage> {
         let (tx, rx) = oneshot::channel();
-        if self.commands.send(Command::OpenSheet { sheet, reply: tx }).is_err() {
+        if self
+            .commands
+            .send(Command::OpenSheet { sheet, reply: tx })
+            .is_err()
+        {
             return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
         }
-        rx.await.unwrap_or_else(|_| Err(UiMessage::new("error-sheet-not-found", "Sheet not found")))
+        rx.await
+            .unwrap_or_else(|_| Err(UiMessage::new("error-sheet-not-found", "Sheet not found")))
     }
 
     /// Stops the engine and waits for the final graph save to complete.
@@ -97,13 +109,18 @@ pub fn spawn(
         tracing::warn!(locale = %server_settings.locale, "Invalid formatting locale; using en");
     }
     let server_settings = server_settings.validated();
-    server_settings.display.validate().map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.fallback))?;
+    server_settings
+        .display
+        .validate()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.fallback))?;
     engine.set_locale(&server_settings.locale);
     engine.set_display_rules(server_settings.display.clone());
     let tick = Duration::from_millis(server_settings.tick_ms as u64);
     engine.host_state.runtime = Some(tokio::runtime::Handle::current());
     engine.host_state.tick_duration = tick;
-    engine.budget = TickBudget { limit: (server_settings.tick_budget != 0).then_some(server_settings.tick_budget) };
+    engine.budget = TickBudget {
+        limit: (server_settings.tick_budget != 0).then_some(server_settings.tick_budget),
+    };
     let actor = Actor {
         engine,
         server_settings,
@@ -184,9 +201,15 @@ impl Actor {
                 self.save();
             }
 
-            let deadline = self.dirty_since.map_or(next_tick, |t| next_tick.min(t + SAVE_DEBOUNCE));
+            let deadline = self
+                .dirty_since
+                .map_or(next_tick, |t| next_tick.min(t + SAVE_DEBOUNCE));
             match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(command) => { if self.handle_command(command) { return; } }
+                Ok(command) => {
+                    if self.handle_command(command) {
+                        return;
+                    }
+                }
                 Err(std_mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std_mpsc::RecvTimeoutError::Disconnected) => {
                     self.save();
@@ -208,13 +231,20 @@ impl Actor {
                         let _ = reply.send(ServerMessage::Created(ids));
                     }
                 }
-                Err(e) => { let _ = reply.send(ServerMessage::Error(e)); }
+                Err(e) => {
+                    let _ = reply.send(ServerMessage::Error(e));
+                }
             },
-            Command::Snapshot { sheet, reply } => { let _ = reply.send(self.snapshot(sheet)); }
+            Command::Snapshot { sheet, reply } => {
+                let _ = reply.send(self.snapshot(sheet));
+            }
             Command::OpenSheet { sheet, reply } => {
                 if let Some(id) = sheet {
                     if !self.sheets.iter().any(|s| s.id == id) {
-                        let _ = reply.send(Err(UiMessage::new("error-sheet-not-found", "Sheet not found")));
+                        let _ = reply.send(Err(UiMessage::new(
+                            "error-sheet-not-found",
+                            "Sheet not found",
+                        )));
                         return false;
                     }
                 }
@@ -232,7 +262,14 @@ impl Actor {
 
     fn broadcast_option_changes(&mut self) {
         for set in self.engine.take_property_option_changes() {
-            self.broadcast(None, &ServerMessage::PropertyOptions { plugin: set.plugin, source: set.source, options: set.options });
+            self.broadcast(
+                None,
+                &ServerMessage::PropertyOptions {
+                    plugin: set.plugin,
+                    source: set.source,
+                    options: set.options,
+                },
+            );
         }
     }
 
@@ -259,8 +296,12 @@ impl Actor {
             return;
         }
         self.telemetry.add_traces(&self.engine.executed);
-        self.telemetry.add_logs(std::mem::take(&mut self.engine.host_state.logs));
-        for (tag, message) in self.telemetry.flush(now, &mut self.engine, &self.node_sheet) {
+        self.telemetry
+            .add_logs(std::mem::take(&mut self.engine.host_state.logs));
+        for (tag, message) in self
+            .telemetry
+            .flush(now, &mut self.engine, &self.node_sheet)
+        {
             self.broadcast(tag, &message);
         }
         self.check_sheets_broadcast(now);
@@ -330,15 +371,23 @@ impl Actor {
         let (graph, traces, history, timers, node_errors) = match active_sheet {
             Some(sheet_id) => {
                 let g = self.sheet_graph(sheet_id);
-                let t = self.traces.values()
+                let t = self
+                    .traces
+                    .values()
                     .filter(|(trace, _)| self.node_sheet.get(&trace.node_id) == Some(&sheet_id))
                     .map(|(trace, at)| (trace.clone(), at.elapsed().as_millis() as u64))
                     .collect();
                 let h = self.histories.get(&sheet_id).map_or_default(|h| h.state());
-                let timers = self.engine.delay_timers().into_iter()
+                let timers = self
+                    .engine
+                    .delay_timers()
+                    .into_iter()
                     .filter(|t| self.node_sheet.get(&t.node) == Some(&sheet_id))
                     .collect();
-                let errors = self.engine.node_errors().into_iter()
+                let errors = self
+                    .engine
+                    .node_errors()
+                    .into_iter()
                     .filter(|e| self.node_sheet.get(&e.node) == Some(&sheet_id))
                     .collect();
                 (g, t, h, timers, errors)
@@ -365,7 +414,11 @@ impl Actor {
             detached_connections: graph.detached_connections,
             timers,
             node_errors,
-            nodes: graph.nodes.iter().filter_map(|n| self.instance(n.id)).collect(),
+            nodes: graph
+                .nodes
+                .iter()
+                .filter_map(|n| self.instance(n.id))
+                .collect(),
             exec_connections: graph.exec_connections,
             data_connections: graph.data_connections,
             traces,
@@ -386,17 +439,17 @@ impl Actor {
     }
 }
 
-pub(crate) mod routes;
-pub(crate) mod sheets;
 mod commands;
-mod plugin_commands;
-mod variables;
-mod history;
-mod telemetry;
-mod settings;
-mod server_settings;
-mod resize;
 mod frames;
+mod history;
+mod plugin_commands;
+mod resize;
+pub(crate) mod routes;
+mod server_settings;
+mod settings;
+pub(crate) mod sheets;
+mod telemetry;
+mod variables;
 
 #[cfg(test)]
 mod tests;

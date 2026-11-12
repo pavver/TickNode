@@ -67,7 +67,11 @@ impl PluginNode for ConditionNode {
         if self.kind == Kind::Sun {
             for property in &mut def.properties {
                 if let Some(boundary) = property.name.strip_suffix("_offset")
-                    && self.properties.get(boundary).is_none_or(|v| v == "none" || v.is_empty()) {
+                    && self
+                        .properties
+                        .get(boundary)
+                        .is_none_or(|v| v == "none" || v.is_empty())
+                {
                     property.kind = PropertyKind::Hidden;
                 }
             }
@@ -75,8 +79,15 @@ impl PluginNode for ConditionNode {
         def
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.kind.definition().properties.into_iter()
-            .filter_map(|p| self.properties.get(&p.name).map(|v| (p.name, DataValue::from(v.as_str()))))
+        self.kind
+            .definition()
+            .properties
+            .into_iter()
+            .filter_map(|p| {
+                self.properties
+                    .get(&p.name)
+                    .map(|v| (p.name, DataValue::from(v.as_str())))
+            })
             .collect()
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
@@ -91,7 +102,9 @@ impl PluginNode for ConditionNode {
         }
         self.properties.insert(name.into(), text.clone());
         self.warning = None;
-        if self.configuration_error().is_none() { self.invalid_reported = None; }
+        if self.configuration_error().is_none() {
+            self.invalid_reported = None;
+        }
         if let Some(serial) = self.serial {
             with_hub(|hub, env| hub.cancel_templates(self.node, serial, Instant::now(), env));
         }
@@ -99,13 +112,17 @@ impl PluginNode for ConditionNode {
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
         crate::validation::condition(self.kind, name, value)
     }
-    fn polls(&self) -> bool { self.configuration_error().is_some() }
+    fn polls(&self) -> bool {
+        self.configuration_error().is_some()
+    }
     fn poll(&mut self, _: u64) -> Option<PinId> {
         self.report_configuration_error();
         None
     }
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
-        if self.report_configuration_error() { return Vec::new(); }
+        if self.report_configuration_error() {
+            return Vec::new();
+        }
         if self.kind == Kind::Template {
             return with_hub(|hub, env| {
                 hub.render_condition(
@@ -140,12 +157,21 @@ impl ConditionNode {
     fn configuration_error(&self) -> Option<UiError> {
         let def = self.definition();
         self.properties.iter().find_map(|(name, value)| {
-            if def.properties.iter().any(|p| p.name == *name && p.kind == PropertyKind::Hidden) { return None; }
-            self.validate_property(name, &DataValue::from(value.as_str())).err()
+            if def
+                .properties
+                .iter()
+                .any(|p| p.name == *name && p.kind == PropertyKind::Hidden)
+            {
+                return None;
+            }
+            self.validate_property(name, &DataValue::from(value.as_str()))
+                .err()
         })
     }
     fn report_configuration_error(&mut self) -> bool {
-        let Some(error) = self.configuration_error() else { return false };
+        let Some(error) = self.configuration_error() else {
+            return false;
+        };
         host::node_error(&error, self.invalid_reported.as_ref() != Some(&error));
         self.invalid_reported = Some(error);
         true

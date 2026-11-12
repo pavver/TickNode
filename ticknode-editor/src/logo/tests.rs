@@ -2,14 +2,31 @@ use super::*;
 use ticknode_shared::{SheetId, SheetInfo};
 
 fn sheet(last_executed_ms: Option<u64>) -> SheetSummary {
-    SheetSummary { info: SheetInfo::new(SheetId::generate(), "s"), nodes: 1, errors: 0, last_executed_ms }
+    SheetSummary {
+        info: SheetInfo::new(SheetId::generate(), "s"),
+        nodes: 1,
+        errors: 0,
+        last_executed_ms,
+    }
 }
 
 #[test]
 fn animates_while_connecting_even_without_activity() {
-    assert!(logo_active(ConnStatus::Connecting, f64::NEG_INFINITY, 10_000.0));
-    assert!(!logo_active(ConnStatus::Online, f64::NEG_INFINITY, 10_000.0));
-    assert!(!logo_active(ConnStatus::Offline, f64::NEG_INFINITY, 10_000.0));
+    assert!(logo_active(
+        ConnStatus::Connecting,
+        f64::NEG_INFINITY,
+        10_000.0
+    ));
+    assert!(!logo_active(
+        ConnStatus::Online,
+        f64::NEG_INFINITY,
+        10_000.0
+    ));
+    assert!(!logo_active(
+        ConnStatus::Offline,
+        f64::NEG_INFINITY,
+        10_000.0
+    ));
 }
 
 #[test]

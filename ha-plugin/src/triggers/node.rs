@@ -21,8 +21,8 @@ pub struct TriggerNode {
 impl TriggerNode {
     pub fn new(platform: Platform, node: NodeId) -> Self {
         let properties = platform.defaults();
-        let serial = (!node.0.is_nil())
-            .then(|| with_hub(|hub, _| hub.add_trigger(node, Instant::now())));
+        let serial =
+            (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_trigger(node, Instant::now())));
         Self {
             node,
             serial,
@@ -48,12 +48,21 @@ impl PluginNode for TriggerNode {
         self.platform.definition()
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.platform.definition().properties.into_iter()
-            .filter_map(|p| self.properties.get(&p.name).map(|v| (p.name, DataValue::from(v.as_str()))))
+        self.platform
+            .definition()
+            .properties
+            .into_iter()
+            .filter_map(|p| {
+                self.properties
+                    .get(&p.name)
+                    .map(|v| (p.name, DataValue::from(v.as_str())))
+            })
             .collect()
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        let DataValue::String(text) = value else { return };
+        let DataValue::String(text) = value else {
+            return;
+        };
         let Some(current) = self.properties.get(name) else {
             return;
         };
@@ -68,7 +77,9 @@ impl PluginNode for TriggerNode {
         {
             self.local_error = Some(crate::validation::error("configuration", &error));
         }
-        if self.local_error != previous_error { self.reported = false; }
+        if self.local_error != previous_error {
+            self.reported = false;
+        }
         self.dirty = true;
     }
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
@@ -81,8 +92,14 @@ impl PluginNode for TriggerNode {
         true
     }
     fn poll(&mut self, _: u64) -> Option<PinId> {
-        if std::mem::take(&mut self.dirty) && let Some(serial) = self.serial {
-            let config = if self.local_error.is_none() { build(self.platform, &self.properties).ok().flatten() } else { None };
+        if std::mem::take(&mut self.dirty)
+            && let Some(serial) = self.serial
+        {
+            let config = if self.local_error.is_none() {
+                build(self.platform, &self.properties).ok().flatten()
+            } else {
+                None
+            };
             with_hub(|hub, env| hub.set_trigger(self.node, serial, config, Instant::now(), env));
         }
         if let Some(error) = &self.local_error {

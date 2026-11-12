@@ -33,21 +33,64 @@ pub(super) fn PastePreview() -> impl IntoView {
         let pending = ed.pending_paste.get()?;
         let (ax, ay) = pending.at;
         let defs = ed.definitions.with(|defs| {
-            pending.graph.nodes.iter()
-                .map(|n| (n.id, defs.iter().find(|d| d.type_name == n.type_name).cloned()))
+            pending
+                .graph
+                .nodes
+                .iter()
+                .map(|n| {
+                    (
+                        n.id,
+                        defs.iter().find(|d| d.type_name == n.type_name).cloned(),
+                    )
+                })
                 .collect::<HashMap<_, _>>()
         });
-        let pos = |n: &NodeModel| Position { x: n.position.x + ax as f32, y: n.position.y + ay as f32 };
-        let positions: HashMap<NodeId, Position> = pending.graph.nodes.iter().map(|n| (n.id, pos(n))).collect();
-        let layouts: HashMap<NodeId, NodeLayout> = pending.graph.nodes.iter()
-            .filter_map(|n| Some((n.id, NodeLayout::sized(defs.get(&n.id)?.as_ref()?, &n.properties, n.size, &pending.graph.data_connections.iter().filter(|c| c.dst_node == n.id).map(|c| c.dst_pin).collect::<Vec<_>>()))))
+        let pos = |n: &NodeModel| Position {
+            x: n.position.x + ax as f32,
+            y: n.position.y + ay as f32,
+        };
+        let positions: HashMap<NodeId, Position> =
+            pending.graph.nodes.iter().map(|n| (n.id, pos(n))).collect();
+        let layouts: HashMap<NodeId, NodeLayout> = pending
+            .graph
+            .nodes
+            .iter()
+            .filter_map(|n| {
+                Some((
+                    n.id,
+                    NodeLayout::sized(
+                        defs.get(&n.id)?.as_ref()?,
+                        &n.properties,
+                        n.size,
+                        &pending
+                            .graph
+                            .data_connections
+                            .iter()
+                            .filter(|c| c.dst_node == n.id)
+                            .map(|c| c.dst_pin)
+                            .collect::<Vec<_>>(),
+                    ),
+                ))
+            })
             .collect();
         let wire = |c: &ConnectionModel| {
-            let a = layouts.get(&c.src_node)?.anchor(*positions.get(&c.src_node)?, c.src_pin, PinDirection::Output)?;
-            let b = layouts.get(&c.dst_node)?.anchor(*positions.get(&c.dst_node)?, c.dst_pin, PinDirection::Input)?;
+            let a = layouts.get(&c.src_node)?.anchor(
+                *positions.get(&c.src_node)?,
+                c.src_pin,
+                PinDirection::Output,
+            )?;
+            let b = layouts.get(&c.dst_node)?.anchor(
+                *positions.get(&c.dst_node)?,
+                c.dst_pin,
+                PinDirection::Input,
+            )?;
             Some(wire_path(a, b))
         };
-        let wires = pending.graph.exec_connections.iter().chain(&pending.graph.data_connections)
+        let wires = pending
+            .graph
+            .exec_connections
+            .iter()
+            .chain(&pending.graph.data_connections)
             .filter_map(wire)
             .map(|d| view! { <path class="wire pending" d=d /> })
             .collect_view();

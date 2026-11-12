@@ -1,7 +1,7 @@
+use crate::engine::RemovedConnections;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use ticknode_shared::{ConnectionModel, NodeId, PinId};
-use crate::engine::RemovedConnections;
 
 /// Index storing exec and data connections with fast lookups for hot execution paths.
 #[derive(Debug, Default, Clone)]
@@ -57,7 +57,11 @@ impl ConnectionIndex {
         if list.is_empty() {
             self.exec_out.remove(&(c.src_node, c.src_pin));
         }
-        let exec_pos = self.exec.iter().position(|x| x == c).expect("exec index in sync");
+        let exec_pos = self
+            .exec
+            .iter()
+            .position(|x| x == c)
+            .expect("exec index in sync");
         self.exec.remove(exec_pos);
         true
     }
@@ -72,14 +76,22 @@ impl ConnectionIndex {
     }
 
     /// Removes the data connection targeting `(dst_node, dst_pin)`, returning it if present.
-    pub fn remove_data_input(&mut self, dst_node: NodeId, dst_pin: PinId) -> Option<ConnectionModel> {
+    pub fn remove_data_input(
+        &mut self,
+        dst_node: NodeId,
+        dst_pin: PinId,
+    ) -> Option<ConnectionModel> {
         let list = self.data_in.get_mut(&dst_node)?;
         let in_pos = list.iter().position(|x| x.dst_pin == dst_pin)?;
         let old = list.remove(in_pos);
         if list.is_empty() {
             self.data_in.remove(&dst_node);
         }
-        let pos = self.data.iter().position(|x| *x == old).expect("data index in sync");
+        let pos = self
+            .data
+            .iter()
+            .position(|x| *x == old)
+            .expect("data index in sync");
         self.data.remove(pos);
         Some(old)
     }
@@ -130,10 +142,7 @@ impl ConnectionIndex {
         }
         self.data_in.clear();
         for c in &self.data {
-            self.data_in
-                .entry(c.dst_node)
-                .or_default()
-                .push(*c);
+            self.data_in.entry(c.dst_node).or_default().push(*c);
         }
     }
 
@@ -145,10 +154,7 @@ impl ConnectionIndex {
     }
 
     pub fn data_into(&self, node: NodeId) -> &[ConnectionModel] {
-        self.data_in
-            .get(&node)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
+        self.data_in.get(&node).map(|v| v.as_slice()).unwrap_or(&[])
     }
 
     pub fn data_source(&self, node: NodeId, pin: PinId) -> Option<ConnectionModel> {

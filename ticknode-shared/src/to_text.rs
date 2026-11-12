@@ -119,7 +119,9 @@ pub trait IdentifierLabels {
     fn label(&self, type_name: &str, id: i64) -> Option<String>;
 }
 impl<F: Fn(&str, i64) -> Option<String>> IdentifierLabels for F {
-    fn label(&self, type_name: &str, id: i64) -> Option<String> { self(type_name, id) }
+    fn label(&self, type_name: &str, id: i64) -> Option<String> {
+        self(type_name, id)
+    }
 }
 
 /// The registry supplies declared field types when presenting plugin structures.
@@ -131,13 +133,26 @@ pub fn to_text_in(
     labels: &dyn QuantityLabels,
     types: &TypeRegistry,
 ) -> String {
-    to_text_with_identifiers(value, declared, options, rules, labels, types, &|_: &str, _: i64| None)
+    to_text_with_identifiers(
+        value,
+        declared,
+        options,
+        rules,
+        labels,
+        types,
+        &|_: &str, _: i64| None,
+    )
 }
 
 /// Typed presentation with live plugin identifier labels, recursively through lists and structures.
 pub fn to_text_with_identifiers(
-    value: &DataValue, declared: &DataType, options: &ToTextOptions, rules: &DisplayRules,
-    labels: &dyn QuantityLabels, types: &TypeRegistry, identifiers: &dyn IdentifierLabels,
+    value: &DataValue,
+    declared: &DataType,
+    options: &ToTextOptions,
+    rules: &DisplayRules,
+    labels: &dyn QuantityLabels,
+    types: &TypeRegistry,
+    identifiers: &dyn IdentifierLabels,
 ) -> String {
     let runtime = value.get_type();
     let declared = if *declared == DataType::Any {
@@ -153,7 +168,9 @@ pub fn to_text_with_identifiers(
     if let (DataValue::Number(NumberValue::Int(id)), DataType::Named(name)) = (value, declared)
         && types.get(name).is_some_and(TypeDefinition::is_identifier)
     {
-        return identifiers.label(name, *id).unwrap_or_else(|| id.to_string());
+        return identifiers
+            .label(name, *id)
+            .unwrap_or_else(|| id.to_string());
     }
     let number = options.effective_number(rules.number);
     let format = |default: &str| {
@@ -240,7 +257,9 @@ pub fn to_text_with_identifiers(
             };
             elements
                 .iter()
-                .map(|v| to_text_with_identifiers(v, element, options, rules, labels, types, identifiers))
+                .map(|v| {
+                    to_text_with_identifiers(v, element, options, rules, labels, types, identifiers)
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         }

@@ -17,11 +17,16 @@ pub(super) struct Tasks {
 }
 impl Tasks {
     pub(super) fn new(runtime: Option<tokio::runtime::Handle>) -> Self {
-        Self { runtime, pending: BTreeMap::new() }
+        Self {
+            runtime,
+            pending: BTreeMap::new(),
+        }
     }
     pub(super) fn start(&mut self, request: HttpRequest) -> Result<TaskId, String> {
         if self.pending.len() >= MAX_PLUGIN_HTTP_TASKS {
-            return Err(format!("Too many plugin-owned HTTP tasks (maximum {MAX_PLUGIN_HTTP_TASKS})"));
+            return Err(format!(
+                "Too many plugin-owned HTTP tasks (maximum {MAX_PLUGIN_HTTP_TASKS})"
+            ));
         }
         let runtime = self
             .runtime
@@ -40,7 +45,13 @@ impl Tasks {
         })
     }
     pub(super) fn drain(&mut self, max: usize) -> Vec<wit::WsEvent> {
-        let ready: Vec<_> = self.pending.iter().filter(|(_, t)| t.is_finished()).take(max).map(|(id, _)| *id).collect();
+        let ready: Vec<_> = self
+            .pending
+            .iter()
+            .filter(|(_, t)| t.is_finished())
+            .take(max)
+            .map(|(id, _)| *id)
+            .collect();
         ready
             .into_iter()
             .map(|id| {
@@ -64,9 +75,11 @@ pub(super) fn done(id: TaskId, result: TaskResult) -> wit::TaskDone {
         id,
         result: result.map(|output| match output {
             TaskOutput::Delay => wit::TaskOutput::Delay,
-            TaskOutput::Http(r) => {
-                wit::TaskOutput::Http(wit::HttpResponse { status: r.status, headers: r.headers, body: r.body })
-            }
+            TaskOutput::Http(r) => wit::TaskOutput::Http(wit::HttpResponse {
+                status: r.status,
+                headers: r.headers,
+                body: r.body,
+            }),
         }),
     }
 }

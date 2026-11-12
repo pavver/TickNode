@@ -1,7 +1,7 @@
-use crate::{DataType, TypeRegistry};
 use super::catalog;
 use super::kinds::{self, ValueKind};
 use super::scan::{self, ForScope};
+use crate::{DataType, TypeRegistry};
 
 pub(crate) struct InferContext<'a> {
     pub inputs: &'a [(String, DataType)],
@@ -228,7 +228,12 @@ fn resolve_dotted_path_kind(path: &[String], ctx: &InferContext) -> ValueKind {
         return ValueKind::Any;
     }
 
-    let root_type = if let Some(scope) = ctx.for_stack.iter().rev().find(|s| s.vars.iter().any(|v| v == root)) {
+    let root_type = if let Some(scope) = ctx
+        .for_stack
+        .iter()
+        .rev()
+        .find(|s| s.vars.iter().any(|v| v == root))
+    {
         scope.var_type.clone()
     } else if let Some((_, ty)) = ctx.inputs.iter().find(|(name, _)| name == root) {
         Some(ty.clone())

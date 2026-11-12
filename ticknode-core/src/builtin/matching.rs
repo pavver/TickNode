@@ -1,6 +1,6 @@
+use crate::{Node, NodeContext};
 use ticknode_shared::condition::{MatchCase, MatchInput, match_inputs};
 use ticknode_shared::*;
-use crate::{Node, NodeContext};
 
 /// How Match chooses which matching cases fire.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -61,8 +61,18 @@ impl MatchNode {
     pub fn new(id: NodeId) -> Self {
         // Default input `a` is inferred from the condition. While the node is being restored, cases without `inputs`
         // (legacy format) infer inputs; after `restored`, inputs are explicit — both for new and loaded nodes.
-        let mut node = Self { id, cases: Vec::new(), mode: MatchMode::First, last_case: None, in_else: false, inputs: Vec::new(), explicit_inputs: false };
-        node.set_cases(vec![MatchCase::parse("1: a > 0").expect("the default case is valid")]);
+        let mut node = Self {
+            id,
+            cases: Vec::new(),
+            mode: MatchMode::First,
+            last_case: None,
+            in_else: false,
+            inputs: Vec::new(),
+            explicit_inputs: false,
+        };
+        node.set_cases(vec![
+            MatchCase::parse("1: a > 0").expect("the default case is valid"),
+        ]);
         node
     }
 
@@ -73,8 +83,14 @@ impl MatchNode {
         cases.retain(|c| c.pin != Self::ELSE_PIN.0 && seen.insert(c.pin));
         self.cases = cases;
         if !self.explicit_inputs {
-            self.inputs = match_inputs(&self.cases).into_iter().enumerate()
-                .map(|(i, name)| MatchInput { pin: i as u32 + 1, name, value_type: DataType::Any })
+            self.inputs = match_inputs(&self.cases)
+                .into_iter()
+                .enumerate()
+                .map(|(i, name)| MatchInput {
+                    pin: i as u32 + 1,
+                    name,
+                    value_type: DataType::Any,
+                })
                 .collect();
         }
     }
@@ -127,27 +143,48 @@ impl MatchNode {
 }
 
 fn string_list(elements: &[DataValue]) -> Option<Vec<&str>> {
-    elements.iter().map(|e| match e {
-        DataValue::String(s) => Some(s.as_str()),
-        _ => None,
-    }).collect()
+    elements
+        .iter()
+        .map(|e| match e {
+            DataValue::String(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 impl Node for MatchNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
     fn definition(&self) -> NodeDefinition {
-        let mut pins = vec![PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false }];
+        let mut pins = vec![PinDefinition {
+            id: PinId(0),
+            name: "In".to_string(),
+            pin_type: PinType::Exec,
+            direction: PinDirection::Input,
+            required: false,
+        }];
         pins.extend(self.inputs.iter().map(|i| PinDefinition {
             id: PinId(i.pin),
             name: i.name.clone(),
             pin_type: PinType::Data(i.value_type.clone()),
-            direction: PinDirection::Input, required: false }));
+            direction: PinDirection::Input,
+            required: false,
+        }));
         pins.extend(self.cases.iter().map(|c| PinDefinition {
             id: PinId(c.pin),
             name: c.display(),
             pin_type: PinType::Exec,
-            direction: PinDirection::Output, required: false }));
-        pins.push(PinDefinition { id: Self::ELSE_PIN, name: "Else".to_string(), pin_type: PinType::Exec, direction: PinDirection::Output, required: false });
+            direction: PinDirection::Output,
+            required: false,
+        }));
+        pins.push(PinDefinition {
+            id: Self::ELSE_PIN,
+            name: "Else".to_string(),
+            pin_type: PinType::Exec,
+            direction: PinDirection::Output,
+            required: false,
+        });
         NodeDefinition {
             adaptive: false,
             cost: 1,
@@ -165,12 +202,33 @@ impl Node for MatchNode {
     }
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let value_of = |name: &str| {
-            self.inputs.iter().find(|i| i.name == name).and_then(|i| ctx.get_value(PinId(i.pin)))
+            self.inputs
+                .iter()
+                .find(|i| i.name == name)
+                .and_then(|i| ctx.get_value(PinId(i.pin)))
         };
         let all = self.mode == MatchMode::All;
         let mut matched = Vec::new();
         for case in &self.cases {
-            if case.matches_in(ctx.types, |name| self.inputs.iter().find(|i| i.name == name).map_or(DataType::Any, |i| if i.value_type == DataType::Any { ctx.input_types.get(&PinId(i.pin)).cloned().unwrap_or(DataType::Any) } else { i.value_type.clone() }), value_of) {
+            if case.matches_in(
+                ctx.types,
+                |name| {
+                    self.inputs
+                        .iter()
+                        .find(|i| i.name == name)
+                        .map_or(DataType::Any, |i| {
+                            if i.value_type == DataType::Any {
+                                ctx.input_types
+                                    .get(&PinId(i.pin))
+                                    .cloned()
+                                    .unwrap_or(DataType::Any)
+                            } else {
+                                i.value_type.clone()
+                            }
+                        })
+                },
+                value_of,
+            ) {
                 matched.push(PinId(case.pin));
                 if !all {
                     break;
@@ -186,9 +244,18 @@ impl Node for MatchNode {
         };
         // Inputs come before cases: when reconstructing the node, cases need not infer inputs on their own
         vec![
-            ("inputs".to_string(), list(self.inputs.iter().map(MatchInput::to_text).collect())),
-            ("cases".to_string(), list(self.cases.iter().map(MatchCase::to_text).collect())),
-            ("mode".to_string(), DataValue::String(self.mode.as_str().to_string())),
+            (
+                "inputs".to_string(),
+                list(self.inputs.iter().map(MatchInput::to_text).collect()),
+            ),
+            (
+                "cases".to_string(),
+                list(self.cases.iter().map(MatchCase::to_text).collect()),
+            ),
+            (
+                "mode".to_string(),
+                DataValue::String(self.mode.as_str().to_string()),
+            ),
         ]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
@@ -197,7 +264,11 @@ impl Node for MatchNode {
             ("cases", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
                     .ok_or_else(|| "a case must be a string".to_string())
-                    .and_then(|l| l.into_iter().map(|t| MatchCase::parse(t).map_err(|e| e.to_string())).collect());
+                    .and_then(|l| {
+                        l.into_iter()
+                            .map(|t| MatchCase::parse(t).map_err(|e| e.to_string()))
+                            .collect()
+                    });
                 match parsed {
                     Ok(cases) => self.set_cases(cases),
                     Err(e) => tracing::warn!("Match: invalid cases: {e}"),
@@ -206,7 +277,11 @@ impl Node for MatchNode {
             ("inputs", DataValue::List { elements, .. }) => {
                 let parsed: Result<Vec<_>, _> = string_list(&elements)
                     .ok_or_else(|| "an input must be a string".to_string())
-                    .and_then(|l| l.into_iter().map(|t| MatchInput::parse(t).map_err(|e| e.to_string())).collect());
+                    .and_then(|l| {
+                        l.into_iter()
+                            .map(|t| MatchInput::parse(t).map_err(|e| e.to_string()))
+                            .collect()
+                    });
                 match parsed {
                     Ok(inputs) => self.set_inputs(inputs),
                     Err(e) => tracing::warn!("Match: invalid inputs: {e}"),
@@ -214,10 +289,17 @@ impl Node for MatchNode {
             }
             ("mode", DataValue::String(text)) => match MatchMode::parse(&text) {
                 Some(mode) => self.set_mode(mode),
-                None => tracing::warn!("Match: unknown mode \"{text}\", keeping \"{}\"", self.mode.as_str()),
+                None => tracing::warn!(
+                    "Match: unknown mode \"{text}\", keeping \"{}\"",
+                    self.mode.as_str()
+                ),
             },
             // Graphs saved before `mode` existed
-            ("all_matches", DataValue::Bool(all)) => self.set_mode(if all { MatchMode::All } else { MatchMode::First }),
+            ("all_matches", DataValue::Bool(all)) => self.set_mode(if all {
+                MatchMode::All
+            } else {
+                MatchMode::First
+            }),
             _ => {}
         }
     }

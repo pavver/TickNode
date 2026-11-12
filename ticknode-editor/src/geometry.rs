@@ -8,11 +8,11 @@ use ticknode_shared::{
     TypeRegistry, parse_input_value_property,
 };
 
-mod routes;
 mod layout;
-pub use layout::{NodeLayout, resize_size};
+mod routes;
 pub(crate) use layout::compact_select_width;
-pub use routes::{route_path, route_insert_index, route_midpoint};
+pub use layout::{NodeLayout, resize_size};
+pub use routes::{route_insert_index, route_midpoint, route_path};
 
 /// Connection presentation: solid for compatible pins, dashed for conversion, absent if invalid.
 pub fn wire_conversion(types: &TypeRegistry, src: &PinType, dst: &PinType) -> Option<bool> {
@@ -46,7 +46,11 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, zoom: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            zoom: 1.0,
+        }
     }
 }
 
@@ -59,7 +63,11 @@ impl Camera {
     pub fn zoom_at(&self, sx: f64, sy: f64, factor: f64) -> Camera {
         let zoom = (self.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
         let (wx, wy) = self.to_world(sx, sy);
-        Camera { x: sx - wx * zoom, y: sy - wy * zoom, zoom }
+        Camera {
+            x: sx - wx * zoom,
+            y: sy - wy * zoom,
+            zoom,
+        }
     }
 }
 
@@ -70,26 +78,56 @@ pub fn pins(def: &NodeDefinition, direction: PinDirection) -> impl Iterator<Item
 /// Property shown and editable directly on the node (a row between the header and pins).
 /// Input values (`in:*`) are rendered next to pins, and Match cases are rendered in their own block.
 pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
-    ticknode_shared::text::is_text_type(&value.get_type()) && parse_input_value_property(name).is_none()
+    ticknode_shared::text::is_text_type(&value.get_type())
+        && parse_input_value_property(name).is_none()
         && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 
 /// Adaptive nodes show their declared type through pins or the existing Value row.
 pub fn is_node_property(node_type: &str, name: &str, value: &DataValue) -> bool {
     is_inline_property(name, value)
-        && !(matches!(node_type, "const" | "convert" | "compare" | "logic/hysteresis" | "math/add" | "math/sub" | "math/mul" | "math/div") && name == "value_type")
+        && !(matches!(
+            node_type,
+            "const"
+                | "convert"
+                | "compare"
+                | "logic/hysteresis"
+                | "math/add"
+                | "math/sub"
+                | "math/mul"
+                | "math/div"
+        ) && name == "value_type")
 }
 
-pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, properties: &[(String, DataValue)]) -> bool {
-    if !is_node_property(node_type, name, value) { return false; }
-    if !matches!(node_type, "text/to_text" | "convert") { return true; }
-    let ty = properties.iter().find(|(n, _)| n == "value_type").and_then(|(_, v)| match v {
-        DataValue::String(s) => ticknode_shared::parse_data_type(s), _ => None,
-    }).unwrap_or(DataType::Any);
+pub fn visible_node_property(
+    node_type: &str,
+    name: &str,
+    value: &DataValue,
+    properties: &[(String, DataValue)],
+) -> bool {
+    if !is_node_property(node_type, name, value) {
+        return false;
+    }
+    if !matches!(node_type, "text/to_text" | "convert") {
+        return true;
+    }
+    let ty = properties
+        .iter()
+        .find(|(n, _)| n == "value_type")
+        .and_then(|(_, v)| match v {
+            DataValue::String(s) => ticknode_shared::parse_data_type(s),
+            _ => None,
+        })
+        .unwrap_or(DataType::Any);
     if node_type == "convert" {
-        let target = properties.iter().find(|(n, _)| n == "target").and_then(|(_, v)| match v {
-            DataValue::String(s) => Some(s.as_str()), _ => None,
-        }).unwrap_or_default();
+        let target = properties
+            .iter()
+            .find(|(n, _)| n == "target")
+            .and_then(|(_, v)| match v {
+                DataValue::String(s) => Some(s.as_str()),
+                _ => None,
+            })
+            .unwrap_or_default();
         ticknode_shared::convert::property_visible(&ty, target, name)
     } else {
         ticknode_shared::to_text::property_visible(&ty, name)
@@ -97,16 +135,35 @@ pub fn visible_node_property(node_type: &str, name: &str, value: &DataValue, pro
 }
 
 /// Visible rows in schema order, followed by undescribed rows in stored order.
-pub fn property_rows<'a>(def: &NodeDefinition, properties: &'a [(String, DataValue)]) -> Vec<&'a (String, DataValue)> {
+pub fn property_rows<'a>(
+    def: &NodeDefinition,
+    properties: &'a [(String, DataValue)],
+) -> Vec<&'a (String, DataValue)> {
     property_rows_connected(def, properties, &[])
 }
 
-pub fn property_rows_connected<'a>(def: &NodeDefinition, properties: &'a [(String, DataValue)], connected: &[PinId]) -> Vec<&'a (String, DataValue)> {
-    let mut rows: Vec<_> = properties.iter().filter(|(name, value)| {
-        visible_node_property(&def.type_name, name, value, properties)
-            && !def.properties.iter().any(|p| p.name == *name && (p.kind == ticknode_shared::PropertyKind::Hidden || p.input.is_some_and(|pin| connected.contains(&pin))))
-    }).collect();
-    rows.sort_by_key(|(name, _)| def.properties.iter().position(|p| p.name == *name).unwrap_or(usize::MAX));
+pub fn property_rows_connected<'a>(
+    def: &NodeDefinition,
+    properties: &'a [(String, DataValue)],
+    connected: &[PinId],
+) -> Vec<&'a (String, DataValue)> {
+    let mut rows: Vec<_> = properties
+        .iter()
+        .filter(|(name, value)| {
+            visible_node_property(&def.type_name, name, value, properties)
+                && !def.properties.iter().any(|p| {
+                    p.name == *name
+                        && (p.kind == ticknode_shared::PropertyKind::Hidden
+                            || p.input.is_some_and(|pin| connected.contains(&pin)))
+                })
+        })
+        .collect();
+    rows.sort_by_key(|(name, _)| {
+        def.properties
+            .iter()
+            .position(|p| p.name == *name)
+            .unwrap_or(usize::MAX)
+    });
     rows
 }
 
@@ -116,39 +173,64 @@ pub fn is_type_property(def: &NodeDefinition, name: &str) -> bool {
 
 /// Status rows rendered between inline properties and pins.
 pub fn status_rows(def: &NodeDefinition) -> usize {
-    if def.type_name == "text/template" { 1 } else { 0 }
+    if def.type_name == "text/template" {
+        1
+    } else {
+        0
+    }
 }
 
 /// Number of inline property rows on a node.
 #[cfg(test)]
 pub fn prop_rows(node_type: &str, properties: &[(String, DataValue)]) -> usize {
-    properties.iter().filter(|(n, v)| visible_node_property(node_type, n, v, properties)).count()
+    properties
+        .iter()
+        .filter(|(n, v)| visible_node_property(node_type, n, v, properties))
+        .count()
 }
 
 /// Match node cases extracted from its properties (invalid entries are skipped, just as on the server).
 pub fn match_cases(properties: &[(String, DataValue)]) -> Vec<MatchCase> {
-    match properties.iter().find(|(n, _)| n == "cases").map(|(_, v)| v) {
-        Some(DataValue::List { elements, .. }) => elements.iter().filter_map(|e| match e {
-            DataValue::String(s) => MatchCase::parse(s).ok(),
-            _ => None,
-        }).collect(),
+    match properties
+        .iter()
+        .find(|(n, _)| n == "cases")
+        .map(|(_, v)| v)
+    {
+        Some(DataValue::List { elements, .. }) => elements
+            .iter()
+            .filter_map(|e| match e {
+                DataValue::String(s) => MatchCase::parse(s).ok(),
+                _ => None,
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
 
 /// Explicit inputs of a Match node (`inputs` property).
 pub fn match_inputs_of(properties: &[(String, DataValue)]) -> Vec<MatchInput> {
-    match properties.iter().find(|(n, _)| n == "inputs").map(|(_, v)| v) {
-        Some(DataValue::List { elements, .. }) => elements.iter().filter_map(|e| match e {
-            DataValue::String(s) => MatchInput::parse(s).ok(),
-            _ => None,
-        }).collect(),
+    match properties
+        .iter()
+        .find(|(n, _)| n == "inputs")
+        .map(|(_, v)| v)
+    {
+        Some(DataValue::List { elements, .. }) => elements
+            .iter()
+            .filter_map(|e| match e {
+                DataValue::String(s) => MatchInput::parse(s).ok(),
+                _ => None,
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
 
 pub fn node_width(type_name: &str) -> f64 {
-    if type_name == "match" { MATCH_WIDTH } else { NODE_WIDTH }
+    if type_name == "match" {
+        MATCH_WIDTH
+    } else {
+        NODE_WIDTH
+    }
 }
 
 /// Row count in a Match case block: header (with exec output) + conditions (or an "always" row when empty).
@@ -157,7 +239,9 @@ pub fn case_rows(case: &MatchCase) -> usize {
 }
 
 pub fn pin_type(def: &NodeDefinition, pin: PinId, direction: PinDirection) -> Option<&PinType> {
-    pins(def, direction).find(|p| p.id == pin).map(|p| &p.pin_type)
+    pins(def, direction)
+        .find(|p| p.id == pin)
+        .map(|p| &p.pin_type)
 }
 
 /// Horizontal cubic Bézier curve from output to input.
@@ -177,7 +261,8 @@ pub fn pin_color(types: &TypeRegistry, pin_type: &PinType) -> String {
 /// deterministic color hashed from the type name.
 pub fn type_color(types: &TypeRegistry, t: &DataType) -> String {
     match t {
-        DataType::Named(name) => types.get(name)
+        DataType::Named(name) => types
+            .get(name)
             .and_then(|d| d.color.as_deref())
             .filter(|c| is_hex_color(c))
             .map_or_else(|| hash_color(name), str::to_string),
@@ -192,7 +277,9 @@ fn is_hex_color(c: &str) -> bool {
 
 /// Deterministic color from a name hash (FNV-1a → hue).
 fn hash_color(name: &str) -> String {
-    let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
     format!("hsl({} 55% 55%)", (hash >> 16) % 360)
 }
 

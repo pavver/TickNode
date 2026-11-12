@@ -1,20 +1,17 @@
 //! Variable row component with in-place value editing, drag to canvas, action button, and delete confirmation.
 
-use leptos::prelude::*;
-use ticknode_shared::ClientMessage;
+use super::logic::VariableItem;
+use super::menu::handle_variable_click;
+use super::value_editor::VariableValueEditor;
 use crate::geometry::type_color;
 use crate::i18n::{self, t};
 use crate::panels::{drop_on_canvas, move_palette_drag};
 use crate::state::{PaletteDrag, use_editor};
-use super::logic::VariableItem;
-use super::menu::handle_variable_click;
-use super::value_editor::VariableValueEditor;
+use leptos::prelude::*;
+use ticknode_shared::ClientMessage;
 
 #[component]
-pub fn VariableRow(
-    item: VariableItem,
-    #[prop(optional)] can_drag: bool,
-) -> impl IntoView {
+pub fn VariableRow(item: VariableItem, #[prop(optional)] can_drag: bool) -> impl IntoView {
     let ed = use_editor();
     let key = item.variable.key.clone();
     let key_for_var = key.clone();
@@ -22,7 +19,9 @@ pub fn VariableRow(
 
     // Reactively track the variable from state so server updates reflect here
     let var_signal = Memo::new(move |_| {
-        ed.variables.with(|vars| vars.get(&key_for_var).cloned()).unwrap_or_else(|| initial_var.clone())
+        ed.variables
+            .with(|vars| vars.get(&key_for_var).cloned())
+            .unwrap_or_else(|| initial_var.clone())
     });
 
     let confirming_delete = RwSignal::new(false);
@@ -33,12 +32,17 @@ pub fn VariableRow(
             return;
         }
         use wasm_bindgen::JsCast;
-        if let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+        if let Some(el) = ev
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
             let _ = el.set_pointer_capture(ev.pointer_id());
         }
         let at = (ev.client_x() as f64, ev.client_y() as f64);
         let cur_var = var_signal.get_untracked();
-        let color = ed.types.with_untracked(|types| type_color(types, &cur_var.data_type));
+        let color = ed
+            .types
+            .with_untracked(|types| type_color(types, &cur_var.data_type));
         ed.palette_drag.set(Some(PaletteDrag::Variable {
             variable: cur_var.clone(),
             title: cur_var.key.name.clone(),

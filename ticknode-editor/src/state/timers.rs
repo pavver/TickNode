@@ -14,27 +14,47 @@ pub struct ClientTimer {
 impl ClientTimer {
     /// Remaining milliseconds and fraction at mount time, accounting for time spent offscreen.
     pub fn progress(&self, now: f64) -> (f64, f64) {
-        let remaining = (self.timer.remaining_ms as f64 - (now - self.received_at).max(0.0)).max(0.0);
-        let fraction = if self.timer.total_ms == 0 { 0.0 } else { (remaining / self.timer.total_ms as f64).min(1.0) };
+        let remaining =
+            (self.timer.remaining_ms as f64 - (now - self.received_at).max(0.0)).max(0.0);
+        let fraction = if self.timer.total_ms == 0 {
+            0.0
+        } else {
+            (remaining / self.timer.total_ms as f64).min(1.0)
+        };
         (remaining, fraction)
     }
 }
 
 pub(super) fn applies(msg: &ServerMessage) -> bool {
-    matches!(msg, ServerMessage::Init { .. } | ServerMessage::Timers(_) | ServerMessage::NodeRemoved(_))
+    matches!(
+        msg,
+        ServerMessage::Init { .. } | ServerMessage::Timers(_) | ServerMessage::NodeRemoved(_)
+    )
 }
 
 pub(super) fn apply(all: &mut NodeTimers, msg: &ServerMessage, now: f64) {
     let timers = match msg {
         ServerMessage::Init { timers, .. } | ServerMessage::Timers(timers) => timers,
-        ServerMessage::NodeRemoved(id) => { all.remove(id); return; }
+        ServerMessage::NodeRemoved(id) => {
+            all.remove(id);
+            return;
+        }
         _ => return,
     };
-    *all = timers.iter().map(|timer| {
-        // Remaining time is freshly measured in every snapshot. A restarted delay can have
-        // exactly the same values as its predecessor, so it still needs a new animation.
-        (timer.node, ClientTimer { timer: timer.clone(), received_at: now })
-    }).collect();
+    *all = timers
+        .iter()
+        .map(|timer| {
+            // Remaining time is freshly measured in every snapshot. A restarted delay can have
+            // exactly the same values as its predecessor, so it still needs a new animation.
+            (
+                timer.node,
+                ClientTimer {
+                    timer: timer.clone(),
+                    received_at: now,
+                },
+            )
+        })
+        .collect();
 }
 
 #[cfg(test)]

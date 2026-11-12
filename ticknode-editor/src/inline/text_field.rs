@@ -2,7 +2,11 @@
 use super::*;
 
 #[derive(Debug, PartialEq)]
-enum TextKey { Commit, Cancel, Insert }
+enum TextKey {
+    Commit,
+    Cancel,
+    Insert,
+}
 
 fn text_key(key: &str, multiline: bool, modifier: bool) -> TextKey {
     match key {
@@ -32,36 +36,54 @@ pub(super) fn TextField(
 ) -> impl IntoView {
     let (shown, draft) = text_draft(value);
     let commit = move || {
-        let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked()) else { return };
-        if text != saved { on_commit.run(Some(DataValue::String(text))); }
+        let (Some(text), Some(saved)) = (draft.try_get_untracked(), shown.try_get_untracked())
+        else {
+            return;
+        };
+        if text != saved {
+            on_commit.run(Some(DataValue::String(text)));
+        }
     };
     let keydown = move |ev: web_sys::KeyboardEvent| {
         use wasm_bindgen::JsCast;
-        match text_key(&ev.key(), multiline.get_untracked(), ev.ctrl_key() || ev.meta_key()) {
+        match text_key(
+            &ev.key(),
+            multiline.get_untracked(),
+            ev.ctrl_key() || ev.meta_key(),
+        ) {
             TextKey::Insert => return,
-            TextKey::Cancel => { draft.set(shown.get_untracked()); }
+            TextKey::Cancel => {
+                draft.set(shown.get_untracked());
+            }
             TextKey::Commit => {}
         }
         ev.prevent_default();
         ev.stop_propagation();
-        if let Some(el) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) { let _ = el.blur(); }
+        if let Some(el) = ev
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok())
+        {
+            let _ = el.blur();
+        }
     };
-    move || if multiline.get() {
-        view! {
-            <textarea
-                class="inline-value multiline"
-                title=move || title.get()
-                spellcheck="false"
-                prop:value=move || draft.get()
-                on:pointerdown=crate::match_editor::stop_on_controls
-                on:input=move |ev| draft.set(event_target_value(&ev))
-                on:wheel=|ev: web_sys::WheelEvent| ev.stop_propagation()
-                on:blur=move |_| commit()
-                on:keydown=keydown
-            ></textarea>
-        }.into_any()
-    } else {
-        view! {
+    move || {
+        if multiline.get() {
+            view! {
+                <textarea
+                    class="inline-value multiline"
+                    title=move || title.get()
+                    spellcheck="false"
+                    prop:value=move || draft.get()
+                    on:pointerdown=crate::match_editor::stop_on_controls
+                    on:input=move |ev| draft.set(event_target_value(&ev))
+                    on:wheel=|ev: web_sys::WheelEvent| ev.stop_propagation()
+                    on:blur=move |_| commit()
+                    on:keydown=keydown
+                ></textarea>
+            }
+            .into_any()
+        } else {
+            view! {
             <input
                 type="text"
                 class="inline-value"
@@ -79,6 +101,7 @@ pub(super) fn TextField(
                 on:keydown=keydown
             />
         }.into_any()
+        }
     }
 }
 

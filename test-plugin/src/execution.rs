@@ -22,7 +22,10 @@ impl PluginNode for Counter {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![("step".into(), DataValue::Number(NumberValue::Int(self.step)))]
+        vec![(
+            "step".into(),
+            DataValue::Number(NumberValue::Int(self.step)),
+        )]
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
@@ -33,7 +36,10 @@ impl PluginNode for Counter {
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
         self.count += self.step;
-        vec![Output::Data(PinId(1), DataValue::Number(NumberValue::Int(self.count)))]
+        vec![Output::Data(
+            PinId(1),
+            DataValue::Number(NumberValue::Int(self.count)),
+        )]
     }
 
     /// Not an event source: the host must not call `poll`.
@@ -63,7 +69,10 @@ impl PluginNode for Ticker {
     }
 
     fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
-        vec![Output::Data(PinId(1), DataValue::Number(NumberValue::Int(self.polls))), Output::Exec(PinId(0))]
+        vec![
+            Output::Data(PinId(1), DataValue::Number(NumberValue::Int(self.polls))),
+            Output::Exec(PinId(0)),
+        ]
     }
 
     fn poll(&mut self, _: u64) -> Option<PinId> {
@@ -71,7 +80,9 @@ impl PluginNode for Ticker {
         Some(PinId(0))
     }
 
-    fn polls(&self) -> bool { true }
+    fn polls(&self) -> bool {
+        true
+    }
 }
 
 /// `panic` — panics, `spin` — infinite loop (must be terminated by the fuel limit).
@@ -139,16 +150,32 @@ impl PluginNode for ClearProbe {
         NodeDefinition {
             adaptive: false,
             cost: 1,
-            type_name: "test/clear".into(), title: "Clear".into(), category: "Test".into(),
-            description: "Sets or clears a data output".into(), help: "Set emits a value; Clear removes it and attempts invalid clears.".into(), properties: vec![],
-            pins: vec![exec_in(0, "Set"), data_out(1, "Value", DataType::Number), exec_in(2, "Clear"), data_in(3, "Input", DataType::Number), exec_out(4, "Out")],
+            type_name: "test/clear".into(),
+            title: "Clear".into(),
+            category: "Test".into(),
+            description: "Sets or clears a data output".into(),
+            help: "Set emits a value; Clear removes it and attempts invalid clears.".into(),
+            properties: vec![],
+            pins: vec![
+                exec_in(0, "Set"),
+                data_out(1, "Value", DataType::Number),
+                exec_in(2, "Clear"),
+                data_in(3, "Input", DataType::Number),
+                exec_out(4, "Out"),
+            ],
         }
     }
     fn execute(&mut self, trigger: Trigger, _: &Inputs) -> Vec<Output> {
         if matches!(trigger, Trigger::Pin(PinId(0))) {
             vec![Output::Data(PinId(1), 42i64.into())]
         } else {
-            vec![Output::Clear(PinId(1)), Output::Clear(PinId(0)), Output::Clear(PinId(3)), Output::Clear(PinId(4)), Output::Clear(PinId(99))]
+            vec![
+                Output::Clear(PinId(1)),
+                Output::Clear(PinId(0)),
+                Output::Clear(PinId(3)),
+                Output::Clear(PinId(4)),
+                Output::Clear(PinId(99)),
+            ]
         }
     }
 }

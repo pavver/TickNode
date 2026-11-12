@@ -3,17 +3,19 @@
 use leptos::prelude::*;
 use ticknode_shared::*;
 
-use crate::i18n::{self, t};
-use crate::state::use_editor;
-use crate::geometry::pin_color;
 use super::formatting::{MAX_VALUE_CHARS, instance_pin_label, truncate};
 use super::{display_value, relative_time};
+use crate::geometry::pin_color;
+use crate::i18n::{self, t};
+use crate::state::use_editor;
 
 /// When the node last executed and what values were on its pins.
 #[component]
 pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
     let ed = use_editor();
-    let Some(node) = ed.node(id) else { return ().into_any() };
+    let Some(node) = ed.node(id) else {
+        return ().into_any();
+    };
     let def = Memo::new(move |_| node.instance.with(|i| i.definition.clone()));
     let when = move || {
         let at = node.last_exec.get();
@@ -23,10 +25,19 @@ pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
             t!("exec-never")
         }
     };
-    let tick = move || node.trace.with(|tr| tr.as_ref().map(|tr| t!("exec-tick", tick = tr.tick)));
+    let tick = move || {
+        node.trace
+            .with(|tr| tr.as_ref().map(|tr| t!("exec-tick", tick = tr.tick)))
+    };
 
     let rows = move |dir: PinDirection| {
-        let pins: Vec<PinDefinition> = def.with(|d| d.pins.iter().filter(|p| p.direction == dir).cloned().collect());
+        let pins: Vec<PinDefinition> = def.with(|d| {
+            d.pins
+                .iter()
+                .filter(|p| p.direction == dir)
+                .cloned()
+                .collect()
+        });
         pins.into_iter().map(|p| {
             let pin = p.id;
             let exec = p.pin_type == PinType::Exec;
@@ -90,17 +101,29 @@ pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
 
 fn shown(value: &DataValue) -> (String, bool, String) {
     let full = display_value(value);
-    (truncate(full.clone(), MAX_VALUE_CHARS), false, truncate(full, 5000))
+    (
+        truncate(full.clone(), MAX_VALUE_CHARS),
+        false,
+        truncate(full, 5000),
+    )
 }
 
 /// Text, muted state and tooltip of a pin in the last execution.
-fn trace_value(trace: Option<&NodeTrace>, dir: PinDirection, exec: bool, pin: PinId, connected: bool) -> (String, bool, String) {
+fn trace_value(
+    trace: Option<&NodeTrace>,
+    dir: PinDirection,
+    exec: bool,
+    pin: PinId,
+    connected: bool,
+) -> (String, bool, String) {
     let Some(trace) = trace else {
         return ("—".into(), true, t!("exec-node-never-hint"));
     };
     match (dir, exec) {
         (PinDirection::Input, true) => (String::new(), true, String::new()),
-        (PinDirection::Output, true) if trace.fired.contains(&pin) => (t!("exec-fired"), false, String::new()),
+        (PinDirection::Output, true) if trace.fired.contains(&pin) => {
+            (t!("exec-fired"), false, String::new())
+        }
         (PinDirection::Output, true) => ("—".into(), true, t!("exec-not-fired-hint")),
         (PinDirection::Input, false) => input_trace_value(trace, pin, connected),
         (PinDirection::Output, false) => match trace.outputs.iter().find(|(p, _)| *p == pin) {

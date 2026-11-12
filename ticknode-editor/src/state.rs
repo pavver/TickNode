@@ -10,11 +10,11 @@ use web_sys::WebSocket;
 use crate::geometry::Camera;
 use crate::i18n::{self, Locale};
 
+pub mod errors;
 mod graph;
 mod messages;
-mod wires;
 pub mod timers;
-pub mod errors;
+mod wires;
 pub use wires::{WireContext, WireKey, WireRoutes};
 
 const MAX_LOG_LINES: usize = 500;
@@ -89,7 +89,9 @@ pub enum PaletteDrag {
 impl PaletteDrag {
     pub fn title(&self) -> &str {
         match self {
-            Self::Node { title, .. } | Self::Resource { title, .. } | Self::Variable { title, .. } => title,
+            Self::Node { title, .. }
+            | Self::Resource { title, .. }
+            | Self::Variable { title, .. } => title,
         }
     }
 
@@ -108,15 +110,32 @@ impl PaletteDrag {
 
     pub fn active(&self) -> bool {
         match self {
-            Self::Node { active, .. } | Self::Resource { active, .. } | Self::Variable { active, .. } => *active,
+            Self::Node { active, .. }
+            | Self::Resource { active, .. }
+            | Self::Variable { active, .. } => *active,
         }
     }
 
     pub fn update_motion(&mut self, at: (f64, f64), threshold: f64) {
         let (start, active) = match self {
-            Self::Node { start, active, at: cur_at, .. }
-            | Self::Resource { start, active, at: cur_at, .. }
-            | Self::Variable { start, active, at: cur_at, .. } => {
+            Self::Node {
+                start,
+                active,
+                at: cur_at,
+                ..
+            }
+            | Self::Resource {
+                start,
+                active,
+                at: cur_at,
+                ..
+            }
+            | Self::Variable {
+                start,
+                active,
+                at: cur_at,
+                ..
+            } => {
                 *cur_at = at;
                 (*start, active)
             }
@@ -198,7 +217,10 @@ pub struct ClientNode {
 /// Node signals are disposed after the UI finishes re-rendering: otherwise effects still
 /// referencing the node (inspector, inline fields) would run against disposed signals.
 fn dispose_later(nodes: impl IntoIterator<Item = ClientNode> + 'static) {
-    set_timeout(move || nodes.into_iter().for_each(ClientNode::dispose), std::time::Duration::ZERO);
+    set_timeout(
+        move || nodes.into_iter().for_each(ClientNode::dispose),
+        std::time::Duration::ZERO,
+    );
 }
 
 impl ClientNode {
@@ -282,7 +304,8 @@ pub struct Editor {
     /// The open property picker popup.
     pub picker: RwSignal<Option<PickerState>>,
     /// The open template completion popup.
-    pub template_completion: RwSignal<Option<crate::inline::template_field::TemplateCompletionState>>,
+    pub template_completion:
+        RwSignal<Option<crate::inline::template_field::TemplateCompletionState>>,
     pub wire_menu: RwSignal<Option<WireMenu>>,
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
     pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
@@ -309,7 +332,12 @@ pub fn now_ms() -> f64 {
 
 fn clock_time() -> String {
     let d = js_sys::Date::new_0();
-    format!("{:02}:{:02}:{:02}", d.get_hours(), d.get_minutes(), d.get_seconds())
+    format!(
+        "{:02}:{:02}:{:02}",
+        d.get_hours(),
+        d.get_minutes(),
+        d.get_seconds()
+    )
 }
 
 impl Editor {
@@ -375,7 +403,12 @@ impl Editor {
     pub fn log(&self, kind: LogKind, text: impl Into<String>) {
         let id = self.next_log_id.get_value();
         self.next_log_id.set_value(id + 1);
-        let line = LogLine { id, time: clock_time(), kind, text: text.into() };
+        let line = LogLine {
+            id,
+            time: clock_time(),
+            kind,
+            text: text.into(),
+        };
         self.logs.update(|logs| {
             logs.push(line);
             if logs.len() > MAX_LOG_LINES {
@@ -395,15 +428,22 @@ impl Editor {
     }
 
     pub fn send(&self, msg: ClientMessage) {
-        let sent = self.socket.with_value(|socket| match (socket, postcard::to_allocvec(&msg)) {
-            (Some(ws), Ok(bytes)) => ws.send_with_u8_array(&bytes).is_ok(),
-            _ => false,
-        });
+        let sent = self
+            .socket
+            .with_value(|socket| match (socket, postcard::to_allocvec(&msg)) {
+                (Some(ws), Ok(bytes)) => ws.send_with_u8_array(&bytes).is_ok(),
+                _ => false,
+            });
         if !sent {
-            self.log(LogKind::Error, "[ERROR] Disconnected from server - change was not sent");
-        } else if let ClientMessage::AddNode { type_name, .. } | ClientMessage::AddNodeConnected { type_name, .. } | ClientMessage::AddNodeWith { type_name, .. } = &msg {
+            self.log(
+                LogKind::Error,
+                "[ERROR] Disconnected from server - change was not sent",
+            );
+        } else if let ClientMessage::AddNode { type_name, .. }
+        | ClientMessage::AddNodeConnected { type_name, .. }
+        | ClientMessage::AddNodeWith { type_name, .. } = &msg
+        {
             crate::quick_add::recent::record(*self, type_name);
         }
     }
-
 }

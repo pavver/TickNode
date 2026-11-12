@@ -1,11 +1,11 @@
 //! In-place value editor for variables (text fields, switch, dropdown, duration, textarea, read-only preview).
 
-use leptos::prelude::*;
-use ticknode_shared::{DataType, DataValue};
 use crate::i18n::{self, t};
 use crate::inline::duration::units::{self, Unit};
 use crate::state::use_editor;
 use crate::ui::Switch;
+use leptos::prelude::*;
+use ticknode_shared::{DataType, DataValue};
 
 #[component]
 pub fn VariableValueEditor(
@@ -16,7 +16,11 @@ pub fn VariableValueEditor(
     let ed = use_editor();
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();
 
-    if ed.types.with_untracked(|types| types.definition_of(&data_type).is_some_and(|d| d.quantity().is_some() || d.is_identifier())) {
+    if ed.types.with_untracked(|types| {
+        types
+            .definition_of(&data_type)
+            .is_some_and(|d| d.quantity().is_some() || d.is_identifier())
+    }) {
         return view! {
             <crate::inline::InlineValue value=Signal::derive(move || Some(value.get())) value_type=data_type
                 on_commit=Callback::new(move |v: Option<DataValue>| { if let Some(v) = v { on_commit.run(v); } }) />
@@ -37,7 +41,12 @@ pub fn VariableValueEditor(
     }
 
     // 2. Enum: select dropdown
-    let enum_def = ed.types.with_untracked(|types| types.definition_of(&data_type).filter(|d| d.is_enum()).cloned());
+    let enum_def = ed.types.with_untracked(|types| {
+        types
+            .definition_of(&data_type)
+            .filter(|d| d.is_enum())
+            .cloned()
+    });
     if let Some(def) = enum_def {
         let current_val = Memo::new(move |_| match value.get() {
             DataValue::String(s) => s,
@@ -61,34 +70,42 @@ pub fn VariableValueEditor(
                     }).collect_view()}
                 </select>
             </div>
-        }.into_any();
+        }
+        .into_any();
     }
 
     // 3. Duration: number input with unit select
     if data_type == DataType::Duration {
         return view! {
             <DurationEditor value=value on_commit=on_commit />
-        }.into_any();
+        }
+        .into_any();
     }
 
     // 4. String: multiline textarea for templates / long texts, or single-line input with toggle
     if data_type == DataType::String {
         return view! {
             <StringEditor value=value on_commit=on_commit />
-        }.into_any();
+        }
+        .into_any();
     }
 
     // 5. Text-form scalars: Number, Time, DateTime, Color
-    if matches!(data_type, DataType::Number | DataType::Time | DataType::DateTime | DataType::Color) {
+    if matches!(
+        data_type,
+        DataType::Number | DataType::Time | DataType::DateTime | DataType::Color
+    ) {
         return view! {
             <ScalarTextEditor data_type=data_type value=value on_commit=on_commit />
-        }.into_any();
+        }
+        .into_any();
     }
 
     // 6. Complex types: List, Object, Any, Struct - read-only preview with expand toggle
     view! {
         <ComplexPreview value=value data_type=data_type />
-    }.into_any()
+    }
+    .into_any()
 }
 
 #[component]
@@ -398,10 +415,7 @@ fn ScalarTextEditor(
 }
 
 #[component]
-fn ComplexPreview(
-    #[prop(into)] value: Signal<DataValue>,
-    data_type: DataType,
-) -> impl IntoView {
+fn ComplexPreview(#[prop(into)] value: Signal<DataValue>, data_type: DataType) -> impl IntoView {
     let is_expanded = RwSignal::new(false);
     let full_text = Memo::new(move |_| crate::panels::display_value_in(&value.get(), &data_type));
     let stop = |ev: web_sys::PointerEvent| ev.stop_propagation();

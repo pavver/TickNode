@@ -32,8 +32,14 @@ pub struct AllowedIds {
 impl AllowedIds {
     pub fn new(plugin: &str, node_types: &[String], data_types: &[String]) -> Self {
         Self {
-            nodes: node_types.iter().map(|t| format!("node-{}", fluent_slug(t))).collect(),
-            types: data_types.iter().map(|t| format!("type-{}", fluent_slug(t))).collect(),
+            nodes: node_types
+                .iter()
+                .map(|t| format!("node-{}", fluent_slug(t)))
+                .collect(),
+            types: data_types
+                .iter()
+                .map(|t| format!("type-{}", fluent_slug(t)))
+                .collect(),
             plugin: fluent_slug(plugin),
         }
     }
@@ -45,15 +51,26 @@ impl AllowedIds {
 
     pub fn message_allowed(&self, id: &str) -> bool {
         let under = |base: &str, suffixes: &[&str], prefixes: &[&str]| {
-            id.strip_prefix(base).and_then(|r| r.strip_prefix('-')).is_some_and(|rest| {
-                suffixes.contains(&rest) || prefixes.iter().any(|p| rest.starts_with(p) && rest.len() > p.len())
-            })
+            id.strip_prefix(base)
+                .and_then(|r| r.strip_prefix('-'))
+                .is_some_and(|rest| {
+                    suffixes.contains(&rest)
+                        || prefixes
+                            .iter()
+                            .any(|p| rest.starts_with(p) && rest.len() > p.len())
+                })
         };
         id.starts_with("category-")
             || id.starts_with(&self.free_prefix())
             || id.starts_with(&format!("setting-{}-", self.plugin))
-            || self.nodes.iter().any(|n| under(n, &["title", "description", "help"], &["pin-", "prop-"]))
-            || self.types.iter().any(|t| under(t, &["title", "description"], &["field-", "value-"]))
+            || self
+                .nodes
+                .iter()
+                .any(|n| under(n, &["title", "description", "help"], &["pin-", "prop-"]))
+            || self
+                .types
+                .iter()
+                .any(|t| under(t, &["title", "description"], &["field-", "value-"]))
     }
 
     fn term_allowed(&self, id: &str) -> bool {
@@ -72,9 +89,18 @@ pub fn normalize_locale(code: &str) -> Option<String> {
 
 /// Validates one plugin resource. `Err` when the syntax is invalid (the whole resource is rejected);
 /// otherwise the source reduced to the messages the plugin may define.
-pub fn filter_plugin_resource(plugin: &str, locale: &str, source: &str, allowed: &AllowedIds) -> Result<String, String> {
+pub fn filter_plugin_resource(
+    plugin: &str,
+    locale: &str,
+    source: &str,
+    allowed: &AllowedIds,
+) -> Result<String, String> {
     let mut resource = parser::parse(source).map_err(|(_, errors)| {
-        format!("{} syntax error(s), first: {:?}", errors.len(), errors.first().map(|e| &e.kind))
+        format!(
+            "{} syntax error(s), first: {:?}",
+            errors.len(),
+            errors.first().map(|e| &e.kind)
+        )
     })?;
     let mut dropped = Vec::new();
     resource.body.retain(|entry| match entry {
@@ -109,7 +135,11 @@ pub fn merge_resources<'a>(sources: impl IntoIterator<Item = (&'a str, &'a str)>
         let mut resource: Resource<&str> = match parser::parse(source) {
             Ok(r) => r,
             Err((_, errors)) => {
-                warn!(locale, errors = errors.len(), "Skipping a translation resource with syntax errors");
+                warn!(
+                    locale,
+                    errors = errors.len(),
+                    "Skipping a translation resource with syntax errors"
+                );
                 continue;
             }
         };
@@ -157,21 +187,32 @@ mod tests {
 
     fn bundle(source: &str) -> std::collections::BTreeMap<String, String> {
         let res = parser::parse(source).expect("core translations must parse without errors");
-        res.body.into_iter().filter_map(|e| match e {
-            Entry::Message(m) => {
-                let text: String = m.value.iter().flat_map(|p| p.elements.iter()).map(|el| match el {
-                    fluent_syntax::ast::PatternElement::TextElement { value } => *value,
-                    fluent_syntax::ast::PatternElement::Placeable {
-                        expression: fluent_syntax::ast::Expression::Inline(
-                            fluent_syntax::ast::InlineExpression::StringLiteral { value }
-                        ),
-                    } => *value,
-                    fluent_syntax::ast::PatternElement::Placeable { .. } => "{?}",
-                }).collect();
-                Some((m.id.name.to_string(), text))
-            }
-            _ => None,
-        }).collect()
+        res.body
+            .into_iter()
+            .filter_map(|e| match e {
+                Entry::Message(m) => {
+                    let text: String = m
+                        .value
+                        .iter()
+                        .flat_map(|p| p.elements.iter())
+                        .map(|el| match el {
+                            fluent_syntax::ast::PatternElement::TextElement { value } => *value,
+                            fluent_syntax::ast::PatternElement::Placeable {
+                                expression:
+                                    fluent_syntax::ast::Expression::Inline(
+                                        fluent_syntax::ast::InlineExpression::StringLiteral {
+                                            value,
+                                        },
+                                    ),
+                            } => *value,
+                            fluent_syntax::ast::PatternElement::Placeable { .. } => "{?}",
+                        })
+                        .collect();
+                    Some((m.id.name.to_string(), text))
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     fn ids(source: &str) -> BTreeSet<String> {
@@ -189,7 +230,10 @@ mod tests {
         let (en, uk) = (ids(en), ids(uk));
         let only_en: Vec<_> = en.difference(&uk).collect();
         let only_uk: Vec<_> = uk.difference(&en).collect();
-        assert!(only_en.is_empty() && only_uk.is_empty(), "only in en: {only_en:?}, only in uk: {only_uk:?}");
+        assert!(
+            only_en.is_empty() && only_uk.is_empty(),
+            "only in en: {only_en:?}, only in uk: {only_uk:?}"
+        );
     }
 
     #[test]
@@ -218,10 +262,29 @@ mod tests {
         let texts = bundle(en);
         for def in engine.registry.get_definitions() {
             let slug = fluent_slug(&def.type_name);
-            assert_eq!(texts[&format!("node-{slug}-title")], def.title, "{}", def.type_name);
-            assert_eq!(texts[&format!("node-{slug}-description")], def.description, "{}", def.type_name);
-            assert_eq!(texts[&format!("node-{slug}-help")], def.help.trim(), "{}", def.type_name);
-            for pin in def.pins.iter().filter(|p| p.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')) {
+            assert_eq!(
+                texts[&format!("node-{slug}-title")],
+                def.title,
+                "{}",
+                def.type_name
+            );
+            assert_eq!(
+                texts[&format!("node-{slug}-description")],
+                def.description,
+                "{}",
+                def.type_name
+            );
+            assert_eq!(
+                texts[&format!("node-{slug}-help")],
+                def.help.trim(),
+                "{}",
+                def.type_name
+            );
+            for pin in def.pins.iter().filter(|p| {
+                p.name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            }) {
                 if let Some(label) = texts.get(&format!("node-{slug}-pin-{}", pin.name)) {
                     assert_eq!(label, &pin.name, "{} pin {}", def.type_name, pin.name);
                 }
@@ -230,7 +293,11 @@ mod tests {
     }
 
     fn allowed() -> AllowedIds {
-        AllowedIds::new("my_plugin", &["my/node".to_string()], &["my.type".to_string()])
+        AllowedIds::new(
+            "my_plugin",
+            &["my/node".to_string()],
+            &["my.type".to_string()],
+        )
     }
 
     #[test]
@@ -257,17 +324,34 @@ category-weather = Weather
 ";
         let out = filter_plugin_resource("my_plugin", "uk", source, &allowed()).unwrap();
         let kept = message_ids(&out);
-        assert_eq!(kept, [
-            "node-my-node-title", "node-my-node-pin-In", "node-my-node-prop-entity_id-title", "node-my-node-prop-mode-option-every",
-            "type-my-type-field-x", "type-my-type-value-a",
-            "setting-my-plugin-key-title", "my-plugin-error-x", "category-weather",
-        ]);
+        assert_eq!(
+            kept,
+            [
+                "node-my-node-title",
+                "node-my-node-pin-In",
+                "node-my-node-prop-entity_id-title",
+                "node-my-node-prop-mode-option-every",
+                "type-my-type-field-x",
+                "type-my-type-value-a",
+                "setting-my-plugin-key-title",
+                "my-plugin-error-x",
+                "category-weather",
+            ]
+        );
         assert!(out.contains("-my-plugin-term") && !out.contains("-other-term"));
     }
 
     #[test]
     fn syntax_errors_reject_the_whole_resource() {
-        assert!(filter_plugin_resource("my_plugin", "uk", "node-my-node-title = ok\nthis is = = not fluent {", &allowed()).is_err());
+        assert!(
+            filter_plugin_resource(
+                "my_plugin",
+                "uk",
+                "node-my-node-title = ok\nthis is = = not fluent {",
+                &allowed()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -279,8 +363,15 @@ category-weather = Weather
             ("uk", "= broken {"),
         ]);
         let en = merged.iter().find(|(l, _)| l == "en").unwrap().1.clone();
-        assert!(en.contains("a = core") && en.contains("c = plugin") && !en.contains("a = plugin"), "{en}");
-        assert!(merged.iter().any(|(l, t)| l == "uk" && t.contains("a = core-uk")));
+        assert!(
+            en.contains("a = core") && en.contains("c = plugin") && !en.contains("a = plugin"),
+            "{en}"
+        );
+        assert!(
+            merged
+                .iter()
+                .any(|(l, t)| l == "uk" && t.contains("a = core-uk"))
+        );
         assert_eq!(merged.len(), 2);
     }
 
@@ -304,8 +395,16 @@ category-weather = Weather
     fn engine_merges_core_translations() {
         let engine = TickEngine::new();
         let translations = engine.translations();
-        assert!(translations.iter().any(|(l, t)| l == "en" && t.contains("node-const-title")));
-        assert!(translations.iter().any(|(l, t)| l == "uk" && t.contains("node-const-title")));
+        assert!(
+            translations
+                .iter()
+                .any(|(l, t)| l == "en" && t.contains("node-const-title"))
+        );
+        assert!(
+            translations
+                .iter()
+                .any(|(l, t)| l == "uk" && t.contains("node-const-title"))
+        );
     }
 }
 

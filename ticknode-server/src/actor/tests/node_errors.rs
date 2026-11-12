@@ -8,12 +8,18 @@ fn snapshot_carries_current_node_errors_with_ages_and_roundtrips() {
     let id = NodeId::generate();
     actor.engine.create_node(id, "const", &[]).unwrap();
     actor.node_sheet.insert(id, sheet_id);
-    actor.engine.host_state.error(id, UiMessage::new("error-node-frozen", "Frozen"), "Frozen".into());
+    actor.engine.host_state.error(
+        id,
+        UiMessage::new("error-node-frozen", "Frozen"),
+        "Frozen".into(),
+    );
     actor.engine.tick();
     let snapshot = actor.snapshot(Some(sheet_id));
     let decoded: ServerMessage = postcard::from_bytes(&encode(&snapshot)).unwrap();
     assert_eq!(snapshot, decoded);
-    let ServerMessage::Init { node_errors, .. } = snapshot else { panic!() };
+    let ServerMessage::Init { node_errors, .. } = snapshot else {
+        panic!()
+    };
     assert_eq!(node_errors.len(), 1);
     assert_eq!(node_errors[0].node, id);
     assert_eq!(node_errors[0].count, 1);

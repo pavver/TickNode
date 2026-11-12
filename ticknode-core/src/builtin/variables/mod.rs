@@ -1,22 +1,19 @@
 use ticknode_shared::*;
 
-mod get;
-mod set;
+mod changed;
 mod create;
 mod delete;
-mod changed;
+mod get;
+mod set;
 
-pub use get::*;
-pub use set::*;
+pub use changed::*;
 pub use create::*;
 pub use delete::*;
-pub use changed::*;
+pub use get::*;
+pub use set::*;
 
-pub(super) const LOOKUP_OPTIONS: &[(&str, &str)] = &[
-    ("auto", "Auto"),
-    ("sheet", "Sheet"),
-    ("global", "Global"),
-];
+pub(super) const LOOKUP_OPTIONS: &[(&str, &str)] =
+    &[("auto", "Auto"), ("sheet", "Sheet"), ("global", "Global")];
 
 pub(super) const SCOPE_OPTIONS: &[(&str, &str)] = &[
     ("sheet", "Sheet"),

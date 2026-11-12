@@ -14,11 +14,21 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     pub fn get(url: impl Into<String>) -> Self {
-        Self { method: "GET".into(), url: url.into(), headers: Vec::new(), body: Vec::new(), timeout_ms: 0 }
+        Self {
+            method: "GET".into(),
+            url: url.into(),
+            headers: Vec::new(),
+            body: Vec::new(),
+            timeout_ms: 0,
+        }
     }
 
     pub fn post(url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self {
-        Self { method: "POST".into(), body: body.into(), ..Self::get(url) }
+        Self {
+            method: "POST".into(),
+            body: body.into(),
+            ..Self::get(url)
+        }
     }
 
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
@@ -56,7 +66,10 @@ pub enum Trigger {
     /// Pulse on an input exec pin (or manual trigger from the editor).
     Pin(PinId),
     /// A task started by this node has completed.
-    Task { id: TaskId, result: Result<TaskOutput, String> },
+    Task {
+        id: TaskId,
+        result: Result<TaskOutput, String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,7 +96,10 @@ pub enum WsEvent {
     /// The connection ended or could not be opened; carries the reason.
     Closed(WsId, String),
     /// A task started without a current node finished; delivered only to its owning instance.
-    HttpDone { id: TaskId, result: Result<TaskOutput, String> },
+    HttpDone {
+        id: TaskId,
+        result: Result<TaskOutput, String>,
+    },
 }
 
 /// Events delivered to the plugin tick (WebSocket events and plugin-owned HTTP completions).

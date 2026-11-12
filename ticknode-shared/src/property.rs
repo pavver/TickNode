@@ -3,8 +3,8 @@
 //! Node properties are stored as an untyped `Vec<(String, DataValue)>`; optional definitions describe
 //! their controls, validation, order and visibility. Undescribed properties retain their legacy rows.
 
-use serde::{Deserialize, Serialize};
 use crate::{DataValue, PinId};
+use serde::{Deserialize, Serialize};
 
 mod validation;
 pub use validation::{normalize_property_value, parse_property_duration};
@@ -51,7 +51,13 @@ pub struct PropertyDefinition {
 
 impl PropertyDefinition {
     fn new(name: &str, title: &str, kind: PropertyKind) -> Self {
-        Self { name: name.into(), title: title.into(), description: String::new(), kind, input: None }
+        Self {
+            name: name.into(),
+            title: title.into(),
+            description: String::new(),
+            kind,
+            input: None,
+        }
     }
 
     pub fn text(name: &str, title: &str) -> Self {
@@ -60,13 +66,23 @@ impl PropertyDefinition {
 
     /// `options` — `(value, label)` pairs.
     pub fn select(name: &str, title: &str, options: &[(&str, &str)]) -> Self {
-        let options = options.iter().map(|(v, l)| ((*v).into(), (*l).into())).collect();
+        let options = options
+            .iter()
+            .map(|(v, l)| ((*v).into(), (*l).into()))
+            .collect();
         Self::new(name, title, PropertyKind::Select(options))
     }
 
     /// A picker over the options the plugin publishes under `source`.
     pub fn dynamic(name: &str, title: &str, source: &str) -> Self {
-        Self::new(name, title, PropertyKind::Dynamic { source: source.into(), plugin: String::new() })
+        Self::new(
+            name,
+            title,
+            PropertyKind::Dynamic {
+                source: source.into(),
+                plugin: String::new(),
+            },
+        )
     }
 
     pub fn duration(name: &str, title: &str, signed: bool) -> Self {
@@ -78,7 +94,16 @@ impl PropertyDefinition {
     }
 
     pub fn multi_select(name: &str, title: &str, options: &[(&str, &str)]) -> Self {
-        Self::new(name, title, PropertyKind::MultiSelect(options.iter().map(|(v, l)| ((*v).into(), (*l).into())).collect()))
+        Self::new(
+            name,
+            title,
+            PropertyKind::MultiSelect(
+                options
+                    .iter()
+                    .map(|(v, l)| ((*v).into(), (*l).into()))
+                    .collect(),
+            ),
+        )
     }
 
     pub fn multiline(name: &str, title: &str) -> Self {
@@ -95,8 +120,11 @@ impl PropertyDefinition {
     }
 
     pub fn uses_input(&self, properties: &[(String, DataValue)]) -> bool {
-        self.input.is_some() && properties.iter().find(|(name, _)| *name == self.name)
-            .is_none_or(|(_, value)| matches!(value, DataValue::String(s) if s.is_empty()))
+        self.input.is_some()
+            && properties
+                .iter()
+                .find(|(name, _)| *name == self.name)
+                .is_none_or(|(_, value)| matches!(value, DataValue::String(s) if s.is_empty()))
     }
 
     pub fn described(mut self, description: &str) -> Self {
@@ -139,7 +167,8 @@ mod tests {
 
     #[test]
     fn old_property_schemas_default_to_no_replacement_input() {
-        let property: PropertyDefinition = serde_json::from_str(r#"{"name":"target","title":"Target"}"#).unwrap();
+        let property: PropertyDefinition =
+            serde_json::from_str(r#"{"name":"target","title":"Target"}"#).unwrap();
         assert_eq!(property.input, None);
         assert!(!property.uses_input(&[]));
         let property = property.or_input(1);
@@ -153,11 +182,20 @@ mod tests {
         let def = NodeDefinition {
             adaptive: false,
             cost: 1,
-            type_name: "x/y".into(), title: "X".into(), category: "Test".into(), description: String::new(), help: String::new(),
+            type_name: "x/y".into(),
+            title: "X".into(),
+            category: "Test".into(),
+            description: String::new(),
+            help: String::new(),
             pins: vec![],
             properties: vec![
                 PropertyDefinition::text("a", "A"),
-                PropertyDefinition::select("mode", "Mode", &[("every", "Every"), ("latest", "Latest")]).described("d"),
+                PropertyDefinition::select(
+                    "mode",
+                    "Mode",
+                    &[("every", "Every"), ("latest", "Latest")],
+                )
+                .described("d"),
                 PropertyDefinition::dynamic("entity_id", "Entity", "entities").or_input(1),
                 PropertyDefinition::duration("offset", "Offset", true),
                 PropertyDefinition::time("at", "At"),
@@ -166,16 +204,25 @@ mod tests {
                 PropertyDefinition::hidden("snapshot"),
             ],
         };
-        let back: NodeDefinition = postcard::from_bytes(&postcard::to_allocvec(&def).unwrap()).unwrap();
+        let back: NodeDefinition =
+            postcard::from_bytes(&postcard::to_allocvec(&def).unwrap()).unwrap();
         assert_eq!(back, def);
-        let json: NodeDefinition = serde_json::from_str(&serde_json::to_string(&def).unwrap()).unwrap();
+        let json: NodeDefinition =
+            serde_json::from_str(&serde_json::to_string(&def).unwrap()).unwrap();
         assert_eq!(json, def);
 
         let set = PropertyOptionSet {
-            plugin: "p".into(), source: "entities".into(),
-            options: vec![PropertyOption { value: "light.a".into(), label: "A".into(), detail: "light.a".into(), icon: Some("mdi:lightbulb".into()) }],
+            plugin: "p".into(),
+            source: "entities".into(),
+            options: vec![PropertyOption {
+                value: "light.a".into(),
+                label: "A".into(),
+                detail: "light.a".into(),
+                icon: Some("mdi:lightbulb".into()),
+            }],
         };
-        let back: PropertyOptionSet = postcard::from_bytes(&postcard::to_allocvec(&set).unwrap()).unwrap();
+        let back: PropertyOptionSet =
+            postcard::from_bytes(&postcard::to_allocvec(&set).unwrap()).unwrap();
         assert_eq!(back, set);
     }
 }

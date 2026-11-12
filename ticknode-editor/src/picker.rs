@@ -28,19 +28,27 @@ const MIN_SPACE_BELOW: f64 = 55.0 * DU;
 /// and malformed names have no glyph in the bundled font.
 pub fn mdi_class(icon: &str) -> Option<String> {
     let name = icon.strip_prefix("mdi:")?;
-    let valid = !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let valid = !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     valid.then(|| format!("mdi mdi-{name}"))
 }
 
 /// Indices of the options matching `query` (case-insensitive, every whitespace-separated term must occur in the
 /// label, the detail or the value), at most `limit` of them, and how many matched in total.
-pub fn filter_options(options: &[PropertyOption], query: &str, limit: usize) -> (Vec<usize>, usize) {
+pub fn filter_options(
+    options: &[PropertyOption],
+    query: &str,
+    limit: usize,
+) -> (Vec<usize>, usize) {
     let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let mut shown = Vec::new();
     let mut total = 0;
     for (i, option) in options.iter().enumerate() {
         let matches = terms.is_empty() || {
-            let haystack = format!("{}\n{}\n{}", option.label, option.detail, option.value).to_lowercase();
+            let haystack =
+                format!("{}\n{}\n{}", option.label, option.detail, option.value).to_lowercase();
             terms.iter().all(|term| haystack.contains(term.as_str()))
         };
         if matches {
@@ -68,7 +76,9 @@ pub struct Placement {
 pub fn placement(anchor: (f64, f64, f64, f64), viewport: (f64, f64)) -> Placement {
     let (left, top, right, bottom) = anchor;
     let (vw, vh) = viewport;
-    let width = (right - left).max(MIN_WIDTH).min((vw - 2.0 * MARGIN).max(0.0));
+    let width = (right - left)
+        .max(MIN_WIDTH)
+        .min((vw - 2.0 * MARGIN).max(0.0));
     let x = left.clamp(MARGIN, (vw - width - MARGIN).max(MARGIN));
     let below = vh - bottom - MARGIN;
     let above = top - MARGIN;
@@ -85,22 +95,45 @@ pub fn placement(anchor: (f64, f64, f64, f64), viewport: (f64, f64)) -> Placemen
 
 pub(crate) fn viewport() -> (f64, f64) {
     (
-        window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1280.0),
-        window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(800.0),
+        window()
+            .inner_width()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1280.0),
+        window()
+            .inner_height()
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(800.0),
     )
 }
 
 pub(crate) fn input_options(options: &[PropertyOption], label: &str) -> Vec<PropertyOption> {
-    std::iter::once(PropertyOption { value: String::new(), label: label.into(), detail: String::new(), icon: None })
-        .chain(options.iter().filter(|o| !o.value.is_empty()).cloned()).collect()
+    std::iter::once(PropertyOption {
+        value: String::new(),
+        label: label.into(),
+        detail: String::new(),
+        icon: None,
+    })
+    .chain(options.iter().filter(|o| !o.value.is_empty()).cloned())
+    .collect()
 }
 
 fn property_has_input(ed: Editor, node: NodeId, property: &str) -> bool {
-    ed.node_tracked(node).is_some_and(|n| n.instance.with(|i| i.definition.properties.iter().any(|p| p.name == property && p.input.is_some())))
+    ed.node_tracked(node).is_some_and(|n| {
+        n.instance.with(|i| {
+            i.definition
+                .properties
+                .iter()
+                .any(|p| p.name == property && p.input.is_some())
+        })
+    })
 }
 
 fn options_of(ed: Editor, plugin: &str, source: &str) -> std::sync::Arc<Vec<PropertyOption>> {
-    ed.property_options.with(|all| all.get(&(plugin.to_string(), source.to_string())).cloned()).unwrap_or_default()
+    ed.property_options
+        .with(|all| all.get(&(plugin.to_string(), source.to_string())).cloned())
+        .unwrap_or_default()
 }
 
 fn glyph(icon: Option<&str>) -> impl IntoView + use<> {
@@ -123,26 +156,36 @@ pub fn PickerField(
     // The option behind the current value (if the list has it), otherwise the raw value is shown
     let current = Memo::new(move |_| {
         let value = value.get();
-        let options = ed.property_options.with(|all| all.get(&(p.clone(), s.clone())).cloned()).unwrap_or_default();
+        let options = ed
+            .property_options
+            .with(|all| all.get(&(p.clone(), s.clone())).cloned())
+            .unwrap_or_default();
         let found = options.iter().find(|o| o.value == value).cloned();
         (value, found)
     });
     let input_property = property.clone();
     let (prop, plug, src) = (property.clone(), plugin, source);
     let toggle = move |ev: web_sys::MouseEvent| {
-        let open_here = ed.picker.with_untracked(|p| p.as_ref().is_some_and(|p| p.node == node && p.property == prop));
+        let open_here = ed.picker.with_untracked(|p| {
+            p.as_ref()
+                .is_some_and(|p| p.node == node && p.property == prop)
+        });
         if open_here {
             ed.picker.set(None);
             return;
         }
-        let Some(rect) = ev.current_target()
+        let Some(rect) = ev
+            .current_target()
             .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
             .map(|el| el.get_bounding_client_rect())
-        else { return };
+        else {
+            return;
+        };
         ed.wire_context.set(None);
         ed.wire_menu.set(None);
         ed.picker.set(Some(PickerState {
-            on_pick: None, value: None,
+            on_pick: None,
+            value: None,
             node,
             property: prop.clone(),
             plugin: plug.clone(),

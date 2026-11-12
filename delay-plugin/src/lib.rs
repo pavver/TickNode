@@ -136,7 +136,10 @@ impl DelayNode {
         if let (Mode::Reset, Some(task)) = (self.mode, self.active.take()) {
             scheduler.cancel(task);
         }
-        let value = inputs.get(PinId(base + 2)).cloned().unwrap_or(DataValue::Ticks(1));
+        let value = inputs
+            .get(PinId(base + 2))
+            .cloned()
+            .unwrap_or(DataValue::Ticks(1));
         match scheduler.delay_for(&value) {
             Ok(task) => self.active = Some(task),
             Err(e) => scheduler.error(&e),

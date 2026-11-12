@@ -18,7 +18,12 @@ const TOOLTIP_WIDTH: f64 = 80.0 * DU;
 pub(super) fn InfoButton(def: NodeDefinition) -> impl IntoView {
     let ed = use_editor();
     let show = move |ev: &web_sys::MouseEvent| {
-        let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) else { return };
+        let Some(el) = ev
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        else {
+            return;
+        };
         let r = el.get_bounding_client_rect();
         ed.tooltip.set(Some(Tooltip {
             title: i18n::node_title(&def),
@@ -55,14 +60,30 @@ pub fn TooltipLayer() -> impl IntoView {
         let tip = ed.tooltip.get()?;
         let (left, top, right, bottom) = tip.anchor;
         let (vw, vh) = (
-            window().inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1280.0),
-            window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(800.0),
+            window()
+                .inner_width()
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1280.0),
+            window()
+                .inner_height()
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(800.0),
         );
         let width = TOOLTIP_WIDTH.min(vw - 4.0 * DU);
         let gap = 2.0 * DU;
-        let x = if right + gap + width <= vw { right + gap } else { (left - gap - width).max(2.0 * DU) };
+        let x = if right + gap + width <= vw {
+            right + gap
+        } else {
+            (left - gap - width).max(2.0 * DU)
+        };
         // In the lower half of the screen, align with the button's bottom edge to keep the tooltip on-screen
-        let y = if top < vh / 2.0 { format!("top:{top}px") } else { format!("bottom:{}px", vh - bottom) };
+        let y = if top < vh / 2.0 {
+            format!("top:{top}px")
+        } else {
+            format!("bottom:{}px", vh - bottom)
+        };
         Some(view! {
             <div class="tooltip" style=format!("left:{x}px;{y};width:{width}px")>
                 <div class="tooltip-title">{tip.title}</div>

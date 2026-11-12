@@ -2,32 +2,53 @@
 
 use ticknode_plugin_sdk::*;
 
-mod settings;
-mod identifiers;
-mod http;
-mod properties;
-mod websocket;
-mod execution;
-mod typed;
-mod cost;
 mod clock;
+mod cost;
+mod execution;
+mod http;
+mod identifiers;
+mod properties;
+mod settings;
+mod typed;
+mod websocket;
 
+use execution::{ClearProbe, Counter, Crash, Storage, Ticker};
 use settings::{CONFIG, Greeter, Picker, publish_options};
+use typed::{BadSource, MODE, POINT, PointSink, PointSource};
 use websocket::{WS, WsProbe, ws_emit};
-use execution::{Counter, Ticker, Crash, Storage, ClearProbe};
-use typed::{POINT, MODE, PointSource, BadSource, PointSink};
 
 struct TestPlugin;
 
 impl Plugin for TestPlugin {
-    const NODE_TYPES: &'static [&'static str] =
-        &["test/identifier", "test/http_probe", "test/properties", "test/clock", "test/cost", "test/clear", "test/bad_source", "test/counter", "test/crash", "test/greeter", "test/picker", "test/point_sink", "test/point_source", "test/storage", "test/ticker", "test/ws_probe"];
+    const NODE_TYPES: &'static [&'static str] = &[
+        "test/identifier",
+        "test/http_probe",
+        "test/properties",
+        "test/clock",
+        "test/cost",
+        "test/clear",
+        "test/bad_source",
+        "test/counter",
+        "test/crash",
+        "test/greeter",
+        "test/picker",
+        "test/point_sink",
+        "test/point_source",
+        "test/storage",
+        "test/ticker",
+        "test/ws_probe",
+    ];
     /// `de` has a syntax error (rejected by the host); `uk` contains an id the plugin may not define (dropped).
-    const TRANSLATIONS: &'static [(&'static str, &'static str)] =
-        &[("uk", include_str!("../locales/uk.ftl")), ("de", "node-test-counter-title = Zähler\nthis is not fluent"), ("zz", include_str!("../locales/zz.ftl"))];
+    const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[
+        ("uk", include_str!("../locales/uk.ftl")),
+        ("de", "node-test-counter-title = Zähler\nthis is not fluent"),
+        ("zz", include_str!("../locales/zz.ftl")),
+    ];
 
     fn configure(settings: &[(String, DataValue)]) -> Result<(), UiError> {
-        let token = setting_str(settings, "token").unwrap_or_default().to_string();
+        let token = setting_str(settings, "token")
+            .unwrap_or_default()
+            .to_string();
         // Reconnect on every configure (also after the instance is recreated following a crash)
         let ws_result = WS.with(|w| {
             let mut w = w.borrow_mut();
@@ -37,7 +58,10 @@ impl Plugin for TestPlugin {
             match setting_str(settings, "ws_url") {
                 Some(url) => host::ws_connect(url, &[("x-test".to_string(), "1".to_string())])
                     .map(|id| w.id = Some(id))
-                    .map_err(|e| UiError::new("test-plugin-error-ws", format!("WebSocket: {e}")).arg("reason", e)),
+                    .map_err(|e| {
+                        UiError::new("test-plugin-error-ws", format!("WebSocket: {e}"))
+                            .arg("reason", e)
+                    }),
                 None => Ok(()),
             }
         });
@@ -45,14 +69,20 @@ impl Plugin for TestPlugin {
         identifiers::publish(setting_str(settings, "greeting").unwrap_or("Hello"));
         CONFIG.with(|c| {
             let mut c = c.borrow_mut();
-            c.greeting = setting_str(settings, "greeting").unwrap_or_default().to_string();
+            c.greeting = setting_str(settings, "greeting")
+                .unwrap_or_default()
+                .to_string();
             publish_options(&c.greeting);
             c.mode = setting_str(settings, "mode").unwrap_or("quiet").to_string();
             c.token = token.clone();
         });
         match token.as_str() {
-            "" => Err(UiError::new("test-plugin-error-no-token", "Token is not set")),
-            "bad" => Err(UiError::new("test-plugin-error-bad-token", "Invalid token").arg("length", token.len())),
+            "" => Err(UiError::new(
+                "test-plugin-error-no-token",
+                "Token is not set",
+            )),
+            "bad" => Err(UiError::new("test-plugin-error-bad-token", "Invalid token")
+                .arg("length", token.len())),
             // A key outside the plugin namespace must be dropped by the host
             "foreign" => Err(UiError::new("node-math-add-title", "Foreign key")),
             "plain" => Err("Plain error".into()),
@@ -63,8 +93,17 @@ impl Plugin for TestPlugin {
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
         CONFIG.with(|c| match c.borrow().greeting.as_str() {
             "tick-clock" => host::log(&format!("Plugin tick {}", host::current_tick())),
-            "settings-error" => host::node_error(&UiError::new("test-plugin-error-async", "Asynchronous authentication failed"), true),
-            "foreign-settings-error" => host::node_error(&UiError::new("node-math-add-title", "Foreign asynchronous error"), false),
+            "settings-error" => host::node_error(
+                &UiError::new(
+                    "test-plugin-error-async",
+                    "Asynchronous authentication failed",
+                ),
+                true,
+            ),
+            "foreign-settings-error" => host::node_error(
+                &UiError::new("node-math-add-title", "Foreign asynchronous error"),
+                false,
+            ),
             "trap-tick" => {
                 host::log(&format!("Plugin tick {}", host::current_tick()));
                 panic!("deliberate plugin-tick panic");
@@ -75,9 +114,14 @@ impl Plugin for TestPlugin {
         let mut emissions = http::tick(&events);
         for event in events {
             match event {
-                WsEvent::HttpDone { .. } => {},
-                WsEvent::Opened(_) => emissions.extend(ws_emit(vec![Output::Data(PinId(4), "open".into())])),
-                WsEvent::Message(_, text) => emissions.extend(ws_emit(vec![Output::Data(PinId(3), text.into()), Output::Exec(PinId(2))])),
+                WsEvent::HttpDone { .. } => {}
+                WsEvent::Opened(_) => {
+                    emissions.extend(ws_emit(vec![Output::Data(PinId(4), "open".into())]))
+                }
+                WsEvent::Message(_, text) => emissions.extend(ws_emit(vec![
+                    Output::Data(PinId(3), text.into()),
+                    Output::Exec(PinId(2)),
+                ])),
                 WsEvent::Closed(id, reason) => {
                     WS.with(|w| {
                         let mut w = w.borrow_mut();
@@ -85,7 +129,10 @@ impl Plugin for TestPlugin {
                             w.id = None;
                         }
                     });
-                    emissions.extend(ws_emit(vec![Output::Data(PinId(4), format!("closed: {reason}").into())]));
+                    emissions.extend(ws_emit(vec![Output::Data(
+                        PinId(4),
+                        format!("closed: {reason}").into(),
+                    )]));
                 }
             }
         }
@@ -94,26 +141,51 @@ impl Plugin for TestPlugin {
 
     fn types() -> Vec<TypeDefinition> {
         vec![
-            TypeDefinition::identifier(identifiers::CHAT, "Chat", "An opaque chat ID").labels("ids"),
+            TypeDefinition::identifier(identifiers::CHAT, "Chat", "An opaque chat ID")
+                .labels("ids"),
             TypeDefinition::identifier(identifiers::USER, "User", "An opaque user ID"),
-            TypeDefinition::new_struct(POINT, "Point", vec![
-                FieldDefinition::new("x", "X", DataType::Number),
-                FieldDefinition::new("y", "Y", DataType::Number),
-                FieldDefinition::new("label", "Label", DataType::String).optional(),
-            ]).described("A point on a plane").colored("#e0a030"),
+            TypeDefinition::new_struct(
+                POINT,
+                "Point",
+                vec![
+                    FieldDefinition::new("x", "X", DataType::Number),
+                    FieldDefinition::new("y", "Y", DataType::Number),
+                    FieldDefinition::new("label", "Label", DataType::String).optional(),
+                ],
+            )
+            .described("A point on a plane")
+            .colored("#e0a030"),
             TypeDefinition::new_enum(MODE, "Mode", &[("auto", "Auto"), ("manual", "Manual")]),
         ]
     }
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("test_plugin", "0.1.0", "TickNode")
-            .capability(Capability::Http { allowed_domains: vec!["*".into()] })
+            .capability(Capability::Http {
+                allowed_domains: vec!["*".into()],
+            })
             .capability(Capability::Storage)
-            .capability(Capability::WebSocket { allowed_hosts: vec!["*".into()] })
-            .setting(SettingDefinition::text("greeting", "Greeting").described("What the Greeter node emits").default_value("Hello"))
-            .setting(SettingDefinition::secret("token", "Token").described("The plugin rejects an empty token or \"bad\"").required())
-            .setting(SettingDefinition::select("mode", "Mode", &[("quiet", "Quiet"), ("loud", "Loud")]).default_value("quiet"))
-            .setting(SettingDefinition::text("ws_url", "WebSocket URL").described("Opened by the plugin for the ws_probe node"))
+            .capability(Capability::WebSocket {
+                allowed_hosts: vec!["*".into()],
+            })
+            .setting(
+                SettingDefinition::text("greeting", "Greeting")
+                    .described("What the Greeter node emits")
+                    .default_value("Hello"),
+            )
+            .setting(
+                SettingDefinition::secret("token", "Token")
+                    .described("The plugin rejects an empty token or \"bad\"")
+                    .required(),
+            )
+            .setting(
+                SettingDefinition::select("mode", "Mode", &[("quiet", "Quiet"), ("loud", "Loud")])
+                    .default_value("quiet"),
+            )
+            .setting(
+                SettingDefinition::text("ws_url", "WebSocket URL")
+                    .described("Opened by the plugin for the ws_probe node"),
+            )
             .setting(SettingDefinition::text("http_url", "HTTP URL"))
             .setting(SettingDefinition::number("http_count", "HTTP count"))
             .setting(SettingDefinition::bool("http_cancel", "Cancel HTTP"))
@@ -131,7 +203,10 @@ impl Plugin for TestPlugin {
             "test/counter" => Box::new(Counter { step: 1, count: 0 }),
             "test/crash" => Box::new(Crash),
             "test/greeter" => Box::new(Greeter),
-            "test/picker" => Box::new(Picker { choice: String::new(), mode: "a".into() }),
+            "test/picker" => Box::new(Picker {
+                choice: String::new(),
+                mode: "a".into(),
+            }),
             "test/bad_source" => Box::new(BadSource),
             "test/point_source" => Box::new(PointSource { x: 0.0, y: 0.0 }),
             "test/point_sink" => Box::new(PointSink),

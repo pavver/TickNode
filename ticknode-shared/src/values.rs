@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use chrono::{NaiveTime, DateTime, Utc};
-use std::time::Duration;
-use std::ops::{Add, Sub, Mul, Div};
-use std::collections::BTreeMap;
 use crate::{TypeRegistry, is_type_name};
+use chrono::{DateTime, NaiveTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::ops::{Add, Div, Mul, Sub};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Color {
@@ -79,11 +79,15 @@ impl Div for NumberValue {
 }
 
 impl From<i64> for NumberValue {
-    fn from(v: i64) -> Self { Self::Int(v) }
+    fn from(v: i64) -> Self {
+        Self::Int(v)
+    }
 }
 
 impl From<f64> for NumberValue {
-    fn from(v: f64) -> Self { Self::Float(v) }
+    fn from(v: f64) -> Self {
+        Self::Float(v)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -144,17 +148,40 @@ impl DataValue {
             Self::Duration(_) | Self::Ticks(_) => DataType::Duration,
             Self::Color(_) => DataType::Color,
             Self::List { element_type, .. } => DataType::List(Box::new(element_type.clone())),
-            Self::Object { type_name: Some(name), .. } => DataType::Named(name.clone()),
+            Self::Object {
+                type_name: Some(name),
+                ..
+            } => DataType::Named(name.clone()),
             Self::Object { .. } => DataType::Object,
         }
     }
 }
 
-impl From<bool> for DataValue { fn from(v: bool) -> Self { Self::Bool(v) } }
-impl From<f64> for DataValue { fn from(v: f64) -> Self { Self::Number(NumberValue::Float(v).normalize()) } }
-impl From<i64> for DataValue { fn from(v: i64) -> Self { Self::Number(NumberValue::Int(v)) } }
-impl From<&str> for DataValue { fn from(v: &str) -> Self { Self::String(v.into()) } }
-impl From<String> for DataValue { fn from(v: String) -> Self { Self::String(v) } }
+impl From<bool> for DataValue {
+    fn from(v: bool) -> Self {
+        Self::Bool(v)
+    }
+}
+impl From<f64> for DataValue {
+    fn from(v: f64) -> Self {
+        Self::Number(NumberValue::Float(v).normalize())
+    }
+}
+impl From<i64> for DataValue {
+    fn from(v: i64) -> Self {
+        Self::Number(NumberValue::Int(v))
+    }
+}
+impl From<&str> for DataValue {
+    fn from(v: &str) -> Self {
+        Self::String(v.into())
+    }
+}
+impl From<String> for DataValue {
+    fn from(v: String) -> Self {
+        Self::String(v)
+    }
+}
 
 /// Whether an output of type `src` can be connected to an input of type `dst` when there are no custom types:
 /// equal, or at least one is `Any` (also inside lists: `list<number>` → `list<any>`).
@@ -164,9 +191,15 @@ pub fn types_compatible(src: &DataType, dst: &DataType) -> bool {
 }
 
 const BUILTIN_TYPES: &[(DataType, &str)] = &[
-    (DataType::Bool, "bool"), (DataType::Number, "number"), (DataType::String, "string"),
-    (DataType::Time, "time"), (DataType::DateTime, "datetime"), (DataType::Duration, "duration"),
-    (DataType::Color, "color"), (DataType::Object, "object"), (DataType::Any, "any"),
+    (DataType::Bool, "bool"),
+    (DataType::Number, "number"),
+    (DataType::String, "string"),
+    (DataType::Time, "time"),
+    (DataType::DateTime, "datetime"),
+    (DataType::Duration, "duration"),
+    (DataType::Color, "color"),
+    (DataType::Object, "object"),
+    (DataType::Any, "any"),
 ];
 
 pub fn parse_data_type(s: &str) -> Option<DataType> {
@@ -174,7 +207,10 @@ pub fn parse_data_type(s: &str) -> Option<DataType> {
     if let Some((ty, _)) = BUILTIN_TYPES.iter().find(|(_, name)| *name == lower) {
         return Some(ty.clone());
     }
-    if let Some(inner) = lower.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
+    if let Some(inner) = lower
+        .strip_prefix("list<")
+        .and_then(|r| r.strip_suffix('>'))
+    {
         return parse_data_type(inner).map(|t| DataType::List(Box::new(t)));
     }
     // Custom type: case is preserved (type names are lowercase, but we do not guess)
@@ -186,6 +222,11 @@ pub fn data_type_name(t: &DataType) -> String {
     match t {
         DataType::Named(name) => name.clone(),
         DataType::List(inner) => format!("list<{}>", data_type_name(inner)),
-        _ => BUILTIN_TYPES.iter().find(|(ty, _)| ty == t).expect("every built-in type has a name").1.into(),
+        _ => BUILTIN_TYPES
+            .iter()
+            .find(|(ty, _)| ty == t)
+            .expect("every built-in type has a name")
+            .1
+            .into(),
     }
 }

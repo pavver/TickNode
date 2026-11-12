@@ -31,7 +31,8 @@ impl PluginNode for Identifier {
             title: "Identifier probe".into(),
             category: "Test".into(),
             description: "Emits opaque integer identifiers".into(),
-            help: "Copies Chat to the output, or emits the stored value to test output validation.".into(),
+            help: "Copies Chat to the output, or emits the stored value to test output validation."
+                .into(),
             pins: vec![
                 exec_in(0, "In"),
                 data_in(1, "Chat", DataType::Named(CHAT.into())),
@@ -42,8 +43,14 @@ impl PluginNode for Identifier {
         }
     }
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
-        let value = inputs.get(PinId(1)).cloned().unwrap_or_else(|| self.value.clone());
-        vec![Output::Data(PinId(2), value), Output::Data(PinId(3), self.value.clone())]
+        let value = inputs
+            .get(PinId(1))
+            .cloned()
+            .unwrap_or_else(|| self.value.clone());
+        vec![
+            Output::Data(PinId(2), value),
+            Output::Data(PinId(3), self.value.clone()),
+        ]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
         if name == "value" {

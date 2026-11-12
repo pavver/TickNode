@@ -1,14 +1,21 @@
 //! Frame validation, storage, layout reconciliation and clipboard import.
 
 use std::collections::BTreeMap;
-use ticknode_shared::{Frame, FrameId, ServerMessage, SheetId, UiMessage, MAX_FRAMES};
+use ticknode_shared::{Frame, FrameId, MAX_FRAMES, ServerMessage, SheetId, UiMessage};
 
 use super::Actor;
 
 impl Actor {
-    pub(super) fn set_frame(&mut self, frame: Frame, sheet: SheetId) -> Result<Vec<ServerMessage>, UiMessage> {
+    pub(super) fn set_frame(
+        &mut self,
+        frame: Frame,
+        sheet: SheetId,
+    ) -> Result<Vec<ServerMessage>, UiMessage> {
         let valid = frame.validated().ok_or_else(|| {
-            UiMessage::new("error-frame-invalid", "Frame position and size must be finite")
+            UiMessage::new(
+                "error-frame-invalid",
+                "Frame position and size must be finite",
+            )
         })?;
         if self.frame_sheet.get(&valid.id).is_some_and(|s| *s != sheet) {
             return Err(UiMessage::new("error-no-sheet", "Open a sheet first"));
@@ -36,14 +43,19 @@ impl Actor {
         }
     }
 
-    pub(super) fn restore_frames_for_sheet(&mut self, sheet: SheetId, target: &[Frame]) -> Vec<ServerMessage> {
+    pub(super) fn restore_frames_for_sheet(
+        &mut self,
+        sheet: SheetId,
+        target: &[Frame],
+    ) -> Vec<ServerMessage> {
         let target_map: BTreeMap<FrameId, Frame> = target
             .iter()
             .filter_map(|f| f.clone().validated())
             .map(|f| (f.id, f))
             .collect();
         let mut events = Vec::new();
-        let sheet_frame_ids: Vec<FrameId> = self.frame_sheet
+        let sheet_frame_ids: Vec<FrameId> = self
+            .frame_sheet
             .iter()
             .filter(|(_, sh)| **sh == sheet)
             .map(|(&id, _)| id)

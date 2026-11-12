@@ -1,6 +1,6 @@
-use ticknode_shared::*;
-use crate::{Node, NodeContext};
 use super::math::numeric_type;
+use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
 pub struct HysteresisNode {
     pub id: NodeId,
@@ -12,20 +12,35 @@ pub struct HysteresisNode {
 
 impl HysteresisNode {
     pub fn new(id: NodeId) -> Self {
-        Self { id, value_type: DataType::Number, falling: false, state: false, invalid_reported: false }
+        Self {
+            id,
+            value_type: DataType::Number,
+            falling: false,
+            state: false,
+            invalid_reported: false,
+        }
     }
 }
 
 impl Node for HysteresisNode {
-    fn id(&self) -> NodeId { self.id }
+    fn id(&self) -> NodeId {
+        self.id
+    }
 
     fn definition(&self) -> NodeDefinition {
         let input = |id, name: &str| PinDefinition {
-            id: PinId(id), name: name.into(), pin_type: PinType::Data(self.value_type.clone()),
-            direction: PinDirection::Input, required: true,
+            id: PinId(id),
+            name: name.into(),
+            pin_type: PinType::Data(self.value_type.clone()),
+            direction: PinDirection::Input,
+            required: true,
         };
         let exec = |id, name: &str, direction| PinDefinition {
-            id: PinId(id), name: name.into(), pin_type: PinType::Exec, direction, required: false,
+            id: PinId(id),
+            name: name.into(),
+            pin_type: PinType::Exec,
+            direction,
+            required: false,
         };
         NodeDefinition {
             type_name: "logic/hysteresis".into(),
@@ -61,9 +76,16 @@ impl Node for HysteresisNode {
         let previous = self.state;
         let invalid = if self.falling { on > off } else { on < off };
         if invalid {
-            let message = UiMessage::new("error-hysteresis-thresholds", "Invalid hysteresis thresholds: rising mode requires On threshold ≥ Off threshold; falling mode requires On threshold ≤ Off threshold");
+            let message = UiMessage::new(
+                "error-hysteresis-thresholds",
+                "Invalid hysteresis thresholds: rising mode requires On threshold ≥ Off threshold; falling mode requires On threshold ≤ Off threshold",
+            );
             if !self.invalid_reported {
-                ctx.host_state.error(self.id, message.clone(), format!("[ERROR] {}", message.fallback));
+                ctx.host_state.error(
+                    self.id,
+                    message.clone(),
+                    format!("[ERROR] {}", message.fallback),
+                );
                 self.invalid_reported = true;
             } else {
                 // Keep the UI error alive while Out continues, without repeating the log.
@@ -73,7 +95,11 @@ impl Node for HysteresisNode {
             self.invalid_reported = false;
             if if self.falling { value < on } else { value > on } {
                 self.state = true;
-            } else if if self.falling { value > off } else { value < off } {
+            } else if if self.falling {
+                value > off
+            } else {
+                value < off
+            } {
                 self.state = false;
             }
         }
@@ -88,15 +114,22 @@ impl Node for HysteresisNode {
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![
             ("value_type".into(), data_type_name(&self.value_type).into()),
-            ("mode".into(), if self.falling { "falling" } else { "rising" }.into()),
+            (
+                "mode".into(),
+                if self.falling { "falling" } else { "rising" }.into(),
+            ),
         ]
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        let DataValue::String(value) = value else { return };
+        let DataValue::String(value) = value else {
+            return;
+        };
         match name {
             "value_type" => {
-                if let Some(t) = parse_data_type(&value).filter(numeric_type) { self.value_type = t; }
+                if let Some(t) = parse_data_type(&value).filter(numeric_type) {
+                    self.value_type = t;
+                }
             }
             "mode" if value == "rising" || value == "falling" => self.falling = value == "falling",
             _ => {}
@@ -104,10 +137,14 @@ impl Node for HysteresisNode {
     }
 
     fn adapt_to(&mut self, pin: PinId, t: &DataType) -> bool {
-        if !(1..=3).contains(&pin.0) || !numeric_type(t) || *t == self.value_type { return false; }
+        if !(1..=3).contains(&pin.0) || !numeric_type(t) || *t == self.value_type {
+            return false;
+        }
         self.value_type = t.clone();
         true
     }
 
-    fn adapts_on_connect(&self, pin: PinId) -> bool { pin == PinId(1) }
+    fn adapts_on_connect(&self, pin: PinId) -> bool {
+        pin == PinId(1)
+    }
 }

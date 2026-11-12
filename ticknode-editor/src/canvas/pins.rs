@@ -3,18 +3,20 @@
 use leptos::prelude::*;
 use ticknode_shared::*;
 
+use super::wires::{PendingConnection, connection_pin};
 use crate::geometry::*;
 use crate::i18n::{self, t};
 use crate::inline::PinValue;
-use crate::state::{use_editor, Editor};
-use super::wires::{PendingConnection, connection_pin};
+use crate::state::{Editor, use_editor};
 
 /// Sends the change to the server; effective pins arrive in NodeUpdated.
 #[component]
 pub fn PinSplitControl(node: NodeId, pin: PinDefinition) -> impl IntoView {
     let ed = use_editor();
     let parent = split_field_parent(pin.id).map(|(parent, _)| parent);
-    let can_split = ed.types.with_untracked(|types| splittable_type(types, &pin).is_some());
+    let can_split = ed
+        .types
+        .with_untracked(|types| splittable_type(types, &pin).is_some());
     (parent.is_some() || can_split).then(|| view! {
         <button
             class="mini-btn icon pin-split"
@@ -55,14 +57,22 @@ pub fn Pin(
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
     // An unconnected data input can have an inline value set right here
-    let value_type = ed.types.with_untracked(|types| inline_type(types, dir, &pin.pin_type));
-    let row_height = Signal::derive(move || ed.layout(node).map_or(ROW_H, |l| l.pin_height(pin_id, dir)));
-    let property_input = ed.node(node).is_some_and(|n| n.instance.with_untracked(|i| i.definition.properties.iter().any(|p| p.input == Some(pin_id))));
+    let value_type = ed
+        .types
+        .with_untracked(|types| inline_type(types, dir, &pin.pin_type));
+    let row_height =
+        Signal::derive(move || ed.layout(node).map_or(ROW_H, |l| l.pin_height(pin_id, dir)));
+    let property_input = ed.node(node).is_some_and(|n| {
+        n.instance.with_untracked(|i| {
+            i.definition
+                .properties
+                .iter()
+                .any(|p| p.input == Some(pin_id))
+        })
+    });
     let value = value_type.filter(|_| !property_input).map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() multiline=Signal::derive(move || row_height.get() > ROW_H) /> }));
     let pin_for_title = pin.clone();
-    let pin_title = move || {
-        pin_title_text(ed, node, &pin_for_title, dir)
-    };
+    let pin_title = move || pin_title_text(ed, node, &pin_for_title, dir);
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();
     let allowed_target = move || target_conversion(ed, pending?.0.get()?, node, dir, &target_type);
@@ -101,14 +111,22 @@ pub fn Pin(
     }
 }
 
-pub(crate) fn pin_title_text(ed: Editor, node: NodeId, pin: &PinDefinition, dir: PinDirection) -> String {
+pub(crate) fn pin_title_text(
+    ed: Editor,
+    node: NodeId,
+    pin: &PinDefinition,
+    dir: PinDirection,
+) -> String {
     let is_input = dir == PinDirection::Input;
     let eff_type = effective_pin_type(ed, node, pin.id, is_input, &pin.pin_type);
     let translated_pin = translated_pin_name(ed, node, &pin.name);
     let type_name = pin_type_title_label(ed, &eff_type);
     let exec = pin.pin_type == PinType::Exec;
     let status = crate::node_status::pin_status(ed, node, pin.id, dir, exec);
-    format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &eff_type, pin.required))
+    format!(
+        "{}\n{status}",
+        pin_tooltip(&translated_pin, &type_name, &eff_type, pin.required)
+    )
 }
 
 pub(crate) fn display_type(declared: &DataType, source: Option<DataType>) -> DataType {
@@ -119,7 +137,13 @@ pub(crate) fn display_type(declared: &DataType, source: Option<DataType>) -> Dat
     }
 }
 
-fn effective_pin_type(ed: crate::state::Editor, node: NodeId, pin_id: PinId, is_input: bool, declared: &PinType) -> PinType {
+fn effective_pin_type(
+    ed: crate::state::Editor,
+    node: NodeId,
+    pin_id: PinId,
+    is_input: bool,
+    declared: &PinType,
+) -> PinType {
     match declared {
         PinType::Data(declared) => PinType::Data(display_type(
             declared,
@@ -130,15 +154,28 @@ fn effective_pin_type(ed: crate::state::Editor, node: NodeId, pin_id: PinId, is_
 }
 
 fn translated_pin_name(ed: crate::state::Editor, node: NodeId, name: &str) -> String {
-    ed.node_tracked(node).map_or_else(|| name.to_string(), |n| n.instance.with(|i| i18n::node_pin_label(&i.definition.type_name, name)))
+    ed.node_tracked(node).map_or_else(
+        || name.to_string(),
+        |n| {
+            n.instance
+                .with(|i| i18n::node_pin_label(&i.definition.type_name, name))
+        },
+    )
 }
 
 fn pin_type_title_label(ed: crate::state::Editor, pin: &PinType) -> String {
-    match pin { PinType::Exec => i18n::type_name_label("exec"), PinType::Data(t) => ed.type_title(t) }
+    match pin {
+        PinType::Exec => i18n::type_name_label("exec"),
+        PinType::Data(t) => ed.type_title(t),
+    }
 }
 
 fn pin_tooltip(name: &str, type_name: &str, pin: &PinType, required: bool) -> String {
-    let required_note = if required { t!("pin-required-suffix") } else { String::new() };
+    let required_note = if required {
+        t!("pin-required-suffix")
+    } else {
+        String::new()
+    };
     let technical = match pin {
         PinType::Data(t) => format!("\n{}", t!("pin-technical-type", name = data_type_name(t))),
         _ => String::new(),
@@ -148,23 +185,43 @@ fn pin_tooltip(name: &str, type_name: &str, pin: &PinType, required: bool) -> St
 
 fn inline_type(types: &TypeRegistry, dir: PinDirection, pin: &PinType) -> Option<DataType> {
     match pin {
-        PinType::Data(t) if dir == PinDirection::Input && input_value_editable(types, t) => Some(t.clone()),
+        PinType::Data(t) if dir == PinDirection::Input && input_value_editable(types, t) => {
+            Some(t.clone())
+        }
         _ => None,
     }
 }
 
-fn target_conversion(ed: crate::state::Editor, from: super::wires::WireEnd, node: NodeId, dir: PinDirection, target: &PinType) -> Option<bool> {
-    if from.dir == dir || from.node == node { return None; }
+fn target_conversion(
+    ed: crate::state::Editor,
+    from: super::wires::WireEnd,
+    node: NodeId,
+    dir: PinDirection,
+    target: &PinType,
+) -> Option<bool> {
+    if from.dir == dir || from.node == node {
+        return None;
+    }
     let other = connection_pin(ed, from.node, from.pin, from.dir)?;
-    let (src, dst) = if dir == PinDirection::Input { (&other, target) } else { (target, &other) };
+    let (src, dst) = if dir == PinDirection::Input {
+        (&other, target)
+    } else {
+        (target, &other)
+    };
     ed.types.with(|types| wire_conversion(types, src, dst))
 }
 
 fn pin_class(is_input: bool, is_field: bool, missing: bool, connectable: bool) -> String {
     let mut class = if is_input { "pin in" } else { "pin out" }.to_string();
-    if is_field { class.push_str(" split-field"); }
-    if missing { class.push_str(" missing"); }
-    if connectable { class.push_str(" connectable"); }
+    if is_field {
+        class.push_str(" split-field");
+    }
+    if missing {
+        class.push_str(" missing");
+    }
+    if connectable {
+        class.push_str(" connectable");
+    }
     class
 }
 

@@ -10,7 +10,10 @@ fn disabled_nodes_are_excluded_from_sources_and_idle_tick() {
 
     engine.set_disabled([clock], true);
     assert!(engine.is_disabled(clock));
-    assert!(!engine.sources.contains(&clock), "disabled node must not be in sources");
+    assert!(
+        !engine.sources.contains(&clock),
+        "disabled node must not be in sources"
+    );
 
     // Idle tick does not visit the disabled clock
     engine.tick();
@@ -28,12 +31,17 @@ fn disabled_nodes_skip_queue_execution_and_pure_pulls() {
     let mut engine = TickEngine::new();
     let c = NodeId::generate();
     let add = NodeId::generate();
-    engine.create_node(c, "const", &[("value".into(), 10i64.into())]).unwrap();
+    engine
+        .create_node(c, "const", &[("value".into(), 10i64.into())])
+        .unwrap();
     engine.create_node(add, "math/add", &[]).unwrap();
     engine.connect_data(c, PinId(0), add, PinId(0)).unwrap();
 
     // Normal pure pull
-    assert_eq!(engine.pull_data(c, PinId(0), &mut vec![]), Some(10i64.into()));
+    assert_eq!(
+        engine.pull_data(c, PinId(0), &mut vec![]),
+        Some(10i64.into())
+    );
 
     // When disabled, pure pull through it yields None
     engine.set_disabled([c], true);
@@ -42,11 +50,17 @@ fn disabled_nodes_skip_queue_execution_and_pure_pulls() {
     // Triggered node in execution queue is skipped
     engine.trigger_node(c, PinId(0));
     engine.tick();
-    assert!(engine.executed.is_empty(), "disabled node should not execute");
+    assert!(
+        engine.executed.is_empty(),
+        "disabled node should not execute"
+    );
 
     // Re-enabling allows pure pull again
     engine.set_disabled([c], false);
-    assert_eq!(engine.pull_data(c, PinId(0), &mut vec![]), Some(10i64.into()));
+    assert_eq!(
+        engine.pull_data(c, PinId(0), &mut vec![]),
+        Some(10i64.into())
+    );
 }
 
 #[test]
@@ -73,5 +87,8 @@ fn disabled_nodes_drop_finished_tasks_without_error_spam() {
     engine.host_state.current_tick += 1;
     engine.tick();
     assert!(engine.executed.is_empty());
-    assert!(engine.host_state.logs.is_empty(), "dropped task on disabled node must not produce error spam");
+    assert!(
+        engine.host_state.logs.is_empty(),
+        "dropped task on disabled node must not produce error spam"
+    );
 }

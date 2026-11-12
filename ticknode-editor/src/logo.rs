@@ -1,9 +1,9 @@
 //! The TickNode mark in the header. It plays the signal animation while the editor connects and
 //! while the engine runs nodes; a cycle in progress always finishes, so it never stops mid-flash.
 
+use crate::state::{ConnStatus, use_editor};
 use leptos::prelude::*;
 use ticknode_shared::SheetSummary;
-use crate::state::{ConnStatus, use_editor};
 
 /// One animation cycle (`logo-*` keyframes in `styles/logo.css`).
 const CYCLE_MS: f64 = 4000.0;
@@ -45,9 +45,14 @@ pub fn summary_activity(sheets: &[SheetSummary], received_at: f64) -> Option<f64
 #[component]
 pub fn Logo() -> impl IntoView {
     let ed = use_editor();
-    let active = Memo::new(move |_| logo_active(ed.status.get(), ed.activity_at.get(), ed.now.get()));
+    let active =
+        Memo::new(move |_| logo_active(ed.status.get(), ed.activity_at.get(), ed.now.get()));
     let playing = RwSignal::new(false);
-    Effect::new(move |_| if active.get() { playing.set(true) });
+    Effect::new(move |_| {
+        if active.get() {
+            playing.set(true)
+        }
+    });
     view! {
         <svg
             class=move || if playing.get() { "logo playing" } else { "logo" }

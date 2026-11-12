@@ -1,8 +1,12 @@
 use ticknode_plugin_sdk::*;
 
-pub(super) struct CostProbe { cost: u32 }
+pub(super) struct CostProbe {
+    cost: u32,
+}
 impl Default for CostProbe {
-    fn default() -> Self { Self { cost: 1 } }
+    fn default() -> Self {
+        Self { cost: 1 }
+    }
 }
 impl PluginNode for CostProbe {
     fn definition(&self) -> NodeDefinition {
@@ -24,5 +28,7 @@ impl PluginNode for CostProbe {
             self.cost = cost;
         }
     }
-    fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> { Vec::new() }
+    fn execute(&mut self, _: Trigger, _: &Inputs) -> Vec<Output> {
+        Vec::new()
+    }
 }

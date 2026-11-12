@@ -22,10 +22,20 @@ fn migration_from_old_graph_json_creates_main_sheet_and_renames_to_migrated() {
 
     let mut engine = TickEngine::new();
     let c = NodeId::generate();
-    engine.create_node(c, "const", &[("value".into(), DataValue::String("hello".into()))]).unwrap();
+    engine
+        .create_node(
+            c,
+            "const",
+            &[("value".into(), DataValue::String("hello".into()))],
+        )
+        .unwrap();
     let mut model = engine.export_graph();
     model.nodes[0].position = Position { x: 12.0, y: 34.0 };
-    std::fs::write(&old_graph_path, serde_json::to_string_pretty(&model).unwrap()).unwrap();
+    std::fs::write(
+        &old_graph_path,
+        serde_json::to_string_pretty(&model).unwrap(),
+    )
+    .unwrap();
 
     let storage = Storage::new(dir.path().to_path_buf());
     let mut restored = TickEngine::new();
@@ -50,13 +60,27 @@ fn load_and_save_round_trip_of_two_sheets() {
     let mut engine = TickEngine::new();
     let s1 = SheetId::generate();
     let s2 = SheetId::generate();
-    let info1 = SheetInfo { id: s1, title: "Sheet 1".into(), caption: "Cap 1".into(), enabled: true };
-    let info2 = SheetInfo { id: s2, title: "Sheet 2".into(), caption: "Cap 2".into(), enabled: false };
+    let info1 = SheetInfo {
+        id: s1,
+        title: "Sheet 1".into(),
+        caption: "Cap 1".into(),
+        enabled: true,
+    };
+    let info2 = SheetInfo {
+        id: s2,
+        title: "Sheet 2".into(),
+        caption: "Cap 2".into(),
+        enabled: false,
+    };
 
     let n1 = NodeId::generate();
     let n2 = NodeId::generate();
-    engine.create_node(n1, "const", &[("value".into(), 1i64.into())]).unwrap();
-    engine.create_node(n2, "const", &[("value".into(), 2i64.into())]).unwrap();
+    engine
+        .create_node(n1, "const", &[("value".into(), 1i64.into())])
+        .unwrap();
+    engine
+        .create_node(n2, "const", &[("value".into(), 2i64.into())])
+        .unwrap();
 
     let mut g1 = GraphModel::default();
     g1.nodes.push(engine.node_model(n1).unwrap());
@@ -66,7 +90,9 @@ fn load_and_save_round_trip_of_two_sheets() {
     g2.nodes.push(engine.node_model(n2).unwrap());
     g2.nodes[0].position = Position { x: 100.0, y: 200.0 };
 
-    storage.save_sheets_meta(&[info1.clone(), info2.clone()]).unwrap();
+    storage
+        .save_sheets_meta(&[info1.clone(), info2.clone()])
+        .unwrap();
     storage.save_sheet(s1, &g1).unwrap();
     storage.save_sheet(s2, &g2).unwrap();
 
@@ -79,7 +105,10 @@ fn load_and_save_round_trip_of_two_sheets() {
     assert_eq!(loaded.positions[&n1], Position { x: 10.0, y: 20.0 });
     assert_eq!(loaded.positions[&n2], Position { x: 100.0, y: 200.0 });
     assert!(!restored.is_disabled(n1));
-    assert!(restored.is_disabled(n2), "sheet 2 was disabled, so node 2 must be disabled");
+    assert!(
+        restored.is_disabled(n2),
+        "sheet 2 was disabled, so node 2 must be disabled"
+    );
 }
 
 #[test]
@@ -98,7 +127,12 @@ fn delete_sheet_moves_file_to_trash() {
 
     let trash_files: Vec<_> = std::fs::read_dir(storage.trash_dir()).unwrap().collect();
     assert_eq!(trash_files.len(), 1);
-    let name = trash_files[0].as_ref().unwrap().file_name().to_string_lossy().to_string();
+    let name = trash_files[0]
+        .as_ref()
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .to_string();
     assert!(name.starts_with(&format!("{}-", id.0)));
     assert!(name.ends_with(".json"));
 }
@@ -108,7 +142,12 @@ fn corrupt_sheet_file_fails_load() {
     let dir = tempfile::tempdir().unwrap();
     let storage = Storage::new(dir.path().to_path_buf());
     let id = SheetId::generate();
-    let info = SheetInfo { id, title: "Broken".into(), caption: "".into(), enabled: true };
+    let info = SheetInfo {
+        id,
+        title: "Broken".into(),
+        caption: "".into(),
+        enabled: true,
+    };
     storage.save_sheets_meta(&[info]).unwrap();
     std::fs::create_dir_all(storage.sheets_dir()).unwrap();
     std::fs::write(storage.sheet_path(id), "{ broken json").unwrap();
@@ -139,7 +178,9 @@ fn save_and_load_variables_round_trip() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::metadata(storage.variables_json_path()).unwrap().permissions();
+        let perms = std::fs::metadata(storage.variables_json_path())
+            .unwrap()
+            .permissions();
         assert_eq!(perms.mode() & 0o777, 0o600);
     }
 
@@ -151,11 +192,17 @@ fn save_and_load_variables_round_trip() {
     let mut engine = TickEngine::new();
     storage.load(&mut engine).unwrap();
     assert_eq!(
-        engine.variables.get(&VariableKey::persistent("theme")).map(|v| &v.value),
+        engine
+            .variables
+            .get(&VariableKey::persistent("theme"))
+            .map(|v| &v.value),
         Some(&DataValue::from("dark"))
     );
     assert_eq!(
-        engine.variables.get(&VariableKey::persistent("brightness")).map(|v| &v.value),
+        engine
+            .variables
+            .get(&VariableKey::persistent("brightness"))
+            .map(|v| &v.value),
         Some(&DataValue::from(80))
     );
 }
@@ -176,7 +223,14 @@ fn settings_fallback_to_env_and_defaults() {
     let path = dir.path().join("settings.json");
 
     let no_env = Storage::load_settings_from(&path, &|_| None).unwrap();
-    assert_eq!(no_env, ServerSettings { tick_ms: 100, tick_budget: 0, ..Default::default() });
+    assert_eq!(
+        no_env,
+        ServerSettings {
+            tick_ms: 100,
+            tick_budget: 0,
+            ..Default::default()
+        }
+    );
 
     let env = |k: &str| match k {
         "TICKNODE_TICK_MS" => Some("50".into()),
@@ -184,7 +238,14 @@ fn settings_fallback_to_env_and_defaults() {
         _ => None,
     };
     let with_env = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(with_env, ServerSettings { tick_ms: 50, tick_budget: 1000, ..Default::default() });
+    assert_eq!(
+        with_env,
+        ServerSettings {
+            tick_ms: 50,
+            tick_budget: 1000,
+            ..Default::default()
+        }
+    );
 }
 
 #[test]
@@ -193,7 +254,13 @@ fn settings_file_precedence_over_env() {
     let storage = Storage::new(dir.path().to_path_buf());
     let path = storage.settings_json_path();
 
-    storage.save_settings(&ServerSettings { tick_ms: 250, tick_budget: 2000, ..Default::default() }).unwrap();
+    storage
+        .save_settings(&ServerSettings {
+            tick_ms: 250,
+            tick_budget: 2000,
+            ..Default::default()
+        })
+        .unwrap();
 
     let env = |k: &str| match k {
         "TICKNODE_TICK_MS" => Some("50".into()),
@@ -201,7 +268,14 @@ fn settings_file_precedence_over_env() {
         _ => None,
     };
     let loaded = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 250, tick_budget: 2000, ..Default::default() });
+    assert_eq!(
+        loaded,
+        ServerSettings {
+            tick_ms: 250,
+            tick_budget: 2000,
+            ..Default::default()
+        }
+    );
 }
 
 #[test]
@@ -215,7 +289,14 @@ fn settings_partial_file_uses_env_fallback() {
         _ => None,
     };
     let loaded = Storage::load_settings_from(&path, &env).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 300, tick_budget: 500, ..Default::default() });
+    assert_eq!(
+        loaded,
+        ServerSettings {
+            tick_ms: 300,
+            tick_budget: 500,
+            ..Default::default()
+        }
+    );
 }
 
 #[test]
@@ -225,7 +306,14 @@ fn settings_validation_clamp() {
     std::fs::write(&path, r#"{"tick_ms": 0, "tick_budget": 5000000}"#).unwrap();
 
     let loaded = Storage::load_settings_from(&path, &|_| None).unwrap();
-    assert_eq!(loaded, ServerSettings { tick_ms: 1, tick_budget: 1_000_000, ..Default::default() });
+    assert_eq!(
+        loaded,
+        ServerSettings {
+            tick_ms: 1,
+            tick_budget: 1_000_000,
+            ..Default::default()
+        }
+    );
 }
 
 #[test]
@@ -243,13 +331,42 @@ fn display_settings_roundtrip_and_invalid_file_is_rejected() {
     use ticknode_shared::{DisplayRules, QuantityDisplay, UnitStep};
     let dir = tempfile::tempdir().unwrap();
     let storage = Storage::new(dir.path().join("graph.json"));
-    let mut settings = ServerSettings { display: DisplayRules { quantities: [("quantity.power".into(), QuantityDisplay {
-        digits: 4, steps: vec![UnitStep { from: 0.0, unit: "watt".into() }, UnitStep { from: 10000.0, unit: "kilowatt".into() }],
-        rounding: Default::default(),
-    })].into(), ..Default::default() }, ..Default::default() };
+    let mut settings = ServerSettings {
+        display: DisplayRules {
+            quantities: [(
+                "quantity.power".into(),
+                QuantityDisplay {
+                    digits: 4,
+                    steps: vec![
+                        UnitStep {
+                            from: 0.0,
+                            unit: "watt".into(),
+                        },
+                        UnitStep {
+                            from: 10000.0,
+                            unit: "kilowatt".into(),
+                        },
+                    ],
+                    rounding: Default::default(),
+                },
+            )]
+            .into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
     storage.save_settings(&settings).unwrap();
-    assert_eq!(Storage::load_settings_from(&storage.settings_json_path(), &|_| None).unwrap(), settings);
-    settings.display.quantities.get_mut("quantity.power").unwrap().steps[0].from = 1.0;
+    assert_eq!(
+        Storage::load_settings_from(&storage.settings_json_path(), &|_| None).unwrap(),
+        settings
+    );
+    settings
+        .display
+        .quantities
+        .get_mut("quantity.power")
+        .unwrap()
+        .steps[0]
+        .from = 1.0;
     storage.save_settings(&settings).unwrap();
     assert!(Storage::load_settings_from(&storage.settings_json_path(), &|_| None).is_err());
 }

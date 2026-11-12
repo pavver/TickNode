@@ -50,7 +50,13 @@ fn test_syntax_errors_with_line_column_and_range() {
 fn test_render_error_with_line() {
     let source = "line 1\nline 2\n{{ 1 // 0 }}";
     let inputs = vec![];
-    let err = render(source, &inputs, &|_, _| String::new(), std::sync::Arc::new(|_: &DataValue| String::new())).unwrap_err();
+    let err = render(
+        source,
+        &inputs,
+        &|_, _| String::new(),
+        std::sync::Arc::new(|_: &DataValue| String::new()),
+    )
+    .unwrap_err();
     assert_eq!(err.line, Some(3));
 }
 
@@ -58,7 +64,13 @@ fn test_render_error_with_line() {
 fn test_render_fuel_exhaustion() {
     let source = "{% for i in range(100000) %}{{ i }}{% endfor %}";
     let inputs = vec![];
-    let err = render(source, &inputs, &|_, _| String::new(), std::sync::Arc::new(|_: &DataValue| String::new())).unwrap_err();
+    let err = render(
+        source,
+        &inputs,
+        &|_, _| String::new(),
+        std::sync::Arc::new(|_: &DataValue| String::new()),
+    )
+    .unwrap_err();
     assert!(err.message.contains("fuel"));
 }
 
@@ -66,13 +78,23 @@ fn test_render_fuel_exhaustion() {
 fn test_render_inputs_format_and_runtime_text() {
     let source = "{{ x + 1 }}|{{ text.power }}|{{ (power / 1000) | text }}|{{ text.missing | default('unset') }}";
     let inputs = vec![
-        ("x".into(), Some(DataValue::Number(NumberValue::Int(10))), DataType::Number),
-        ("power".into(), Some(DataValue::Number(NumberValue::Int(1500))), DataType::Named("quantity.power".into())),
+        (
+            "x".into(),
+            Some(DataValue::Number(NumberValue::Int(10))),
+            DataType::Number,
+        ),
+        (
+            "power".into(),
+            Some(DataValue::Number(NumberValue::Int(1500))),
+            DataType::Named("quantity.power".into()),
+        ),
         ("missing".into(), None, DataType::String),
     ];
     let format = |val: &DataValue, ty: &DataType| -> String {
         match (val, ty) {
-            (DataValue::Number(NumberValue::Int(n)), DataType::Named(name)) if name == "quantity.power" => {
+            (DataValue::Number(NumberValue::Int(n)), DataType::Named(name))
+                if name == "quantity.power" =>
+            {
                 format!("{} W", n)
             }
             _ => format!("{val:?}"),

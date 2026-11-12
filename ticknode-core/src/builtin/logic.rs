@@ -1,21 +1,58 @@
-use ticknode_shared::*;
 use crate::{Node, NodeContext};
+use ticknode_shared::*;
 
-pub struct LogicalNode { pub id: NodeId, pub op: LogOp }
+pub struct LogicalNode {
+    pub id: NodeId,
+    pub op: LogOp,
+}
 impl Node for LogicalNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         let (name, title) = operation_identity(self.op);
         let pins = match self.op {
             LogOp::And | LogOp::Or => vec![
-                PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "B".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(2), name: "Res".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
+                PinDefinition {
+                    id: PinId(0),
+                    name: "A".to_string(),
+                    pin_type: PinType::Data(DataType::Bool),
+                    direction: PinDirection::Input,
+                    required: false,
+                },
+                PinDefinition {
+                    id: PinId(1),
+                    name: "B".to_string(),
+                    pin_type: PinType::Data(DataType::Bool),
+                    direction: PinDirection::Input,
+                    required: false,
+                },
+                PinDefinition {
+                    id: PinId(2),
+                    name: "Res".to_string(),
+                    pin_type: PinType::Data(DataType::Bool),
+                    direction: PinDirection::Output,
+                    required: false,
+                },
             ],
             LogOp::Not => vec![
-                PinDefinition { id: PinId(0), name: "A".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(2), name: "Res".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
+                PinDefinition {
+                    id: PinId(0),
+                    name: "A".to_string(),
+                    pin_type: PinType::Data(DataType::Bool),
+                    direction: PinDirection::Input,
+                    required: false,
+                },
+                PinDefinition {
+                    id: PinId(2),
+                    name: "Res".to_string(),
+                    pin_type: PinType::Data(DataType::Bool),
+                    direction: PinDirection::Output,
+                    required: false,
+                },
             ],
         };
         NodeDefinition {
@@ -30,26 +67,44 @@ impl Node for LogicalNode {
                 LogOp::And => "Res = true only if both A and B are true.",
                 LogOp::Or => "Res = true if at least one of A or B is true.",
                 LogOp::Not => "Res is the logical negation of A.",
-            }.to_string() + "\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to false.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",
+            }
+            .to_string()
+                + "\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to false.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",
             pins,
         }
     }
-    fn execute(&mut self, _:Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
+    fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let a = ctx.get_bool(PinId(0), false);
         let b = ctx.get_bool(PinId(1), false);
-        let res = match self.op { LogOp::And => a && b, LogOp::Or => a || b, LogOp::Not => !a };
+        let res = match self.op {
+            LogOp::And => a && b,
+            LogOp::Or => a || b,
+            LogOp::Not => !a,
+        };
         vec![NodeOutput::Data(PinId(2), DataValue::Bool(res))]
     }
 }
 
 /// `value_type` is Number or a physical quantity shared by A and B (canonical numbers are compared).
-pub struct CompareNode { pub id: NodeId, pub value_type: DataType }
+pub struct CompareNode {
+    pub id: NodeId,
+    pub value_type: DataType,
+}
 impl CompareNode {
-    pub fn new(id: NodeId) -> Self { Self { id, value_type: DataType::Number } }
+    pub fn new(id: NodeId) -> Self {
+        Self {
+            id,
+            value_type: DataType::Number,
+        }
+    }
 }
 impl Node for CompareNode {
-    fn id(&self) -> NodeId { self.id }
-    fn is_pure(&self) -> bool { true }
+    fn id(&self) -> NodeId {
+        self.id
+    }
+    fn is_pure(&self) -> bool {
+        true
+    }
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             adaptive: true,
@@ -80,22 +135,29 @@ impl Node for CompareNode {
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         // Plain numbers persist nothing, so existing graphs stay unchanged.
-        if self.value_type == DataType::Number { return Vec::new(); }
+        if self.value_type == DataType::Number {
+            return Vec::new();
+        }
         vec![("value_type".into(), data_type_name(&self.value_type).into())]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "value_type" && let DataValue::String(s) = value
+        if name == "value_type"
+            && let DataValue::String(s) = value
             && let Some(t) = parse_data_type(&s).filter(super::math::numeric_type)
         {
             self.value_type = t;
         }
     }
     fn adapt_to(&mut self, pin: PinId, t: &DataType) -> bool {
-        if pin.0 > 1 || !super::math::numeric_type(t) || *t == self.value_type { return false; }
+        if pin.0 > 1 || !super::math::numeric_type(t) || *t == self.value_type {
+            return false;
+        }
         self.value_type = t.clone();
         true
     }
-    fn adapts_on_connect(&self, pin: PinId) -> bool { pin.0 <= 1 }
+    fn adapts_on_connect(&self, pin: PinId) -> bool {
+        pin.0 <= 1
+    }
 }
 
 fn operation_identity(op: LogOp) -> (&'static str, &'static str) {

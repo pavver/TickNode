@@ -1,18 +1,18 @@
 //! Resources tab in the left panel: dynamic options grouped by plugin collection,
 //! draggable onto the canvas or clickable to create configured nodes.
 
-use std::collections::HashSet;
 use leptos::prelude::*;
+use std::collections::HashSet;
 use ticknode_shared::*;
 use wasm_bindgen::JsCast;
 use web_sys::PointerEvent;
 
+use super::palette::{drop_on_canvas, handle_resource_click, move_palette_drag};
 use crate::categories::category_color;
 use crate::i18n::{self, t};
 use crate::picker::{filter_options, mdi_class};
 use crate::state::{PaletteDrag, PropertyOptions, use_editor};
 use crate::ui::{TextField, icons};
-use super::palette::{drop_on_canvas, handle_resource_click, move_palette_drag};
 
 const RESOURCE_LIMIT: usize = 100;
 const COLLAPSED_KEY: &str = "ticknode.resources-collapsed";
@@ -28,7 +28,10 @@ fn load_collapsed() -> HashSet<String> {
 }
 
 fn save_collapsed(collapsed: &HashSet<String>) {
-    if let (Some(storage), Ok(json)) = (window().local_storage().ok().flatten(), serde_json::to_string(collapsed)) {
+    if let (Some(storage), Ok(json)) = (
+        window().local_storage().ok().flatten(),
+        serde_json::to_string(collapsed),
+    ) {
         let _ = storage.set_item(COLLAPSED_KEY, &json);
     }
 }
@@ -47,7 +50,9 @@ pub fn available_actions<'a>(
             None => true,
             Some(source) => property_options
                 .get(&(plugin.to_string(), source.clone()))
-                .map_or(false, |options| options.iter().any(|opt| opt.value == item_value)),
+                .map_or(false, |options| {
+                    options.iter().any(|opt| opt.value == item_value)
+                }),
         })
         .collect()
 }
@@ -131,7 +136,9 @@ fn CollectionSection(
         let source = col.source.clone();
         move |_| {
             ed.property_options.with(|opts| {
-                opts.get(&(plugin.clone(), source.clone())).cloned().unwrap_or_default()
+                opts.get(&(plugin.clone(), source.clone()))
+                    .cloned()
+                    .unwrap_or_default()
             })
         }
     });
@@ -257,15 +264,23 @@ fn ResourceRow(
         }
         ev.stop_propagation();
         let available: Vec<ResourceAction> = ed.property_options.with_untracked(|opts| {
-            available_actions(&actions_for_drag, &plugin_for_drag, &item_for_drag.value, opts)
-                .into_iter()
-                .cloned()
-                .collect()
+            available_actions(
+                &actions_for_drag,
+                &plugin_for_drag,
+                &item_for_drag.value,
+                opts,
+            )
+            .into_iter()
+            .cloned()
+            .collect()
         });
         if available.is_empty() {
             return;
         }
-        if let Some(el) = ev.current_target().and_then(|t| t.dyn_into::<web_sys::Element>().ok()) {
+        if let Some(el) = ev
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        {
             let _ = el.set_pointer_capture(ev.pointer_id());
         }
         let at = (ev.client_x() as f64, ev.client_y() as f64);
@@ -292,7 +307,13 @@ fn ResourceRow(
     let on_pointer_up = move |ev: PointerEvent| {
         match ed.palette_drag.try_update(Option::take).flatten() {
             Some(drag) if drag.active() => drop_on_canvas(ed, &drag, &ev),
-            Some(PaletteDrag::Resource { plugin, collection_id, item, actions, .. }) => {
+            Some(PaletteDrag::Resource {
+                plugin,
+                collection_id,
+                item,
+                actions,
+                ..
+            }) => {
                 let screen = (ev.client_x() as f64, ev.client_y() as f64);
                 handle_resource_click(ed, &plugin, &collection_id, &item, &actions, screen);
             }
@@ -303,14 +324,26 @@ fn ResourceRow(
             None => {
                 // Direct click without prior drag start
                 let available: Vec<ResourceAction> = ed.property_options.with_untracked(|opts| {
-                    available_actions(&actions_for_click, &plugin_for_click, &item_for_click.value, opts)
-                        .into_iter()
-                        .cloned()
-                        .collect()
+                    available_actions(
+                        &actions_for_click,
+                        &plugin_for_click,
+                        &item_for_click.value,
+                        opts,
+                    )
+                    .into_iter()
+                    .cloned()
+                    .collect()
                 });
                 if !available.is_empty() {
                     let screen = (ev.client_x() as f64, ev.client_y() as f64);
-                    handle_resource_click(ed, &plugin_for_click, &col_id_for_click, &item_for_click, &available, screen);
+                    handle_resource_click(
+                        ed,
+                        &plugin_for_click,
+                        &col_id_for_click,
+                        &item_for_click,
+                        &available,
+                        screen,
+                    );
                 }
             }
         }

@@ -1,25 +1,25 @@
 //! Pure MiniJinja template analysis, syntax validation and rendering.
 
-use std::sync::Arc;
-use std::ops::Range;
+use crate::{DataType, DataValue};
 use minijinja::{
     Environment, Value,
     machinery::{Token, tokenize},
 };
 use serde::{Deserialize, Serialize};
-use crate::{DataType, DataValue};
+use std::ops::Range;
+use std::sync::Arc;
 
-mod values;
 #[cfg(test)]
 mod tests;
+mod values;
 
 pub mod complete;
 pub use complete::{
-    complete, expression_at, Completion, CompletionInput, CompletionItem, CompletionKind,
+    Completion, CompletionInput, CompletionItem, CompletionKind, complete, expression_at,
 };
 
 pub mod highlight;
-pub use highlight::{highlight, Highlight, TokenClass};
+pub use highlight::{Highlight, TokenClass, highlight};
 
 pub use values::plain;
 
@@ -114,13 +114,7 @@ pub fn variables(source: &str) -> Result<Vec<String>, TemplateError> {
     names.retain(|name| !env.globals().any(|(global, _)| global == name));
     let mut ordered = Vec::new();
     let mut attribute = false;
-    let mut tokens = tokenize(
-        source,
-        false,
-        Default::default(),
-        Default::default(),
-    )
-    .peekable();
+    let mut tokens = tokenize(source, false, Default::default(), Default::default()).peekable();
     while let Some(token) = tokens.next() {
         let Ok((token, _)) = token else { break };
         if let Token::Ident(mut name) = token
@@ -167,7 +161,9 @@ impl CompiledTemplate {
         let mut env = self.env.clone();
         let text_map: Value = inputs
             .iter()
-            .filter_map(|(name, value, ty)| Some((name.clone(), Value::from(format(value.as_ref()?, ty)))))
+            .filter_map(|(name, value, ty)| {
+                Some((name.clone(), Value::from(format(value.as_ref()?, ty))))
+            })
             .collect();
         env.add_global("text", text_map);
         let zero = runtime_text(&DataValue::Number(crate::NumberValue::Int(0)));
@@ -177,11 +173,23 @@ impl CompiledTemplate {
         });
         let context: Value = inputs
             .iter()
-            .map(|(name, value, _)| (name.clone(), value.as_ref().map(values::plain).unwrap_or(Value::UNDEFINED)))
+            .map(|(name, value, _)| {
+                (
+                    name.clone(),
+                    value
+                        .as_ref()
+                        .map(values::plain)
+                        .unwrap_or(Value::UNDEFINED),
+                )
+            })
             .collect();
-        let template = env.get_template("template").expect("compiled template is registered");
+        let template = env
+            .get_template("template")
+            .expect("compiled template is registered");
         let source = template.source().to_string();
-        template.render(context).map_err(|err| TemplateError::from_minijinja(&err, &source))
+        template
+            .render(context)
+            .map_err(|err| TemplateError::from_minijinja(&err, &source))
     }
 }
 

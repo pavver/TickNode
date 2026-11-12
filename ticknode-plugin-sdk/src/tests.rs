@@ -237,10 +237,15 @@ fn output_conversion_keeps_clears_execution_and_encoded_data_distinct() {
 
 #[test]
 fn identifier_builder_exports_optional_dynamic_label_sources() {
-    let definition = TypeDefinition::identifier("opaque.chat", "Chat", "An opaque chat ID").labels("chats");
+    let definition =
+        TypeDefinition::identifier("opaque.chat", "Chat", "An opaque chat ID").labels("chats");
     assert!(definition.is_identifier());
     let exported = crate::convert::to_wit_type_definition(definition);
     assert!(matches!(exported.kind, wit::TypeKind::Identifier(Some(source)) if source == "chats"));
-    let exported = crate::convert::to_wit_type_definition(TypeDefinition::identifier("opaque.user", "User", "An opaque user ID"));
+    let exported = crate::convert::to_wit_type_definition(TypeDefinition::identifier(
+        "opaque.user",
+        "User",
+        "An opaque user ID",
+    ));
     assert!(matches!(exported.kind, wit::TypeKind::Identifier(None)));
 }

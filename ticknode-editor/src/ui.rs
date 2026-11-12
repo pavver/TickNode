@@ -47,14 +47,16 @@ pub fn flash(state: RwSignal<ControlState>, result: ControlState) {
 pub mod icons {
     // Material glyphs in a 24x24 viewBox (matching OperatorIcons.kt).
     pub const ADD: &str = "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z";
-    pub const DELETE: &str = "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
+    pub const DELETE: &str =
+        "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
     pub const CLOSE: &str = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
     pub const CHECK: &str = "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
     pub const SEARCH: &str = "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z";
     pub const COPY: &str = "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z";
     pub const DUPLICATE: &str = "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z";
     pub const PLAY: &str = "M8 5v14l11-7z";
-    pub const TERMINAL: &str = "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z";
+    pub const TERMINAL: &str =
+        "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z";
     pub const FIT: &str = "M5 15H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z";
     pub const THEME: &str = "M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69zM12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6z";
     pub const INFO: &str = "M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z";
@@ -63,7 +65,8 @@ pub mod icons {
     pub const CALL_SPLIT: &str = "M14 4l2.29 2.29-2.88 2.88 1.42 1.42 2.88-2.88L20 10V4zm-4 0H4v6l2.29-2.29 4.71 4.7V20h2v-8.41l-5.29-5.3z";
     pub const SCHEDULE: &str = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z";
     pub const SEND: &str = "M2.01 21 23 12 2.01 3 2 10l15 2-15 2z";
-    pub const STORAGE: &str = "M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z";
+    pub const STORAGE: &str =
+        "M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z";
     pub const CALCULATE: &str = "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5.97 4.06L14.09 6l1.41 1.41L16.91 6l1.06 1.06-1.41 1.41 1.41 1.41-1.06 1.06-1.41-1.4-1.41 1.41-1.06-1.06 1.41-1.41-1.41-1.42zm-6.78.66h5v1.5h-5v-1.5zM11.5 16h-2v2H8v-2H6v-1.5h2v-2h1.5v2h2V16zm6.5 1.25h-5v-1.5h5v1.5zm0-2.5h-5v-1.5h5v1.5z";
     pub const ACCOUNT_TREE: &str = "M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z";
     pub const TEXT_FIELDS: &str = "M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z";
@@ -98,7 +101,10 @@ fn PendingRun(state: Signal<ControlState>) -> impl IntoView {
 }
 
 /// Effective state: external state (when non-Idle) takes precedence over local state.
-fn effective(external: Option<Signal<ControlState>>, local: RwSignal<ControlState>) -> Signal<ControlState> {
+fn effective(
+    external: Option<Signal<ControlState>>,
+    local: RwSignal<ControlState>,
+) -> Signal<ControlState> {
     Signal::derive(move || match external.map(|s| s.get()) {
         Some(s) if s != ControlState::Idle => s,
         _ => local.get(),
@@ -115,7 +121,8 @@ pub fn ActionButton(
     #[prop(optional)] full: bool,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
     /// Action without server confirmation: immediately flash Success.
-    #[prop(optional)] flash_on_click: bool,
+    #[prop(optional)]
+    flash_on_click: bool,
     #[prop(optional, into)] disabled: Option<Signal<bool>>,
 ) -> impl IntoView {
     let local = RwSignal::new(ControlState::Idle);
@@ -182,11 +189,13 @@ pub fn IconButton(
 #[component]
 pub fn TextField(
     /// Saved value (from the server).
-    #[prop(into)] value: Signal<String>,
+    #[prop(into)]
+    value: Signal<String>,
     #[prop(optional, into)] placeholder: Signal<String>,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
     /// Without `on_save`, the field acts as a live search input via `on_input`.
-    #[prop(optional)] on_save: Option<Callback<String>>,
+    #[prop(optional)]
+    on_save: Option<Callback<String>>,
     #[prop(optional)] on_input: Option<Callback<String>>,
     #[prop(optional)] icon: Option<&'static str>,
     #[prop(optional)] numeric: bool,
@@ -242,7 +251,8 @@ pub fn Switch(
     on_toggle: Callback<bool>,
     #[prop(optional, into)] state: Option<Signal<ControlState>>,
     /// Compact variant (used inline on a node).
-    #[prop(optional)] small: bool,
+    #[prop(optional)]
+    small: bool,
 ) -> impl IntoView {
     let local = RwSignal::new(ControlState::Idle);
     let state = effective(state, local);

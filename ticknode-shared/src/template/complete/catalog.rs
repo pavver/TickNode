@@ -1,23 +1,77 @@
-use super::kinds::{kind_label, ValueKind};
+use super::kinds::{ValueKind, kind_label};
 use super::{CompletionItem, CompletionKind};
 use crate::TypeRegistry;
 
 pub const LOOP_ATTRS: &[&str] = &[
-    "changed", "cycle", "depth", "depth0", "first", "index", "index0", "last",
-    "length", "nextitem", "previtem", "revindex", "revindex0",
+    "changed",
+    "cycle",
+    "depth",
+    "depth0",
+    "first",
+    "index",
+    "index0",
+    "last",
+    "length",
+    "nextitem",
+    "previtem",
+    "revindex",
+    "revindex0",
 ];
 
 pub const TAG_KEYWORDS: &[&str] = &[
-    "call", "elif", "else", "endcall", "endfilter", "endfor", "endif",
-    "endmacro", "endraw", "endset", "endwith", "filter", "for", "if",
-    "macro", "raw", "set", "with",
+    "call",
+    "elif",
+    "else",
+    "endcall",
+    "endfilter",
+    "endfor",
+    "endif",
+    "endmacro",
+    "endraw",
+    "endset",
+    "endwith",
+    "filter",
+    "for",
+    "if",
+    "macro",
+    "raw",
+    "set",
+    "with",
 ];
 
 pub const TESTS: &[&str] = &[
-    "boolean", "defined", "divisibleby", "endingwith", "eq", "escaped", "even",
-    "false", "filter", "float", "ge", "gt", "in", "integer", "iterable", "le",
-    "lower", "lt", "mapping", "ne", "none", "number", "odd", "safe", "sameas",
-    "sequence", "startingwith", "string", "test", "true", "undefined", "upper",
+    "boolean",
+    "defined",
+    "divisibleby",
+    "endingwith",
+    "eq",
+    "escaped",
+    "even",
+    "false",
+    "filter",
+    "float",
+    "ge",
+    "gt",
+    "in",
+    "integer",
+    "iterable",
+    "le",
+    "lower",
+    "lt",
+    "mapping",
+    "ne",
+    "none",
+    "number",
+    "odd",
+    "safe",
+    "sameas",
+    "sequence",
+    "startingwith",
+    "string",
+    "test",
+    "true",
+    "undefined",
+    "upper",
 ];
 
 pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
@@ -90,17 +144,23 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
     }
     match name {
         "abs" | "round" => matches!(input, ValueKind::Number),
-        "int" => matches!(input, ValueKind::Number | ValueKind::String | ValueKind::Bool),
+        "int" => matches!(
+            input,
+            ValueKind::Number | ValueKind::String | ValueKind::Bool
+        ),
         "float" => matches!(input, ValueKind::Number | ValueKind::String),
         "capitalize" | "lower" | "upper" | "title" | "trim" | "replace" | "indent" | "format"
         | "safe" | "escape" | "e" => matches!(input, ValueKind::String),
         "split" | "lines" => matches!(input, ValueKind::String),
         "first" | "last" | "reverse" => matches!(input, ValueKind::String | ValueKind::List(_)),
         "length" | "count" | "list" => {
-            matches!(input, ValueKind::String | ValueKind::List(_) | ValueKind::Map(_))
+            matches!(
+                input,
+                ValueKind::String | ValueKind::List(_) | ValueKind::Map(_)
+            )
         }
-        "join" | "batch" | "slice" | "sort" | "unique" | "select" | "reject" | "min"
-        | "max" | "map" => matches!(input, ValueKind::List(_)),
+        "join" | "batch" | "slice" | "sort" | "unique" | "select" | "reject" | "min" | "max"
+        | "map" => matches!(input, ValueKind::List(_)),
         "sum" => match input {
             ValueKind::List(t) => matches!(**t, ValueKind::Number | ValueKind::Any),
             _ => false,
@@ -231,14 +291,23 @@ pub fn test_accepts(name: &str, input: &ValueKind) -> bool {
         "lower" | "upper" | "startingwith" | "endingwith" | "escaped" | "safe" | "filter"
         | "test" => matches!(input, ValueKind::String | ValueKind::Any),
         "sequence" | "iterable" => {
-            matches!(input, ValueKind::List(_) | ValueKind::String | ValueKind::Any)
+            matches!(
+                input,
+                ValueKind::List(_) | ValueKind::String | ValueKind::Any
+            )
         }
         "mapping" => matches!(input, ValueKind::Map(_) | ValueKind::Any),
         "eq" | "ne" => {
-            matches!(input, ValueKind::Number | ValueKind::String | ValueKind::Bool | ValueKind::Any)
+            matches!(
+                input,
+                ValueKind::Number | ValueKind::String | ValueKind::Bool | ValueKind::Any
+            )
         }
         "lt" | "le" | "gt" | "ge" => {
-            matches!(input, ValueKind::Number | ValueKind::String | ValueKind::Any)
+            matches!(
+                input,
+                ValueKind::Number | ValueKind::String | ValueKind::Any
+            )
         }
         _ => false,
     }

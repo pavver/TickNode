@@ -1,14 +1,28 @@
 use super::*;
 
 fn option(value: &str, label: &str) -> PropertyOption {
-    PropertyOption { value: value.into(), label: label.into(), detail: value.into(), icon: None }
+    PropertyOption {
+        value: value.into(),
+        label: label.into(),
+        detail: value.into(),
+        icon: None,
+    }
 }
 
 #[test]
 fn mdi_icons_become_font_classes() {
-    assert_eq!(mdi_class("mdi:lightbulb").as_deref(), Some("mdi mdi-lightbulb"));
-    assert_eq!(mdi_class("mdi:door-open").as_deref(), Some("mdi mdi-door-open"));
-    assert_eq!(mdi_class("mdi:battery-10").as_deref(), Some("mdi mdi-battery-10"));
+    assert_eq!(
+        mdi_class("mdi:lightbulb").as_deref(),
+        Some("mdi mdi-lightbulb")
+    );
+    assert_eq!(
+        mdi_class("mdi:door-open").as_deref(),
+        Some("mdi mdi-door-open")
+    );
+    assert_eq!(
+        mdi_class("mdi:battery-10").as_deref(),
+        Some("mdi mdi-battery-10")
+    );
     // Other icon sets and unsafe names have no glyph (and never reach the class attribute)
     assert_eq!(mdi_class("phu:bulb"), None);
     assert_eq!(mdi_class("mdi:"), None);
@@ -33,7 +47,9 @@ fn search_matches_label_detail_and_value_case_insensitively() {
 
 #[test]
 fn search_caps_the_rendered_rows_but_counts_all_matches() {
-    let options: Vec<PropertyOption> = (0..2500).map(|i| option(&format!("sensor.s{i}"), &format!("Sensor {i}"))).collect();
+    let options: Vec<PropertyOption> = (0..2500)
+        .map(|i| option(&format!("sensor.s{i}"), &format!("Sensor {i}")))
+        .collect();
     let (shown, total) = filter_options(&options, "", MAX_ROWS);
     assert_eq!((shown.len(), total), (MAX_ROWS, 2500));
     let (shown, total) = filter_options(&options, "sensor 12", MAX_ROWS);
@@ -52,7 +68,11 @@ fn popup_opens_below_or_above_and_stays_on_screen() {
     assert!(p.up && p.edge == 40.0);
     // Narrow screen: never wider than the viewport and clamped to its edges
     let p = placement((250.0, 100.0, 330.0, 124.0), (360.0, 640.0));
-    assert!(p.width <= 360.0 - 2.0 * MARGIN && p.left + p.width <= 360.0 - MARGIN + 0.001 && p.left >= MARGIN);
+    assert!(
+        p.width <= 360.0 - 2.0 * MARGIN
+            && p.left + p.width <= 360.0 - MARGIN + 0.001
+            && p.left >= MARGIN
+    );
     // A wide field gets a popup as wide as itself
     let p = placement((50.0, 100.0, 450.0, 124.0), (1280.0, 800.0));
     assert_eq!(p.width, 400.0);

@@ -1,6 +1,6 @@
+use crate::{RemovedConnections, TickEngine};
 use std::collections::{HashMap, HashSet};
 use ticknode_shared::*;
-use crate::{RemovedConnections, TickEngine};
 
 /// Changes actually made while restoring a graph without resetting untouched nodes.
 #[derive(Debug, Default)]
@@ -24,24 +24,51 @@ struct GraphDiff {
 fn diff(current: &GraphModel, target: &GraphModel) -> GraphDiff {
     let before: HashMap<_, _> = current.nodes.iter().map(|n| (n.id, n)).collect();
     let after: HashMap<_, _> = target.nodes.iter().map(|n| (n.id, n)).collect();
-    let same = |a: &NodeModel, b: &NodeModel| a.type_name == b.type_name && a.properties == b.properties;
-    let kept: HashSet<_> = before.iter().filter_map(|(id, n)| after.get(id).filter(|t| same(n, t)).map(|_| *id)).collect();
-    let removed_nodes = current.nodes.iter().filter(|n| !kept.contains(&n.id)).map(|n| n.id).collect();
+    let same =
+        |a: &NodeModel, b: &NodeModel| a.type_name == b.type_name && a.properties == b.properties;
+    let kept: HashSet<_> = before
+        .iter()
+        .filter_map(|(id, n)| after.get(id).filter(|t| same(n, t)).map(|_| *id))
+        .collect();
+    let removed_nodes = current
+        .nodes
+        .iter()
+        .filter(|n| !kept.contains(&n.id))
+        .map(|n| n.id)
+        .collect();
     let touching = |c: &ConnectionModel| !kept.contains(&c.src_node) || !kept.contains(&c.dst_node);
     let changes = |old: &[ConnectionModel], new: &[ConnectionModel]| {
         let old_set: HashSet<_> = old.iter().copied().collect();
         let new_set: HashSet<_> = new.iter().copied().collect();
-        let drop = old.iter().filter(|c| touching(c) || !new_set.contains(c)).copied().collect();
-        let add = new.iter().filter(|c| touching(c) || !old_set.contains(c)).copied().collect();
+        let drop = old
+            .iter()
+            .filter(|c| touching(c) || !new_set.contains(c))
+            .copied()
+            .collect();
+        let add = new
+            .iter()
+            .filter(|c| touching(c) || !old_set.contains(c))
+            .copied()
+            .collect();
         (drop, add)
     };
     let (exec, exec_connections) = changes(&current.exec_connections, &target.exec_connections);
     let (data, data_connections) = changes(&current.data_connections, &target.data_connections);
     GraphDiff {
-        removed_nodes, disconnected: RemovedConnections { exec, data },
+        removed_nodes,
+        disconnected: RemovedConnections { exec, data },
         insert: GraphModel {
-            nodes: target.nodes.iter().filter(|n| !kept.contains(&n.id)).cloned().collect(),
-            exec_connections, data_connections, wire_routes: Vec::new(), detached_connections: Vec::new(), frames: Vec::new(),
+            nodes: target
+                .nodes
+                .iter()
+                .filter(|n| !kept.contains(&n.id))
+                .cloned()
+                .collect(),
+            exec_connections,
+            data_connections,
+            wire_routes: Vec::new(),
+            detached_connections: Vec::new(),
+            frames: Vec::new(),
         },
     }
 }
@@ -85,15 +112,40 @@ impl TickEngine {
         let accept = user_edit.filter(|id| !before_frozen.contains_key(id));
         result.warnings = self.insert_graph_edit(&plan.insert, |id| id, user_edit, accept);
         for n in &target.nodes {
-            self.restore_pins(n.id, if accept == Some(n.id) { None } else { n.pins.as_deref() });
-            if before_frozen.get(&n.id).map(Vec::as_slice).unwrap_or(&[]) != self.frozen_changes(n.id) {
+            self.restore_pins(
+                n.id,
+                if accept == Some(n.id) {
+                    None
+                } else {
+                    n.pins.as_deref()
+                },
+            );
+            if before_frozen.get(&n.id).map(Vec::as_slice).unwrap_or(&[])
+                != self.frozen_changes(n.id)
+            {
                 result.updated_nodes.push(n.id);
             }
         }
         self.restore_detached(&target.detached_connections);
-        result.added_nodes = plan.insert.nodes.iter().filter(|n| self.has_node(n.id)).map(|n| n.id).collect();
-        result.connected_exec = plan.insert.exec_connections.into_iter().filter(|c| self.connections.contains_exec(c)).collect();
-        result.connected_data = plan.insert.data_connections.into_iter().filter(|c| self.connections.contains_data(c)).collect();
+        result.added_nodes = plan
+            .insert
+            .nodes
+            .iter()
+            .filter(|n| self.has_node(n.id))
+            .map(|n| n.id)
+            .collect();
+        result.connected_exec = plan
+            .insert
+            .exec_connections
+            .into_iter()
+            .filter(|c| self.connections.contains_exec(c))
+            .collect();
+        result.connected_data = plan
+            .insert
+            .data_connections
+            .into_iter()
+            .filter(|c| self.connections.contains_data(c))
+            .collect();
         result
     }
 }

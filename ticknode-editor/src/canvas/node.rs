@@ -3,6 +3,7 @@
 use leptos::prelude::*;
 use ticknode_shared::*;
 
+use super::pins::Pin;
 use crate::categories::{category_color, category_label};
 use crate::geometry::*;
 use crate::i18n::{self, t};
@@ -10,15 +11,19 @@ use crate::inline::NodeProps;
 use crate::match_editor::MatchBody;
 use crate::state::{EXEC_HIGHLIGHT_MS, use_editor};
 use crate::ui::{Icon, icons};
-use super::pins::Pin;
 
-mod timer;
 mod resize;
+mod timer;
 
 /// Pin used to trigger a node manually: first exec input; for event sources (Clock, button),
 /// their exec output.
 pub fn trigger_pin(def: &NodeDefinition) -> Option<PinId> {
-    let exec = |dir| def.pins.iter().find(|p| p.direction == dir && p.pin_type == PinType::Exec).map(|p| p.id);
+    let exec = |dir| {
+        def.pins
+            .iter()
+            .find(|p| p.direction == dir && p.pin_type == PinType::Exec)
+            .map(|p| p.id)
+    };
     exec(PinDirection::Input).or_else(|| exec(PinDirection::Output))
 }
 
@@ -48,7 +53,13 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
     // Stub node: its plugin is unavailable — the node is dimmed and properties are read-only
     let unavailable = Memo::new(move |_| node.instance.with(|i| i.unavailable.clone()));
     let frozen = Memo::new(move |_| node.instance.with(|i| !i.frozen.is_empty()));
-    let trigger = Memo::new(move |_| if frozen.get() || unavailable.with(Option::is_some) { None } else { def.with(super::trigger_pin) });
+    let trigger = Memo::new(move |_| {
+        if frozen.get() || unavailable.with(Option::is_some) {
+            None
+        } else {
+            def.with(super::trigger_pin)
+        }
+    });
     view! {
         <div
             class=move || {

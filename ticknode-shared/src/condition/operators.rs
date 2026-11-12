@@ -1,20 +1,54 @@
-use crate::DataType;
 use super::CompareOp::*;
+use crate::DataType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompareOp {
-    Eq, Ne, Lt, Le, Gt, Ge,
-    Contains, NotContains, StartsWith, EndsWith,
-    IsEmpty, NotEmpty, IsTrue, IsFalse,
-    HasField, NoField,
-    LenEq, LenGt, LenLt,
-    HasValue, NoValue,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Contains,
+    NotContains,
+    StartsWith,
+    EndsWith,
+    IsEmpty,
+    NotEmpty,
+    IsTrue,
+    IsFalse,
+    HasField,
+    NoField,
+    LenEq,
+    LenGt,
+    LenLt,
+    HasValue,
+    NoValue,
 }
 
 impl CompareOp {
     pub const ALL: [CompareOp; 21] = [
-        Eq, Ne, Lt, Le, Gt, Ge, Contains, NotContains, StartsWith, EndsWith, IsEmpty, NotEmpty, IsTrue, IsFalse,
-        HasField, NoField, LenEq, LenGt, LenLt, HasValue, NoValue,
+        Eq,
+        Ne,
+        Lt,
+        Le,
+        Gt,
+        Ge,
+        Contains,
+        NotContains,
+        StartsWith,
+        EndsWith,
+        IsEmpty,
+        NotEmpty,
+        IsTrue,
+        IsFalse,
+        HasField,
+        NoField,
+        LenEq,
+        LenGt,
+        LenLt,
+        HasValue,
+        NoValue,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -31,7 +65,10 @@ impl CompareOp {
 
     /// Whether the operator has no right operand.
     pub fn is_unary(self) -> bool {
-        matches!(self, IsEmpty | NotEmpty | IsTrue | IsFalse | HasValue | NoValue)
+        matches!(
+            self,
+            IsEmpty | NotEmpty | IsTrue | IsFalse | HasValue | NoValue
+        )
     }
 
     /// Type of the right operand for a left operand of type `left` (`None` if the operator is unary).
@@ -55,15 +92,60 @@ impl CompareOp {
 /// Operators applicable to a left input of this type (in display order).
 pub fn ops_for(t: &DataType) -> &'static [CompareOp] {
     match t {
-        DataType::Number | DataType::Time | DataType::DateTime | DataType::Duration => &[Eq, Ne, Lt, Le, Gt, Ge, HasValue, NoValue],
-        DataType::String => &[Eq, Ne, Contains, NotContains, StartsWith, EndsWith, IsEmpty, NotEmpty, LenEq, LenGt, LenLt, HasValue, NoValue],
+        DataType::Number | DataType::Time | DataType::DateTime | DataType::Duration => {
+            &[Eq, Ne, Lt, Le, Gt, Ge, HasValue, NoValue]
+        }
+        DataType::String => &[
+            Eq,
+            Ne,
+            Contains,
+            NotContains,
+            StartsWith,
+            EndsWith,
+            IsEmpty,
+            NotEmpty,
+            LenEq,
+            LenGt,
+            LenLt,
+            HasValue,
+            NoValue,
+        ],
         DataType::Bool => &[IsTrue, IsFalse, Eq, Ne, HasValue, NoValue],
         DataType::Color => &[Eq, Ne, HasValue, NoValue],
-        DataType::List(_) => &[Contains, NotContains, IsEmpty, NotEmpty, LenEq, LenGt, LenLt, Eq, Ne, HasValue, NoValue],
-        DataType::Object => &[HasField, NoField, IsEmpty, NotEmpty, Eq, Ne, HasValue, NoValue],
+        DataType::List(_) => &[
+            Contains,
+            NotContains,
+            IsEmpty,
+            NotEmpty,
+            LenEq,
+            LenGt,
+            LenLt,
+            Eq,
+            Ne,
+            HasValue,
+            NoValue,
+        ],
+        DataType::Object => &[
+            HasField, NoField, IsEmpty, NotEmpty, Eq, Ne, HasValue, NoValue,
+        ],
         // Custom type without a registry (enums; structs go through `ops_in`): equality and presence only
         DataType::Named(_) => &[Eq, Ne, HasValue, NoValue],
-        DataType::Any => &[Eq, Ne, Lt, Le, Gt, Ge, Contains, NotContains, IsEmpty, NotEmpty, IsTrue, IsFalse, HasValue, NoValue],
+        DataType::Any => &[
+            Eq,
+            Ne,
+            Lt,
+            Le,
+            Gt,
+            Ge,
+            Contains,
+            NotContains,
+            IsEmpty,
+            NotEmpty,
+            IsTrue,
+            IsFalse,
+            HasValue,
+            NoValue,
+        ],
     }
 }
 

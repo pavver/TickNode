@@ -17,13 +17,15 @@ pub struct Suggestion {
 }
 
 /// Preferred node types for each dragged data type, in order. Applies in either wire direction.
-const PREFERRED_TYPES: &[(DataType, &[&str])] = &[
-    (DataType::String, &["text/template"]),
-];
+const PREFERRED_TYPES: &[(DataType, &[&str])] = &[(DataType::String, &["text/template"])];
 
 fn preference(pin_type: &PinType, type_name: &str) -> usize {
-    let PinType::Data(data_type) = pin_type else { return usize::MAX };
-    PREFERRED_TYPES.iter().find(|(t, _)| t == data_type)
+    let PinType::Data(data_type) = pin_type else {
+        return usize::MAX;
+    };
+    PREFERRED_TYPES
+        .iter()
+        .find(|(t, _)| t == data_type)
         .and_then(|(_, names)| names.iter().position(|name| *name == type_name))
         .unwrap_or(usize::MAX)
 }
@@ -60,25 +62,42 @@ pub fn suggestions(
 ) -> Vec<Suggestion> {
     let mut result = Vec::new();
     for definition in catalog {
-        if definition.category == "Unavailable" { continue; }
-        let best = definition.pins.iter().filter(|p| p.direction != direction).filter_map(|p| {
-            let rank = if direction == PinDirection::Output {
-                rank(registry, pin_type, &p.pin_type)
-            } else {
-                rank(registry, &p.pin_type, pin_type)
-            }?;
-            // A pin that only accepts the value through an implicit conversion (Bool → Number for a
-            // loop count or math operand) is not a meaningful suggestion.
-            if rank == CONVERSION { return None; }
-            // An adaptive node takes on a fitting type exactly; it cannot adapt to an unrelated one.
-            let rank = if definition.adaptive && matches!(pin_type, PinType::Data(_)) { 0 } else { rank };
-            Some((rank, p.id.0))
-        }).min();
+        if definition.category == "Unavailable" {
+            continue;
+        }
+        let best = definition
+            .pins
+            .iter()
+            .filter(|p| p.direction != direction)
+            .filter_map(|p| {
+                let rank = if direction == PinDirection::Output {
+                    rank(registry, pin_type, &p.pin_type)
+                } else {
+                    rank(registry, &p.pin_type, pin_type)
+                }?;
+                // A pin that only accepts the value through an implicit conversion (Bool → Number for a
+                // loop count or math operand) is not a meaningful suggestion.
+                if rank == CONVERSION {
+                    return None;
+                }
+                // An adaptive node takes on a fitting type exactly; it cannot adapt to an unrelated one.
+                let rank = if definition.adaptive && matches!(pin_type, PinType::Data(_)) {
+                    0
+                } else {
+                    rank
+                };
+                Some((rank, p.id.0))
+            })
+            .min();
         if let Some((rank, pin)) = best {
             let (title, category) = labels(definition);
             result.push(Suggestion {
-                type_name: definition.type_name.clone(), title, category,
-                group: definition.category.clone(), pin: PinId(pin), rank,
+                type_name: definition.type_name.clone(),
+                title,
+                category,
+                group: definition.category.clone(),
+                pin: PinId(pin),
+                rank,
                 preference: preference(pin_type, &definition.type_name),
             });
         }
@@ -100,17 +119,46 @@ pub fn arrange(
     group_rank: impl Fn(&str) -> usize,
 ) -> Vec<(bool, Suggestion)> {
     let recency = |name: &str| recent.iter().position(|r| r == name).unwrap_or(usize::MAX);
-    let mut popular: Vec<_> = list.iter().enumerate()
-        .map(|(i, s)| (usage.get(&s.type_name).copied().unwrap_or(0), recency(&s.type_name), i))
+    let mut popular: Vec<_> = list
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            (
+                usage.get(&s.type_name).copied().unwrap_or(0),
+                recency(&s.type_name),
+                i,
+            )
+        })
         .filter(|&(count, at, _)| count > 0 || at != usize::MAX)
         .collect();
     popular.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     popular.truncate(MAX_POPULAR);
     let picked: Vec<usize> = popular.iter().map(|&(_, _, i)| i).collect();
-    let mut rest: Vec<_> = list.iter().enumerate().filter(|(i, _)| !picked.contains(i)).map(|(_, s)| s).collect();
-    rest.sort_by(|a, b| (group_rank(&a.group), &a.group, a.preference, &a.title, &a.type_name)
-        .cmp(&(group_rank(&b.group), &b.group, b.preference, &b.title, &b.type_name)));
-    picked.iter().map(|&i| (true, list[i].clone()))
+    let mut rest: Vec<_> = list
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !picked.contains(i))
+        .map(|(_, s)| s)
+        .collect();
+    rest.sort_by(|a, b| {
+        (
+            group_rank(&a.group),
+            &a.group,
+            a.preference,
+            &a.title,
+            &a.type_name,
+        )
+            .cmp(&(
+                group_rank(&b.group),
+                &b.group,
+                b.preference,
+                &b.title,
+                &b.type_name,
+            ))
+    });
+    picked
+        .iter()
+        .map(|&i| (true, list[i].clone()))
         .chain(rest.into_iter().map(|s| (false, s.clone())))
         .collect()
 }

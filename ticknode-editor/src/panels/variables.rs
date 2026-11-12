@@ -1,8 +1,8 @@
 //! Variables tab in the left panel.
 
-use leptos::prelude::*;
 use crate::state::use_editor;
 use crate::variables_panel::VariablesList;
+use leptos::prelude::*;
 
 #[component]
 pub fn VariablesPanel() -> impl IntoView {

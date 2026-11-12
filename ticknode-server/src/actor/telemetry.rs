@@ -8,7 +8,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
 use ticknode_shared::{
-    NodeError, NodeId, NodeTimer, NodeTrace, ServerMessage, SheetId, Variable, VariableKey, VariableScope,
+    NodeError, NodeId, NodeTimer, NodeTrace, ServerMessage, SheetId, Variable, VariableKey,
+    VariableScope,
 };
 
 /// How often accumulated telemetry is sent to editors.
@@ -71,7 +72,8 @@ impl Telemetry {
         // Node errors split per sheet
         let (set, cleared) = engine.take_node_error_changes();
         if !set.is_empty() || !cleared.is_empty() {
-            let mut sheet_errors: HashMap<Option<SheetId>, (Vec<NodeError>, Vec<NodeId>)> = HashMap::new();
+            let mut sheet_errors: HashMap<Option<SheetId>, (Vec<NodeError>, Vec<NodeId>)> =
+                HashMap::new();
             for err in set {
                 let sheet = node_sheet.get(&err.node).copied();
                 sheet_errors.entry(sheet).or_default().0.push(err);
@@ -81,13 +83,22 @@ impl Telemetry {
                 sheet_errors.entry(sheet).or_default().1.push(id);
             }
             for (sheet, (sheet_set, sheet_cleared)) in sheet_errors {
-                messages.push((sheet, ServerMessage::NodeErrors { set: sheet_set, cleared: sheet_cleared }));
+                messages.push((
+                    sheet,
+                    ServerMessage::NodeErrors {
+                        set: sheet_set,
+                        cleared: sheet_cleared,
+                    },
+                ));
             }
         }
 
         // Timers split per sheet
         let timers = engine.host_state.delay_timers_with_tasks();
-        let mut current_sheet_timers: HashMap<Option<SheetId>, (Vec<(NodeId, ticknode_core::TaskId, u32)>, Vec<NodeTimer>)> = HashMap::new();
+        let mut current_sheet_timers: HashMap<
+            Option<SheetId>,
+            (Vec<(NodeId, ticknode_core::TaskId, u32)>, Vec<NodeTimer>),
+        > = HashMap::new();
         for (task_id, timer) in timers {
             let sheet = node_sheet.get(&timer.node).copied();
             let entry = current_sheet_timers.entry(sheet).or_default();
@@ -95,7 +106,10 @@ impl Telemetry {
             entry.1.push(timer);
         }
 
-        let all_sheets: BTreeSet<Option<SheetId>> = self.sheet_timers.keys().copied()
+        let all_sheets: BTreeSet<Option<SheetId>> = self
+            .sheet_timers
+            .keys()
+            .copied()
             .chain(current_sheet_timers.keys().copied())
             .collect();
 
@@ -132,7 +146,8 @@ impl Telemetry {
         // Variable changes split per sheet
         let changes = engine.variables.take_changes();
         if !changes.set.is_empty() || !changes.removed.is_empty() {
-            let mut sheet_changes: HashMap<Option<SheetId>, (Vec<Variable>, Vec<VariableKey>)> = HashMap::new();
+            let mut sheet_changes: HashMap<Option<SheetId>, (Vec<Variable>, Vec<VariableKey>)> =
+                HashMap::new();
             for var in changes.set {
                 let sheet = match var.key.scope {
                     VariableScope::Sheet => var.key.sheet,
@@ -153,10 +168,24 @@ impl Telemetry {
         }
 
         // Logs are global
-        messages.extend(self.logs.drain(..).map(|(node_id, message)| (None, ServerMessage::Log { node_id, message })));
+        messages.extend(
+            self.logs
+                .drain(..)
+                .map(|(node_id, message)| (None, ServerMessage::Log { node_id, message })),
+        );
         if self.dropped_logs > 0 {
-            let message = format!("[WARN] {} log lines dropped (more than {MAX_LOGS} in {} ms)", self.dropped_logs, INTERVAL.as_millis());
-            messages.push((None, ServerMessage::Log { node_id: NodeId(ticknode_shared::Uuid::nil()), message }));
+            let message = format!(
+                "[WARN] {} log lines dropped (more than {MAX_LOGS} in {} ms)",
+                self.dropped_logs,
+                INTERVAL.as_millis()
+            );
+            messages.push((
+                None,
+                ServerMessage::Log {
+                    node_id: NodeId(ticknode_shared::Uuid::nil()),
+                    message,
+                },
+            ));
             self.dropped_logs = 0;
         }
 

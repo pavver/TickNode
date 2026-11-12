@@ -1,8 +1,8 @@
 //! Pure logic for variables grouping, sorting, shadowing, and search filtering.
 
+use crate::i18n;
 use std::collections::HashSet;
 use ticknode_shared::{SheetId, TypeRegistry, Variable, VariableScope, data_type_name};
-use crate::i18n;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableItem {
@@ -73,7 +73,10 @@ pub fn group_and_filter_variables(
         }
 
         let shadowed = sheet.is_some()
-            && matches!(v.key.scope, VariableScope::Global | VariableScope::Persistent)
+            && matches!(
+                v.key.scope,
+                VariableScope::Global | VariableScope::Persistent
+            )
             && sheet_names.contains(v.key.name.as_str());
 
         let item = VariableItem {
@@ -90,7 +93,10 @@ pub fn group_and_filter_variables(
 
     let sort_items = |items: &mut Vec<VariableItem>| {
         items.sort_by(|a, b| {
-            a.variable.key.name.to_lowercase()
+            a.variable
+                .key
+                .name
+                .to_lowercase()
                 .cmp(&b.variable.key.name.to_lowercase())
                 .then_with(|| a.variable.key.name.cmp(&b.variable.key.name))
         });

@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 use ticknode_shared::{Frame, FrameId, ServerMessage};
 
 pub(super) fn applies(event: &ServerMessage) -> bool {
-    matches!(event, ServerMessage::Init { .. } | ServerMessage::FrameSet(_) | ServerMessage::FrameRemoved(_))
+    matches!(
+        event,
+        ServerMessage::Init { .. } | ServerMessage::FrameSet(_) | ServerMessage::FrameRemoved(_)
+    )
 }
 
 pub(super) fn apply(all: &mut BTreeMap<FrameId, Frame>, event: &ServerMessage) {

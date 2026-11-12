@@ -13,7 +13,11 @@ pub fn PickerLayer() -> impl IntoView {
             ed.picker.set(None);
         }
     });
-    move || ed.picker.get().map(|state| view! { <PickerPopup state=state /> })
+    move || {
+        ed.picker
+            .get()
+            .map(|state| view! { <PickerPopup state=state /> })
+    }
 }
 
 #[component]
@@ -39,9 +43,19 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
     let current = {
         let property = property.clone();
         Memo::new(move |_| {
-            if let Some(value) = supplied_value { return value.get(); }
+            if let Some(value) = supplied_value {
+                return value.get();
+            }
             ed.node_tracked(node)
-                .and_then(|n| n.instance.with(|i| i.model.properties.iter().find(|(name, _)| *name == property).map(|(_, v)| v.clone())))
+                .and_then(|n| {
+                    n.instance.with(|i| {
+                        i.model
+                            .properties
+                            .iter()
+                            .find(|(name, _)| *name == property)
+                            .map(|(_, v)| v.clone())
+                    })
+                })
                 .and_then(|v| match v {
                     DataValue::String(s) => Some(s),
                     _ => None,
@@ -55,7 +69,9 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
         let options = options_of(ed, &plugin, &source);
         if on_pick.is_none() && property_has_input(ed, node, &input_property) {
             std::sync::Arc::new(input_options(&options, &t!("property-from-input")))
-        } else { options }
+        } else {
+            options
+        }
     });
     let found = Memo::new(move |_| {
         let options = options.get();
@@ -68,7 +84,11 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
             if let Some(callback) = on_pick {
                 callback.run(value);
             } else if value != current.get_untracked() {
-                ed.send(ClientMessage::SetProperty { id: node, name: property.clone(), value: DataValue::String(value) });
+                ed.send(ClientMessage::SetProperty {
+                    id: node,
+                    name: property.clone(),
+                    value: DataValue::String(value),
+                });
             }
             ed.picker.set(None);
         }
@@ -85,12 +105,22 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
         move |ev: web_sys::KeyboardEvent| {
             let count = found.with_untracked(|(shown, _)| shown.len());
             let action = key_action(&ev.key(), active.get_untracked(), count);
-            if action != KeyAction::Ignore { ev.prevent_default(); }
+            if action != KeyAction::Ignore {
+                ev.prevent_default();
+            }
             match action {
-                KeyAction::Move(next) => { active.set(next); scroll_to(next); }
+                KeyAction::Move(next) => {
+                    active.set(next);
+                    scroll_to(next);
+                }
                 KeyAction::Pick => {
-                    let chosen = found.with_untracked(|(shown, _)| shown.get(active.get_untracked()).copied());
-                    if let Some(value) = chosen_value(&options.get_untracked(), chosen, &query.get_untracked()) { pick(value); }
+                    let chosen = found
+                        .with_untracked(|(shown, _)| shown.get(active.get_untracked()).copied());
+                    if let Some(value) =
+                        chosen_value(&options.get_untracked(), chosen, &query.get_untracked())
+                    {
+                        pick(value);
+                    }
                 }
                 KeyAction::Close => ed.picker.set(None),
                 KeyAction::Handled | KeyAction::Ignore => {}
@@ -99,8 +129,15 @@ fn PickerPopup(state: PickerState) -> impl IntoView {
     };
 
     let place = placement(state.anchor, viewport());
-    let vertical = if place.up { format!("bottom:{}px", place.edge) } else { format!("top:{}px", place.edge) };
-    let style = format!("left:{}px;width:{}px;{vertical};max-height:{}px", place.left, place.width, place.max_height);
+    let vertical = if place.up {
+        format!("bottom:{}px", place.edge)
+    } else {
+        format!("top:{}px", place.edge)
+    };
+    let style = format!(
+        "left:{}px;width:{}px;{vertical};max-height:{}px",
+        place.left, place.width, place.max_height
+    );
     let row_pick = pick.clone();
     let typed_pick = pick;
     view! {
@@ -185,7 +222,13 @@ pub(super) fn option_is_current(current: &str, value: &str) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum KeyAction { Move(usize), Pick, Close, Handled, Ignore }
+pub(crate) enum KeyAction {
+    Move(usize),
+    Pick,
+    Close,
+    Handled,
+    Ignore,
+}
 
 pub(crate) fn key_action(key: &str, active: usize, count: usize) -> KeyAction {
     match key {
@@ -207,10 +250,15 @@ fn chosen_value(options: &[PropertyOption], chosen: Option<usize>, typed: &str) 
 }
 
 fn list_note(no_options: bool, no_query: bool, shown: usize, total: usize) -> Option<String> {
-    if no_options && no_query { Some(t!("picker-no-options")) }
-    else if shown == 0 && no_query { Some(t!("picker-empty")) }
-    else if total > shown { Some(t!("picker-more", count = total - shown)) }
-    else { None }
+    if no_options && no_query {
+        Some(t!("picker-no-options"))
+    } else if shown == 0 && no_query {
+        Some(t!("picker-empty"))
+    } else if total > shown {
+        Some(t!("picker-more", count = total - shown))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

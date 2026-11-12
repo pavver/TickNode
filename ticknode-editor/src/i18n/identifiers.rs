@@ -20,7 +20,12 @@ pub fn identifier_source(t: &DataType) -> Option<(String, String)> {
     TYPES.with(|types| {
         let types = types.borrow();
         let d = types.definition_of(t)?;
-        let TypeKind::Identifier { labels: Some(source) } = &d.kind else { return None };
+        let TypeKind::Identifier {
+            labels: Some(source),
+        } = &d.kind
+        else {
+            return None;
+        };
         Some((d.plugin.clone()?, source.clone()))
     })
 }
@@ -44,10 +49,22 @@ pub fn identifier_label(name: &str, id: i64) -> Option<String> {
 }
 
 pub fn identifier_text(value: &DataValue, t: &DataType) -> Option<String> {
-    let DataValue::Number(NumberValue::Int(id)) = value else { return None };
-    let DataType::Named(name) = t else { return None };
-    let identifier = TYPES.with(|types| types.borrow().get(name).is_some_and(TypeDefinition::is_identifier));
-    identifier.then(|| identifier_label(name, *id).map_or_else(|| id.to_string(), |label| format!("{label} ({id})")))
+    let DataValue::Number(NumberValue::Int(id)) = value else {
+        return None;
+    };
+    let DataType::Named(name) = t else {
+        return None;
+    };
+    let identifier = TYPES.with(|types| {
+        types
+            .borrow()
+            .get(name)
+            .is_some_and(TypeDefinition::is_identifier)
+    });
+    identifier.then(|| {
+        identifier_label(name, *id)
+            .map_or_else(|| id.to_string(), |label| format!("{label} ({id})"))
+    })
 }
 
 #[cfg(test)]

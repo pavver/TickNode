@@ -34,18 +34,27 @@ fn activate(engine: &mut TickEngine, id: NodeId, pin: u32) -> NodeTrace {
 fn test_variable_get_and_set() {
     let mut engine = TickEngine::new();
     let key = VariableKey::global("speed");
-    assert!(engine.variables.create(key.clone(), DataType::Number, number(10)));
+    assert!(
+        engine
+            .variables
+            .create(key.clone(), DataType::Number, number(10))
+    );
 
     let get = add(&mut engine, "variable/get", &[property("name", "speed")]);
     assert_eq!(pull(&mut engine, get, 0), Some(number(10)));
     assert_eq!(pull(&mut engine, get, 1), Some(DataValue::Bool(true)));
 
     let set = add(&mut engine, "variable/set", &[property("name", "speed")]);
-    engine.set_input_value(set, PinId(3), Some(number(25))).unwrap();
+    engine
+        .set_input_value(set, PinId(3), Some(number(25)))
+        .unwrap();
 
     let trace = activate(&mut engine, set, 0);
     assert_eq!(trace.fired, vec![PinId(1)]); // Pin 1 = Out
-    assert_eq!(engine.variables.get(&key).map(|v| &v.value), Some(&number(25)));
+    assert_eq!(
+        engine.variables.get(&key).map(|v| &v.value),
+        Some(&number(25))
+    );
     assert_eq!(pull(&mut engine, get, 0), Some(number(25)));
 }
 
@@ -53,18 +62,29 @@ fn test_variable_get_and_set() {
 fn test_variable_set_type_conversion_and_failure() {
     let mut engine = TickEngine::new();
     let key = VariableKey::global("temp");
-    assert!(engine.variables.create(key.clone(), DataType::Number, number(0)));
+    assert!(
+        engine
+            .variables
+            .create(key.clone(), DataType::Number, number(0))
+    );
 
     let set = add(&mut engine, "variable/set", &[property("name", "temp")]);
 
     // Compatible/convertible string "42" -> converted to Number 42
-    engine.set_input_value(set, PinId(3), Some(DataValue::from("42"))).unwrap();
+    engine
+        .set_input_value(set, PinId(3), Some(DataValue::from("42")))
+        .unwrap();
     let trace = activate(&mut engine, set, 0);
     assert_eq!(trace.fired, vec![PinId(1)]);
-    assert_eq!(engine.variables.get(&key).map(|v| &v.value), Some(&number(42)));
+    assert_eq!(
+        engine.variables.get(&key).map(|v| &v.value),
+        Some(&number(42))
+    );
 
     // Inconvertible string "hello" -> failure, fires Failed (Pin 2)
-    engine.set_input_value(set, PinId(3), Some(DataValue::from("hello"))).unwrap();
+    engine
+        .set_input_value(set, PinId(3), Some(DataValue::from("hello")))
+        .unwrap();
     let trace = activate(&mut engine, set, 0);
     assert_eq!(trace.fired, vec![PinId(2)]);
     assert!(engine.node_errors().iter().any(|e| e.node == set));
@@ -73,8 +93,14 @@ fn test_variable_set_type_conversion_and_failure() {
 #[test]
 fn test_variable_set_missing_variable() {
     let mut engine = TickEngine::new();
-    let set = add(&mut engine, "variable/set", &[property("name", "nonexistent")]);
-    engine.set_input_value(set, PinId(3), Some(number(100))).unwrap();
+    let set = add(
+        &mut engine,
+        "variable/set",
+        &[property("name", "nonexistent")],
+    );
+    engine
+        .set_input_value(set, PinId(3), Some(number(100)))
+        .unwrap();
 
     let trace = activate(&mut engine, set, 0);
     assert_eq!(trace.fired, vec![PinId(2)]); // Pin 2 = Failed
@@ -87,24 +113,42 @@ fn test_variable_create_and_delete() {
     let create = add(
         &mut engine,
         "variable/create",
-        &[property("name", "counter"), property("scope", "global"), property("type", "number")],
+        &[
+            property("name", "counter"),
+            property("scope", "global"),
+            property("type", "number"),
+        ],
     );
-    engine.set_input_value(create, PinId(3), Some(number(1))).unwrap();
+    engine
+        .set_input_value(create, PinId(3), Some(number(1)))
+        .unwrap();
 
     // First create: Created (Pin 1)
     let trace = activate(&mut engine, create, 0);
     assert_eq!(trace.fired, vec![PinId(1)]);
     let key = VariableKey::global("counter");
-    assert_eq!(engine.variables.get(&key).map(|v| &v.value), Some(&number(1)));
+    assert_eq!(
+        engine.variables.get(&key).map(|v| &v.value),
+        Some(&number(1))
+    );
 
     // Second create with same name: Exists (Pin 2), does not overwrite
-    engine.set_input_value(create, PinId(3), Some(number(999))).unwrap();
+    engine
+        .set_input_value(create, PinId(3), Some(number(999)))
+        .unwrap();
     let trace = activate(&mut engine, create, 0);
     assert_eq!(trace.fired, vec![PinId(2)]);
-    assert_eq!(engine.variables.get(&key).map(|v| &v.value), Some(&number(1)));
+    assert_eq!(
+        engine.variables.get(&key).map(|v| &v.value),
+        Some(&number(1))
+    );
 
     // Delete node
-    let delete = add(&mut engine, "variable/delete", &[property("name", "counter")]);
+    let delete = add(
+        &mut engine,
+        "variable/delete",
+        &[property("name", "counter")],
+    );
     let trace = activate(&mut engine, delete, 0);
     assert_eq!(trace.fired, vec![PinId(1)]);
     assert!(engine.variables.get(&key).is_none());
@@ -121,36 +165,77 @@ fn test_variable_scope_shadowing_and_lookup() {
     let sheet_key = VariableKey::sheet(sheet_id, "mode");
     let global_key = VariableKey::global("mode");
 
-    assert!(engine.variables.create(sheet_key, DataType::String, DataValue::from("sheet_val")));
-    assert!(engine.variables.create(global_key, DataType::String, DataValue::from("global_val")));
+    assert!(
+        engine
+            .variables
+            .create(sheet_key, DataType::String, DataValue::from("sheet_val"))
+    );
+    assert!(
+        engine
+            .variables
+            .create(global_key, DataType::String, DataValue::from("global_val"))
+    );
 
     // Node on sheet_id with Auto lookup -> finds sheet variable
-    let get_auto = add(&mut engine, "variable/get", &[property("name", "mode"), property("lookup", "auto")]);
+    let get_auto = add(
+        &mut engine,
+        "variable/get",
+        &[property("name", "mode"), property("lookup", "auto")],
+    );
     engine.set_node_sheet(get_auto, Some(sheet_id));
-    assert_eq!(pull(&mut engine, get_auto, 0), Some(DataValue::from("sheet_val")));
+    assert_eq!(
+        pull(&mut engine, get_auto, 0),
+        Some(DataValue::from("sheet_val"))
+    );
 
     // Node on sheet_id with Global lookup -> finds global variable
-    let get_global = add(&mut engine, "variable/get", &[property("name", "mode"), property("lookup", "global")]);
+    let get_global = add(
+        &mut engine,
+        "variable/get",
+        &[property("name", "mode"), property("lookup", "global")],
+    );
     engine.set_node_sheet(get_global, Some(sheet_id));
-    assert_eq!(pull(&mut engine, get_global, 0), Some(DataValue::from("global_val")));
+    assert_eq!(
+        pull(&mut engine, get_global, 0),
+        Some(DataValue::from("global_val"))
+    );
 
     // Node without sheet (or on another sheet) with Auto lookup -> finds global variable
     let other_sheet = SheetId::generate();
-    let get_other = add(&mut engine, "variable/get", &[property("name", "mode"), property("lookup", "auto")]);
+    let get_other = add(
+        &mut engine,
+        "variable/get",
+        &[property("name", "mode"), property("lookup", "auto")],
+    );
     engine.set_node_sheet(get_other, Some(other_sheet));
-    assert_eq!(pull(&mut engine, get_other, 0), Some(DataValue::from("global_val")));
+    assert_eq!(
+        pull(&mut engine, get_other, 0),
+        Some(DataValue::from("global_val"))
+    );
 }
 
 #[test]
 fn test_variable_changed_fires_next_tick() {
     let mut engine = TickEngine::new();
     let key = VariableKey::global("target");
-    assert!(engine.variables.create(key.clone(), DataType::Number, number(0)));
+    assert!(
+        engine
+            .variables
+            .create(key.clone(), DataType::Number, number(0))
+    );
 
-    let changed = add(&mut engine, "variable/changed", &[property("name", "target")]);
+    let changed = add(
+        &mut engine,
+        "variable/changed",
+        &[property("name", "target")],
+    );
     let sink = add(&mut engine, "console", &[]);
-    engine.connect_exec(changed, PinId(0), sink, PinId(0)).unwrap();
-    engine.connect_data(changed, PinId(1), sink, PinId(1)).unwrap();
+    engine
+        .connect_exec(changed, PinId(0), sink, PinId(0))
+        .unwrap();
+    engine
+        .connect_data(changed, PinId(1), sink, PinId(1))
+        .unwrap();
 
     // Tick 1: no changes yet
     engine.tick();
@@ -158,7 +243,9 @@ fn test_variable_changed_fires_next_tick() {
 
     // Tick 2: set variable target
     let set = add(&mut engine, "variable/set", &[property("name", "target")]);
-    engine.set_input_value(set, PinId(3), Some(number(50))).unwrap();
+    engine
+        .set_input_value(set, PinId(3), Some(number(50)))
+        .unwrap();
     activate(&mut engine, set, 0);
 
     // Tick 3: changed polls and fires, queuing sink
@@ -181,10 +268,19 @@ fn test_legacy_var_name_property_migration() {
     let key = VariableKey::global("migrated");
     assert!(engine.variables.create(key, DataType::Number, number(77)));
 
-    let get = add(&mut engine, "variable/get", &[property("var_name", "migrated")]);
+    let get = add(
+        &mut engine,
+        "variable/get",
+        &[property("var_name", "migrated")],
+    );
     assert_eq!(pull(&mut engine, get, 0), Some(number(77)));
 
     // Verify property name was migrated to "name"
     let model = engine.node_model(get).unwrap();
-    assert!(model.properties.iter().any(|(k, v)| k == "name" && v == &DataValue::from("migrated")));
+    assert!(
+        model
+            .properties
+            .iter()
+            .any(|(k, v)| k == "name" && v == &DataValue::from("migrated"))
+    );
 }

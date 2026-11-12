@@ -11,13 +11,26 @@ fn history_state(actor: &Actor) -> HistoryState {
     actor.histories.get(&sheet_id).map_or_default(|h| h.state())
 }
 fn add(actor: &mut Actor) -> NodeId {
-    let id = apply(actor, ClientMessage::AddNode { type_name: "const".into(), position: Position::default() })
-        .into_iter().find_map(|e| match e { ServerMessage::NodeAdded(n) => Some(n.model.id), _ => None }).unwrap();
+    let id = apply(
+        actor,
+        ClientMessage::AddNode {
+            type_name: "const".into(),
+            position: Position::default(),
+        },
+    )
+    .into_iter()
+    .find_map(|e| match e {
+        ServerMessage::NodeAdded(n) => Some(n.model.id),
+        _ => None,
+    })
+    .unwrap();
     actor.histories.clear();
     actor.dirty_since = None;
     id
 }
-fn size(width: f64, height: f64) -> Option<NodeSize> { Some(NodeSize { width, height }) }
+fn size(width: f64, height: f64) -> Option<NodeSize> {
+    Some(NodeSize { width, height })
+}
 
 #[test]
 fn resize_persists_in_init_and_json_without_changing_the_engine() {
@@ -26,15 +39,32 @@ fn resize_persists_in_init_and_json_without_changing_the_engine() {
     let id = add(&mut actor);
     let before = actor.engine.node_model(id);
     let dimensions = size(424.0, 252.0);
-    let command = ClientMessage::ResizeNode { id, size: dimensions };
+    let command = ClientMessage::ResizeNode {
+        id,
+        size: dimensions,
+    };
     let decoded = postcard::from_bytes(&postcard::to_allocvec(&command).unwrap()).unwrap();
     let events = apply(&mut actor, decoded);
-    assert_eq!(events[0], ServerMessage::NodeResized { id, size: dimensions });
-    assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&events[0])).unwrap(), events[0]);
+    assert_eq!(
+        events[0],
+        ServerMessage::NodeResized {
+            id,
+            size: dimensions
+        }
+    );
+    assert_eq!(
+        postcard::from_bytes::<ServerMessage>(&encode(&events[0])).unwrap(),
+        events[0]
+    );
     assert_eq!(actor.engine.node_model(id), before);
     let snapshot = actor.snapshot(Some(actor.sheets[0].id));
-    assert_eq!(postcard::from_bytes::<ServerMessage>(&encode(&snapshot)).unwrap(), snapshot);
-    let ServerMessage::Init { nodes, .. } = snapshot else { panic!() };
+    assert_eq!(
+        postcard::from_bytes::<ServerMessage>(&encode(&snapshot)).unwrap(),
+        snapshot
+    );
+    let ServerMessage::Init { nodes, .. } = snapshot else {
+        panic!()
+    };
     assert_eq!(nodes[0].model.size, dimensions);
     actor.save();
     let sheet_id = actor.sheets[0].id;
@@ -45,7 +75,10 @@ fn resize_persists_in_init_and_json_without_changing_the_engine() {
     let loaded = actor.storage.load(&mut engine).unwrap();
     assert_eq!(loaded.sizes[&id], dimensions.unwrap());
     actor.storage.save_sheet(sheet_id, &graph).unwrap();
-    assert_eq!(std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap(), first);
+    assert_eq!(
+        std::fs::read_to_string(actor.storage.sheet_path(sheet_id)).unwrap(),
+        first
+    );
 }
 
 #[test]
@@ -56,19 +89,76 @@ fn resize_clamps_rejects_nonfinite_and_does_not_record_noops() {
     assert!(apply(&mut actor, ClientMessage::ResizeNode { id, size: None }).is_empty());
     assert!(actor.dirty_since.is_none());
     assert!(!history_state(&actor).can_undo);
-    apply(&mut actor, ClientMessage::ResizeNode { id, size: size(-10.0, 2000.0) });
-    assert_eq!(actor.sizes[&id], NodeSize { width: MIN_NODE_W, height: MAX_NODE_H });
-    assert!(apply(&mut actor, ClientMessage::ResizeNode { id, size: size(0.0, 9999.0) }).is_empty());
-    apply(&mut actor, ClientMessage::ResizeNode { id, size: size(10000.0, -1.0) });
-    assert_eq!(actor.sizes[&id], NodeSize { width: MAX_NODE_W, height: 0.0 });
+    apply(
+        &mut actor,
+        ClientMessage::ResizeNode {
+            id,
+            size: size(-10.0, 2000.0),
+        },
+    );
+    assert_eq!(
+        actor.sizes[&id],
+        NodeSize {
+            width: MIN_NODE_W,
+            height: MAX_NODE_H
+        }
+    );
+    assert!(
+        apply(
+            &mut actor,
+            ClientMessage::ResizeNode {
+                id,
+                size: size(0.0, 9999.0)
+            }
+        )
+        .is_empty()
+    );
+    apply(
+        &mut actor,
+        ClientMessage::ResizeNode {
+            id,
+            size: size(10000.0, -1.0),
+        },
+    );
+    assert_eq!(
+        actor.sizes[&id],
+        NodeSize {
+            width: MAX_NODE_W,
+            height: 0.0
+        }
+    );
     actor.histories.clear();
     actor.dirty_since = None;
     let (reply, _) = mpsc::unbounded_channel();
-    for dimensions in [size(f64::NAN, 1.0), size(1.0, f64::INFINITY), size(f64::NEG_INFINITY, 0.0)] {
-        let error = actor.apply(ClientMessage::ResizeNode { id, size: dimensions }, Some(actor.sheets[0].id), &reply).unwrap_err();
+    for dimensions in [
+        size(f64::NAN, 1.0),
+        size(1.0, f64::INFINITY),
+        size(f64::NEG_INFINITY, 0.0),
+    ] {
+        let error = actor
+            .apply(
+                ClientMessage::ResizeNode {
+                    id,
+                    size: dimensions,
+                },
+                Some(actor.sheets[0].id),
+                &reply,
+            )
+            .unwrap_err();
         assert_eq!(error.key, "error-node-size");
     }
-    assert!(actor.apply(ClientMessage::ResizeNode { id: NodeId::generate(), size: None }, Some(actor.sheets[0].id), &reply).is_err());
+    assert!(
+        actor
+            .apply(
+                ClientMessage::ResizeNode {
+                    id: NodeId::generate(),
+                    size: None
+                },
+                Some(actor.sheets[0].id),
+                &reply
+            )
+            .is_err()
+    );
     assert!(!history_state(&actor).can_undo);
     assert!(actor.dirty_since.is_none());
 }
@@ -79,13 +169,31 @@ fn resize_batch_undo_redo_reset_and_removal_preserve_layout_history() {
     let mut actor = actor(dir.path());
     let a = add(&mut actor);
     let b = add(&mut actor);
-    apply(&mut actor, ClientMessage::Batch(vec![
-        ClientMessage::ResizeNode { id: a, size: size(300.0, 200.0) },
-        ClientMessage::ResizeNode { id: b, size: size(400.0, 300.0) },
-    ]));
+    apply(
+        &mut actor,
+        ClientMessage::Batch(vec![
+            ClientMessage::ResizeNode {
+                id: a,
+                size: size(300.0, 200.0),
+            },
+            ClientMessage::ResizeNode {
+                id: b,
+                size: size(400.0, 300.0),
+            },
+        ]),
+    );
     let events = apply(&mut actor, ClientMessage::Undo);
-    assert_eq!(events.iter().filter(|e| matches!(e, ServerMessage::NodeResized { size: None, .. })).count(), 2);
-    assert!(!events.iter().any(|e| matches!(e, ServerMessage::NodeUpdated(_) | ServerMessage::NodeAdded(_) | ServerMessage::NodeRemoved(_))));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| matches!(e, ServerMessage::NodeResized { size: None, .. }))
+            .count(),
+        2
+    );
+    assert!(!events.iter().any(|e| matches!(
+        e,
+        ServerMessage::NodeUpdated(_) | ServerMessage::NodeAdded(_) | ServerMessage::NodeRemoved(_)
+    )));
     assert!(actor.sizes.is_empty());
     assert!(!history_state(&actor).can_undo);
     apply(&mut actor, ClientMessage::Redo);
@@ -111,13 +219,32 @@ fn pasted_snippets_keep_sizes_and_settings_paste_keeps_destination_size() {
     let dir = tempfile::tempdir().unwrap();
     let mut actor = actor(dir.path());
     let id = add(&mut actor);
-    apply(&mut actor, ClientMessage::ResizeNode { id, size: size(380.0, 240.0) });
+    apply(
+        &mut actor,
+        ClientMessage::ResizeNode {
+            id,
+            size: size(380.0, 240.0),
+        },
+    );
     let snippet = actor.graph_snapshot();
     let events = apply(&mut actor, ClientMessage::Paste(snippet));
-    let pasted = events.iter().find_map(|e| match e { ServerMessage::NodeAdded(n) => Some(n), _ => None }).unwrap();
+    let pasted = events
+        .iter()
+        .find_map(|e| match e {
+            ServerMessage::NodeAdded(n) => Some(n),
+            _ => None,
+        })
+        .unwrap();
     assert_ne!(pasted.model.id, id);
     assert_eq!(pasted.model.size, size(380.0, 240.0));
-    apply(&mut actor, ClientMessage::PasteSettings { id, type_name: "const".into(), properties: vec![("value".into(), DataValue::from("new\nmessage"))] });
+    apply(
+        &mut actor,
+        ClientMessage::PasteSettings {
+            id,
+            type_name: "const".into(),
+            properties: vec![("value".into(), DataValue::from("new\nmessage"))],
+        },
+    );
     assert_eq!(actor.instance(id).unwrap().model.size, size(380.0, 240.0));
     apply(&mut actor, ClientMessage::Undo);
     assert_eq!(actor.instance(id).unwrap().model.size, size(380.0, 240.0));

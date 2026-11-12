@@ -17,12 +17,18 @@ pub struct WireContext {
 
 impl Editor {
     pub fn wire_exists(&self, (exec, connection): WireKey) -> bool {
-        if exec { self.exec.with(|all| all.contains(&connection)) }
-        else { self.data.with(|all| all.contains(&connection)) }
+        if exec {
+            self.exec.with(|all| all.contains(&connection))
+        } else {
+            self.data.with(|all| all.contains(&connection))
+        }
     }
 
     pub fn wire_exists_untracked(&self, (exec, connection): WireKey) -> bool {
-        if exec { self.exec.with_untracked(|all| all.contains(&connection)) }
-        else { self.data.with_untracked(|all| all.contains(&connection)) }
+        if exec {
+            self.exec.with_untracked(|all| all.contains(&connection))
+        } else {
+            self.data.with_untracked(|all| all.contains(&connection))
+        }
     }
 }

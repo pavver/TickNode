@@ -12,7 +12,11 @@ pub fn can_move_down(index: usize, total: usize) -> bool {
 
 /// Computes the live age in milliseconds for a sheet execution.
 /// `last_executed_ms` was the age in ms at `received_at_ms`.
-pub fn sheet_last_run_age(last_executed_ms: Option<u64>, received_at_ms: f64, now_ms: f64) -> Option<f64> {
+pub fn sheet_last_run_age(
+    last_executed_ms: Option<u64>,
+    received_at_ms: f64,
+    now_ms: f64,
+) -> Option<f64> {
     last_executed_ms.map(|ago| {
         let elapsed = (now_ms - received_at_ms).max(0.0);
         ago as f64 + elapsed

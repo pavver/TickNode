@@ -46,8 +46,12 @@ pub fn Pin(
         PinDirection::Input => ed.is_input_connected(node, pin_id),
         PinDirection::Output => ed.is_output_connected(node, pin_id),
     };
-    let color = ed.types.with_untracked(|types| pin_color(types, &pin.pin_type));
     let is_input = dir == PinDirection::Input;
+    let color_declared = pin.pin_type.clone();
+    let color = move || {
+        let eff = effective_pin_type(ed, node, pin_id, is_input, &color_declared);
+        ed.types.with(|types| pin_color(types, &eff))
+    };
     let is_required = pin.required;
     let pin_def = pin.clone();
     let missing = move || ed.required_missing(node, &pin_def);
@@ -57,12 +61,13 @@ pub fn Pin(
     let property_input = ed.node(node).is_some_and(|n| n.instance.with_untracked(|i| i.definition.properties.iter().any(|p| p.input == Some(pin_id))));
     let value = value_type.filter(|_| !property_input).map(|t| move || (!connected()).then(|| view! { <PinValue ed=ed node=node pin=pin_id value_type=t.clone() multiline=Signal::derive(move || row_height.get() > ROW_H) /> }));
     let pin_name_title = pin.name.clone();
-    let pin_type_title = pin.pin_type.clone();
+    let title_declared = pin.pin_type.clone();
     let pin_title = move || {
+        let eff_type = effective_pin_type(ed, node, pin_id, is_input, &title_declared);
         let translated_pin = translated_pin_name(ed, node, &pin_name_title);
-        let type_name = pin_type_title_label(ed, &pin_type_title);
+        let type_name = pin_type_title_label(ed, &eff_type);
         let status = crate::node_status::pin_status(ed, node, pin_id, dir, exec);
-        format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &pin_type_title, is_required))
+        format!("{}\n{status}", pin_tooltip(&translated_pin, &type_name, &eff_type, is_required))
     };
     let pending = use_context::<PendingConnection>();
     let target_type = pin.pin_type.clone();
@@ -94,11 +99,29 @@ pub fn Pin(
             data-dir=if is_input { "in" } else { "out" }
             data-kind=if exec { "exec" } else { "data" }
         >
-            <span class="socket" class:exec=exec class:connected=connected style=format!("--pin-color:{color}")></span>
+            <span class="socket" class:exec=exec class:connected=connected style=move || format!("--pin-color:{}", color())></span>
             <span class="ellipsis">{pin_label}</span>
             <PinSplitControl node=node pin=split_control_pin />
             {value}
         </div>
+    }
+}
+
+pub(crate) fn display_type(declared: &DataType, source: Option<DataType>) -> DataType {
+    if matches!(declared, DataType::Any) {
+        source.unwrap_or(DataType::Any)
+    } else {
+        declared.clone()
+    }
+}
+
+fn effective_pin_type(ed: crate::state::Editor, node: NodeId, pin_id: PinId, is_input: bool, declared: &PinType) -> PinType {
+    match declared {
+        PinType::Data(declared) => PinType::Data(display_type(
+            declared,
+            is_input.then(|| ed.source_type(node, pin_id)).flatten(),
+        )),
+        PinType::Exec => PinType::Exec,
     }
 }
 

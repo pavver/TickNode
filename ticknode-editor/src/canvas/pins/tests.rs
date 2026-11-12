@@ -1,6 +1,16 @@
 use super::*;
 
 #[test]
+fn any_input_displays_source_type_when_connected_and_any_when_disconnected() {
+    assert_eq!(display_type(&DataType::Any, None), DataType::Any);
+    assert_eq!(display_type(&DataType::Any, Some(DataType::Number)), DataType::Number);
+    assert_eq!(display_type(&DataType::Any, Some(DataType::String)), DataType::String);
+    assert_eq!(display_type(&DataType::Any, Some(DataType::Bool)), DataType::Bool);
+    assert_eq!(display_type(&DataType::Number, Some(DataType::String)), DataType::Number);
+    assert_eq!(display_type(&DataType::String, None), DataType::String);
+}
+
+#[test]
 fn tooltips_keep_required_and_technical_type_information() {
     i18n::with_locale(i18n::Locale::En, || {
         assert_eq!(pin_tooltip("Go", "Execution", &PinType::Exec, false), "Go: Execution");

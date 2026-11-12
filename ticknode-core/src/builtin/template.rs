@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod formatting_tests;
 #[cfg(test)]
+mod rename_tests;
+#[cfg(test)]
 mod tests;
 
 use crate::{Node, NodeContext};
@@ -10,7 +12,7 @@ use ticknode_shared::{
     *,
 };
 
-const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: {{ name | default('—') }} supplies a fallback.
+const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits, and renaming a single variable in place keeps its pin. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: {{ name | default('—') }} supplies a fallback.
 
 Examples: Power: {{ text.power }}; {% if power > 1000 %}high{% endif %}; {{ (power / 1000) | round(1) }} kW; {% for item in items %}{{ item }} {% endfor %}; {{ name | default('—') }}.
 
@@ -54,6 +56,24 @@ impl TemplateNode {
             return;
         };
         let old = std::mem::take(&mut self.pins);
+        let mut rename: Option<(String, PinId)> = None;
+        if !self.restoring {
+            let disappeared: Vec<(usize, PinId)> = old
+                .iter()
+                .enumerate()
+                .filter(|(_, (name, _))| !ordered.contains(name))
+                .map(|(idx, (_, pin))| (idx, *pin))
+                .collect();
+            let appeared: Vec<(usize, &String)> = ordered
+                .iter()
+                .enumerate()
+                .filter(|(_, name)| !old.iter().any(|(n, _)| n == *name))
+                .map(|(idx, name)| (idx, name))
+                .collect();
+            if disappeared.len() == 1 && appeared.len() == 1 && disappeared[0].0 == appeared[0].0 {
+                rename = Some((appeared[0].1.clone(), disappeared[0].1));
+            }
+        }
         self.next_pin = old
             .iter()
             .map(|(_, pin)| pin.0 + 1)
@@ -64,6 +84,8 @@ impl TemplateNode {
             .into_iter()
             .filter_map(|name| {
                 let pin = if let Some((_, pin)) = old.iter().find(|(n, _)| *n == name) {
+                    *pin
+                } else if let Some((rename_name, pin)) = &rename && rename_name == &name {
                     *pin
                 } else {
                     // Do not allocate from the split-pin range or wrap around.

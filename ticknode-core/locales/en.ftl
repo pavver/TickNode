@@ -859,7 +859,7 @@ node-logic-hysteresis-prop-mode-option-falling = Falling
 node-text-template-title = Format text
 node-text-template-description = Formats text with a MiniJinja template
 node-text-template-help =
-    Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } supplies a fallback.
+    Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits, and renaming a single variable in place keeps its pin. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } supplies a fallback.
 
     Examples: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
 

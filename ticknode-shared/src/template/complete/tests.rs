@@ -151,11 +151,20 @@ fn test_filter_completion() {
     assert_eq!(c1.items[0].label, "upper");
     assert_eq!(c1.items[0].kind, CompletionKind::Filter);
 
-    // No space right after pipe: {{ x||^| }} has pipe then caret
+    // For String input, type-aware completion lists specific filters first (e.g. capitalize)
+    // and excludes numeric filters such as abs, while text is offered among generics.
     let (_, res2) = complete_at("{{ x||^| }}", &inputs, &types);
     let c2 = res2.expect("no-space pipe position should complete filters");
-    assert_eq!(c2.items[0].label, "text");
-    assert!(c2.items.iter().any(|i| i.label == "abs"));
+    assert_eq!(c2.items[0].label, "capitalize");
+    assert!(!c2.items.iter().any(|i| i.label == "abs"));
+    assert!(c2.items.iter().any(|i| i.label == "text"));
+
+    // For Any input, all filters are offered and text stays first.
+    let any_inputs = vec![("x".to_string(), DataType::Any)];
+    let (_, res_any) = complete_at("{{ x||^| }}", &any_inputs, &types);
+    let c_any = res_any.expect("no-space pipe with Any input");
+    assert_eq!(c_any.items[0].label, "text");
+    assert!(c_any.items.iter().any(|i| i.label == "abs"));
 
     // No space right after pipe with prefix: {{ x|up|^| }}
     let (source3, res3) = complete_at("{{ x|up|^| }}", &inputs, &types);

@@ -127,13 +127,8 @@ pub(crate) fn scan_prefix(
     (state, for_stack, set_vars)
 }
 
-pub(crate) fn is_after_is_or_is_not(before: &str) -> bool {
+pub(crate) fn strip_is_or_is_not(before: &str) -> Option<&str> {
     let s = before.trim_end();
-    if let Some(rest) = s.strip_suffix("is")
-        && (rest.is_empty() || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
-    {
-        return true;
-    }
     if let Some(rest) = s.strip_suffix("not")
         && (rest.is_empty() || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
     {
@@ -141,6 +136,32 @@ pub(crate) fn is_after_is_or_is_not(before: &str) -> bool {
         if let Some(rest3) = rest2.strip_suffix("is")
             && (rest3.is_empty() || rest3.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
         {
+            return Some(rest3);
+        }
+    }
+    if let Some(rest) = s.strip_suffix("is")
+        && (rest.is_empty() || rest.ends_with(|c: char| c.is_whitespace() || (!c.is_alphanumeric() && c != '_')))
+    {
+        return Some(rest);
+    }
+    None
+}
+
+pub(crate) fn is_for_in_iterator(before_slice: &str) -> bool {
+    let s = before_slice.trim_start().trim_start_matches(['-', '+']).trim_start();
+    let Some(rest) = s.strip_prefix("for") else {
+        return false;
+    };
+    if !rest.starts_with(char::is_whitespace) {
+        return false;
+    }
+    let rest = rest.trim_start();
+    for (idx, _) in rest.match_indices("in") {
+        let before = &rest[..idx];
+        let after_idx = idx + 2;
+        let after = &rest[after_idx..];
+        let before_ok = before.ends_with(char::is_whitespace) || before.ends_with(')');
+        if before_ok && after.chars().all(char::is_whitespace) {
             return true;
         }
     }

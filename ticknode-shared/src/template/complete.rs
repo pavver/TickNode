@@ -3,9 +3,15 @@ use std::ops::Range;
 use crate::{DataType, TypeRegistry};
 
 mod catalog;
+mod infer;
+pub mod kinds;
 mod scan;
 #[cfg(test)]
+mod context_tests;
+#[cfg(test)]
 mod tests;
+
+pub use kinds::{kind_of, ValueKind};
 
 pub struct CompletionInput<'a> {
     pub source: &'a str,
@@ -111,39 +117,69 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Context 2: after `|`
     if before.ends_with('|') && !before.ends_with("||") {
-        let items = filter_and_dedup(catalog::filter_items(), partial);
+        let left_text = &before[..before.len() - 1];
+        let ctx = infer::InferContext {
+            inputs: input.inputs,
+            types: input.types,
+            for_stack: &for_stack,
+            set_vars: &set_vars,
+        };
+        let left_kind = infer::infer_left(left_text, &ctx);
+        let items = filter_and_dedup(catalog::filter_items_for(&left_kind, input.types), partial);
         return Some(Completion { range, items });
     }
 
     // Context 3: after `is` / `is not`
-    if scan::is_after_is_or_is_not(before) {
-        let items = filter_and_dedup(catalog::test_items(), partial);
+    if let Some(left_text) = scan::strip_is_or_is_not(before) {
+        let ctx = infer::InferContext {
+            inputs: input.inputs,
+            types: input.types,
+            for_stack: &for_stack,
+            set_vars: &set_vars,
+        };
+        let left_kind = infer::infer_left(left_text, &ctx);
+        let items = filter_and_dedup(catalog::test_items_for(&left_kind), partial);
         return Some(Completion { range, items });
     }
 
     // Context 5: any other expression position
+    let for_in = is_tag && scan::is_for_in_iterator(before_slice);
     let mut raw_items = Vec::new();
 
     // 1. Inputs
     for (name, data_type) in input.inputs {
-        raw_items.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionKind::Variable,
-            detail: type_label(data_type, input.types),
-            insert: name.clone(),
-        });
+        let kind = kinds::kind_of(data_type, input.types);
+        if !for_in || kind.is_iterable() {
+            raw_items.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionKind::Variable,
+                detail: type_label(data_type, input.types),
+                insert: name.clone(),
+            });
+        }
     }
 
     // 2. Open for loop variables
     for scope in for_stack.iter().rev() {
-        let detail = scope.var_type.as_ref().map(|t| type_label(t, input.types)).unwrap_or_default();
-        for var in &scope.vars {
-            raw_items.push(CompletionItem {
-                label: var.clone(),
-                kind: CompletionKind::Variable,
-                detail: detail.clone(),
-                insert: var.clone(),
-            });
+        let is_iter = scope
+            .var_type
+            .as_ref()
+            .map(|t| kinds::kind_of(t, input.types).is_iterable())
+            .unwrap_or(true);
+        if !for_in || is_iter {
+            let detail = scope
+                .var_type
+                .as_ref()
+                .map(|t| type_label(t, input.types))
+                .unwrap_or_default();
+            for var in &scope.vars {
+                raw_items.push(CompletionItem {
+                    label: var.clone(),
+                    kind: CompletionKind::Variable,
+                    detail: detail.clone(),
+                    insert: var.clone(),
+                });
+            }
         }
     }
 
@@ -157,8 +193,8 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
         });
     }
 
-    // 4. Loop (only inside an open for)
-    if !for_stack.is_empty() {
+    // 4. Loop (only inside an open for, and not right after `for ... in`)
+    if !for_stack.is_empty() && !for_in {
         raw_items.push(CompletionItem {
             label: "loop".to_string(),
             kind: CompletionKind::Variable,
@@ -167,19 +203,32 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
         });
     }
 
-    // 5. Text
-    raw_items.push(CompletionItem {
-        label: "text".to_string(),
-        kind: CompletionKind::Variable,
-        detail: "formatted inputs".to_string(),
-        insert: "text".to_string(),
-    });
+    // 5. Text (not right after `for ... in`)
+    if !for_in {
+        raw_items.push(CompletionItem {
+            label: "text".to_string(),
+            kind: CompletionKind::Variable,
+            detail: "formatted inputs".to_string(),
+            insert: "text".to_string(),
+        });
+    }
 
     // Functions
-    raw_items.extend(catalog::function_items());
+    if for_in {
+        raw_items.push(CompletionItem {
+            label: "range".to_string(),
+            kind: CompletionKind::Function,
+            detail: "range([start], stop, [step])".to_string(),
+            insert: "range()".to_string(),
+        });
+    } else {
+        raw_items.extend(catalog::function_items());
+    }
 
-    // Keyword operators
-    raw_items.extend(catalog::keyword_operator_items());
+    // Keyword operators (not right after `for ... in`)
+    if !for_in {
+        raw_items.extend(catalog::keyword_operator_items());
+    }
 
     let items = filter_and_dedup(raw_items, partial);
     Some(Completion { range, items })

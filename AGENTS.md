@@ -17,6 +17,40 @@ TickNode is a node-based visual programming system for automation. The goal is a
 - **Definitions are English.** Titles, descriptions, help, pin names, type and setting texts in node/plugin code are English; they are the fallback. Other languages come only from Fluent resources (see *Translations*). Ukrainian words that the text parsers accept as input aliases (`ticknode_shared::text`, `condition`, keyboard shortcut letters) stay.
 - **Logs are always English and are never translated**: the server log (`tracing`), node and plugin messages (`host::log`, `ServerMessage::Log`) and the editor console. This is deliberate: when a user reports a problem from any locale, their logs can be read without translation. Plugin authors must log in English; this includes `#[error(...)]` texts, `host::log`/`warn`/`error`, and `[UI]`/`[ERROR]` lines the editor writes to its console (plain English constants, no `t!`). Exceptions are server errors (`i18n::ui_text`) and the settings-copy confirmation (`settings-copied`): both answer a user action and are translated.
 
+## Project rules (adopted from the Operator design system)
+
+These rules come from [../operator-design-system/AGENTS.md](../operator-design-system/AGENTS.md) and apply to new and changed code.
+
+### Formatting
+* In Markdown files, every sentence is on its own line.
+* Files are referenced with relative paths.
+
+### Units and geometry (editor UI)
+* Spatial values use Design Units (`1 DU = 4 logical points`, CSS `--du`, Rust `geometry::DU`).
+* Font sizes and line heights use Type Units (`1 TU = 1 scalable logical point`).
+* Raw `px`, `dp`, `sp`, `pt` and `rem` values are prohibited in new CSS and component code.
+  The only exceptions are the unit definitions themselves and geometry measured at runtime (pointer positions, element sizes).
+* Corner radius is `0 DU` unless the design system specification of the component lists a round exception.
+* Standard border `0.25 DU`, emphasis border `0.5 DU`, always drawn inside the bounds.
+
+### Tokens and icons
+* Design tokens (colours, spacing, motion) are defined in [../operator-design-system/tokens/tokens.toml](../operator-design-system/tokens/tokens.toml); the editor mirrors them in `ticknode-editor/styles/base.css`.
+  Do not invent new colour values in component CSS: add or reuse a token, and every theme must keep the same token set.
+* The design system uses Material Symbols Sharp ([../operator-design-system/tokens/icons.toml](../operator-design-system/tokens/icons.toml)); the editor still bundles Material Design Icons (`mdi:*`), so prefer a symbol available in both and draw a custom icon only when nothing fits ([../operator-design-system/docs/foundations/iconography.md](../operator-design-system/docs/foundations/iconography.md)).
+
+### Behavior
+* Follow [../operator-design-system/docs/foundations/states.md](../operator-design-system/docs/foundations/states.md) for every interactive control.
+* Pending blocks input, results do not, errors roll back with the same animation as the forward change.
+
+### Rust
+* No `.unwrap()` or `.expect()` in non-test code.
+* Run `cargo clippy` (host crates, and the editor with `--target wasm32-unknown-unknown`) on the changed crates before committing; changed code must be warning-free.
+* `cargo fmt` is pending a one-off formatting pass of the whole workspace (the code is not rustfmt-clean yet, and formatting may push files over the 500-line limit); until then do not reformat untouched code.
+
+### Git
+* Conventional Commits in English (`feat(editor): ...`, `fix(core): ...`).
+* No automated or AI signatures in commit messages.
+
 ## Commands
 
 ```bash
@@ -155,7 +189,7 @@ cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu   # geometry and
 - Wires support grid-snapped route points: double-click a wire to add, double-click a point to remove, drag a point to move, pull a wire sideways past `WIRE_PULL_THRESHOLD` (8 px) to insert and drag a point, or use the wire/point context menu. A pressed point is `Editor::selected_point`: Delete removes that point instead of the wire. `Editor::wire_routes` follows server events with local drag previews; group moves translate routes with both endpoints selected in the same history entry. Snippets preserve and offset internal routes.
 - Dropping a wire on the canvas background opens `Editor::wire_menu` at the release point and keeps the pending wire visible. `wire_suggest.rs` ranks default catalog pins by exact type (an adaptive definition's fitting or Any opposite-direction data pin counts as exact), compatibility and Any, omitting pins reachable only through an implicit conversion (Bool → Number), selecting the lowest pin ID at the best rank (match type only picks the pin); titles and category details are translated. `arrange` orders the menu: a "Frequently used" section (up to 5 types, by node count in the graph, then browser-local recents), then every other match grouped by category in palette order, editor-preferred types for the dragged data type first (`PREFERRED_TYPES`: String → `text/template`), then title. `MenuRow.section` draws a divider wherever the section changes (quick add uses it for recent/all). `WireMenuLayer` shares picker filtering, placement, row limit and keyboard decisions; outside press, Esc, camera changes or a missing origin close it. Selection sends `AddNodeConnected`; `Created` selects the node. Dragging from a connected data input still relocates its wire (the input is disconnected and the source output becomes the origin), so dropping it on the background offers nodes for that output.
 - Frames (comment boxes) render behind wires and nodes with a translucent fill and header strip (`6 * DU`); the body passes clicks through to the canvas. Key `C` or the toolbar button creates a frame around selected nodes (or 400×240 centered) with `6 * DU` padding (`12 * DU` top) snapped to `DU`. Selecting a frame (`Selection::Frame`) enables Delete (`RemoveFrame`); double-click renames the title, and the header swatch recolors it. Dragging the frame header moves the frame with all nodes, routes and frames fully inside it in one `Batch`; the bottom-right handle resizes it (`MIN_FRAME_W`/`MIN_FRAME_H`..=`MAX_FRAME_SIZE`, snapped to `DU`). Copy, cut, duplicate (Ctrl+D) and paste include the frame and its enclosed nodes; cutting removes both in one Batch.
-- The design is the Operator UI design system (reference Kotlin components: `/home/pavver/rust/notifiApp/NotifiApp/design_system/`): tokens in `ticknode-editor/styles/base.css` (`:root` / `[data-theme=light]`; the other `styles/*.css` files are linked in cascade order from `index.html`), unit `--du: 4px`, square corners, control states Idle/Selected/Pending/Success/Error (`ui::ControlState`).
+- The design is the Operator UI design system ([../operator-design-system](../operator-design-system): Leptos components in `web/operator-ui`, specifications in `docs/`, tokens in `tokens/tokens.toml`; see *Project rules*): tokens in `ticknode-editor/styles/base.css` (`:root` / `[data-theme=light]`; the other `styles/*.css` files are linked in cascade order from `index.html`), unit `--du: 4px`, square corners, control states Idle/Selected/Pending/Success/Error (`ui::ControlState`).
 - Wires are built from computed pin positions (`geometry.rs`), not measured in the DOM: the constants `DU`, `NODE_WIDTH` / `MATCH_WIDTH` (width — `NodeLayout::width`) and the header/row heights must match the CSS of `.node-header`, `.node-props`, `.pins`, `.pin`. `NodeLayout` gives pin positions and the node size: simple properties (text-typed, except `in:*`) are rows between the header and the pins; in Match, after In, the input rows and the "+ input" row come the case blocks (`case_rows`), each case's exec output sits in its block header, Else in the last row.
 - All settings live on the node itself (properties, `*_type` drop-downs, input values, Match conditions, ▶ "run" in the header); the inspector shows the description, the last execution and actions. Controls on a node must not let `pointerdown` reach the canvas (`stop_on_controls`), or a drag starts.
 - A dynamic `class=move || …` overwrites the whole `className`, so do not combine it with `class:x=…` on the same element: build the class as one string.

@@ -20,6 +20,8 @@ TickNode is a node-based visual programming system for automation. The goal is a
 ## Project rules (adopted from the Operator design system)
 
 These rules come from [../operator-design-system/AGENTS.md](../operator-design-system/AGENTS.md) and apply to new and changed code.
+A global redesign of the editor onto the design system's Leptos components (`web/operator-ui`) is planned for later, after the core functionality is complete.
+Do not start that migration unless asked, but keep new UI code compatible with it (Design Units, tokens, control states).
 
 ### Formatting
 * In Markdown files, every sentence is on its own line.
@@ -46,6 +48,11 @@ These rules come from [../operator-design-system/AGENTS.md](../operator-design-s
 * No `.unwrap()` or `.expect()` in non-test code.
 * Run `cargo clippy` (host crates, and the editor with `--target wasm32-unknown-unknown`) on the changed crates before committing; changed code must be warning-free.
 * `cargo fmt` is pending a one-off formatting pass of the whole workspace (the code is not rustfmt-clean yet, and formatting may push files over the 500-line limit); until then do not reformat untouched code.
+
+### Releases
+* Before every release (version bump, add-on version change, tag or published image), run a ub-mode pass over the changes since the previous release: the reduced principles First Make it Work, Then Make it Right, Follow Practice (Claude Code: the `ub-mode` skill).
+* The pass includes the unclebob metrics tools (`crapper`, `dryer`, `mutator`, run one crate at a time; results in `.metrics/`) and the 500-line limit for every Rust file.
+* Fix or explicitly accept every finding before releasing.
 
 ### Git
 * Conventional Commits in English (`feat(editor): ...`, `fix(core): ...`).

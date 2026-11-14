@@ -427,6 +427,34 @@ node-object-unpack-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-object-unpack-pin-Obj = Obj
 
+node-object-break-title = Break object
+node-object-break-description = Breaks a typed object into individual fields
+node-object-break-help =
+    Breaks a typed object into individual fields: each field is an output pin.
+
+    Select Type on the node or connect a typed object to Value to adapt it.
+
+    An optional field that is absent from the value has no value (the pin is empty).
+
+    Pure node: evaluated whenever its result is needed by another node.
+node-object-break-pin-Value = Value
+node-object-break-prop-type-title = Type
+node-object-break-prop-type-description = Object struct type to break into fields
+
+node-object-make-title = Make object
+node-object-make-description = Constructs a typed object from individual fields
+node-object-make-help =
+    Constructs a typed object from individual fields.
+
+    Select Type on the node to choose the object structure.
+
+    Required fields are required inputs: without them no value is created. An optional field without a value is skipped.
+
+    Pure node: evaluated whenever its result is needed by another node.
+node-object-make-pin-Value = Value
+node-object-make-prop-type-title = Type
+node-object-make-prop-type-description = Object struct type to construct from fields
+
 # Physical quantities and unit symbols.
 number-decimal-separator = .
 type-quantity-power-title = Power
@@ -1008,6 +1036,7 @@ node-text-template-prop-blocks-title = Tag lines
 node-text-template-prop-blocks-description = Trim removes the line break after a { "{" }% %{ "}" } tag and the spaces before it
 node-text-template-prop-blocks-option-keep = Keep
 node-text-template-prop-blocks-option-trim = Trim
+error-object-unknown-type = Unknown struct type: { $type }
 error-template-syntax = Invalid template syntax: { $message }
 error-template-render = Template rendering failed: { $message }
 

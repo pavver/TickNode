@@ -19,7 +19,11 @@ pub fn break_node_type(type_name: &str) -> String {
     format!("type/break/{type_name}")
 }
 
-fn field_pin(index: usize, field: &FieldDefinition, direction: PinDirection) -> PinDefinition {
+pub(crate) fn field_pin(
+    index: usize,
+    field: &FieldDefinition,
+    direction: PinDirection,
+) -> PinDefinition {
     PinDefinition {
         id: PinId(index as u32 + 1),
         name: if field.title.is_empty() {
@@ -34,7 +38,7 @@ fn field_pin(index: usize, field: &FieldDefinition, direction: PinDirection) -> 
     }
 }
 
-fn struct_pins(
+pub(crate) fn struct_pins(
     def: &TypeDefinition,
     value_direction: PinDirection,
     field_direction: PinDirection,
@@ -203,7 +207,7 @@ impl TickEngine {
         }
         self.types = types;
         self.refresh_identifier_labels();
-        self.clear_definitions();
+        self.notify_types_changed();
         if let Some(owner) = owner {
             self.type_owners
                 .extend(defs.iter().map(|d| (d.name.clone(), owner.to_string())));

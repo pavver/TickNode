@@ -68,6 +68,9 @@ pub trait Node: Send + Sync {
     /// The node has been restored: properties from `create_node` have been applied. Subsequent
     /// `set_property` calls are live edits rather than saved state restoration.
     fn restored(&mut self) {}
+    /// Called when the engine's type registry changes (or when the node is created/restored),
+    /// allowing nodes that depend on custom types to update their definition, pins, and options.
+    fn types_changed(&mut self, _types: &TypeRegistry) {}
     /// Scenario sheet this node belongs to, if known.
     fn set_sheet(&mut self, _sheet: Option<SheetId>) {}
     /// Whether the node is an event source polled (and charged) at the start of every tick.

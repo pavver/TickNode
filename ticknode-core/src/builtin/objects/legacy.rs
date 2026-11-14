@@ -117,7 +117,12 @@ impl Node for ObjectSetFieldNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
+        super::super::properties::set_type_property(
+            &mut self.field_type,
+            "field_type",
+            name,
+            value,
+        );
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![(
@@ -177,7 +182,12 @@ impl Node for ObjectGetFieldNode {
         }
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        super::properties::set_type_property(&mut self.field_type, "field_type", name, value);
+        super::super::properties::set_type_property(
+            &mut self.field_type,
+            "field_type",
+            name,
+            value,
+        );
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
         vec![(

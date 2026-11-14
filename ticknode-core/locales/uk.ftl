@@ -427,6 +427,34 @@ node-object-unpack-help =
     Чиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.
 node-object-unpack-pin-Obj = Obj
 
+node-object-break-title = Розібрати об'єкт
+node-object-break-description = Розбирає типізований об'єкт на окремі поля
+node-object-break-help =
+    Розбирає типізований об'єкт на окремі поля: кожне поле стає вихідним піном.
+
+    Оберіть тип на вузлі або підключіть типізований об'єкт до входу Value для адаптації.
+
+    Необов'язкове поле, відсутнє у значенні, не має значення (пін залишається порожнім).
+
+    Чистий вузол: обчислюється щоразу, коли його результат потрібен іншому вузлу.
+node-object-break-pin-Value = Значення
+node-object-break-prop-type-title = Тип
+node-object-break-prop-type-description = Структурний тип об'єкта для розбирання на поля
+
+node-object-make-title = Зібрати об'єкт
+node-object-make-description = Створює типізований об'єкт з окремих полів
+node-object-make-help =
+    Створює типізований об'єкт з окремих полів.
+
+    Оберіть тип на вузлі для визначення структури об'єкта.
+
+    Обов'язкові поля є обов'язковими входами: без них значення не створюється. Необов'язкове поле без значення пропускається.
+
+    Чистий вузол: обчислюється щоразу, коли його результат потрібен іншому вузлу.
+node-object-make-pin-Value = Значення
+node-object-make-prop-type-title = Тип
+node-object-make-prop-type-description = Структурний тип об'єкта для створення з полів
+
 # Physical quantities and unit symbols.
 number-decimal-separator = ,
 type-quantity-power-title = Потужність
@@ -1008,6 +1036,7 @@ node-text-template-prop-blocks-title = Рядки тегів
 node-text-template-prop-blocks-description = «Прибирати» видаляє розрив рядка після тегу { "{" }% %{ "}" } і пробіли перед ним
 node-text-template-prop-blocks-option-keep = Зберігати
 node-text-template-prop-blocks-option-trim = Прибирати
+error-object-unknown-type = Невідомий структурний тип: { $type }
 error-template-syntax = Некоректний синтаксис шаблону: { $message }
 error-template-render = Помилка виконання шаблону: { $message }
 

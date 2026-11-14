@@ -6,7 +6,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 41);
+    assert_eq!(definitions.len(), 43);
     let is_expected_required = |type_name: &str, pin_id: PinId| {
         (type_name == "variable/set" && pin_id == PinId(3))
             || (matches!(type_name, "text/to_text" | "convert") && pin_id == PinId(1))

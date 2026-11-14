@@ -193,6 +193,7 @@ impl TickEngine {
             self.types.remove(&t);
         }
         self.refresh_identifier_labels();
+        self.notify_types_changed();
         let slot = self
             .plugins
             .get_mut(name)

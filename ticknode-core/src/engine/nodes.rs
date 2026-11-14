@@ -71,6 +71,7 @@ impl TickEngine {
             .registry
             .create_node(type_name, id)
             .ok_or_else(|| EngineError::UnknownNodeType(type_name.to_string()))?;
+        node.types_changed(&self.types);
         let mut inputs = Vec::new();
         for (name, value) in properties {
             match parse_input_value_property(name) {
@@ -87,6 +88,7 @@ impl TickEngine {
             }
         }
         node.restored();
+        node.types_changed(&self.types);
         Ok((node, inputs))
     }
 
@@ -173,6 +175,19 @@ impl TickEngine {
 
     pub(crate) fn clear_definitions(&mut self) {
         self.definitions.clear();
+    }
+
+    pub(crate) fn notify_types_changed(&mut self) {
+        self.clear_definitions();
+        for node in self.nodes.values_mut() {
+            node.types_changed(&self.types);
+        }
+        let ids: Vec<NodeId> = self.nodes.keys().copied().collect();
+        for id in ids {
+            let confirmed = self.confirmed_pins.get(&id).cloned();
+            self.restore_pins(id, confirmed.as_deref());
+            self.update_roles(id);
+        }
     }
 
     #[cfg(test)]

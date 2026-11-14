@@ -174,6 +174,8 @@ impl NodeRegistry {
             })
         }));
         self.register(Box::new(|id| Box::new(ObjectCreateNode { id })));
+        self.register(Box::new(|id| Box::new(ObjectBreakNode::new(id))));
+        self.register(Box::new(|id| Box::new(ObjectMakeNode::new(id))));
         self.register(Box::new(|id| {
             Box::new(ObjectSetFieldNode {
                 id,

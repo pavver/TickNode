@@ -1000,10 +1000,14 @@ node-text-template-help =
 
     The text filter formats runtime kinds only, including values computed in the template: numbers use plain-number display rules, booleans use localized words, lists and maps are formatted recursively, and strings stay unchanged. It has no source type or quantity units: { "{" }{ "{" } (power / 1000) | text { "}" }{ "}" } formats a plain number. Globals and filters have separate namespaces, so both text.name and | text are available.
 
-    Numbers retain integer/float precision; date-times use RFC 3339, and time, duration and color use canonical text. Structures expose field names. Pure node: evaluated when Text is needed. Rendering has a fixed 10,000 instruction fuel budget and the default recursion limit. A rendering error produces no output and reports a node error.
+    Numbers retain integer/float precision; date-times use RFC 3339, and time, duration and color use canonical text. Structures expose field names. Tag lines selects what happens to the line of a { "{" }% %{ "}" } tag: keep preserves tag lines as-is, while trim removes the line break after a tag and spaces before it. Pure node: evaluated when Text is needed. Rendering has a fixed 10,000 instruction fuel budget and the default recursion limit. A rendering error produces no output and reports a node error.
 node-text-template-pin-Text = Text
 node-text-template-prop-template-title = Template
 node-text-template-prop-template-description = MiniJinja template; variables become input pins.
+node-text-template-prop-blocks-title = Tag lines
+node-text-template-prop-blocks-description = Trim removes the line break after a { "{" }% %{ "}" } tag and the spaces before it
+node-text-template-prop-blocks-option-keep = Keep
+node-text-template-prop-blocks-option-trim = Trim
 error-template-syntax = Invalid template syntax: { $message }
 error-template-render = Template rendering failed: { $message }
 

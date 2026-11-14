@@ -400,3 +400,62 @@ fn a_new_node_has_a_value_input_while_stored_templates_are_restored_as_written()
         ["a"]
     );
 }
+
+#[test]
+fn blocks_property_roundtrip_default_not_persisted_and_rendering_differs() {
+    let mut node = TemplateNode::new(NodeId::generate());
+    assert!(!node.properties().iter().any(|(n, _)| n == "blocks"));
+
+    node.set_property("blocks", "trim".into());
+    assert!(
+        node.properties()
+            .iter()
+            .any(|(n, v)| n == "blocks" && v == &DataValue::String("trim".into()))
+    );
+
+    node.set_property("blocks", "keep".into());
+    assert!(!node.properties().iter().any(|(n, _)| n == "blocks"));
+
+    let source = "Status:\n{% if on %}\n  Light is on\n{% endif %}\n";
+    let (mut engine, id) = setup(source);
+    inline(&mut engine, id, "on", true.into());
+
+    let untrimmed = render(&mut engine, id).unwrap();
+    assert_eq!(
+        untrimmed,
+        DataValue::String("Status:\n\n  Light is on\n".into())
+    );
+
+    engine
+        .set_node_property(id, "blocks", "trim".into())
+        .unwrap();
+    let trimmed = render(&mut engine, id).unwrap();
+    assert_eq!(
+        trimmed,
+        DataValue::String("Status:\n  Light is on\n".into())
+    );
+
+    let exported = engine.export_graph();
+    let exported_node = exported.nodes.iter().find(|n| n.id == id).unwrap();
+    assert_eq!(
+        exported_node
+            .properties
+            .iter()
+            .find(|(n, _)| n == "blocks")
+            .unwrap()
+            .1,
+        DataValue::String("trim".into())
+    );
+
+    engine
+        .set_node_property(id, "blocks", "keep".into())
+        .unwrap();
+    let exported_default = engine.export_graph();
+    let exported_default_node = exported_default.nodes.iter().find(|n| n.id == id).unwrap();
+    assert!(
+        !exported_default_node
+            .properties
+            .iter()
+            .any(|(n, _)| n == "blocks")
+    );
+}

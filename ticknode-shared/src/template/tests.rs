@@ -118,3 +118,46 @@ fn test_plain_values() {
     assert_eq!(plain(&DataValue::Bool(true)).is_true(), true);
     assert_eq!(plain(&DataValue::String("hi".into())).as_str(), Some("hi"));
 }
+
+#[test]
+fn test_template_options_trim_blocks() {
+    let if_source = "Status:\n{% if on %}\n  Light is on\n{% endif %}\n";
+    let inputs = vec![("on".into(), Some(DataValue::Bool(true)), DataType::Bool)];
+    let dummy_format = |val: &DataValue, _: &DataType| format!("{val:?}");
+    let dummy_runtime = std::sync::Arc::new(|val: &DataValue| format!("{val:?}"));
+
+    let untrimmed = CompiledTemplate::new_with(if_source, TemplateOptions { trim_blocks: false })
+        .unwrap()
+        .render(&inputs, &dummy_format, dummy_runtime.clone())
+        .unwrap();
+    assert_eq!(untrimmed, "Status:\n\n  Light is on\n");
+
+    let trimmed = CompiledTemplate::new_with(if_source, TemplateOptions { trim_blocks: true })
+        .unwrap()
+        .render(&inputs, &dummy_format, dummy_runtime.clone())
+        .unwrap();
+    assert_eq!(trimmed, "Status:\n  Light is on\n");
+
+    let for_source = "Items:\n{% for item in items %}\n  - {{ item }}\n{% endfor %}\n";
+    let for_inputs = vec![(
+        "items".into(),
+        Some(DataValue::List {
+            element_type: DataType::String,
+            elements: vec!["a".into(), "b".into()],
+        }),
+        DataType::List(Box::new(DataType::String)),
+    )];
+
+    let untrimmed_for =
+        CompiledTemplate::new_with(for_source, TemplateOptions { trim_blocks: false })
+            .unwrap()
+            .render(&for_inputs, &dummy_format, dummy_runtime.clone())
+            .unwrap();
+    assert_eq!(untrimmed_for, "Items:\n\n  - a\n\n  - b\n");
+
+    let trimmed_for = CompiledTemplate::new_with(for_source, TemplateOptions { trim_blocks: true })
+        .unwrap()
+        .render(&for_inputs, &dummy_format, dummy_runtime)
+        .unwrap();
+    assert_eq!(trimmed_for, "Items:\n  - a\n  - b\n");
+}

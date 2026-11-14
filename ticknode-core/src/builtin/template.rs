@@ -22,11 +22,12 @@ Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard fi
 
 The text filter formats runtime kinds only, including values computed in the template: numbers use plain-number display rules, booleans use localized words, lists and maps are formatted recursively, and strings stay unchanged. It has no source type or quantity units: {{ (power / 1000) | text }} formats a plain number. Globals and filters have separate namespaces, so both text.name and | text are available.
 
-Numbers retain integer/float precision; date-times use RFC 3339, and time, duration and color use canonical text. Structures expose field names. Pure node: evaluated when Text is needed. Rendering has a fixed 10,000 instruction fuel budget and the default recursion limit. A rendering error produces no output and reports a node error."#;
+Numbers retain integer/float precision; date-times use RFC 3339, and time, duration and color use canonical text. Structures expose field names. Tag lines selects what happens to the line of a {% %} tag: keep preserves tag lines as-is, while trim removes the line break after a tag and spaces before it. Pure node: evaluated when Text is needed. Rendering has a fixed 10,000 instruction fuel budget and the default recursion limit. A rendering error produces no output and reports a node error."#;
 
 pub struct TemplateNode {
     id: NodeId,
     template: String,
+    trim_blocks: bool,
     /// Parsed once per edit; `None` while the template has a syntax error.
     compiled: Option<template::CompiledTemplate>,
     pins: Vec<(String, PinId)>,
@@ -41,6 +42,7 @@ impl TemplateNode {
         let mut node = Self {
             id,
             template: "{{ value }}".into(),
+            trim_blocks: false,
             compiled: None,
             pins: Vec::new(),
             next_pin: 1,
@@ -53,7 +55,10 @@ impl TemplateNode {
     }
 
     fn compile(&mut self) {
-        self.compiled = template::CompiledTemplate::new(&self.template).ok();
+        let options = template::TemplateOptions {
+            trim_blocks: self.trim_blocks,
+        };
+        self.compiled = template::CompiledTemplate::new_with(&self.template, options).ok();
         let Ok(ordered) = template::variables(&self.template) else {
             return;
         };
@@ -202,6 +207,14 @@ impl Node for TemplateNode {
             properties: vec![
                 PropertyDefinition::multiline("template", "Template")
                     .described("MiniJinja template; variables become input pins."),
+                PropertyDefinition::select(
+                    "blocks",
+                    "Tag lines",
+                    &[("keep", "Keep"), ("trim", "Trim")],
+                )
+                .described(
+                    "Trim removes the line break after a {% %} tag and the spaces before it",
+                ),
                 PropertyDefinition::hidden("pin_ids"),
                 PropertyDefinition::hidden("next_pin"),
             ],
@@ -254,7 +267,7 @@ impl Node for TemplateNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![
+        let mut props = vec![
             ("template".into(), self.template.clone().into()),
             (
                 "pin_ids".into(),
@@ -271,7 +284,11 @@ impl Node for TemplateNode {
                 "next_pin".into(),
                 DataValue::Number(NumberValue::Int(self.next_pin.into())),
             ),
-        ]
+        ];
+        if self.trim_blocks {
+            props.push(("blocks".into(), DataValue::String("trim".into())));
+        }
+        props
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
@@ -284,6 +301,20 @@ impl Node for TemplateNode {
         }
         match (name, value) {
             ("template", DataValue::String(source)) => self.template = source,
+            ("blocks", DataValue::String(value)) => {
+                let trim = match value.as_str() {
+                    "trim" => true,
+                    "keep" => false,
+                    _ => return,
+                };
+                if self.trim_blocks != trim {
+                    self.trim_blocks = trim;
+                    if !self.restoring {
+                        self.compile();
+                    }
+                }
+                return;
+            }
             ("pin_ids", DataValue::List { elements, .. }) => {
                 let mut pins = Vec::new();
                 for value in elements {

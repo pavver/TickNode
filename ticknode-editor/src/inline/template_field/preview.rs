@@ -141,6 +141,7 @@ pub enum PreviewStatus {
 pub fn evaluate_preview(
     draft: &str,
     inputs: &[(String, Option<DataValue>, DataType)],
+    options: ticknode_shared::template::TemplateOptions,
 ) -> PreviewStatus {
     if let Err(err) = ticknode_shared::template::validate(draft) {
         return PreviewStatus::SyntaxError {
@@ -154,7 +155,7 @@ pub fn evaluate_preview(
         return PreviewStatus::Waiting;
     }
 
-    let compiled = match ticknode_shared::template::CompiledTemplate::new(draft) {
+    let compiled = match ticknode_shared::template::CompiledTemplate::new_with(draft, options) {
         Ok(c) => c,
         Err(err) => return PreviewStatus::RenderError(err.message),
     };
@@ -227,11 +228,31 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
             RwSignal::new(stored)
         });
 
+    let blocks = Memo::new(move |_| {
+        ed.node_tracked(node)
+            .and_then(|n| {
+                n.instance.with(|i| {
+                    i.model
+                        .properties
+                        .iter()
+                        .find(|(name, _)| name == "blocks")
+                        .and_then(|(_, v)| match v {
+                            DataValue::String(s) => Some(s.clone()),
+                            _ => None,
+                        })
+                })
+            })
+            .unwrap_or_else(|| "keep".to_string())
+    });
+
     let inputs = Memo::new(move |_| node_preview_inputs(ed, node));
     let preview = Memo::new(move |_| {
         let text = draft.get();
         let ins = inputs.get();
-        evaluate_preview(&text, &ins)
+        let options = ticknode_shared::template::TemplateOptions {
+            trim_blocks: blocks.get() == "trim",
+        };
+        evaluate_preview(&text, &ins, options)
     });
 
     view! {

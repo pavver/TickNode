@@ -212,6 +212,12 @@ impl Default for RenderEnv {
     }
 }
 
+/// Options for compiling and rendering a template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct TemplateOptions {
+    pub trim_blocks: bool,
+}
+
 /// A parsed template kept between renders, so a pure node does not reparse on every evaluation.
 pub struct CompiledTemplate {
     env: Environment<'static>,
@@ -221,9 +227,15 @@ pub struct CompiledTemplate {
 
 impl CompiledTemplate {
     pub fn new(source: &str) -> Result<Self, TemplateError> {
+        Self::new_with(source, TemplateOptions::default())
+    }
+
+    pub fn new_with(source: &str, options: TemplateOptions) -> Result<Self, TemplateError> {
         validate(source)?;
         let (rewritten, insertions) = unit::rewrite_unit_paths(source);
         let mut env = environment();
+        env.set_trim_blocks(options.trim_blocks);
+        env.set_lstrip_blocks(options.trim_blocks);
         env.add_template_owned("template", rewritten)
             .map_err(|err| TemplateError::from_minijinja_mapped(&err, source, &insertions))?;
         Ok(Self {

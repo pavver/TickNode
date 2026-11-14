@@ -322,3 +322,20 @@ fn test_compute_styled_spans_with_error() {
     assert_eq!(spans[3].class, "tk-variable");
     assert!(spans[3].is_error);
 }
+
+#[test]
+fn test_hover_filter_and_function_docs() {
+    use ticknode_shared::template::complete::docs::{DocKind, find_doc};
+
+    let date_doc = find_doc(DocKind::Filter, "date").expect("date doc exists");
+    assert_eq!(date_doc.signature, "date([pattern])");
+    assert_eq!(date_doc.help_key, "template-help-filter-date");
+
+    let range_doc = find_doc(DocKind::Function, "range").expect("range doc exists");
+    assert_eq!(range_doc.signature, "range([start], stop, [step])");
+    assert_eq!(range_doc.help_key, "template-help-function-range");
+
+    let div_doc = find_doc(DocKind::Test, "divisibleby").expect("divisibleby doc exists");
+    assert_eq!(div_doc.signature, "is divisibleby(num)");
+    assert_eq!(div_doc.help_key, "template-help-test-divisibleby");
+}

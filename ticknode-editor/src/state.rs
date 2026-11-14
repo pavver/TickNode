@@ -306,6 +306,8 @@ pub struct Editor {
     /// The open template completion popup.
     pub template_completion:
         RwSignal<Option<crate::inline::template_field::TemplateCompletionState>>,
+    /// The active template signature help popup.
+    pub template_signature: RwSignal<Option<crate::inline::template_field::TemplateSignatureState>>,
     pub wire_menu: RwSignal<Option<WireMenu>>,
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
     pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
@@ -387,6 +389,7 @@ impl Editor {
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),
             template_completion: RwSignal::new(None),
+            template_signature: RwSignal::new(None),
             wire_menu: RwSignal::new(None),
             quick_add: RwSignal::new(None),
             resource_menu: RwSignal::new(None),

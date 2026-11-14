@@ -262,41 +262,7 @@ fn make_filter_item(
     } else {
         sig.to_string()
     };
-    let help = match name {
-        "date" => Some(crate::UiMessage::new(
-            "template-help-filter-date",
-            "Formats a date-time or time: date('DD.MM.YYYY HH:mm') or a preset; type inside the quotes for format codes",
-        )),
-        "strftime" => Some(crate::UiMessage::new(
-            "template-help-filter-strftime",
-            "Formats a date-time or time using strftime format codes",
-        )),
-        "ago" => Some(crate::UiMessage::new(
-            "template-help-filter-ago",
-            "Formats relative time, e.g. '5 minutes ago' or 'in 2 hours'",
-        )),
-        "duration" => Some(crate::UiMessage::new(
-            "template-help-filter-duration",
-            "Formats a duration using compact units ('short'), words ('long'), or an 'H:mm' pattern",
-        )),
-        "unit" => Some(crate::UiMessage::new(
-            "template-help-filter-unit",
-            "Formats a number or physical quantity using project display rules or an explicit unit symbol",
-        )),
-        "text" => Some(crate::UiMessage::new(
-            "template-help-filter-text",
-            "Formats a value using its unit and locale rules",
-        )),
-        "plural" => Some(crate::UiMessage::new(
-            "template-help-filter-plural",
-            "Selects plural text based on cardinal rules: positional forms follow the formatting language's rules (e.g. one, few, many), keywords zero/one/two/few/many/other, and # is replaced by the formatted number",
-        )),
-        "default" => Some(crate::UiMessage::new(
-            "template-help-filter-default",
-            "Fallback value when the input is undefined or empty",
-        )),
-        _ => None,
-    };
+    let help = super::docs::find_doc(super::docs::DocKind::Filter, name).map(|d| d.help());
     let (insert, caret) = super::snippets::filter_snippet(name);
     CompletionItem {
         label: name.to_string(),
@@ -385,13 +351,16 @@ pub fn test_items_for(input: &ValueKind) -> Vec<CompletionItem> {
     TESTS
         .iter()
         .filter(|&&name| test_accepts(name, input))
-        .map(|&name| CompletionItem {
-            label: name.to_string(),
-            kind: CompletionKind::Test,
-            detail: "test".to_string(),
-            insert: name.to_string(),
-            help: None,
-            caret: None,
+        .map(|&name| {
+            let help = super::docs::find_doc(super::docs::DocKind::Test, name).map(|d| d.help());
+            CompletionItem {
+                label: name.to_string(),
+                kind: CompletionKind::Test,
+                detail: "test".to_string(),
+                insert: name.to_string(),
+                help,
+                caret: None,
+            }
         })
         .collect()
 }
@@ -431,13 +400,8 @@ pub fn function_items() -> Vec<CompletionItem> {
     FUNCTIONS
         .iter()
         .map(|&(name, sig)| {
-            let help = match name {
-                "now" => Some(crate::UiMessage::new(
-                    "template-help-function-now",
-                    "Current date and time as an ISO 8601 / RFC 3339 string",
-                )),
-                _ => None,
-            };
+            let help =
+                super::docs::find_doc(super::docs::DocKind::Function, name).map(|d| d.help());
             let (insert, caret) = super::snippets::function_snippet(name);
             CompletionItem {
                 label: name.to_string(),

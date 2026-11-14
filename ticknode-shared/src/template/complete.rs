@@ -9,14 +9,18 @@ mod context_tests;
 mod date_format;
 #[cfg(test)]
 mod date_tests;
+pub mod docs;
 mod infer;
 pub mod kinds;
 mod scan;
+pub mod signature;
 pub mod snippets;
 #[cfg(test)]
 mod tests;
 
+pub use docs::{Doc, DocKind, find_doc};
 pub use kinds::{ValueKind, kind_of};
+pub use signature::{ParamHelp, SignatureHelp, signature_at};
 
 pub struct CompletionInput<'a> {
     pub source: &'a str,
@@ -254,12 +258,13 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Functions
     if for_in {
+        let help = docs::find_doc(docs::DocKind::Function, "range").map(|d| d.help());
         raw_items.push(CompletionItem {
             label: "range".to_string(),
             kind: CompletionKind::Function,
             detail: "range([start], stop, [step])".to_string(),
             insert: "range()".to_string(),
-            help: None,
+            help,
             caret: Some(6),
         });
     } else {

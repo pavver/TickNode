@@ -221,6 +221,7 @@ pub fn TemplateCompletionLayer() -> impl IntoView {
         ed.view.track();
         if first.is_some() {
             ed.template_completion.set(None);
+            ed.template_signature.set(None);
         }
     });
 
@@ -231,12 +232,26 @@ pub fn TemplateCompletionLayer() -> impl IntoView {
         {
             ed.template_completion.set(None);
         }
+        if let Some(state) = ed.template_signature.get()
+            && ed.node_tracked(state.node).is_none()
+        {
+            ed.template_signature.set(None);
+        }
     });
 
-    move || {
-        ed.template_completion
+    view! {
+        {move || ed.template_completion
             .get()
-            .map(|state| view! { <TemplateCompletionPopup state=state /> })
+            .map(|state| view! { <TemplateCompletionPopup state=state /> })}
+        {move || {
+            if ed.template_completion.get().is_none() {
+                ed.template_signature
+                    .get()
+                    .map(|state| view! { <super::signature_help::TemplateSignaturePopup state=state /> })
+            } else {
+                None
+            }
+        }}
     }
 }
 

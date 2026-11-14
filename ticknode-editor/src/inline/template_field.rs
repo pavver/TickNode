@@ -11,6 +11,7 @@ pub mod completion;
 pub mod highlight;
 pub mod hover;
 pub mod preview;
+pub mod signature_help;
 
 #[cfg(test)]
 mod tests;
@@ -18,6 +19,7 @@ mod tests;
 pub use completion::{TemplateCompletionLayer, TemplateCompletionState};
 pub use highlight::TemplateHighlightLayer;
 pub use preview::TemplateStatusRow;
+pub use signature_help::TemplateSignatureState;
 
 /// Reactive context storing the current draft of the template being edited on a node.
 #[derive(Clone, Copy)]
@@ -95,6 +97,7 @@ pub fn TemplateField(
 
     let trigger_completion = move |_is_explicit: bool| {
         completion::request_completion(ed, id, _is_explicit);
+        signature_help::update_signature_help(ed, id);
     };
 
     let keydown = move |ev: web_sys::KeyboardEvent| {
@@ -180,15 +183,26 @@ pub fn TemplateField(
                     ev.prevent_default();
                     ev.stop_propagation();
                     ed.template_completion.set(None);
+                    ed.template_signature.set(None);
                     return;
                 }
                 // Moving the caret leaves the completion range behind.
-                "ArrowLeft" | "ArrowRight" | "Home" | "End" => ed.template_completion.set(None),
+                "ArrowLeft" | "ArrowRight" | "Home" | "End" => {
+                    ed.template_completion.set(None);
+                    ed.template_signature.set(None);
+                    signature_help::update_signature_help(ed, id);
+                }
                 _ => {}
             }
         }
 
         if key == "Escape" {
+            if ed.template_signature.with_untracked(|s| s.is_some()) {
+                ev.prevent_default();
+                ev.stop_propagation();
+                ed.template_signature.set(None);
+                return;
+            }
             ev.prevent_default();
             ev.stop_propagation();
             let stored = match value.get_untracked() {
@@ -334,6 +348,7 @@ pub fn TemplateField(
                     last_auto_close.set_value(None);
                     if ed.template_completion.with_untracked(|c| c.is_some()) {
                         ed.template_completion.set(None);
+                    ed.template_signature.set(None);
                     }
                 }
                 on:focus=move |_| focused.set(true)
@@ -347,6 +362,7 @@ pub fn TemplateField(
                         timer.set_value(None);
                     }
                     ed.template_completion.set(None);
+                    ed.template_signature.set(None);
 
                     let current = draft.get_untracked();
                     let stored = match value.get_untracked() {
@@ -423,7 +439,14 @@ pub fn TemplateField(
                     if hovered != last_hovered.get_value() {
                         last_hovered.set_value(hovered.clone());
                         let desired_title = match hovered {
-                            Some(token) => hover::resolve_hover_tooltip(ed, id, &token.path).unwrap_or_else(|| title.get_untracked()),
+                            Some(token) => hover::resolve_hover_tooltip_with_context(
+                                ed,
+                                id,
+                                &token.path,
+                                Some(token.range.clone()),
+                                Some(&current_text),
+                            )
+                            .unwrap_or_else(|| title.get_untracked()),
                             None => title.get_untracked(),
                         };
                         let current_title = textarea.get_attribute("title").unwrap_or_default();
@@ -458,6 +481,8 @@ pub fn TemplateField(
                 }
             }
             on:keydown=keydown
+            on:keyup=move |_| signature_help::update_signature_help(ed, id)
+            on:click=move |_| signature_help::update_signature_help(ed, id)
             on:wheel=|ev: web_sys::WheelEvent| ev.stop_propagation()
         ></textarea>
         </div>

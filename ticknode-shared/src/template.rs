@@ -25,7 +25,8 @@ pub use unit::unit_filter;
 
 pub mod complete;
 pub use complete::{
-    Completion, CompletionInput, CompletionItem, CompletionKind, complete, expression_at,
+    Completion, CompletionInput, CompletionItem, CompletionKind, Doc, DocKind, ParamHelp,
+    SignatureHelp, complete, expression_at, find_doc, signature_at,
 };
 
 pub mod highlight;

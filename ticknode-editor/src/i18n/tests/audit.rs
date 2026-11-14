@@ -123,3 +123,46 @@ fn every_t_key_used_in_code_exists_in_bundles() {
         "the scanner must find translation macro calls in the source"
     );
 }
+
+#[test]
+fn every_template_help_key_in_catalog_exists_in_bundles() {
+    let mut checked = 0usize;
+    BUNDLES.with(|b| {
+        let b = b.borrow();
+        for doc in ticknode_shared::template::complete::docs::all_docs() {
+            assert!(
+                b.uk.has_message(doc.help_key),
+                "help key '{}' for {} is missing in locales/uk/ui.ftl",
+                doc.help_key,
+                doc.name
+            );
+            assert!(
+                b.en.has_message(doc.help_key),
+                "help key '{}' for {} is missing in locales/en/ui.ftl",
+                doc.help_key,
+                doc.name
+            );
+            checked += 1;
+
+            for &(param_name, _) in doc.params {
+                let pkey = ticknode_shared::template::complete::docs::param_help_key(
+                    doc.kind, doc.name, param_name,
+                );
+                assert!(
+                    b.uk.has_message(&pkey),
+                    "parameter help key '{pkey}' for {}.{} is missing in locales/uk/ui.ftl",
+                    doc.name,
+                    param_name
+                );
+                assert!(
+                    b.en.has_message(&pkey),
+                    "parameter help key '{pkey}' for {}.{} is missing in locales/en/ui.ftl",
+                    doc.name,
+                    param_name
+                );
+                checked += 1;
+            }
+        }
+    });
+    assert!(checked > 0, "must check template help keys");
+}

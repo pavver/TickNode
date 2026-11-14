@@ -229,6 +229,17 @@ pub fn format_field_tooltip(
 /// Resolves the tooltip text for a hovered path in the template of `node`.
 #[allow(dead_code)]
 pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, path: &[String]) -> Option<String> {
+    resolve_hover_tooltip_with_context(ed, node, path, None, None)
+}
+
+/// Resolves the tooltip text with source context (for filters, tests, and functions).
+pub fn resolve_hover_tooltip_with_context(
+    ed: Editor,
+    node: NodeId,
+    path: &[String],
+    token_range: Option<Range<usize>>,
+    source: Option<&str>,
+) -> Option<String> {
     if path.is_empty() {
         return None;
     }
@@ -250,46 +261,77 @@ pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, path: &[String]) -> Optio
         return Some(format!("{header}\n{pin_title}"));
     }
 
-    let pin = client_node.instance.with(|i| {
+    let maybe_pin = client_node.instance.with(|i| {
         i.definition
             .pins
             .iter()
             .find(|p| p.direction == PinDirection::Input && p.name == *root)
             .cloned()
-    })?;
+    });
 
-    // Case 1: root is an input name and the path has one segment
-    if path.len() == 1 {
-        return Some(crate::canvas::pin_title_text(
-            ed,
-            node,
-            &pin,
-            PinDirection::Input,
+    if let Some(pin) = maybe_pin {
+        // Case 1: root is an input name and the path has one segment
+        if path.len() == 1 {
+            return Some(crate::canvas::pin_title_text(
+                ed,
+                node,
+                &pin,
+                PinDirection::Input,
+            ));
+        }
+
+        // Case 3: root is an input and the path has fields
+        let declared_ty = match &pin.pin_type {
+            PinType::Data(t) => t.clone(),
+            _ => DataType::Any,
+        };
+        let eff_type = crate::canvas::display_type(&declared_ty, ed.source_type(node, pin.id));
+        let fields = &path[1..];
+        let field_type = ed
+            .types
+            .with(|types| resolve_field_path_type(&eff_type, fields, types))?;
+
+        let preview_inputs = crate::inline::template_field::preview::node_preview_inputs(ed, node);
+        let input_val = preview_inputs
+            .into_iter()
+            .find(|(name, _, _)| name == root)
+            .and_then(|(_, v, _)| v);
+        let field_val = resolve_field_path_value(input_val.as_ref(), fields);
+        let type_title = ed.type_title(&field_type);
+        return Some(format_field_tooltip(
+            path,
+            &field_type,
+            field_val.as_ref(),
+            &type_title,
         ));
     }
 
-    // Case 3: root is an input and the path has fields
-    let declared_ty = match &pin.pin_type {
-        PinType::Data(t) => t.clone(),
-        _ => DataType::Any,
-    };
-    let eff_type = crate::canvas::display_type(&declared_ty, ed.source_type(node, pin.id));
-    let fields = &path[1..];
-    let field_type = ed
-        .types
-        .with(|types| resolve_field_path_type(&eff_type, fields, types))?;
+    // Filter, test, or function hover from documentation catalog
+    if path.len() == 1 {
+        use ticknode_shared::template::complete::docs::{DocKind, find_doc};
 
-    let preview_inputs = crate::inline::template_field::preview::node_preview_inputs(ed, node);
-    let input_val = preview_inputs
-        .into_iter()
-        .find(|(name, _, _)| name == root)
-        .and_then(|(_, v, _)| v);
-    let field_val = resolve_field_path_value(input_val.as_ref(), fields);
-    let type_title = ed.type_title(&field_type);
-    Some(format_field_tooltip(
-        path,
-        &field_type,
-        field_val.as_ref(),
-        &type_title,
-    ))
+        let doc = if let (Some(range), Some(src)) = (token_range, source) {
+            let before = src[..range.start.min(src.len())].trim_end();
+            if before.ends_with('|') && !before.ends_with("||") {
+                find_doc(DocKind::Filter, root)
+            } else if before.ends_with("is") || before.ends_with("not") {
+                find_doc(DocKind::Test, root)
+            } else {
+                find_doc(DocKind::Function, root)
+                    .or_else(|| find_doc(DocKind::Filter, root))
+                    .or_else(|| find_doc(DocKind::Test, root))
+            }
+        } else {
+            find_doc(DocKind::Function, root)
+                .or_else(|| find_doc(DocKind::Filter, root))
+                .or_else(|| find_doc(DocKind::Test, root))
+        };
+
+        if let Some(doc) = doc {
+            let desc = crate::i18n::ui_text(&doc.help());
+            return Some(format!("{}\n{}", doc.signature, desc));
+        }
+    }
+
+    None
 }

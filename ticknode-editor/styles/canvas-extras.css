@@ -137,6 +137,36 @@
 .template-completion-row .picker-row-label { flex: 0 1 auto; }
 .template-completion-row .template-detail { margin-left: auto; flex: 0 0 auto; font-size: 11px; color: var(--text-secondary); }
 .template-completion-help { border-top: var(--border-w) solid var(--divider); padding: calc(var(--du) * 1.5) calc(var(--du) * 2.5); color: var(--text-secondary); font-size: calc(var(--tu) * 11); line-height: calc(var(--tu) * 14); }
+.template-signature-popup {
+    position: fixed;
+    z-index: 1000;
+    max-width: calc(var(--du) * 100);
+    background: var(--surface);
+    color: var(--text-primary);
+    border: calc(var(--du) * 0.25) solid var(--border);
+    padding: calc(var(--du) * 1.5) calc(var(--du) * 2);
+    pointer-events: none;
+    font-family: var(--font);
+}
+.template-signature-code {
+    display: block;
+    font-family: var(--font);
+    font-size: calc(var(--tu) * 11);
+    line-height: calc(var(--tu) * 14);
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.template-signature-param-active {
+    font-weight: 700;
+    color: var(--accent);
+}
+.template-signature-desc {
+    margin-top: calc(var(--du) * 1);
+    color: var(--text-secondary);
+    font-size: calc(var(--tu) * 11);
+    line-height: calc(var(--tu) * 14);
+}
 .prop-row > .prop-label { min-width: 0; }
 .prop-row > .inline-value.select { min-width: 0; }
 

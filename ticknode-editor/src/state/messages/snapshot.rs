@@ -6,6 +6,14 @@ impl Editor {
     pub(super) fn remove_absent_nodes(&self, nodes: &[NodeInstance]) -> Vec<ClientNode> {
         // Remove disappeared nodes; keep open inspector and inline fields alive across reconnects.
         let fresh: BTreeSet<NodeId> = nodes.iter().map(|i| i.model.id).collect();
+        self.sample_values
+            .update(|samples| samples.retain(|(n, _), _| fresh.contains(n)));
+        if self
+            .template_samples
+            .with_untracked(|s| s.as_ref().is_some_and(|st| !fresh.contains(&st.node)))
+        {
+            self.template_samples.set(None);
+        }
         self.nodes
             .try_update(|map| {
                 let ids: Vec<NodeId> = map

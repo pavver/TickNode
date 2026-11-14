@@ -308,6 +308,10 @@ pub struct Editor {
         RwSignal<Option<crate::inline::template_field::TemplateCompletionState>>,
     /// The active template signature help popup.
     pub template_signature: RwSignal<Option<crate::inline::template_field::TemplateSignatureState>>,
+    /// The open sample values popup for template preview.
+    pub template_samples: RwSignal<Option<crate::inline::template_field::TemplateSamplesState>>,
+    /// In-memory sample input values for template previews: (node_id, input_name) -> value.
+    pub sample_values: RwSignal<HashMap<(NodeId, String), DataValue>>,
     pub wire_menu: RwSignal<Option<WireMenu>>,
     pub quick_add: RwSignal<Option<crate::quick_add::QuickAdd>>,
     pub resource_menu: RwSignal<Option<crate::resource_menu::ResourceMenu>>,
@@ -390,6 +394,8 @@ impl Editor {
             picker: RwSignal::new(None),
             template_completion: RwSignal::new(None),
             template_signature: RwSignal::new(None),
+            template_samples: RwSignal::new(None),
+            sample_values: RwSignal::new(HashMap::new()),
             wire_menu: RwSignal::new(None),
             quick_add: RwSignal::new(None),
             resource_menu: RwSignal::new(None),
@@ -400,6 +406,18 @@ impl Editor {
             nudge: StoredValue::new(Default::default()),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),
+        }
+    }
+
+    /// Clears any in-memory template sample values stored for the given node.
+    pub fn clear_sample_values(&self, id: NodeId) {
+        self.sample_values
+            .update(|samples| samples.retain(|(n, _), _| *n != id));
+        if self
+            .template_samples
+            .with_untracked(|s| s.as_ref().is_some_and(|st| st.node == id))
+        {
+            self.template_samples.set(None);
         }
     }
 

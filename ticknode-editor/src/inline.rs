@@ -18,7 +18,7 @@ mod typed_properties;
 
 pub use properties::*;
 pub use template_field::{
-    TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateStatusRow,
+    TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateSamplesLayer, TemplateStatusRow,
 };
 
 /// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.

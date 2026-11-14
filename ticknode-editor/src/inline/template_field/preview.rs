@@ -8,13 +8,32 @@ use std::sync::Arc;
 use ticknode_shared::*;
 
 /// Resolves the effective input value according to precedence:
-/// own trace input > connected source trace output > inline value property.
+/// own trace input > connected source trace output > inline value property > sample value.
 pub fn resolve_input_value(
     own_trace: Option<&DataValue>,
     source_trace: Option<&DataValue>,
     inline_value: Option<&DataValue>,
+    sample_value: Option<&DataValue>,
 ) -> Option<DataValue> {
-    own_trace.or(source_trace).or(inline_value).cloned()
+    own_trace
+        .or(source_trace)
+        .or(inline_value)
+        .or(sample_value)
+        .cloned()
+}
+
+/// Returns true if the effective value resolved for the input originates from a sample value.
+#[allow(dead_code)]
+pub fn is_sample_value_used(
+    own_trace: Option<&DataValue>,
+    source_trace: Option<&DataValue>,
+    inline_value: Option<&DataValue>,
+    sample_value: Option<&DataValue>,
+) -> bool {
+    own_trace.is_none()
+        && source_trace.is_none()
+        && inline_value.is_none()
+        && sample_value.is_some()
 }
 
 /// Plain descriptor for unit testing input collection precedence.
@@ -27,6 +46,7 @@ pub struct PinPreviewInputSource<'a> {
     pub own_trace: Option<&'a DataValue>,
     pub source_trace: Option<&'a DataValue>,
     pub inline_value: Option<&'a DataValue>,
+    pub sample_value: Option<&'a DataValue>,
 }
 
 /// Pure helper collecting template input tuples from plain descriptors.
@@ -37,7 +57,8 @@ pub fn collect_preview_inputs(
     sources
         .iter()
         .map(|s| {
-            let val = resolve_input_value(s.own_trace, s.source_trace, s.inline_value);
+            let val =
+                resolve_input_value(s.own_trace, s.source_trace, s.inline_value, s.sample_value);
             (s.name.to_string(), val, s.declared_type.clone())
         })
         .collect()
@@ -113,10 +134,19 @@ pub fn node_preview_inputs(ed: Editor, id: NodeId) -> Vec<(String, Option<DataVa
                 None
             };
 
+            let sample_value =
+                if own_trace.is_none() && source_trace.is_none() && inline_value.is_none() {
+                    ed.sample_values
+                        .with(|s| s.get(&(id, name.clone())).cloned())
+                } else {
+                    None
+                };
+
             let value = resolve_input_value(
                 own_trace.as_ref(),
                 source_trace.as_ref(),
                 inline_value.as_ref(),
+                sample_value.as_ref(),
             );
             (name, value, declared_ty)
         })
@@ -246,6 +276,35 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
     });
 
     let inputs = Memo::new(move |_| node_preview_inputs(ed, node));
+    let has_samples = Memo::new(move |_| super::samples::node_has_active_samples(ed, node));
+
+    let toggle_samples = move |ev: web_sys::MouseEvent| {
+        ev.stop_propagation();
+        let open_here = ed
+            .template_samples
+            .with_untracked(|s| s.as_ref().is_some_and(|st| st.node == node));
+        if open_here {
+            ed.template_samples.set(None);
+            return;
+        }
+        use wasm_bindgen::JsCast;
+        let Some(rect) = ev
+            .current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .map(|el| el.get_bounding_client_rect())
+        else {
+            return;
+        };
+        ed.picker.set(None);
+        ed.template_completion.set(None);
+        ed.template_signature.set(None);
+        ed.template_samples
+            .set(Some(super::samples::TemplateSamplesState {
+                node,
+                anchor: (rect.left(), rect.top(), rect.right(), rect.bottom()),
+            }));
+    };
+
     let preview = Memo::new(move |_| {
         let text = draft.get();
         let ins = inputs.get();
@@ -279,6 +338,16 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
                     let err_text = t!("template-render-error", message = msg.clone());
                     let title = err_text.clone();
                     view! {
+                        {move || has_samples.get().then(|| view! {
+                            <span
+                                class="template-preview-sample-badge"
+                                title=t!("template-preview-samples")
+                                on:pointerdown=|ev| ev.stop_propagation()
+                                on:click=toggle_samples
+                            >
+                                {t!("template-preview-sample-badge")}
+                            </span>
+                        })}
                         <span class="template-status-text ellipsis" title=title>
                             {err_text}
                         </span>
@@ -289,9 +358,28 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
                     let title = wait_text.clone();
                     view! {
                         <span class="mdi mdi-eye-outline template-status-icon" aria-hidden="true"></span>
+                        {move || has_samples.get().then(|| view! {
+                            <span
+                                class="template-preview-sample-badge"
+                                title=t!("template-preview-samples")
+                                on:pointerdown=|ev| ev.stop_propagation()
+                                on:click=toggle_samples
+                            >
+                                {t!("template-preview-sample-badge")}
+                            </span>
+                        })}
                         <span class="template-status-text ellipsis" title=title>
                             {wait_text}
                         </span>
+                        <button
+                            type="button"
+                            class="template-preview-samples template-preview-samples-btn"
+                            title=t!("template-preview-samples")
+                            on:pointerdown=|ev| ev.stop_propagation()
+                            on:click=toggle_samples
+                        >
+                            {t!("template-preview-samples")}
+                        </button>
                     }.into_any()
                 }
                 PreviewStatus::Empty => {
@@ -299,6 +387,16 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
                     let title = empty_text.clone();
                     view! {
                         <span class="mdi mdi-eye-outline template-status-icon" aria-hidden="true"></span>
+                        {move || has_samples.get().then(|| view! {
+                            <span
+                                class="template-preview-sample-badge"
+                                title=t!("template-preview-samples")
+                                on:pointerdown=|ev| ev.stop_propagation()
+                                on:click=toggle_samples
+                            >
+                                {t!("template-preview-sample-badge")}
+                            </span>
+                        })}
                         <span class="template-status-text ellipsis" style="font-style: italic;" title=title>
                             {empty_text}
                         </span>
@@ -308,6 +406,16 @@ pub fn TemplateStatusRow(node: NodeId) -> impl IntoView {
                     let title = text.clone();
                     view! {
                         <span class="mdi mdi-eye-outline template-status-icon" aria-hidden="true"></span>
+                        {move || has_samples.get().then(|| view! {
+                            <span
+                                class="template-preview-sample-badge"
+                                title=t!("template-preview-samples")
+                                on:pointerdown=|ev| ev.stop_propagation()
+                                on:click=toggle_samples
+                            >
+                                {t!("template-preview-sample-badge")}
+                            </span>
+                        })}
                         <span class="template-status-text ellipsis" title=title>
                             {text}
                         </span>

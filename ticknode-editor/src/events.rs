@@ -54,13 +54,22 @@ pub fn hide_picker(editor: Editor, ev: web_sys::PointerEvent) {
     let inside = ev
         .target()
         .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-        .and_then(|el| el.closest(".picker-popup, .picker-field").ok().flatten())
+        .and_then(|el| {
+            el.closest(
+                ".picker-popup, .picker-field, .template-samples-popup, .template-preview-samples, .template-preview-sample-badge",
+            )
+            .ok()
+            .flatten()
+        })
         .is_some();
     if !inside && editor.picker.with_untracked(|p| p.is_some()) {
         editor.picker.set(None);
     }
     if !inside && editor.template_completion.with_untracked(|p| p.is_some()) {
         editor.template_completion.set(None);
+    }
+    if !inside && editor.template_samples.with_untracked(|p| p.is_some()) {
+        editor.template_samples.set(None);
     }
 }
 

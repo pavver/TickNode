@@ -1,6 +1,6 @@
 use super::super::preview::{
     PinPreviewInputSource, PreviewStatus, collect_preview_inputs, evaluate_preview,
-    resolve_input_value,
+    is_sample_value_used, resolve_input_value,
 };
 use ticknode_shared::template::TemplateOptions;
 use ticknode_shared::{DataType, DataValue, PinId};
@@ -10,33 +10,60 @@ fn preview_input_collection_precedence() {
     let own = DataValue::from("from_own");
     let src = DataValue::from("from_source");
     let inline = DataValue::from("from_inline");
+    let sample = DataValue::from("from_sample");
 
-    // Own trace takes precedence over source trace and inline value
+    // Own trace takes precedence over source trace, inline value, and sample value
     assert_eq!(
-        resolve_input_value(Some(&own), Some(&src), Some(&inline)),
+        resolve_input_value(Some(&own), Some(&src), Some(&inline), Some(&sample),),
         Some(own.clone())
     );
 
-    // Source trace takes precedence over inline value when own trace is absent
+    // Source trace takes precedence over inline value and sample value when own trace is absent
     assert_eq!(
-        resolve_input_value(None, Some(&src), Some(&inline)),
+        resolve_input_value(None, Some(&src), Some(&inline), Some(&sample)),
         Some(src.clone())
     );
 
-    // Inline value is used when traces are absent
+    // Inline value takes precedence over sample value when traces are absent
     assert_eq!(
-        resolve_input_value(None, None, Some(&inline)),
+        resolve_input_value(None, None, Some(&inline), Some(&sample)),
         Some(inline.clone())
     );
 
+    // Sample value is used when traces and inline value are absent
+    assert_eq!(
+        resolve_input_value(None, None, None, Some(&sample)),
+        Some(sample.clone())
+    );
+
     // None when nothing has a value
-    assert_eq!(resolve_input_value(None, None, None), None);
+    assert_eq!(resolve_input_value(None, None, None, None), None);
+}
+
+#[test]
+fn preview_is_sample_value_used_truth_table() {
+    let own = DataValue::from("from_own");
+    let src = DataValue::from("from_source");
+    let inline = DataValue::from("from_inline");
+    let sample = DataValue::from("from_sample");
+
+    assert!(!is_sample_value_used(Some(&own), None, None, Some(&sample)));
+    assert!(!is_sample_value_used(None, Some(&src), None, Some(&sample)));
+    assert!(!is_sample_value_used(
+        None,
+        None,
+        Some(&inline),
+        Some(&sample)
+    ));
+    assert!(is_sample_value_used(None, None, None, Some(&sample)));
+    assert!(!is_sample_value_used(None, None, None, None));
 }
 
 #[test]
 fn collect_preview_inputs_maps_pin_list() {
     let own = DataValue::from("v1");
     let src = DataValue::from(42i64);
+    let sample = DataValue::from(true);
 
     let sources = [
         PinPreviewInputSource {
@@ -46,6 +73,7 @@ fn collect_preview_inputs_maps_pin_list() {
             own_trace: Some(&own),
             source_trace: None,
             inline_value: None,
+            sample_value: None,
         },
         PinPreviewInputSource {
             pin_id: PinId(2),
@@ -54,6 +82,7 @@ fn collect_preview_inputs_maps_pin_list() {
             own_trace: None,
             source_trace: Some(&src),
             inline_value: None,
+            sample_value: None,
         },
         PinPreviewInputSource {
             pin_id: PinId(3),
@@ -62,11 +91,21 @@ fn collect_preview_inputs_maps_pin_list() {
             own_trace: None,
             source_trace: None,
             inline_value: None,
+            sample_value: Some(&sample),
+        },
+        PinPreviewInputSource {
+            pin_id: PinId(4),
+            name: "fourth",
+            declared_type: DataType::Any,
+            own_trace: None,
+            source_trace: None,
+            inline_value: None,
+            sample_value: None,
         },
     ];
 
     let result = collect_preview_inputs(&sources);
-    assert_eq!(result.len(), 3);
+    assert_eq!(result.len(), 4);
     assert_eq!(
         result[0],
         ("first".to_string(), Some(own), DataType::String)
@@ -75,7 +114,11 @@ fn collect_preview_inputs_maps_pin_list() {
         result[1],
         ("second".to_string(), Some(src), DataType::Number)
     );
-    assert_eq!(result[2], ("third".to_string(), None, DataType::Bool));
+    assert_eq!(
+        result[2],
+        ("third".to_string(), Some(sample), DataType::Bool)
+    );
+    assert_eq!(result[3], ("fourth".to_string(), None, DataType::Any));
 }
 
 #[test]
@@ -163,5 +206,38 @@ fn evaluate_preview_supports_template_options_trim_blocks() {
     assert_eq!(
         trimmed,
         PreviewStatus::Text("Status:\n  Light is on\n".to_string())
+    );
+}
+
+#[test]
+fn evaluate_preview_with_sample_inputs() {
+    let sources = [
+        PinPreviewInputSource {
+            pin_id: PinId(1),
+            name: "greeting",
+            declared_type: DataType::String,
+            own_trace: None,
+            source_trace: None,
+            inline_value: None,
+            sample_value: Some(&DataValue::from("Hello")),
+        },
+        PinPreviewInputSource {
+            pin_id: PinId(2),
+            name: "user",
+            declared_type: DataType::String,
+            own_trace: None,
+            source_trace: None,
+            inline_value: None,
+            sample_value: Some(&DataValue::from("Alice")),
+        },
+    ];
+    let inputs = collect_preview_inputs(&sources);
+    assert_eq!(
+        evaluate_preview(
+            "{{ greeting }}, {{ user }}!",
+            &inputs,
+            TemplateOptions::default()
+        ),
+        PreviewStatus::Text("Hello, Alice!".to_string())
     );
 }

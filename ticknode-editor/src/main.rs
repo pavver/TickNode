@@ -37,7 +37,7 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::canvas::{Canvas, fit_view};
-use crate::inline::TemplateCompletionLayer;
+use crate::inline::{TemplateCompletionLayer, TemplateSamplesLayer};
 use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
 use crate::picker::PickerLayer;
 use crate::state::{Editor, LogKind, Theme, now_ms};
@@ -240,6 +240,7 @@ fn App() -> impl IntoView {
                     <TooltipLayer />
                     <PickerLayer />
                     <TemplateCompletionLayer />
+                    <TemplateSamplesLayer />
                     <wire_menu::WireMenuLayer />
                     <quick_add::QuickAddLayer />
                     <wire_context::WireContextLayer />

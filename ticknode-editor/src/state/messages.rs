@@ -228,6 +228,7 @@ impl Editor {
     }
 
     fn remove_node(&self, id: NodeId) {
+        self.clear_sample_values(id);
         let removed = self.nodes.try_update(|nodes| nodes.remove(&id)).flatten();
         self.exec
             .update(|e| e.retain(|c| c.src_node != id && c.dst_node != id));

@@ -11,6 +11,7 @@ pub mod completion;
 pub mod highlight;
 pub mod hover;
 pub mod preview;
+pub mod samples;
 pub mod signature_help;
 
 #[cfg(test)]
@@ -19,6 +20,7 @@ mod tests;
 pub use completion::{TemplateCompletionLayer, TemplateCompletionState};
 pub use highlight::TemplateHighlightLayer;
 pub use preview::TemplateStatusRow;
+pub use samples::{TemplateSamplesLayer, TemplateSamplesState};
 pub use signature_help::TemplateSignatureState;
 
 /// Reactive context storing the current draft of the template being edited on a node.

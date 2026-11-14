@@ -9,6 +9,7 @@ mod matching;
 mod math;
 mod objects;
 mod properties;
+mod rs_trigger;
 mod time;
 mod variables;
 
@@ -22,6 +23,7 @@ pub use logic::*;
 pub use matching::*;
 pub use math::*;
 pub use objects::*;
+pub use rs_trigger::*;
 pub use time::*;
 pub use variables::*;
 

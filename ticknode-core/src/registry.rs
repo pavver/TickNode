@@ -128,6 +128,7 @@ impl NodeRegistry {
         self.register(Box::new(|id| Box::new(ConvertNode::new(id))));
         self.register(Box::new(|id| Box::new(CompareNode::new(id))));
         self.register(Box::new(|id| Box::new(HysteresisNode::new(id))));
+        self.register(Box::new(|id| Box::new(RsTriggerNode::new(id))));
         self.register(Box::new(|id| {
             Box::new(ForLoopNode {
                 id,

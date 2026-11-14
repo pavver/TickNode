@@ -12,6 +12,7 @@ mod mutation_contracts;
 mod property_input;
 mod property_validation;
 mod quantities;
+mod rs_trigger;
 mod universal_struct_nodes;
 mod variables;
 

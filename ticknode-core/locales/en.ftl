@@ -1014,6 +1014,40 @@ node-logic-hysteresis-prop-mode-description = Whether rising or falling values t
 node-logic-hysteresis-prop-mode-option-rising = Rising
 node-logic-hysteresis-prop-mode-option-falling = Falling
 
+# RS trigger
+node-logic-rs-trigger-title = RS trigger
+node-logic-rs-trigger-description = Bistable flip-flop with pulse and level inputs
+node-logic-rs-trigger-help =
+    Bistable trigger (flip-flop) that holds a boolean state.
+
+    Exec inputs provide pulse-driven control: Set turns the state on, Reset turns it off, and Toggle inverts the current state.
+
+    Data inputs S (Set) and R (Reset) provide level-driven control: they are evaluated whenever the node runs on any exec input. A pulse at Evaluate re-evaluates S and R without an accompanying Set, Reset, or Toggle pulse. While S is true and R is false, the trigger turns on. While R is true and S is false, it turns off. When neither S nor R is true, the trigger latches and keeps its previous state.
+
+    When both Set and Reset are active at the same time — whether both level inputs S and R are true, or Set and Reset exec pulses arrive in the same tick — the Priority property determines the winning state (Reset by default, or Set).
+
+    The Initial state property chooses whether the trigger starts in the off (default) or on state after creation or server restart. State lives in memory and is not persisted across restarts.
+
+    Every evaluation emits State first, then Turned on or Turned off only if the state changed, then Out.
+node-logic-rs-trigger-pin-Set = Set
+node-logic-rs-trigger-pin-Reset = Reset
+node-logic-rs-trigger-pin-Toggle = Toggle
+node-logic-rs-trigger-pin-S = S
+node-logic-rs-trigger-pin-R = R
+node-logic-rs-trigger-pin-Evaluate = Evaluate
+node-logic-rs-trigger-pin-State = State
+node-logic-rs-trigger-pin-turned-on = Turned on
+node-logic-rs-trigger-pin-turned-off = Turned off
+node-logic-rs-trigger-pin-Out = Out
+node-logic-rs-trigger-prop-priority-title = Priority
+node-logic-rs-trigger-prop-priority-description = Which state wins when both set and reset are active at the same time
+node-logic-rs-trigger-prop-priority-option-reset = Reset
+node-logic-rs-trigger-prop-priority-option-set = Set
+node-logic-rs-trigger-prop-initial-title = Initial state
+node-logic-rs-trigger-prop-initial-description = State of the trigger after creation or restart
+node-logic-rs-trigger-prop-initial-option-off = Off
+node-logic-rs-trigger-prop-initial-option-on = On
+
 # text/template
 node-text-template-title = Text from template
 node-text-template-description = Builds text from a template, substituting input values

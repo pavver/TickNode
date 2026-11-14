@@ -1014,6 +1014,40 @@ node-logic-hysteresis-prop-mode-description = Увімкнення під час
 node-logic-hysteresis-prop-mode-option-rising = Зростання
 node-logic-hysteresis-prop-mode-option-falling = Спадання
 
+# RS trigger
+node-logic-rs-trigger-title = RS-тригер
+node-logic-rs-trigger-description = Бістабільний тригер з імпульсними входами та входами рівнів
+node-logic-rs-trigger-help =
+    Бістабільний тригер (flip-flop), що зберігає логічний стан.
+
+    Керуючі імпульсні входи: Встановити вмикає стан (true), Скинути вимикає (false), а Перемкнути інвертує поточний стан.
+
+    Входи рівнів S (Set) та R (Reset) забезпечують керування рівнем сигналу: вони оцінюються щоразу, коли вузол спрацьовує за будь-яким входом виконання. Сигнал на Оцінити повторно перевіряє S та R без додаткового імпульсу встановлення чи скидання. Якщо S істинний, а R хибний — тригер вмикається. Якщо R істинний, а S хибний — вимикається. Якщо обидва хибні — тригер зберігає попередній стан (засувка).
+
+    Коли встановлення та скидання активні одночасно — чи то обидва входи рівнів S і R істинні, чи то імпульси Встановити та Скинути надійшли в одному такті — властивість Пріоритет визначає результуючий стан (Скидання за замовчуванням або Встановлення).
+
+    Властивість Початковий стан визначає, у якому стані тригер запускається після створення або перезапуску сервера: вимкнено (за замовчуванням) чи увімкнено. Стан зберігається в пам'яті та скидається після перезапуску.
+
+    Кожна оцінка спочатку видає Стан, потім Увімкнено або Вимкнено лише за зміни стану, а далі Вихід.
+node-logic-rs-trigger-pin-Set = Встановити
+node-logic-rs-trigger-pin-Reset = Скинути
+node-logic-rs-trigger-pin-Toggle = Перемкнути
+node-logic-rs-trigger-pin-S = S
+node-logic-rs-trigger-pin-R = R
+node-logic-rs-trigger-pin-Evaluate = Перечитати
+node-logic-rs-trigger-pin-State = Стан
+node-logic-rs-trigger-pin-turned-on = Увімкнено
+node-logic-rs-trigger-pin-turned-off = Вимкнено
+node-logic-rs-trigger-pin-Out = Вихід
+node-logic-rs-trigger-prop-priority-title = Пріоритет
+node-logic-rs-trigger-prop-priority-description = Який стан перемагає, коли одночасно активні встановлення та скидання
+node-logic-rs-trigger-prop-priority-option-reset = Скидання
+node-logic-rs-trigger-prop-priority-option-set = Встановлення
+node-logic-rs-trigger-prop-initial-title = Початковий стан
+node-logic-rs-trigger-prop-initial-description = Стан тригера після створення або перезапуску
+node-logic-rs-trigger-prop-initial-option-off = Вимкнено
+node-logic-rs-trigger-prop-initial-option-on = Увімкнено
+
 # text/template
 node-text-template-title = Текст за шаблоном
 node-text-template-description = Складає текст із шаблону, підставляючи значення входів

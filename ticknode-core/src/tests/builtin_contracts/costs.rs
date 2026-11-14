@@ -6,7 +6,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 43);
+    assert_eq!(definitions.len(), 44);
     let is_expected_required = |type_name: &str, pin_id: PinId| {
         (type_name == "variable/set" && pin_id == PinId(3))
             || (matches!(type_name, "text/to_text" | "convert") && pin_id == PinId(1))
@@ -160,6 +160,7 @@ fn active_nodes_charge_one_work_unit_and_produce_effects() {
         "match",
         "sleep",
         "variable/set",
+        "logic/rs_trigger",
     ] {
         let mut engine = TickEngine::new();
         let properties = if name == "variable/set" {
@@ -207,6 +208,10 @@ fn active_nodes_charge_one_work_unit_and_produce_effects() {
                     Some(&number(0))
                 );
                 assert_eq!(trace.fired, vec![PinId(1)]);
+            }
+            "logic/rs_trigger" => {
+                assert_eq!(trace.fired, vec![PinId(1), PinId(3)]);
+                assert_eq!(trace.outputs, vec![(PinId(0), DataValue::Bool(true))]);
             }
             _ => panic!("missing expectation for {name}"),
         }

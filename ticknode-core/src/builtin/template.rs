@@ -16,7 +16,7 @@ const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become 
 
 Examples: Power: {{ text.power }}; {% if power > 1000 %}high{% endif %}; {{ (power / 1000) | round(1) }} kW; {% for item in items %}{{ item }} {% endfor %}; {{ name | default('—') }}.
 
-Date-times and times: {{ when | date }} uses the formatting language's default, {{ when | date('DD.MM.YYYY HH:mm') }} takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and {{ when | strftime('%d.%m.%Y') }} accepts chrono strftime formats. Date-times are shown in the server time zone.
+Date-times and times: {{ when | date }} uses the formatting language's default, {{ when | date('DD.MM.YYYY HH:mm') }} takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and {{ when | strftime('%d.%m.%Y') }} accepts chrono strftime formats. Date-times are shown in the server time zone. Plural forms: {{ count | plural('file', 'files') }} selects text using CLDR cardinal rules for the engine language (positional categories in integer order or keywords zero/one/two/few/many/other), replacing # with the formatted number.
 
 Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: {{ text.power }} can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
 

@@ -26,6 +26,9 @@ use super::{TYPES, lookup};
 
 pub struct UiQuantityLabels;
 impl QuantityLabels for UiQuantityLabels {
+    fn locale(&self) -> String {
+        super::current_locale().code().to_string()
+    }
     fn unit_symbol(&self, id: &str) -> Option<String> {
         unit_symbol(id)
     }
@@ -40,6 +43,14 @@ impl QuantityLabels for UiQuantityLabels {
     }
     fn message(&self, id: &str) -> Option<String> {
         lookup(id)
+    }
+    fn message_args(&self, id: &str, args: &[(&str, String)]) -> Option<String> {
+        let mut fluent_args = fluent_bundle::FluentArgs::new();
+        for (k, v) in args {
+            fluent_args.set(*k, fluent_bundle::FluentValue::from(v.as_str()));
+        }
+        let res = super::try_translate(id, Some(&fluent_args))?;
+        Some(res.replace(['\u{2068}', '\u{2069}'], ""))
     }
 }
 

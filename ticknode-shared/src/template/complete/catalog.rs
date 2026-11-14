@@ -103,6 +103,7 @@ pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("map", "map(...)"),
     ("max", "max()"),
     ("min", "min()"),
+    ("plural", "plural(forms…)"),
     ("pprint", "pprint()"),
     ("reject", "reject(...)"),
     ("rejectattr", "rejectattr(...)"),
@@ -146,7 +147,7 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
     }
     match name {
         "date" | "strftime" => matches!(input, ValueKind::DateTime | ValueKind::Time),
-        "abs" | "round" => matches!(input, ValueKind::Number),
+        "abs" | "round" | "plural" => matches!(input, ValueKind::Number),
         "int" => matches!(
             input,
             ValueKind::Number | ValueKind::String | ValueKind::Bool
@@ -180,16 +181,15 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
 pub fn filter_output_kind(name: &str, input: &ValueKind) -> ValueKind {
     if matches!(input, ValueKind::Any) {
         return match name {
-            "date" | "strftime" | "text" | "string" | "pprint" | "safe" | "escape" | "e" => {
-                ValueKind::String
-            }
+            "date" | "strftime" | "text" | "string" | "pprint" | "safe" | "escape" | "e"
+            | "plural" => ValueKind::String,
             "bool" => ValueKind::Bool,
             _ => ValueKind::Any,
         };
     }
 
     match name {
-        "date" | "strftime" | "text" | "string" | "pprint" => ValueKind::String,
+        "date" | "strftime" | "text" | "string" | "pprint" | "plural" => ValueKind::String,
         "bool" => ValueKind::Bool,
         "default" | "d" => input.clone(),
         "capitalize" | "lower" | "upper" | "title" | "trim" | "replace" | "indent" | "format"
@@ -259,6 +259,10 @@ fn make_filter_item(
         "text" => Some(crate::UiMessage::new(
             "template-help-filter-text",
             "Formats a value using its unit and locale rules",
+        )),
+        "plural" => Some(crate::UiMessage::new(
+            "template-help-filter-plural",
+            "Selects plural text based on cardinal rules: positional forms follow the formatting language's rules (e.g. one, few, many), keywords zero/one/two/few/many/other, and # is replaced by the formatted number",
         )),
         "default" => Some(crate::UiMessage::new(
             "template-help-filter-default",

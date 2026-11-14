@@ -588,6 +588,7 @@ template-hover-text-of = Formatted like To text ({ $name })
 template-help-filter-date = Formats a date-time or time: date('DD.MM.YYYY HH:mm') or a preset; type inside the quotes for format codes
 template-help-filter-strftime = Formats a date-time or time using strftime format codes
 template-help-filter-text = Formats a value using its unit and locale rules
+template-help-filter-plural = Selects a plural form: positional forms follow the formatting language's rules (e.g. one, few, many), keywords zero/one/two/few/many/other, and # is replaced by the formatted number
 template-help-filter-default = Fallback value when the input is undefined or empty
 
 template-help-date-preset-datetime = Standard date and time

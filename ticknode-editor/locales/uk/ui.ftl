@@ -603,6 +603,7 @@ template-hover-text-of = Форматовано як «У текст» ({ $name 
 template-help-filter-date = Форматує дату й час або час: date('DD.MM.YYYY HH:mm') чи пресет; у лапках доступні коди формату
 template-help-filter-strftime = Форматує дату й час або час за допомогою кодів strftime
 template-help-filter-text = Форматує значення з урахуванням одиниці вимірювання та локалі
+template-help-filter-plural = Вибирає форму множини: позиційні форми відповідають правилам мови форматування (напр. one, few, many), ключові слова zero/one/two/few/many/other, а # замінюється на відформатоване число
 template-help-filter-default = Резервне значення, якщо вхідне значення невизначене або порожнє
 
 template-help-date-preset-datetime = Стандартні дата й час

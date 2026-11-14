@@ -29,6 +29,12 @@ pub trait QuantityLabels {
     fn message(&self, _id: &str) -> Option<String> {
         None
     }
+    fn locale(&self) -> String {
+        "en".into()
+    }
+    fn message_args(&self, _id: &str, _args: &[(&str, String)]) -> Option<String> {
+        None
+    }
 }
 
 impl<T: QuantityLabels + ?Sized> QuantityLabels for &T {
@@ -46,6 +52,12 @@ impl<T: QuantityLabels + ?Sized> QuantityLabels for &T {
     }
     fn message(&self, id: &str) -> Option<String> {
         (**self).message(id)
+    }
+    fn locale(&self) -> String {
+        (**self).locale()
+    }
+    fn message_args(&self, id: &str, args: &[(&str, String)]) -> Option<String> {
+        (**self).message_args(id, args)
     }
 }
 

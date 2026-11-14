@@ -10,6 +10,8 @@ uuid = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }
 chrono = { workspace = true }
 minijinja = { workspace = true }
+intl_pluralrules = "7.0.2"
+unic-langid = "0.9"
 getrandom = { version = "0.2.15", features = ["js"] }
 
 [dev-dependencies]

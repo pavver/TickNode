@@ -3338,11 +3338,13 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "getrandom 0.2.17",
+ "intl_pluralrules",
  "minijinja",
  "postcard",
  "serde",
  "serde-reflection",
  "serde_json",
+ "unic-langid",
  "uuid",
 ]
 

@@ -10,6 +10,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 pub mod dates;
+pub mod plural;
 #[cfg(test)]
 mod tests;
 mod values;
@@ -83,6 +84,12 @@ pub fn environment() -> Environment<'static> {
     env.add_filter("text", |value: Value| value.to_string());
     env.add_global("text", Value::from_iter(Vec::<(String, Value)>::new()));
     dates::register(&mut env, Arc::new(crate::quantity::CanonicalLabels));
+    plural::register(
+        &mut env,
+        Arc::new(crate::quantity::CanonicalLabels),
+        None,
+        String::new(),
+    );
     env
 }
 
@@ -162,7 +169,7 @@ impl CompiledTemplate {
         labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
     ) -> Result<String, TemplateError> {
         let mut env = self.env.clone();
-        dates::register(&mut env, labels);
+        dates::register(&mut env, labels.clone());
         let text_map: Value = inputs
             .iter()
             .filter_map(|(name, value, ty)| {
@@ -172,6 +179,12 @@ impl CompiledTemplate {
         env.add_global("text", text_map);
         let zero = runtime_text(&DataValue::Number(crate::NumberValue::Int(0)));
         let int_decimal_suffix = zero.strip_prefix('0').unwrap_or("").to_string();
+        plural::register(
+            &mut env,
+            labels,
+            Some(runtime_text.clone()),
+            int_decimal_suffix.clone(),
+        );
         env.add_filter("text", move |value: Value| {
             values::format_runtime_value(&value, &*runtime_text, &int_decimal_suffix)
         });

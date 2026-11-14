@@ -599,6 +599,12 @@ template-render-error = Помилка шаблону: { $message }
 template-preview-empty = (порожньо)
 template-preview-waiting = Попередній перегляд зʼявиться після отримання значень
 template-hover-text-of = Форматовано як «У текст» ({ $name })
+template-lint-unknown-filter = Невідомий фільтр '{ $name }'
+template-lint-unknown-filter-suggest = Невідомий фільтр '{ $name }'. Можливо, ви мали на увазі '{ $suggestion }'?
+template-lint-filter-type = Фільтр '{ $name }' не застосовується до { $type }
+template-lint-unknown-field = Невідоме поле '{ $field }' у { $type }
+template-lint-unknown-field-suggest = Невідоме поле '{ $field }' у { $type }. Можливо, ви мали на увазі '{ $suggestion }'?
+template-lint-unknown-test = Невідомий тест '{ $name }'
 
 template-help-filter-date = Форматує дату й час або час: date('DD.MM.YYYY HH:mm') чи пресет; у лапках доступні коди формату
 template-help-filter-strftime = Форматує дату й час або час за допомогою кодів strftime

@@ -3,16 +3,16 @@ use crate::{DataType, TypeRegistry};
 use std::collections::HashSet;
 use std::ops::Range;
 
-mod catalog;
+pub(crate) mod catalog;
 #[cfg(test)]
 mod context_tests;
 mod date_format;
 #[cfg(test)]
 mod date_tests;
 pub mod docs;
-mod infer;
+pub(crate) mod infer;
 pub mod kinds;
-mod scan;
+pub(crate) mod scan;
 pub mod signature;
 pub mod snippets;
 #[cfg(test)]

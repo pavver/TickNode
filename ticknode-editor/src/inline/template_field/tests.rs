@@ -305,22 +305,41 @@ fn test_compute_styled_spans_with_error() {
     let source = "Hi {{ unclosed";
     let highlights = highlight(source, &[]);
     // Error on "unclosed" (6..14)
-    let spans = compute_styled_spans(source, &highlights, Some(6..14));
+    let spans = compute_styled_spans(source, &highlights, Some(6..14), &[]);
     assert_eq!(spans[0].text, "Hi ");
     assert_eq!(spans[0].class, "tk-text");
     assert!(!spans[0].is_error);
+    assert!(!spans[0].is_lint);
 
     assert_eq!(spans[1].text, "{{");
     assert_eq!(spans[1].class, "tk-delimiter");
     assert!(!spans[1].is_error);
+    assert!(!spans[1].is_lint);
 
     assert_eq!(spans[2].text, " ");
     assert_eq!(spans[2].class, "tk-text");
     assert!(!spans[2].is_error);
+    assert!(!spans[2].is_lint);
 
     assert_eq!(spans[3].text, "unclosed");
     assert_eq!(spans[3].class, "tk-variable");
     assert!(spans[3].is_error);
+    assert!(!spans[3].is_lint);
+}
+
+#[test]
+fn test_compute_styled_spans_with_lint() {
+    use super::highlight::compute_styled_spans;
+    use ticknode_shared::template::highlight;
+
+    let source = "Hi {{ x | abss }}";
+    let highlights = highlight(source, &[]);
+    // Lint on "abss" (10..14)
+    let spans = compute_styled_spans(source, &highlights, None, &[10..14]);
+    let lint_span = spans.iter().find(|s| s.text == "abss").expect("find abss");
+    assert_eq!(lint_span.class, "tk-filter");
+    assert!(!lint_span.is_error);
+    assert!(lint_span.is_lint);
 }
 
 #[test]

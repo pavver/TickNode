@@ -32,6 +32,9 @@ pub use complete::{
 pub mod highlight;
 pub use highlight::{Highlight, TokenClass, highlight};
 
+pub mod lint;
+pub use lint::{Lint, LintSeverity, lint};
+
 pub use values::plain;
 
 pub const FUEL: u64 = 10_000;

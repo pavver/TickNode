@@ -243,6 +243,24 @@ pub fn resolve_hover_tooltip_with_context(
     if path.is_empty() {
         return None;
     }
+
+    if let (Some(src), Some(range)) = (source, token_range.as_ref()) {
+        let preview_inputs = crate::inline::template_field::preview::node_preview_inputs(ed, node);
+        let inputs: Vec<(String, DataType)> = preview_inputs
+            .into_iter()
+            .map(|(name, _, ty)| (name, ty))
+            .collect();
+        let lints = ed
+            .types
+            .with(|types| ticknode_shared::template::lint(src, &inputs, types));
+        if let Some(lint) = lints
+            .iter()
+            .find(|l| l.range.start < range.end && range.start < l.range.end)
+        {
+            return Some(crate::i18n::ui_text(&lint.message));
+        }
+    }
+
     let client_node = ed.node_tracked(node)?;
     let root = &path[0];
 

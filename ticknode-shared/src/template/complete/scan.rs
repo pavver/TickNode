@@ -432,7 +432,7 @@ fn parse_set_tag(s: &str) -> Option<String> {
     }
 }
 
-fn process_closed_tag(
+pub(crate) fn process_closed_tag(
     tag_text: &str,
     inputs: &[(String, DataType)],
     types: &TypeRegistry,

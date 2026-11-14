@@ -166,3 +166,29 @@ fn every_template_help_key_in_catalog_exists_in_bundles() {
     });
     assert!(checked > 0, "must check template help keys");
 }
+
+#[test]
+fn every_template_lint_key_exists_in_bundles() {
+    let keys = [
+        "template-lint-unknown-filter",
+        "template-lint-unknown-filter-suggest",
+        "template-lint-filter-type",
+        "template-lint-unknown-field",
+        "template-lint-unknown-field-suggest",
+        "template-lint-unknown-test",
+    ];
+
+    BUNDLES.with(|b| {
+        let b = b.borrow();
+        for key in keys {
+            assert!(
+                b.uk.has_message(key),
+                "lint key '{key}' is missing in locales/uk/ui.ftl"
+            );
+            assert!(
+                b.en.has_message(key),
+                "lint key '{key}' is missing in locales/en/ui.ftl"
+            );
+        }
+    });
+}

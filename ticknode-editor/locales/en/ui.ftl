@@ -584,6 +584,12 @@ template-render-error = Render error: { $message }
 template-preview-empty = (empty)
 template-preview-waiting = Preview appears after the inputs get values
 template-hover-text-of = Formatted like To text ({ $name })
+template-lint-unknown-filter = Unknown filter '{ $name }'
+template-lint-unknown-filter-suggest = Unknown filter '{ $name }'. Did you mean '{ $suggestion }'?
+template-lint-filter-type = Filter '{ $name }' cannot be applied to { $type }
+template-lint-unknown-field = Unknown field '{ $field }' on { $type }
+template-lint-unknown-field-suggest = Unknown field '{ $field }' on { $type }. Did you mean '{ $suggestion }'?
+template-lint-unknown-test = Unknown test '{ $name }'
 
 template-help-filter-date = Formats a date-time or time: date('DD.MM.YYYY HH:mm') or a preset; type inside the quotes for format codes
 template-help-filter-strftime = Formats a date-time or time using strftime format codes

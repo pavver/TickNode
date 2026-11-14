@@ -3,6 +3,8 @@
 use leptos::prelude::*;
 use ticknode_shared::NodeId;
 use ticknode_shared::template::{Completion, CompletionItem, CompletionKind};
+#[cfg(target_arch = "wasm32")]
+use ticknode_shared::{DataType, PinDirection, PinType};
 
 use crate::picker::{placement, viewport};
 use crate::state::{Editor, use_editor};
@@ -88,7 +90,8 @@ pub fn accept_completion_item(
                 .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
             {
                 let current = textarea.value();
-                let (new_text, new_caret_byte) = apply_completion(&current, range, &item.insert);
+                let (new_text, new_caret_byte) =
+                    apply_completion(&current, range, &item.insert, item.caret);
                 textarea.set_value(&new_text);
                 let u16_caret = byte_to_utf16(&new_text, new_caret_byte) as u32;
                 let _ = textarea.set_selection_range(u16_caret, u16_caret);
@@ -104,12 +107,107 @@ pub fn accept_completion_item(
                 if let Ok(ev) = web_sys::Event::new("input") {
                     let _ = textarea.dispatch_event(&ev);
                 }
+
+                // If the accepted snippet placed the caret inside quotes (e.g. date(''), strftime('')),
+                // immediately re-run completion so the pattern list opens.
+                let prefix = &new_text[..new_caret_byte];
+                if item.caret.is_some() && (prefix.ends_with('\'') || prefix.ends_with('"')) {
+                    request_completion(ed, node, false);
+                }
             }
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let _ = (node, item, range);
+        let _ = (ed, node, item, range);
+    }
+}
+
+/// Queries template completion for the textarea identified by `node` and updates the completion popup state.
+pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::inline::template_field::caret::{measure_caret_screen_pos, utf16_to_byte};
+        use wasm_bindgen::JsCast;
+
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        let id_str = format!("template-textarea-{}", node.0);
+        let Some(textarea) = doc
+            .get_element_by_id(&id_str)
+            .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
+        else {
+            return;
+        };
+
+        let current_text = textarea.value();
+        let u16_start = textarea.selection_start().ok().flatten().unwrap_or(0) as usize;
+        let caret_byte = utf16_to_byte(&current_text, u16_start);
+        let prefix = if caret_byte <= current_text.len() {
+            &current_text[..caret_byte]
+        } else {
+            &current_text
+        };
+
+        if !is_completion_trigger_char(prefix, is_explicit) {
+            if ed.template_completion.with_untracked(|c| c.is_some()) {
+                ed.template_completion.set(None);
+            }
+            return;
+        }
+
+        let input_pins = ed.node_tracked(node).map_or(Vec::new(), |node_entry| {
+            node_entry.instance.with(|i| {
+                i.definition
+                    .pins
+                    .iter()
+                    .filter(|p| {
+                        p.direction == PinDirection::Input && matches!(p.pin_type, PinType::Data(_))
+                    })
+                    .map(|p| {
+                        let default_ty = match &p.pin_type {
+                            PinType::Data(t) => t.clone(),
+                            _ => DataType::Any,
+                        };
+                        let ty = ed.source_type(node, p.id).unwrap_or(default_ty);
+                        (p.name.clone(), ty)
+                    })
+                    .collect()
+            })
+        });
+
+        let completion = ed.types.with_untracked(|types| {
+            ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
+                source: &current_text,
+                caret: caret_byte,
+                inputs: &input_pins,
+                types,
+                now: Some(chrono::Local::now()),
+                labels: Some(&crate::i18n::UiQuantityLabels),
+            })
+        });
+
+        if let Some(completion) = completion
+            && !completion.items.is_empty()
+            && let Some((x, caret_bottom, caret_top)) =
+                measure_caret_screen_pos(&textarea, caret_byte, &current_text)
+        {
+            ed.template_completion.set(Some(TemplateCompletionState {
+                node,
+                x,
+                caret_bottom,
+                caret_top,
+                completion,
+                selected: 0,
+            }));
+            return;
+        }
+        ed.template_completion.set(None);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (ed, node, is_explicit);
     }
 }
 

@@ -279,6 +279,7 @@ pub(crate) fn resolve_dot_context(
                     detail: type_label(data_type, types),
                     insert: name.clone(),
                     help: None,
+                    caret: None,
                 })
                 .collect();
             items.sort_by(|a, b| a.label.cmp(&b.label));
@@ -331,6 +332,7 @@ pub(crate) fn resolve_dot_context(
                         detail: type_label(&f.data_type, types),
                         insert: f.name.clone(),
                         help: None,
+                        caret: None,
                     })
                     .collect();
                 items.sort_by(|a, b| a.label.cmp(&b.label));

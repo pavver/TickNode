@@ -5,6 +5,7 @@ use ticknode_shared::*;
 
 use crate::state::use_editor;
 
+pub mod auto_close;
 pub mod caret;
 pub mod completion;
 pub mod highlight;
@@ -84,6 +85,7 @@ pub fn TemplateField(
     let last_pos = StoredValue::<Option<(f64, f64)>>::new(None);
     let last_time = StoredValue::<f64>::new(0.0);
     let last_hovered = StoredValue::<Option<hover::HoverToken>>::new(None);
+    let last_auto_close = StoredValue::<Option<auto_close::AutoCloseState>>::new(None);
 
     on_cleanup(move || {
         if let Some(h) = timer.get_value() {
@@ -92,78 +94,7 @@ pub fn TemplateField(
     });
 
     let trigger_completion = move |_is_explicit: bool| {
-        #[cfg(target_arch = "wasm32")]
-        if let Some(textarea) = textarea_ref.get() {
-            use caret::{measure_caret_screen_pos, utf16_to_byte};
-            use completion::is_completion_trigger_char;
-
-            let current_text = draft.get_untracked();
-            let u16_start = textarea.selection_start().ok().flatten().unwrap_or(0) as usize;
-            let caret_byte = utf16_to_byte(&current_text, u16_start);
-            let prefix = if caret_byte <= current_text.len() {
-                &current_text[..caret_byte]
-            } else {
-                &current_text
-            };
-
-            if !is_completion_trigger_char(prefix, _is_explicit) {
-                // A stale popup would accept an item over an outdated range on the next Enter.
-                if ed.template_completion.with_untracked(|c| c.is_some()) {
-                    ed.template_completion.set(None);
-                }
-                return;
-            }
-
-            let input_pins = ed.node_tracked(id).map_or(Vec::new(), |node| {
-                node.instance.with(|i| {
-                    i.definition
-                        .pins
-                        .iter()
-                        .filter(|p| {
-                            p.direction == PinDirection::Input
-                                && matches!(p.pin_type, PinType::Data(_))
-                        })
-                        .map(|p| {
-                            let default_ty = match &p.pin_type {
-                                PinType::Data(t) => t.clone(),
-                                _ => DataType::Any,
-                            };
-                            let ty = ed.source_type(id, p.id).unwrap_or(default_ty);
-                            (p.name.clone(), ty)
-                        })
-                        .collect()
-                })
-            });
-
-            // Borrow the registry: it holds the whole quantity catalog, too large to clone per keystroke.
-            let completion = ed.types.with_untracked(|types| {
-                ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
-                    source: &current_text,
-                    caret: caret_byte,
-                    inputs: &input_pins,
-                    types,
-                    now: Some(chrono::Local::now()),
-                    labels: Some(&crate::i18n::UiQuantityLabels),
-                })
-            });
-
-            if let Some(completion) = completion
-                && !completion.items.is_empty()
-                && let Some((x, caret_bottom, caret_top)) =
-                    measure_caret_screen_pos(&textarea, caret_byte, &current_text)
-            {
-                ed.template_completion.set(Some(TemplateCompletionState {
-                    node: id,
-                    x,
-                    caret_bottom,
-                    caret_top,
-                    completion,
-                    selected: 0,
-                }));
-                return;
-            }
-            ed.template_completion.set(None);
-        }
+        completion::request_completion(ed, id, _is_explicit);
     };
 
     let keydown = move |ev: web_sys::KeyboardEvent| {
@@ -277,6 +208,105 @@ pub fn TemplateField(
             if let Some(el) = textarea_ref.get() {
                 let _ = el.blur();
             }
+            return;
+        }
+
+        let action = {
+            #[cfg(target_arch = "wasm32")]
+            if let Some(textarea) = textarea_ref.get() {
+                use caret::utf16_to_byte;
+                let current_text = draft.get_untracked();
+                let u16_start = textarea.selection_start().ok().flatten().unwrap_or(0) as usize;
+                let u16_end = textarea.selection_end().ok().flatten().unwrap_or(0) as usize;
+                let start_byte = utf16_to_byte(&current_text, u16_start);
+                let end_byte = utf16_to_byte(&current_text, u16_end);
+                auto_close::decide_typing(
+                    &current_text,
+                    start_byte..end_byte,
+                    &key,
+                    last_auto_close.get_value(),
+                )
+            } else {
+                auto_close::AutoCloseAction::None
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            auto_close::AutoCloseAction::None
+        };
+
+        match action {
+            auto_close::AutoCloseAction::None => {
+                if key != "Shift" && key != "Control" && key != "Alt" && key != "Meta" {
+                    last_auto_close.set_value(None);
+                }
+            }
+            auto_close::AutoCloseAction::Insert {
+                range,
+                text,
+                new_caret,
+                state,
+            } => {
+                ev.prevent_default();
+                ev.stop_propagation();
+                last_auto_close.set_value(Some(state));
+
+                #[cfg(target_arch = "wasm32")]
+                if let Some(textarea) = textarea_ref.get() {
+                    use caret::{apply_completion, byte_to_utf16};
+                    let current = textarea.value();
+                    let (new_text, _) = apply_completion(&current, range, text, None);
+                    textarea.set_value(&new_text);
+                    let u16_caret = byte_to_utf16(&new_text, new_caret) as u32;
+                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                    draft.set(new_text);
+                    sync_scroll();
+                    if let Ok(ev) = web_sys::Event::new("input") {
+                        let _ = textarea.dispatch_event(&ev);
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = (range, text, new_caret);
+            }
+            auto_close::AutoCloseAction::SkipChar { new_caret } => {
+                ev.prevent_default();
+                ev.stop_propagation();
+                last_auto_close.set_value(None);
+
+                #[cfg(target_arch = "wasm32")]
+                if let Some(textarea) = textarea_ref.get() {
+                    use caret::byte_to_utf16;
+                    let current = textarea.value();
+                    let u16_caret = byte_to_utf16(&current, new_caret) as u32;
+                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = new_caret;
+            }
+            auto_close::AutoCloseAction::DeletePair {
+                range,
+                replacement,
+                new_caret,
+            } => {
+                ev.prevent_default();
+                ev.stop_propagation();
+                last_auto_close.set_value(None);
+
+                #[cfg(target_arch = "wasm32")]
+                if let Some(textarea) = textarea_ref.get() {
+                    use caret::{apply_completion, byte_to_utf16};
+                    let current = textarea.value();
+                    let (new_text, _) = apply_completion(&current, range, replacement, None);
+                    textarea.set_value(&new_text);
+                    let u16_caret = byte_to_utf16(&new_text, new_caret) as u32;
+                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                    draft.set(new_text);
+                    sync_scroll();
+                    if let Ok(ev) = web_sys::Event::new("input") {
+                        let _ = textarea.dispatch_event(&ev);
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = (range, replacement, new_caret);
+            }
         }
     };
 
@@ -301,6 +331,7 @@ pub fn TemplateField(
                 prop:value=move || draft.get()
                 on:pointerdown=move |ev| {
                     crate::match_editor::stop_on_controls(ev);
+                    last_auto_close.set_value(None);
                     if ed.template_completion.with_untracked(|c| c.is_some()) {
                         ed.template_completion.set(None);
                     }
@@ -310,6 +341,7 @@ pub fn TemplateField(
                     focused.set(false);
                     last_pos.set_value(None);
                     last_hovered.set_value(None);
+                    last_auto_close.set_value(None);
                     if let Some(h) = timer.get_value() {
                         h.clear();
                         timer.set_value(None);

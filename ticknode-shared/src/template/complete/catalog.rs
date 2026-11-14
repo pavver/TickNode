@@ -297,12 +297,14 @@ fn make_filter_item(
         )),
         _ => None,
     };
+    let (insert, caret) = super::snippets::filter_snippet(name);
     CompletionItem {
         label: name.to_string(),
         kind: CompletionKind::Filter,
         detail,
-        insert: name.to_string(),
+        insert,
         help,
+        caret,
     }
 }
 
@@ -389,6 +391,7 @@ pub fn test_items_for(input: &ValueKind) -> Vec<CompletionItem> {
             detail: "test".to_string(),
             insert: name.to_string(),
             help: None,
+            caret: None,
         })
         .collect()
 }
@@ -402,19 +405,24 @@ pub fn loop_attribute_items() -> Vec<CompletionItem> {
             detail: "loop attribute".to_string(),
             insert: attr.to_string(),
             help: None,
+            caret: None,
         })
         .collect()
 }
 
-pub fn tag_keyword_items() -> Vec<CompletionItem> {
+pub fn tag_keyword_items(is_closed: bool) -> Vec<CompletionItem> {
     TAG_KEYWORDS
         .iter()
-        .map(|&kw| CompletionItem {
-            label: kw.to_string(),
-            kind: CompletionKind::Keyword,
-            detail: "keyword".to_string(),
-            insert: kw.to_string(),
-            help: None,
+        .map(|&kw| {
+            let (insert, caret) = super::snippets::tag_keyword_snippet(kw, is_closed);
+            CompletionItem {
+                label: kw.to_string(),
+                kind: CompletionKind::Keyword,
+                detail: "keyword".to_string(),
+                insert,
+                help: None,
+                caret,
+            }
         })
         .collect()
 }
@@ -430,12 +438,14 @@ pub fn function_items() -> Vec<CompletionItem> {
                 )),
                 _ => None,
             };
+            let (insert, caret) = super::snippets::function_snippet(name);
             CompletionItem {
                 label: name.to_string(),
                 kind: CompletionKind::Function,
                 detail: sig.to_string(),
-                insert: format!("{name}()"),
+                insert,
                 help,
+                caret,
             }
         })
         .collect()
@@ -450,6 +460,7 @@ pub fn keyword_operator_items() -> Vec<CompletionItem> {
             detail: "keyword".to_string(),
             insert: kw.to_string(),
             help: None,
+            caret: None,
         })
         .collect()
 }

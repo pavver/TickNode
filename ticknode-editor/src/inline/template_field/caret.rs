@@ -36,8 +36,14 @@ pub fn byte_to_utf16(text: &str, byte_offset: usize) -> usize {
 }
 
 /// Replaces `range` with `insert` in `source`, returning the updated string and caret byte offset.
-/// If `insert` ends with `()` (e.g. functions), the caret is placed between the parentheses.
-pub fn apply_completion(source: &str, range: Range<usize>, insert: &str) -> (String, usize) {
+/// When `caret` is `Some(offset)`, the caret is placed at `start + offset.min(insert.len())`.
+/// When `caret` is `None`, the caret is placed at `start + insert.len()`.
+pub fn apply_completion(
+    source: &str,
+    range: Range<usize>,
+    insert: &str,
+    caret: Option<usize>,
+) -> (String, usize) {
     let start = range.start.min(source.len());
     let end = range.end.min(source.len()).max(start);
     let mut result = String::with_capacity(source.len() + insert.len() - (end - start));
@@ -45,10 +51,9 @@ pub fn apply_completion(source: &str, range: Range<usize>, insert: &str) -> (Str
     result.push_str(insert);
     result.push_str(&source[end..]);
 
-    let caret_byte = if insert.ends_with("()") {
-        start + insert.len() - 1
-    } else {
-        start + insert.len()
+    let caret_byte = match caret {
+        Some(offset) => start + offset.min(insert.len()),
+        None => start + insert.len(),
     };
     (result, caret_byte)
 }

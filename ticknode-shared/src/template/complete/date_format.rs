@@ -181,6 +181,7 @@ fn complete_unit_arg(
                     crate::UiMessage::new("template-help-unit-symbol", "Unit of measurement")
                         .arg("quantity", type_name),
                 ),
+                caret: None,
             });
         }
     }
@@ -234,6 +235,7 @@ fn complete_date_arg(
                         format!("template-help-date-preset-{preset}"),
                         fallback,
                     )),
+                    caret: None,
                 });
             }
         }
@@ -255,6 +257,7 @@ fn complete_date_arg(
                     format!("template-help-date-token-{slug}"),
                     fallback,
                 )),
+                caret: None,
             });
         }
     }
@@ -269,6 +272,7 @@ fn complete_date_arg(
                 "template-help-date-literal",
                 "Text in square brackets is printed as is, e.g. [at]",
             )),
+            caret: None,
         });
     }
 
@@ -321,6 +325,7 @@ fn complete_strftime_arg(
                     format!("template-help-strftime-{slug}"),
                     fallback,
                 )),
+                caret: None,
             });
         }
     }
@@ -370,6 +375,7 @@ fn complete_duration_arg(
                         format!("template-help-duration-preset-{slug}"),
                         fallback,
                     )),
+                    caret: None,
                 });
             }
         }
@@ -387,6 +393,7 @@ fn complete_duration_arg(
                     format!("template-help-duration-token-{slug}"),
                     fallback,
                 )),
+                caret: None,
             });
         }
     }
@@ -401,6 +408,7 @@ fn complete_duration_arg(
                 "template-help-duration-literal",
                 "Text in square brackets is printed as is, e.g. [h]",
             )),
+            caret: None,
         });
     }
 

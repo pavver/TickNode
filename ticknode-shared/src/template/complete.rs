@@ -12,6 +12,7 @@ mod date_tests;
 mod infer;
 pub mod kinds;
 mod scan;
+pub mod snippets;
 #[cfg(test)]
 mod tests;
 
@@ -47,6 +48,7 @@ pub struct CompletionItem {
     pub detail: String,
     pub insert: String,
     pub help: Option<crate::UiMessage>,
+    pub caret: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +129,9 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Context 4: right after `{%` (first word of a tag)
     if is_tag && before_slice.chars().all(char::is_whitespace) {
-        let items = filter_and_dedup(catalog::tag_keyword_items(), partial);
+        let after_caret = &input.source[caret..];
+        let is_closed = snippets::is_tag_closed_after(after_caret);
+        let items = filter_and_dedup(catalog::tag_keyword_items(is_closed), partial);
         return Some(Completion { range, items });
     }
 
@@ -181,6 +185,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
                 detail: type_label(data_type, input.types),
                 insert: name.clone(),
                 help: None,
+                caret: None,
             });
         }
     }
@@ -205,6 +210,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
                     detail: detail.clone(),
                     insert: var.clone(),
                     help: None,
+                    caret: None,
                 });
             }
         }
@@ -218,6 +224,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             detail: String::new(),
             insert: var.clone(),
             help: None,
+            caret: None,
         });
     }
 
@@ -229,6 +236,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             detail: "loop context".to_string(),
             insert: "loop".to_string(),
             help: None,
+            caret: None,
         });
     }
 
@@ -240,6 +248,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             detail: "formatted inputs".to_string(),
             insert: "text".to_string(),
             help: None,
+            caret: None,
         });
     }
 
@@ -251,6 +260,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             detail: "range([start], stop, [step])".to_string(),
             insert: "range()".to_string(),
             help: None,
+            caret: Some(6),
         });
     } else {
         raw_items.extend(catalog::function_items());

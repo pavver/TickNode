@@ -163,7 +163,12 @@ pub fn evaluate_preview(
     let runtime_text: Arc<dyn Fn(&DataValue) -> String + Send + Sync> =
         Arc::new(|v| crate::i18n::value_as_text(v, &DataType::Any));
 
-    match compiled.render(inputs, &format, runtime_text) {
+    match compiled.render_localized(
+        inputs,
+        &format,
+        runtime_text,
+        Arc::new(crate::i18n::UiQuantityLabels),
+    ) {
         Ok(text) if text.is_empty() => PreviewStatus::Empty,
         Ok(text) => PreviewStatus::Text(text),
         // A missing input usually explains the failure (`msg.chat` on an undefined `msg`): wait for values.

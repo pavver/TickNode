@@ -64,7 +64,7 @@ pub fn definition(kind: &str) -> NodeDefinition {
         "command" => (
             "Command",
             "Receive a Telegram bot command",
-            "Enter status or /status. Accepts /status@YourBot with the verified bot username. Arguments is the remaining text; Args splits whitespace and respects quotes. To reply to /status, connect Received to Send message, Chat to Chat and a Format text output to Text; connect Message through Break Telegram message to Reply to.",
+            "Enter status or /status. Accepts /status@YourBot with the verified bot username. Arguments is the remaining text; Args splits whitespace and respects quotes. To reply to /status, connect Received to Send message, Chat to Chat and a Text from template output to Text; connect Message through Break Telegram message to Reply to.",
         ),
         "callback" => (
             "Button pressed",
@@ -74,7 +74,7 @@ pub fn definition(kind: &str) -> NodeDefinition {
         "send" => (
             "Send message",
             "Send text and inline buttons to Telegram",
-            "Connect In, Chat and Text. Leave the Chat property empty to use its input. For /status replies, wire Command Chat to Chat and Format text to Text. Reply to keeps the original topic when known; Topic overrides it. Buttons: one row per line, e.g. Refresh=status | Open=https://example.org. Text is limited to 4096 characters. Done and Message are emitted on success; Failed and Error on failure.",
+            "Connect In, Chat and Text. Leave the Chat property empty to use its input. For /status replies, wire Command Chat to Chat and Text from template to Text. Reply to keeps the original topic when known; Topic overrides it. Buttons: one row per line, e.g. Refresh=status | Open=https://example.org. Text is limited to 4096 characters. Done and Message are emitted on success; Failed and Error on failure.",
         ),
         "edit" => (
             "Edit message",

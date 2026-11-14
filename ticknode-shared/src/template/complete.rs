@@ -5,6 +5,8 @@ use std::ops::Range;
 mod catalog;
 #[cfg(test)]
 mod context_tests;
+#[cfg(test)]
+mod date_tests;
 mod infer;
 pub mod kinds;
 mod scan;

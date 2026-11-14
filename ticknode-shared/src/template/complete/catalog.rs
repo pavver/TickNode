@@ -82,6 +82,7 @@ pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("capitalize", "capitalize()"),
     ("count", "count()"),
     ("d", "d(default)"),
+    ("date", "date([pattern])"),
     ("default", "default(value)"),
     ("dictsort", "dictsort()"),
     ("e", "e()"),
@@ -114,6 +115,7 @@ pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("slice", "slice(slices)"),
     ("sort", "sort()"),
     ("split", "split([separator])"),
+    ("strftime", "strftime(format)"),
     ("string", "string()"),
     ("sum", "sum([attribute])"),
     ("title", "title()"),
@@ -143,6 +145,7 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
         return true;
     }
     match name {
+        "date" | "strftime" => matches!(input, ValueKind::DateTime | ValueKind::Time),
         "abs" | "round" => matches!(input, ValueKind::Number),
         "int" => matches!(
             input,
@@ -177,14 +180,16 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
 pub fn filter_output_kind(name: &str, input: &ValueKind) -> ValueKind {
     if matches!(input, ValueKind::Any) {
         return match name {
-            "text" | "string" | "pprint" | "safe" | "escape" | "e" => ValueKind::String,
+            "date" | "strftime" | "text" | "string" | "pprint" | "safe" | "escape" | "e" => {
+                ValueKind::String
+            }
             "bool" => ValueKind::Bool,
             _ => ValueKind::Any,
         };
     }
 
     match name {
-        "text" | "string" | "pprint" => ValueKind::String,
+        "date" | "strftime" | "text" | "string" | "pprint" => ValueKind::String,
         "bool" => ValueKind::Bool,
         "default" | "d" => input.clone(),
         "capitalize" | "lower" | "upper" | "title" | "trim" | "replace" | "indent" | "format"
@@ -300,13 +305,23 @@ pub fn test_accepts(name: &str, input: &ValueKind) -> bool {
         "eq" | "ne" => {
             matches!(
                 input,
-                ValueKind::Number | ValueKind::String | ValueKind::Bool | ValueKind::Any
+                ValueKind::Number
+                    | ValueKind::String
+                    | ValueKind::Bool
+                    | ValueKind::DateTime
+                    | ValueKind::Time
+                    | ValueKind::Duration
+                    | ValueKind::Any
             )
         }
         "lt" | "le" | "gt" | "ge" => {
             matches!(
                 input,
-                ValueKind::Number | ValueKind::String | ValueKind::Any
+                ValueKind::Number
+                    | ValueKind::String
+                    | ValueKind::DateTime
+                    | ValueKind::Time
+                    | ValueKind::Any
             )
         }
         _ => false,

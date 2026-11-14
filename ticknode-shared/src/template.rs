@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 
+mod dates;
 #[cfg(test)]
 mod tests;
 mod values;
@@ -81,6 +82,7 @@ pub fn environment() -> Environment<'static> {
     // `render` replaces this placeholder with a presentation-aware filter.
     env.add_filter("text", |value: Value| value.to_string());
     env.add_global("text", Value::from_iter(Vec::<(String, Value)>::new()));
+    dates::register(&mut env, Arc::new(crate::quantity::CanonicalLabels));
     env
 }
 
@@ -151,14 +153,16 @@ impl CompiledTemplate {
         Ok(Self { env })
     }
 
-    /// Renders with the fuel budget, input context, the `text` presentation map and `| text` filter.
-    pub fn render(
+    /// Renders with the fuel budget, input context, the `text` presentation map, and localized date/time filters.
+    pub fn render_localized(
         &self,
         inputs: &[(String, Option<DataValue>, DataType)],
         format: &dyn Fn(&DataValue, &DataType) -> String,
         runtime_text: RuntimeText,
+        labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
     ) -> Result<String, TemplateError> {
         let mut env = self.env.clone();
+        dates::register(&mut env, labels);
         let text_map: Value = inputs
             .iter()
             .filter_map(|(name, value, ty)| {
@@ -191,9 +195,24 @@ impl CompiledTemplate {
             .render(context)
             .map_err(|err| TemplateError::from_minijinja(&err, &source))
     }
+
+    /// Renders with canonical (English/ISO) labels; prefer [`Self::render_localized`] for UI/locale-specific rendering.
+    pub fn render(
+        &self,
+        inputs: &[(String, Option<DataValue>, DataType)],
+        format: &dyn Fn(&DataValue, &DataType) -> String,
+        runtime_text: RuntimeText,
+    ) -> Result<String, TemplateError> {
+        self.render_localized(
+            inputs,
+            format,
+            runtime_text,
+            Arc::new(crate::quantity::CanonicalLabels),
+        )
+    }
 }
 
-/// Parses and renders once; prefer [`CompiledTemplate`] for repeated renders.
+/// Parses and renders once with canonical labels; prefer [`CompiledTemplate::render_localized`] for repeated or localized renders.
 pub fn render(
     source: &str,
     inputs: &[(String, Option<DataValue>, DataType)],

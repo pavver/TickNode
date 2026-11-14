@@ -38,6 +38,9 @@ impl QuantityLabels for UiQuantityLabels {
     fn duration_unit(&self, unit: &str) -> String {
         lookup(&format!("text-duration-{unit}")).unwrap_or_else(|| unit.into())
     }
+    fn message(&self, id: &str) -> Option<String> {
+        lookup(id)
+    }
 }
 
 /// The same presentation as the To text node, with the UI locale, the project display rules and the

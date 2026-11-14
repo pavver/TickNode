@@ -3255,6 +3255,7 @@ dependencies = [
 name = "ticknode-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "criterion",
  "evalexpr",
  "fluent-syntax",

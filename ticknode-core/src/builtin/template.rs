@@ -16,6 +16,8 @@ const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become 
 
 Examples: Power: {{ text.power }}; {% if power > 1000 %}high{% endif %}; {{ (power / 1000) | round(1) }} kW; {% for item in items %}{{ item }} {% endfor %}; {{ name | default('—') }}.
 
+Date-times and times: {{ when | date }} uses the formatting language's default, {{ when | date('DD.MM.YYYY HH:mm') }} takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and {{ when | strftime('%d.%m.%Y') }} accepts chrono strftime formats. Date-times are shown in the server time zone.
+
 Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: {{ text.power }} can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
 
 The text filter formats runtime kinds only, including values computed in the template: numbers use plain-number display rules, booleans use localized words, lists and maps are formatted recursively, and strings stay unchanged. It has no source type or quantity units: {{ (power / 1000) | text }} formats a plain number. Globals and filters have separate namespaces, so both text.name and | text are available.
@@ -68,7 +70,6 @@ impl TemplateNode {
                 .iter()
                 .enumerate()
                 .filter(|(_, name)| !old.iter().any(|(n, _)| n == *name))
-                .map(|(idx, name)| (idx, name))
                 .collect();
             if disappeared.len() == 1 && appeared.len() == 1 && disappeared[0].0 == appeared[0].0 {
                 rename = Some((appeared[0].1.clone(), disappeared[0].1));
@@ -118,7 +119,7 @@ impl TemplateNode {
         };
         let display = ctx.host_state.display.clone();
         let labels = crate::quantity::labels(&ctx.host_state.locale);
-        compiled.render(
+        compiled.render_localized(
             &inputs,
             &|value, declared| {
                 to_text_with_identifiers(
@@ -142,6 +143,7 @@ impl TemplateNode {
                     &|_: &str, _: i64| None,
                 )
             }),
+            std::sync::Arc::new(labels),
         )
     }
 }
@@ -175,9 +177,9 @@ impl Node for TemplateNode {
         });
         NodeDefinition {
             type_name: "text/template".into(),
-            title: "Format text".into(),
+            title: "Text from template".into(),
             category: "String".into(),
-            description: "Formats text with a MiniJinja template".into(),
+            description: "Builds text from a template, substituting input values".into(),
             help: HELP.into(),
             properties: vec![
                 PropertyDefinition::multiline("template", "Template")

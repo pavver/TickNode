@@ -25,6 +25,28 @@ pub trait QuantityLabels {
     fn duration_unit(&self, unit: &str) -> String {
         unit.into()
     }
+    /// A simple localized engine message by Fluent id (date presets, month and weekday names).
+    fn message(&self, _id: &str) -> Option<String> {
+        None
+    }
+}
+
+impl<T: QuantityLabels + ?Sized> QuantityLabels for &T {
+    fn unit_symbol(&self, unit_id: &str) -> Option<String> {
+        (**self).unit_symbol(unit_id)
+    }
+    fn decimal_separator(&self) -> String {
+        (**self).decimal_separator()
+    }
+    fn bool_text(&self, value: bool) -> String {
+        (**self).bool_text(value)
+    }
+    fn duration_unit(&self, unit: &str) -> String {
+        (**self).duration_unit(unit)
+    }
+    fn message(&self, id: &str) -> Option<String> {
+        (**self).message(id)
+    }
 }
 
 /// Locale-independent fallback (catalog symbols and a decimal point).

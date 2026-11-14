@@ -562,6 +562,62 @@ text-duration-h = { " год" }
 text-duration-m = { " хв" }
 text-duration-s = { " с" }
 text-duration-ms = { " мс" }
+text-date-format-datetime = DD.MM.YYYY HH:mm
+text-date-format-date = DD.MM.YYYY
+text-date-format-time = HH:mm
+text-date-format-long = D MMMM YYYY, HH:mm
+text-month-1 = січень
+text-month-1-format = січня
+text-month-1-short = січ
+text-month-2 = лютий
+text-month-2-format = лютого
+text-month-2-short = лют
+text-month-3 = березень
+text-month-3-format = березня
+text-month-3-short = бер
+text-month-4 = квітень
+text-month-4-format = квітня
+text-month-4-short = кві
+text-month-5 = травень
+text-month-5-format = травня
+text-month-5-short = тра
+text-month-6 = червень
+text-month-6-format = червня
+text-month-6-short = чер
+text-month-7 = липень
+text-month-7-format = липня
+text-month-7-short = лип
+text-month-8 = серпень
+text-month-8-format = серпня
+text-month-8-short = сер
+text-month-9 = вересень
+text-month-9-format = вересня
+text-month-9-short = вер
+text-month-10 = жовтень
+text-month-10-format = жовтня
+text-month-10-short = жов
+text-month-11 = листопад
+text-month-11-format = листопада
+text-month-11-short = лис
+text-month-12 = грудень
+text-month-12-format = грудня
+text-month-12-short = гру
+text-weekday-1 = понеділок
+text-weekday-1-short = пн
+text-weekday-2 = вівторок
+text-weekday-2-short = вт
+text-weekday-3 = середа
+text-weekday-3-short = ср
+text-weekday-4 = четвер
+text-weekday-4-short = чт
+text-weekday-5 = пʼятниця
+text-weekday-5-short = пт
+text-weekday-6 = субота
+text-weekday-6-short = сб
+text-weekday-7 = неділя
+text-weekday-7-short = нд
+text-am = дп
+text-pm = пп
 
 # Extended sensor quantities and units.
 type-quantity-reactive-power-title = Реактивна потужність
@@ -856,12 +912,14 @@ node-logic-hysteresis-prop-mode-option-rising = Зростання
 node-logic-hysteresis-prop-mode-option-falling = Спадання
 
 # text/template
-node-text-template-title = Форматувати текст
-node-text-template-description = Форматує текст за шаблоном MiniJinja
+node-text-template-title = Текст за шаблоном
+node-text-template-description = Складає текст із шаблону, підставляючи значення входів
 node-text-template-help =
     Форматує шаблон MiniJinja. Неоголошені змінні стають необов’язковими входами Any у порядку першої появи; ідентифікатори пінів зберігаються після редагування, а перейменування однієї змінної на місці зберігає її пін. Звернення text.name також створює вхід name. Назва text зарезервована для глобальної мапи форматованих значень і не може бути входом; не присвоюйте їй значення в шаблонах. Відсутні входи та їхні записи в text мають значення undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } задає запасний текст.
 
     Приклади: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
+
+    Дати й час: { "{" }{ "{" } when | date { "}" }{ "}" } використовує типовий формат мови форматування, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } приймає зрозумілий шаблон (YYYY, MM, MMMM назва місяця, DD, ddd/dddd день тижня, HH, hh, mm, ss, A; текст у [дужках] зберігається), доступні готові шаблони 'date', 'time', 'datetime', 'long' та 'iso', а { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } приймає формати chrono strftime. Дата й час відображаються у часовому поясі сервера.
 
     Входи є звичайними значеннями Jinja, тому арифметика, порівняння, тести та стандартні фільтри працюють звичним чином. Глобальна мапа text форматує кожен вхід так само, як вузол «У текст», використовуючи оголошений тип під’єднаного джерела, правила відображення проєкту й мову форматування рушія: { "{" }{ "{" } text.power { "}" }{ "}" } може вивести 1,2 кВт. Списки та структури зберігають оголошені типи елементів і полів у цьому поданні. Одиниці вимірювання надає text.name.
 

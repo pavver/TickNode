@@ -29,6 +29,9 @@ impl QuantityLabels for Labels {
             .cloned()
             .unwrap_or_else(|| ".".into())
     }
+    fn message(&self, id: &str) -> Option<String> {
+        self.0.get(id).cloned()
+    }
 }
 
 pub fn labels(locale: &str) -> &'static Labels {

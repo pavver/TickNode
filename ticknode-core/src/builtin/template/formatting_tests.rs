@@ -242,3 +242,21 @@ fn runtime_text_filter_preserves_large_computed_integers() {
         Some("9223372036854775808,00".into())
     );
 }
+
+#[test]
+fn ukrainian_locale_renders_format_context_month() {
+    use chrono::{DateTime, Datelike, Local};
+
+    let (mut engine, id) = setup("{{ t | date('D MMMM') }}");
+    engine.set_locale("uk");
+    let dt = text::parse_value("2026-11-14T10:00:00Z", &DataType::DateTime).unwrap();
+    inline(&mut engine, id, "t", dt);
+    let day = DateTime::parse_from_rfc3339("2026-11-14T10:00:00Z")
+        .unwrap()
+        .with_timezone(&Local)
+        .day();
+    assert_eq!(
+        render(&mut engine, id),
+        Some(format!("{day} листопада").into())
+    );
+}

@@ -5,6 +5,9 @@ pub enum ValueKind {
     String,
     Number,
     Bool,
+    DateTime,
+    Time,
+    Duration,
     List(Box<ValueKind>),
     Map(Option<String> /* struct type name */),
     Any,
@@ -22,11 +25,10 @@ impl ValueKind {
 pub fn kind_of(data_type: &DataType, types: &TypeRegistry) -> ValueKind {
     match data_type {
         DataType::Number => ValueKind::Number,
-        DataType::String
-        | DataType::Time
-        | DataType::DateTime
-        | DataType::Duration
-        | DataType::Color => ValueKind::String,
+        DataType::String | DataType::Color => ValueKind::String,
+        DataType::DateTime => ValueKind::DateTime,
+        DataType::Time => ValueKind::Time,
+        DataType::Duration => ValueKind::Duration,
         DataType::Bool => ValueKind::Bool,
         DataType::List(inner) => ValueKind::List(Box::new(kind_of(inner, types))),
         DataType::Object => ValueKind::Map(None),
@@ -57,6 +59,9 @@ pub fn kind_label(kind: &ValueKind, types: &TypeRegistry) -> String {
         ValueKind::String => "String".to_string(),
         ValueKind::Number => "Number".to_string(),
         ValueKind::Bool => "Bool".to_string(),
+        ValueKind::DateTime => "DateTime".to_string(),
+        ValueKind::Time => "Time".to_string(),
+        ValueKind::Duration => "Duration".to_string(),
         ValueKind::List(inner) => format!("list of {}", kind_label(inner, types)),
         ValueKind::Map(Some(name)) => {
             if let Some(def) = types.get(name) {

@@ -534,7 +534,7 @@ settings-invalid-number = Invalid number
 error-save-settings = Failed to save settings
 
 settings-formatting-language = Formatting language
-settings-formatting-language-description = Language for text produced by the engine, including To text and Format text.
+settings-formatting-language-description = Language for text produced by the engine, including To text and Text from template.
 property-locale-server = Server ({ $language })
 language-en = English
 language-uk = Ukrainian

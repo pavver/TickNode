@@ -13,7 +13,7 @@ use criterion::{
     BenchmarkId, Criterion, SamplingMode, Throughput, criterion_group, criterion_main,
 };
 use ticknode_core::TickEngine;
-use ticknode_shared::{DataType, DataValue, NodeId, NumberValue, PinId};
+use ticknode_shared::{DataType, DataValue, NodeId, NumberValue, PinId, VariableKey};
 
 fn number(value: i64) -> DataValue {
     DataValue::Number(NumberValue::Int(value))
@@ -135,7 +135,12 @@ fn validate_automations(engine: &mut TickEngine, triggers: &[NodeId]) {
     assert_eq!(executions, triggers.len() * 4);
     assert_eq!(logs, triggers.len() / 2);
     assert_eq!(engine.variables.len(), triggers.len().div_ceil(2));
-    assert!(engine.variables.values().all(|value| *value == number(1)));
+    assert!(
+        engine
+            .variables
+            .iter()
+            .all(|(_, var)| var.value == number(1))
+    );
 }
 
 fn idle_tick(c: &mut Criterion) {
@@ -184,7 +189,13 @@ fn hop(c: &mut Criterion) {
         clear_telemetry(&mut engine);
     }
     assert!(engine.execution_queue.is_empty());
-    assert_eq!(engine.variables.get("my_var"), Some(&number(1)));
+    assert_eq!(
+        engine
+            .variables
+            .get(&VariableKey::global("my_var"))
+            .map(|v| &v.value),
+        Some(&number(1))
+    );
 
     let mut group = c.benchmark_group("hop");
     group.sample_size(30);

@@ -562,6 +562,62 @@ text-duration-h = h
 text-duration-m = m
 text-duration-s = s
 text-duration-ms = ms
+text-date-format-datetime = YYYY-MM-DD HH:mm
+text-date-format-date = YYYY-MM-DD
+text-date-format-time = HH:mm
+text-date-format-long = MMMM D, YYYY HH:mm
+text-month-1 = January
+text-month-1-format = January
+text-month-1-short = Jan
+text-month-2 = February
+text-month-2-format = February
+text-month-2-short = Feb
+text-month-3 = March
+text-month-3-format = March
+text-month-3-short = Mar
+text-month-4 = April
+text-month-4-format = April
+text-month-4-short = Apr
+text-month-5 = May
+text-month-5-format = May
+text-month-5-short = May
+text-month-6 = June
+text-month-6-format = June
+text-month-6-short = Jun
+text-month-7 = July
+text-month-7-format = July
+text-month-7-short = Jul
+text-month-8 = August
+text-month-8-format = August
+text-month-8-short = Aug
+text-month-9 = September
+text-month-9-format = September
+text-month-9-short = Sep
+text-month-10 = October
+text-month-10-format = October
+text-month-10-short = Oct
+text-month-11 = November
+text-month-11-format = November
+text-month-11-short = Nov
+text-month-12 = December
+text-month-12-format = December
+text-month-12-short = Dec
+text-weekday-1 = Monday
+text-weekday-1-short = Mon
+text-weekday-2 = Tuesday
+text-weekday-2-short = Tue
+text-weekday-3 = Wednesday
+text-weekday-3-short = Wed
+text-weekday-4 = Thursday
+text-weekday-4-short = Thu
+text-weekday-5 = Friday
+text-weekday-5-short = Fri
+text-weekday-6 = Saturday
+text-weekday-6-short = Sat
+text-weekday-7 = Sunday
+text-weekday-7-short = Sun
+text-am = AM
+text-pm = PM
 
 # Extended sensor quantities and units.
 type-quantity-reactive-power-title = Reactive power
@@ -856,12 +912,14 @@ node-logic-hysteresis-prop-mode-option-rising = Rising
 node-logic-hysteresis-prop-mode-option-falling = Falling
 
 # text/template
-node-text-template-title = Format text
-node-text-template-description = Formats text with a MiniJinja template
+node-text-template-title = Text from template
+node-text-template-description = Builds text from a template, substituting input values
 node-text-template-help =
     Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits, and renaming a single variable in place keeps its pin. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } supplies a fallback.
 
     Examples: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
+
+    Date-times and times: { "{" }{ "{" } when | date { "}" }{ "}" } uses the formatting language's default, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } accepts chrono strftime formats. Date-times are shown in the server time zone.
 
     Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: { "{" }{ "{" } text.power { "}" }{ "}" } can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
 

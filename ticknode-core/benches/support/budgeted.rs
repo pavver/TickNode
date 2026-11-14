@@ -25,7 +25,12 @@ pub(super) fn burst_budgeted(c: &mut Criterion) {
         "four work units per automation, including pure pulls"
     );
     assert_eq!(engine.variables.len(), count.div_ceil(2));
-    assert!(engine.variables.values().all(|value| *value == number(1)));
+    assert!(
+        engine
+            .variables
+            .iter()
+            .all(|(_, var)| var.value == number(1))
+    );
     eprintln!("burst_budgeted/10000: {ticks} ticks, max single tick {maximum:?} (validation run)");
 
     let mut group = c.benchmark_group("burst_budgeted");

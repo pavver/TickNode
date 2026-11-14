@@ -32,7 +32,7 @@ Turn on=on
 
 Each button is `Label=callback_data` (1–64 UTF-8 bytes) or `Label=https://url`. There are at most eight buttons per row and 100 total. URL targets must have a nonempty authority and contain no whitespace.
 
-For a `/status` reply, connect Command Received to Send message In and Command Chat to Send message Chat. Leave the send Chat property empty. Feed data into a **Format text** node and connect its Text to Send message Text. Break the command's Message struct and connect its ID to Reply to. A known reply topic is inherited when Topic is empty; an explicit Topic takes precedence. The bounded live message-to-topic cache is populated from incoming and sent messages and quoted replies; it is not persisted. A reply to a known topic creation message can also infer the topic from the persisted directory.
+For a `/status` reply, connect Command Received to Send message In and Command Chat to Send message Chat. Leave the send Chat property empty. Feed data into a **Text from template** node and connect its Text to Send message Text. Break the command's Message struct and connect its ID to Reply to. A known reply topic is inherited when Topic is empty; an explicit Topic takes precedence. The bounded live message-to-topic cache is populated from incoming and sent messages and quoted replies; it is not persisted. A reply to a known topic creation message can also infer the topic from the persisted directory.
 
 ## Directory and identifiers
 

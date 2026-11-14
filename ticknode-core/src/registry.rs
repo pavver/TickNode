@@ -137,6 +137,12 @@ impl NodeRegistry {
             })
         }));
         self.register(Box::new(|id| Box::new(SleepNode { id })));
+        self.register(Box::new(|id| Box::new(NowNode::new(id))));
+        self.register(Box::new(|id| Box::new(TimeDifferenceNode::new(id))));
+        self.register(Box::new(|id| Box::new(ShiftTimeNode::new(id))));
+        self.register(Box::new(|id| Box::new(BreakDateTimeNode::new(id))));
+        self.register(Box::new(|id| Box::new(StartOfPeriodNode::new(id))));
+        self.register(Box::new(|id| Box::new(TimeInRangeNode::new(id))));
         self.register(Box::new(|id| {
             Box::new(ListCreateNode {
                 id,

@@ -6,15 +6,20 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
     // Required is part of that public schema, including on exec and output pins.
     let mut engine = TickEngine::new();
     let definitions = engine.registry.get_definitions();
-    assert_eq!(definitions.len(), 35);
+    assert_eq!(definitions.len(), 41);
+    let is_expected_required = |type_name: &str, pin_id: PinId| {
+        (type_name == "variable/set" && pin_id == PinId(3))
+            || (matches!(type_name, "text/to_text" | "convert") && pin_id == PinId(1))
+            || (type_name == "logic/hysteresis" && (1..=3).contains(&pin_id.0))
+            || (type_name == "time/difference" && (pin_id == PinId(0) || pin_id == PinId(1)))
+            || (type_name == "time/shift" && (pin_id == PinId(0) || pin_id == PinId(1)))
+            || (matches!(type_name, "time/break" | "time/start_of") && pin_id == PinId(0))
+            || (type_name == "time/in_range" && (pin_id == PinId(1) || pin_id == PinId(2)))
+    };
     for definition in &definitions {
         assert!(!definition.pins.is_empty(), "{}", definition.type_name);
         for pin in &definition.pins {
-            if !((definition.type_name == "variable/set" && pin.id == PinId(3))
-                || (matches!(definition.type_name.as_str(), "text/to_text" | "convert")
-                    && pin.id == PinId(1))
-                || (definition.type_name == "logic/hysteresis" && (1..=3).contains(&pin.id.0)))
-            {
+            if !is_expected_required(&definition.type_name, pin.id) {
                 assert!(
                     !pin.required,
                     "catalog: {} / {}",
@@ -44,11 +49,7 @@ fn catalog_and_restored_nodes_advertise_optional_pins() {
             assert_eq!(definition.pins.len(), 3);
         }
         for pin in &definition.pins {
-            if !((node.type_name == "variable/set" && pin.id == PinId(3))
-                || (matches!(node.type_name.as_str(), "text/to_text" | "convert")
-                    && pin.id == PinId(1))
-                || (node.type_name == "logic/hysteresis" && (1..=3).contains(&pin.id.0)))
-            {
+            if !is_expected_required(&node.type_name, pin.id) {
                 assert!(!pin.required, "restored: {} / {}", node.type_name, pin.name);
             }
         }

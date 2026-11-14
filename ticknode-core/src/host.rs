@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use ticknode_shared::{DataValue, NodeId, NodeTimer, SheetId, UiMessage, VariableKey};
 
 pub type TaskId = u64;
@@ -65,6 +66,8 @@ pub struct HostState {
     pub changed_variables: HashSet<VariableKey>,
     /// Live sheet variables currently in the store, for shadowed `Auto` lookups.
     pub active_sheet_variables: HashSet<(SheetId, String)>,
+    /// Optional clock override for deterministic tests.
+    pub clock_override: Option<DateTime<Utc>>,
 }
 
 impl Default for HostState {
@@ -82,11 +85,19 @@ impl Default for HostState {
             errors: Vec::new(),
             changed_variables: HashSet::new(),
             active_sheet_variables: HashSet::new(),
+            clock_override: None,
         }
     }
 }
 
 impl HostState {
+    pub fn now(&self) -> DateTime<Utc> {
+        match self.clock_override {
+            Some(dt) => dt,
+            None => Utc::now(),
+        }
+    }
+
     pub fn log(&mut self, node_id: NodeId, message: impl Into<String>) {
         self.logs.push((node_id, message.into()));
     }

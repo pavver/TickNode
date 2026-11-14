@@ -931,3 +931,101 @@ node-text-template-prop-template-title = Template
 node-text-template-prop-template-description = MiniJinja template; variables become input pins.
 error-template-syntax = Invalid template syntax: { $message }
 error-template-render = Template rendering failed: { $message }
+
+# time/now
+node-time-now-title = Now
+node-time-now-description = Current date-time and local time of day
+node-time-now-help =
+    Outputs the current date-time in UTC on Now and the current time of day in the server local time zone on Time of day.
+
+    Useful as a time source for comparisons, conditions, and calculations.
+
+    Pure node: evaluated whenever its outputs are pulled by another node.
+node-time-now-pin-Now = Now
+node-time-now-pin-time-of-day = Time of day
+
+# time/difference
+node-time-difference-title = Time difference
+node-time-difference-description = Duration between two date-times or times of day
+node-time-difference-help =
+    Computes the difference between two moments: Result = A − B.
+
+    Works with both date-times and times of day. Connecting a wire to A or B adapts the inputs to that type. When comparing times of day, the calculation is a plain difference without wrapping around midnight, so 10:00 − 14:00 yields −4 hours.
+
+    Pure node: evaluated whenever its output is pulled by another node.
+node-time-difference-pin-A = A
+node-time-difference-pin-B = B
+node-time-difference-pin-Result = Result
+
+# time/shift
+node-time-shift-title = Shift time
+node-time-shift-description = Shifts a date-time or time of day by a duration
+node-time-shift-help =
+    Shifts Value forward or backward by Duration: Result = Value + Duration (or − Duration).
+
+    Works with both date-times and times of day. Connecting a wire to Value adapts the input and output to that type. Shifting a time of day wraps around midnight, so 23:00 + 2 hours yields 01:00. Date-time arithmetic checks for overflow and reports an error if the result exceeds valid date boundaries.
+
+    Pure node: evaluated whenever its output is pulled by another node.
+node-time-shift-pin-Value = Value
+node-time-shift-pin-Duration = Duration
+node-time-shift-pin-Result = Result
+node-time-shift-prop-operation-title = Operation
+node-time-shift-prop-operation-description = Whether to add or subtract duration
+node-time-shift-prop-operation-option-add = Add
+node-time-shift-prop-operation-option-subtract = Subtract
+
+# time/break
+node-time-break-title = Break date-time
+node-time-break-description = Extracts date and time components in the local time zone
+node-time-break-help =
+    Breaks a date-time into components in the server local time zone: Year, Month (1–12), Day (1–31), Weekday (1 = Monday … 7 = Sunday), Hour (0–23), Minute (0–59), Second (0–59), local Time of day, and Day of year (1–366).
+
+    For example, 2026-03-15 14:30:00 yields Year = 2026, Month = 3, Day = 15, Weekday = 7 (Sunday), Hour = 14, Minute = 30, Second = 0, Time of day = 14:30:00, and Day of year = 74.
+
+    Pure node: evaluated whenever any of its outputs are pulled by another node.
+node-time-break-pin-Date-time = Date-time
+node-time-break-pin-Year = Year
+node-time-break-pin-Month = Month
+node-time-break-pin-Day = Day
+node-time-break-pin-Weekday = Weekday
+node-time-break-pin-Hour = Hour
+node-time-break-pin-Minute = Minute
+node-time-break-pin-Second = Second
+node-time-break-pin-time-of-day = Time of day
+node-time-break-pin-day-of-year = Day of year
+
+# time/start_of
+node-time-start-of-title = Start of period
+node-time-start-of-description = Calculates the start of a period for a date-time
+node-time-start-of-help =
+    Calculates the start of the selected time period (minute, hour, day, week, month, or year) in the server local time zone, returning the result in UTC.
+
+    Week starts on Monday at 00:00:00 local time. Day starts at 00:00:00, Month on the 1st day at 00:00:00, and Year on January 1st at 00:00:00. For ambiguous or nonexistent local times due to daylight saving time transitions, the earliest valid instant is chosen, stepping forward minute by minute if needed.
+
+    Pure node: evaluated whenever its output is pulled by another node.
+node-time-start-of-pin-Date-time = Date-time
+node-time-start-of-pin-Result = Result
+node-time-start-of-prop-unit-title = Unit
+node-time-start-of-prop-unit-description = Time period to find the start of
+node-time-start-of-prop-unit-option-minute = Minute
+node-time-start-of-prop-unit-option-hour = Hour
+node-time-start-of-prop-unit-option-day = Day
+node-time-start-of-prop-unit-option-week = Week
+node-time-start-of-prop-unit-option-month = Month
+node-time-start-of-prop-unit-option-year = Year
+
+# time/in_range
+node-time-in-range-title = Time of day in range
+node-time-in-range-description = Checks whether a time of day falls between From and To
+node-time-in-range-help =
+    Checks whether the local time of day falls within the range from From to To: From ≤ t < To.
+
+    When From > To, the range crosses midnight (t ≥ From or t < To), for example 22:00 to 06:00 matches night hours. When From == To, the range is empty and always yields false. If Value is unconnected, the current time from the engine clock is used.
+
+    Pure node: evaluated whenever its output is pulled by another node.
+node-time-in-range-pin-Value = Value
+node-time-in-range-pin-From = From
+node-time-in-range-pin-To = To
+node-time-in-range-pin-in-range = In range
+
+error-time-shift-overflow = Date-time shift arithmetic overflowed

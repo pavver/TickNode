@@ -931,3 +931,101 @@ node-text-template-prop-template-title = Шаблон
 node-text-template-prop-template-description = Шаблон MiniJinja; змінні стають вхідними пінами.
 error-template-syntax = Некоректний синтаксис шаблону: { $message }
 error-template-render = Помилка виконання шаблону: { $message }
+
+# time/now
+node-time-now-title = Зараз
+node-time-now-description = Поточна дата й час та місцевий час доби
+node-time-now-help =
+    Видає поточну дату й час в UTC на виході Зараз і поточний час доби в місцевому часовому поясі сервера на виході Час доби.
+
+    Зручно використовувати як джерело часу для порівнянь, умов та обчислень.
+
+    Чистий вузол: обчислюється щоразу, коли його виходи запитує інший вузол.
+node-time-now-pin-Now = Зараз
+node-time-now-pin-time-of-day = Час доби
+
+# time/difference
+node-time-difference-title = Різниця часу
+node-time-difference-description = Тривалість між двома датами й часом або часом доби
+node-time-difference-help =
+    Обчислює різницю між двома моментами: Результат = A − B.
+
+    Працює як із датою й часом, так і з часом доби. Підключення зв'язку до A або B адаптує входи під цей тип. Під час порівняння часу доби обчислюється звичайна різниця без переходу через північ, тому 10:00 − 14:00 дає −4 години.
+
+    Чистий вузол: обчислюється щоразу, коли його вихід запитує інший вузол.
+node-time-difference-pin-A = A
+node-time-difference-pin-B = B
+node-time-difference-pin-Result = Результат
+
+# time/shift
+node-time-shift-title = Зсув часу
+node-time-shift-description = Зсуває дату й час або час доби на вказану тривалість
+node-time-shift-help =
+    Зсуває Значення вперед або назад на Тривалість: Результат = Значення + Тривалість (або − Тривалість).
+
+    Працює як із датою й часом, так і з часом доби. Підключення зв'язку до Значення адаптує вхід і вихід під цей тип. Зсув часу доби циклічно переходить через північ, тому 23:00 + 2 години дає 01:00. Арифметика дати й часу перевіряє переповнення та повідомляє про помилку, якщо результат виходить за допустимі межі дат.
+
+    Чистий вузол: обчислюється щоразу, коли його вихід запитує інший вузол.
+node-time-shift-pin-Value = Значення
+node-time-shift-pin-Duration = Тривалість
+node-time-shift-pin-Result = Результат
+node-time-shift-prop-operation-title = Операція
+node-time-shift-prop-operation-description = Додавання чи віднімання тривалості
+node-time-shift-prop-operation-option-add = Додати
+node-time-shift-prop-operation-option-subtract = Відняти
+
+# time/break
+node-time-break-title = Розбір дати й часу
+node-time-break-description = Виділяє компоненти дати й часу в місцевому часовому поясі
+node-time-break-help =
+    Розбирає дату й час на складові в місцевому часовому поясі сервера: Рік, Місяць (1–12), День (1–31), День тижня (1 = понеділок … 7 = неділя), Година (0–23), Хвилина (0–59), Секунда (0–59), місцевий Час доби та День року (1–366).
+
+    Наприклад, для 2026-03-15 14:30:00 повертає Рік = 2026, Місяць = 3, День = 15, День тижня = 7 (неділя), Година = 14, Хвилина = 30, Секунда = 0, Час доби = 14:30:00 і День року = 74.
+
+    Чистий вузол: обчислюється щоразу, коли будь-який з його виходів запитує інший вузол.
+node-time-break-pin-Date-time = Дата й час
+node-time-break-pin-Year = Рік
+node-time-break-pin-Month = Місяць
+node-time-break-pin-Day = День
+node-time-break-pin-Weekday = День тижня
+node-time-break-pin-Hour = Година
+node-time-break-pin-Minute = Хвилина
+node-time-break-pin-Second = Секунда
+node-time-break-pin-time-of-day = Час доби
+node-time-break-pin-day-of-year = День року
+
+# time/start_of
+node-time-start-of-title = Початок періоду
+node-time-start-of-description = Обчислює початок періоду для дати й часу
+node-time-start-of-help =
+    Обчислює початок обраного періоду часу (хвилина, година, день, тиждень, місяць або рік) у місцевому часовому поясі сервера, повертаючи результат в UTC.
+
+    Тиждень починається в понеділок о 00:00:00 місцевого часу. День починається о 00:00:00, місяць — 1-го числа о 00:00:00, а рік — 1 січня о 00:00:00. Для неоднозначного або відсутнього місцевого часу через перехід на літній/зимовий час обирається найраніший коректний момент із покроковим зсувом уперед по хвилинах за потреби.
+
+    Чистий вузол: обчислюється щоразу, коли його вихід запитує інший вузол.
+node-time-start-of-pin-Date-time = Дата й час
+node-time-start-of-pin-Result = Результат
+node-time-start-of-prop-unit-title = Одиниця
+node-time-start-of-prop-unit-description = Період часу для пошуку початку
+node-time-start-of-prop-unit-option-minute = Хвилина
+node-time-start-of-prop-unit-option-hour = Година
+node-time-start-of-prop-unit-option-day = День
+node-time-start-of-prop-unit-option-week = Тиждень
+node-time-start-of-prop-unit-option-month = Місяць
+node-time-start-of-prop-unit-option-year = Рік
+
+# time/in_range
+node-time-in-range-title = Час доби у діапазоні
+node-time-in-range-description = Перевіряє, чи потрапляє час доби у діапазон від Від до До
+node-time-in-range-help =
+    Перевіряє, чи потрапляє місцевий час доби у діапазон від Від до До: Від ≤ t < До.
+
+    Коли Від > До, діапазон перетинає північ (t ≥ Від або t < До), наприклад від 22:00 до 06:00 відповідає нічним годинам. Коли Від == До, діапазон порожній і завжди повертає false. Якщо Значення не підключено, використовується поточний час із системного годинника двигуна.
+
+    Чистий вузол: обчислюється щоразу, коли його вихід запитує інший вузол.
+node-time-in-range-pin-Value = Значення
+node-time-in-range-pin-From = Від
+node-time-in-range-pin-To = До
+node-time-in-range-pin-in-range = У діапазоні
+
+error-time-shift-overflow = Переповнення під час зсуву дати й часу

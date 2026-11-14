@@ -191,7 +191,10 @@ cargo test -p ticknode-editor --target x86_64-unknown-linux-gnu   # geometry and
   Actions own their HTTP and 429 retry-delay tasks; results arrive through `Trigger::Task`.
   Chat uses a dynamic property with `.or_input(1)`.
   Text is required for `telegram/send` and `telegram/edit`, accepts inline values and fails outside 1–4096 characters.
-  Send and Send media support explicit/inferred reply topics, HTML/MarkdownV2, silent sends, and validated multiline inline keyboards.
+  Send and Send media support explicit/inferred reply topics, HTML/MarkdownV2, silent sends, and keyboard modes (`inline`, `reply`, `remove`, `none`).
+  Reply keyboards use one row per line with `|` separators for plain text buttons, `Text=contact`, or `Text=location`, with `resize`, `one_time`, `placeholder` (0–64 chars), and `persistent` options.
+  Reply keyboard button presses arrive as ordinary text messages handled by `telegram/message` with `text_mode = "equals"`.
+  `telegram/edit` accepts optional inline `buttons` and a `keep_buttons` choice (`yes` keeps existing buttons when none are provided, `no` replaces/removes).
   All properties persist symmetrically and validate both interactive and restored values.
   Help and all UI texts use `locales/{en,uk}.ftl`.
 - Identifier types: `telegram.chat_id` labels `chats`, `telegram.user_id` labels `users`, `telegram.message_id` without labels, `telegram.topic_id` labels `topics`. Topics are keyed internally by `(chat, topic)`; wire values remain raw integers. Since identifier lookup has no chat context, colliding topic IDs share one decimal option with combined `Chat › Topic / Other chat › Topic` labels. Use Chat and Topic filters together. User/message structs keep optional data absent; trigger projections clear absent output pins.

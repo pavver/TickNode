@@ -8,6 +8,30 @@ fn id(inputs: &Inputs, pin: u32) -> Option<i64> {
         _ => None,
     }
 }
+fn attach_keyboard(body: &mut Value, props: &Properties) -> Result<(), UiError> {
+    let keyboard = props
+        .get("keyboard")
+        .map(String::as_str)
+        .unwrap_or("inline");
+    match keyboard {
+        "inline" => {
+            let buttons = props.get("buttons").map(String::as_str).unwrap_or("");
+            if !buttons.trim().is_empty() {
+                body["reply_markup"] = validation::buttons(buttons)?;
+            }
+        }
+        "reply" => {
+            let buttons = props.get("buttons").map(String::as_str).unwrap_or("");
+            body["reply_markup"] = validation::reply_keyboard(buttons, props)?;
+        }
+        "remove" => {
+            body["reply_markup"] = json!({"remove_keyboard": true});
+        }
+        "none" => {}
+        _ => return Err(validation::error("choice", "Select a valid option")),
+    }
+    Ok(())
+}
 pub(super) fn build(
     kind: &str,
     props: &Properties,
@@ -92,9 +116,7 @@ pub(super) fn build(
             body["reply_parameters"] = json!({"message_id": reply});
         }
         body["disable_notification"] = (prop("silent") == "yes").into();
-        if !prop("buttons").trim().is_empty() {
-            body["reply_markup"] = validation::buttons(prop("buttons"))?;
-        }
+        attach_keyboard(&mut body, props)?;
     }
     if kind == "send" {
         let reply = id(inputs, 4);
@@ -106,8 +128,14 @@ pub(super) fn build(
         }
         body["disable_notification"] = (prop("silent") == "yes").into();
         body["link_preview_options"] = json!({"is_disabled":prop("disable_preview") == "yes"});
-        if !prop("buttons").trim().is_empty() {
-            body["reply_markup"] = validation::buttons(prop("buttons"))?;
+        attach_keyboard(&mut body, props)?;
+    }
+    if kind == "edit" {
+        let buttons = prop("buttons");
+        if !buttons.trim().is_empty() {
+            body["reply_markup"] = validation::buttons(buttons)?;
+        } else if prop("keep_buttons") == "no" {
+            body["reply_markup"] = json!({"inline_keyboard": []});
         }
     }
     Ok((

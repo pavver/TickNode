@@ -1,6 +1,8 @@
 //! Node-owned HTTP actions. Telegram rate limits wait through a node-owned delay task.
 mod body;
 #[cfg(test)]
+mod keyboard_tests;
+#[cfg(test)]
 mod media_tests;
 #[cfg(test)]
 mod tests;
@@ -75,7 +77,10 @@ impl ActionNode {
                     Ok(request) => request,
                     Err(error) => return self.failed(error),
                 };
-                let chat = body["chat_id"].as_i64().unwrap();
+                let Some(chat) = body["chat_id"].as_i64() else {
+                    return self
+                        .failed(validation::error("chat", "A Telegram chat ID is required"));
+                };
                 let task = match env.http(api::request(&hub.base, &hub.token, method, body.clone()))
                 {
                     Ok(id) => id,
@@ -103,7 +108,9 @@ impl ActionNode {
                 if !self.pending.as_ref().is_some_and(|p| p.task == id) {
                     return Vec::new();
                 }
-                let mut pending = self.pending.take().unwrap();
+                let Some(mut pending) = self.pending.take() else {
+                    return Vec::new();
+                };
                 if pending.generation != hub.generation {
                     return self.failed(validation::error(
                         "changed",

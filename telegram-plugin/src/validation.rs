@@ -28,7 +28,31 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
             ));
         }
         "buttons" => {
-            buttons(text)?;
+            if kind == "edit" {
+                buttons(text)?;
+            } else {
+                let keyboard = props
+                    .get("keyboard")
+                    .map(String::as_str)
+                    .unwrap_or("inline");
+                if keyboard == "reply" {
+                    reply_buttons(text)?;
+                } else if keyboard == "inline" {
+                    buttons(text)?;
+                }
+            }
+        }
+        "keyboard" if !["inline", "reply", "remove", "none"].contains(&text) => {
+            return Err(error("choice", "Select a valid option"));
+        }
+        "keep_buttons" | "resize" | "one_time" | "persistent" if !["yes", "no"].contains(&text) => {
+            return Err(error("choice", "Select a valid option"));
+        }
+        "placeholder" if text.chars().count() > 64 => {
+            return Err(error(
+                "placeholder",
+                "Placeholder text cannot exceed 64 characters",
+            ));
         }
         "toast" if text.chars().count() > 200 => {
             return Err(error(
@@ -125,6 +149,69 @@ pub fn buttons(text: &str) -> Result<Value, UiError> {
         return Err(invalid());
     }
     Ok(json!({"inline_keyboard":rows}))
+}
+
+pub fn reply_buttons(text: &str) -> Result<Vec<Vec<Value>>, UiError> {
+    let invalid = || {
+        error(
+            "reply-buttons",
+            "Reply keyboard requires at least one button: Label, Label=contact or Label=location, separated by |; one row per line",
+        )
+    };
+    let mut rows = Vec::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let mut row = Vec::new();
+        for button in line.split('|') {
+            let button = button.trim();
+            if button.is_empty() {
+                return Err(invalid());
+            }
+            if let Some((label, action)) = button.split_once('=') {
+                let (label, action) = (label.trim(), action.trim());
+                if label.is_empty() || label.chars().count() > 128 {
+                    return Err(invalid());
+                }
+                match action {
+                    "contact" => row.push(json!({"text": label, "request_contact": true})),
+                    "location" => row.push(json!({"text": label, "request_location": true})),
+                    _ => return Err(invalid()),
+                }
+            } else {
+                if button.chars().count() > 128 {
+                    return Err(invalid());
+                }
+                row.push(json!({"text": button}));
+            }
+        }
+        if row.len() > 12 {
+            return Err(invalid());
+        }
+        rows.push(row);
+    }
+    let total: usize = rows.iter().map(Vec::len).sum();
+    if rows.is_empty() || total > 100 {
+        return Err(invalid());
+    }
+    Ok(rows)
+}
+
+pub fn reply_keyboard(text: &str, props: &Properties) -> Result<Value, UiError> {
+    let rows = reply_buttons(text)?;
+    let mut markup = json!({
+        "keyboard": rows,
+        "resize_keyboard": props.get("resize").map(String::as_str).unwrap_or("yes") == "yes",
+        "one_time_keyboard": props.get("one_time").map(String::as_str).unwrap_or("no") == "yes",
+        "is_persistent": props.get("persistent").map(String::as_str).unwrap_or("no") == "yes",
+    });
+    let placeholder = props
+        .get("placeholder")
+        .map(String::as_str)
+        .unwrap_or("")
+        .trim();
+    if !placeholder.is_empty() {
+        markup["input_field_placeholder"] = placeholder.into();
+    }
+    Ok(markup)
 }
 
 /// Shell-like splitting without expansion; quotes group whitespace, backslash escapes a character.

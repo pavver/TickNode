@@ -12,12 +12,12 @@ Only one `getUpdates` request is pending, with a 50-second Telegram timeout and 
 
 | Node | Behavior |
 | --- | --- |
-| New message | Optional chat/topic/user filters, any/equals/contains/starts-with/regex text matching, optional edited messages |
+| New message | Optional chat/topic/user filters, any/equals/contains/starts-with/regex text matching, optional edited messages; handles reply-keyboard button messages |
 | Command | Validated `status` or `/status`; accepts `/status@BotName`; returns raw Arguments and quote-aware Args |
 | Button pressed | Callback data equality/prefix matching; automatically answers callbacks, with optional toast text |
-| Send message | Chat picker or typed input, optional Topic and Reply to, required Text, parse mode, silent sends, link preview setting, inline buttons |
-| Send media | Chat picker or typed input, kind selector (photo/audio/video/document), required Media, optional Caption (1024 characters), Topic, Reply to, parse mode, silent sends, inline buttons |
-| Edit message | Chat, Message id and Text, with optional parse mode |
+| Send message | Chat picker or typed input, optional Topic and Reply to, required Text, parse mode, silent sends, link preview setting, keyboard mode (`inline`, `reply`, `remove`, `none`) with buttons and reply options |
+| Send media | Chat picker or typed input, kind selector (photo/audio/video/document), required Media, optional Caption (1024 characters), Topic, Reply to, parse mode, silent sends, keyboard mode with buttons and reply options |
+| Edit message | Chat, Message id and Text, with optional parse mode, optional inline buttons and `keep_buttons` choice |
 | Delete message | Chat and Message id |
 
 Triggers cost 2. Each node has a 128-event FIFO queue, emits at most one pulse per tick and logs overflow when dropping the oldest event. Missing optional values clear their output pins. Callbacks are acknowledged even if no trigger matches; when multiple triggers match, the first registered node in node-ID order supplies the toast text. Auxiliary requests have a bounded queue and leave HTTP slots available for polling.
@@ -30,14 +30,44 @@ The request transmits `file_id` when set, falling back to `url`.
 Requests are serialized as JSON; multipart form-data upload is not supported currently and is reserved for future work.
 Captions are optional, accept inline text values, and cannot exceed 1024 characters.
 
-Buttons use one keyboard row per line and `|` between buttons:
+Send message and Send media provide a `keyboard` property with `inline` (default), `reply`, `remove`, and `none` modes.
+In `remove` mode, Telegram sends `{"remove_keyboard": true}` to hide the custom chat keyboard.
+In `none` mode, no keyboard markup is transmitted.
+
+For inline keyboards, buttons use one row per line and `|` between buttons:
 
 ```text
 Refresh=status | Open=https://example.org
 Turn on=on
 ```
 
-Each button is `Label=callback_data` (1–64 UTF-8 bytes) or `Label=https://url`. There are at most eight buttons per row and 100 total. URL targets must have a nonempty authority and contain no whitespace.
+Each inline button is `Label=callback_data` (1–64 UTF-8 bytes) or `Label=https://url`.
+There are at most eight buttons per row and 100 total.
+URL targets must have a nonempty authority and contain no whitespace.
+
+When `keyboard` is set to `reply`, the custom chat keyboard is displayed under the input field.
+Reply keyboard buttons use the same row-per-line and `|` separator syntax:
+
+```text
+Status | Help
+Share contact=contact | Share location=location
+```
+
+Each reply button is either plain text (1–128 characters), or `Text=contact` / `Text=location` to request the user's contact or location.
+There are at most 12 buttons per row and 100 total.
+When `keyboard` is `reply`, additional options become visible:
+`resize` (yes/no, default yes) adapts keyboard height to the button count.
+`one_time` (yes/no, default no) hides the keyboard after one use.
+`placeholder` (text, 0–64 characters) sets input field placeholder text.
+`persistent` (yes/no, default no) requests clients to keep the keyboard visible while the regular keyboard is hidden.
+
+Pressing a reply-keyboard button sends an ordinary text message to the chat.
+Configure a **New message** trigger with text mode `equals` to handle the button label.
+
+Edit message supports optional inline `buttons` (same syntax as Send inline) and a `keep_buttons` choice.
+Setting `keep_buttons` to `yes` (default) omits `reply_markup` when buttons are empty, keeping the existing keyboard.
+Setting `keep_buttons` to `no` with empty buttons sends `{"inline_keyboard": []}` to remove the keyboard.
+Providing new `buttons` replaces the message's inline keyboard.
 
 For a `/status` reply, connect Command Received to Send message In and Command Chat to Send message Chat. Leave the send Chat property empty. Feed data into a **Text from template** node and connect its Text to Send message Text. Break the command's Message struct and connect its ID to Reply to. A known reply topic is inherited when Topic is empty; an explicit Topic takes precedence. The bounded live message-to-topic cache is populated from incoming and sent messages and quoted replies; it is not persisted. A reply to a known topic creation message can also infer the topic from the persisted directory.
 

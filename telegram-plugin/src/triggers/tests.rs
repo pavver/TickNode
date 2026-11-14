@@ -52,6 +52,20 @@ fn message_filters_chat_topic_user_and_text_modes() {
     }
 }
 #[test]
+fn reply_keyboard_button_press_is_handled_by_message_trigger_with_equals() {
+    let raw = update(1, "Status");
+    let update = parsed(raw);
+    let matched = filter("message", &[("text_mode", "equals"), ("pattern", "Status")])
+        .outputs(&update, "Bot");
+    assert!(matched.is_some());
+    let non_matched = filter(
+        "message",
+        &[("text_mode", "equals"), ("pattern", "Different")],
+    )
+    .outputs(&update, "Bot");
+    assert!(non_matched.is_none());
+}
+#[test]
 fn edited_messages_are_opt_in_and_never_commands() {
     let raw = json!({"update_id":1,"edited_message":message(-100,50,"/status")});
     let update = parsed(raw);

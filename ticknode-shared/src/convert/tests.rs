@@ -1,7 +1,6 @@
 use super::*;
 use crate::{Color, NumberValue};
-use chrono::{DateTime, Local};
-use std::time::Duration;
+use chrono::{DateTime, Local, TimeDelta};
 
 fn q(name: &str) -> DataType {
     DataType::Named(format!("quantity.{name}"))
@@ -259,7 +258,7 @@ fn datetime_uses_local_time_and_fractional_unix_seconds() {
 
 #[test]
 fn durations_convert_fractional_seconds_but_ticks_have_no_clock() {
-    let d = DataValue::Duration(Duration::from_millis(1250));
+    let d = DataValue::Duration(TimeDelta::try_milliseconds(1250).unwrap());
     near(
         number_result(d.clone(), DataType::Duration, "seconds", None),
         1.25,
@@ -268,11 +267,20 @@ fn durations_convert_fractional_seconds_but_ticks_have_no_clock() {
         run(1.25.into(), DataType::Number, "duration", None),
         Some(d)
     );
+    let neg_d = DataValue::Duration(TimeDelta::try_milliseconds(-1250).unwrap());
+    near(
+        number_result(neg_d.clone(), DataType::Duration, "seconds", None),
+        -1.25,
+    );
+    assert_eq!(
+        run((-1.25).into(), DataType::Number, "duration", None),
+        Some(neg_d)
+    );
     assert_eq!(
         run(DataValue::Ticks(5), DataType::Duration, "seconds", None),
         None
     );
-    for n in [-1.0, f64::MAX] {
+    for n in [f64::MAX, f64::INFINITY, f64::NAN] {
         assert_eq!(run(n.into(), DataType::Number, "duration", None), None);
     }
 }

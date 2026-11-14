@@ -28,7 +28,14 @@ fn core_c_zero_duration_tick_and_zero_delay_still_wait_one_tick() {
         current_tick: 10,
         ..Default::default()
     };
-    assert_eq!(host.ticks_for(Duration::from_millis(7)), 7);
+    assert_eq!(
+        host.ticks_for(chrono::TimeDelta::try_milliseconds(7).unwrap()),
+        7
+    );
+    assert_eq!(
+        host.ticks_for(chrono::TimeDelta::try_seconds(-5).unwrap()),
+        0
+    );
     let owner = NodeId::generate();
     let task = host.start_delay(owner, 0);
     assert!(
@@ -48,13 +55,26 @@ fn duration_values_round_up_without_losing_submillisecond_time() {
     for (value, expected) in [
         (DataValue::Ticks(0), Some(0)),
         (DataValue::Ticks(u64::MAX), Some(u64::MAX)),
-        (DataValue::Duration(Duration::ZERO), Some(0)),
-        (DataValue::Duration(Duration::from_nanos(1)), Some(1)),
+        (DataValue::Duration(chrono::TimeDelta::zero()), Some(0)),
         (
-            DataValue::Duration(Duration::from_millis(100) + Duration::from_nanos(1)),
+            DataValue::Duration(chrono::TimeDelta::try_seconds(-5).unwrap()),
+            Some(0),
+        ),
+        (
+            DataValue::Duration(chrono::TimeDelta::nanoseconds(1)),
+            Some(1),
+        ),
+        (
+            DataValue::Duration(
+                chrono::TimeDelta::try_milliseconds(100).unwrap()
+                    + chrono::TimeDelta::nanoseconds(1),
+            ),
             Some(2),
         ),
-        (DataValue::Duration(Duration::from_millis(250)), Some(3)),
+        (
+            DataValue::Duration(chrono::TimeDelta::try_milliseconds(250).unwrap()),
+            Some(3),
+        ),
         (DataValue::from(10i64), None),
     ] {
         assert_eq!(host.ticks_for_value(&value), expected);
@@ -135,4 +155,26 @@ fn timers_track_first_started_task_count_cancellation_and_delivery() {
     assert_eq!(timer(&engine, owner).total_ms, 20);
     engine.remove_node(owner);
     assert!(engine.delay_timers().is_empty());
+}
+
+#[test]
+fn negative_delay_fires_on_the_next_tick() {
+    let mut host = HostState {
+        current_tick: 5,
+        ..Default::default()
+    };
+    let owner = NodeId::generate();
+    let ticks = host
+        .ticks_for_value(&DataValue::Duration(
+            chrono::TimeDelta::try_seconds(-10).unwrap(),
+        ))
+        .unwrap();
+    assert_eq!(ticks, 0);
+    let task = host.start_delay(owner, ticks);
+    assert!(host.take_finished().is_empty());
+    host.current_tick += 1;
+    assert_eq!(
+        host.take_finished(),
+        vec![(owner, task, Ok(TaskOutput::Delay))]
+    );
 }

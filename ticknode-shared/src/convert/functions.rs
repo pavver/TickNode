@@ -1,6 +1,5 @@
 use crate::{Color, DataValue};
 use chrono::{DateTime, Local};
-use std::time::Duration;
 
 pub(super) fn number(value: &DataValue) -> Option<f64> {
     let DataValue::Number(n) = value else {
@@ -104,11 +103,9 @@ pub(super) fn seconds(value: &DataValue) -> Option<DataValue> {
     let DataValue::Duration(d) = value else {
         return None;
     };
-    finite(d.as_secs_f64())
+    finite(crate::delta_to_secs_f64(*d))
 }
 
 pub(super) fn duration(value: &DataValue) -> Option<DataValue> {
-    Duration::try_from_secs_f64(number(value)?)
-        .ok()
-        .map(DataValue::Duration)
+    crate::delta_from_secs_f64(number(value)?).map(DataValue::Duration)
 }

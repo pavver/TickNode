@@ -284,9 +284,9 @@ fn field_values_are_ha_selector_values() {
         json!([12, 34, 56])
     );
     assert_eq!(
-        field_json(&DataValue::Duration(std::time::Duration::from_millis(
-            3_661_500
-        ))),
+        field_json(&DataValue::Duration(
+            chrono::TimeDelta::try_milliseconds(3_661_500).unwrap()
+        )),
         json!({"hours":1,"minutes":1,"seconds":1.5})
     );
     assert_eq!(

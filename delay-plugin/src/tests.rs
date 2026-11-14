@@ -107,16 +107,23 @@ fn scheduling_preserves_retrigger_modes_cancellation_and_failure() {
         fail: true,
         ..Clock::default()
     };
-    let inputs = [(PinId(22), DataValue::Duration(std::time::Duration::ZERO))]
-        .into_iter()
-        .collect();
+    let inputs = [(
+        PinId(22),
+        DataValue::Duration(ticknode_plugin_sdk::TimeDelta::zero()),
+    )]
+    .into_iter()
+    .collect();
     assert!(
         node.execute_with(Trigger::Pin(PinId(20)), &inputs, &mut clock)
             .is_empty()
     );
     assert_eq!(
         clock.calls,
-        ["cancel 7", "delay Duration(0ns)", "error failed"]
+        [
+            "cancel 7",
+            "delay Duration(TimeDelta { secs: 0, nanos: 0 })",
+            "error failed"
+        ]
     );
     assert_eq!(node.active, None);
 }
@@ -126,8 +133,10 @@ fn duration_inputs_and_missing_value_reach_the_scheduler() {
     for (value, expected) in [
         (Some(DataValue::Ticks(10)), "delay Ticks(10)"),
         (
-            Some(DataValue::Duration(std::time::Duration::from_millis(250))),
-            "delay Duration(250ms)",
+            Some(DataValue::Duration(
+                ticknode_plugin_sdk::TimeDelta::try_milliseconds(250).unwrap(),
+            )),
+            "delay Duration(TimeDelta { secs: 0, nanos: 250000000 })",
         ),
         (None, "delay Ticks(1)"),
     ] {

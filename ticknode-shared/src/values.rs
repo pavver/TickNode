@@ -1,9 +1,31 @@
 use crate::{TypeRegistry, is_type_name};
-use chrono::{DateTime, NaiveTime, Utc};
+use chrono::{DateTime, NaiveTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ops::{Add, Div, Mul, Sub};
-use std::time::Duration;
+
+pub mod delta_serde;
+
+/// Converts fractional seconds to a checked `TimeDelta`.
+pub fn delta_from_secs_f64(seconds: f64) -> Option<TimeDelta> {
+    if !seconds.is_finite() {
+        return None;
+    }
+    let floor_secs = seconds.floor();
+    if floor_secs < (i64::MIN as f64) || floor_secs > (i64::MAX as f64) {
+        return None;
+    }
+    let secs = floor_secs as i64;
+    let nanos = ((seconds - floor_secs) * 1e9).round() as i64;
+    let base = TimeDelta::try_seconds(secs)?;
+    let extra = TimeDelta::nanoseconds(nanos);
+    base.checked_add(&extra)
+}
+
+/// Converts a `TimeDelta` to fractional seconds as `f64`.
+pub fn delta_to_secs_f64(delta: TimeDelta) -> f64 {
+    delta.num_seconds() as f64 + f64::from(delta.subsec_nanos()) / 1e9
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Color {
@@ -120,7 +142,7 @@ pub enum DataValue {
     String(String),
     Time(NaiveTime),
     DateTime(DateTime<Utc>),
-    Duration(Duration),
+    Duration(#[serde(with = "delta_serde")] TimeDelta),
     Color(Color),
     List {
         element_type: DataType,
@@ -180,6 +202,11 @@ impl From<&str> for DataValue {
 impl From<String> for DataValue {
     fn from(v: String) -> Self {
         Self::String(v)
+    }
+}
+impl From<TimeDelta> for DataValue {
+    fn from(v: TimeDelta) -> Self {
+        Self::Duration(v)
     }
 }
 

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 /// Parses TickNode duration text plus Home Assistant's HH:MM:SS notation.
 pub fn duration(text: &str) -> Option<Duration> {
-    ticknode_shared::property::parse_property_duration(text)
+    ticknode_shared::property::parse_property_duration(text).and_then(|td| td.to_std().ok())
 }
 
 pub(super) fn signed_duration(text: &str) -> Option<TimeDelta> {
@@ -16,7 +16,7 @@ pub(super) fn signed_duration(text: &str) -> Option<TimeDelta> {
     let (sign, text) = text
         .strip_prefix('-')
         .map_or((1, text.strip_prefix('+').unwrap_or(text)), |s| (-1, s));
-    Some(TimeDelta::from_std(duration(text)?).ok()? * sign)
+    Some(ticknode_shared::property::parse_property_duration(text)? * sign)
 }
 
 #[derive(Debug, Clone)]

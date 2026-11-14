@@ -144,8 +144,8 @@ fn duration_property_text(value: Option<&DataValue>, negative: bool) -> String {
         return String::new();
     };
     let text = match value {
-        DataValue::Duration(d) if !d.subsec_nanos().is_multiple_of(1_000_000) => {
-            format!("{}.{:09}s", d.as_secs(), d.subsec_nanos())
+        DataValue::Duration(d) if d.subsec_nanos() % 1_000_000 != 0 => {
+            format!("{}.{:09}s", d.num_seconds().abs(), d.subsec_nanos().abs())
         }
         _ => text::format_value(value),
     };
@@ -155,14 +155,15 @@ fn duration_property_text(value: Option<&DataValue>, negative: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ticknode_shared::TimeDelta;
+
     #[test]
     fn signed_duration_properties_preserve_exact_text_and_empty_values() {
-        use std::time::Duration;
         for duration in [
-            Duration::from_nanos(1),
-            Duration::from_micros(1234),
-            Duration::from_millis(1500),
-            Duration::from_secs(3600),
+            TimeDelta::nanoseconds(1),
+            TimeDelta::microseconds(1234),
+            TimeDelta::try_milliseconds(1500).unwrap(),
+            TimeDelta::try_seconds(3600).unwrap(),
         ] {
             let value = DataValue::Duration(duration);
             let positive = duration_property_text(Some(&value), false);

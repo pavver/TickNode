@@ -141,9 +141,7 @@ pub fn typed_value(state: &State, value_type: ValueType) -> Option<DataValue> {
         ValueType::Duration => {
             let unit = state.attributes.get_as::<String>("unit_of_measurement")?;
             let seconds = finite_number(text)? * crate::units::duration_factor(&unit)?;
-            std::time::Duration::try_from_secs_f64(seconds)
-                .ok()
-                .map(DataValue::Duration)
+            ticknode_shared::delta_from_secs_f64(seconds).map(DataValue::Duration)
         }
         ValueType::Quantity(name) => {
             let (actual, unit) = crate::units::state_unit(state)?;

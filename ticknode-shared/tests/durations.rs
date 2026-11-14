@@ -1,4 +1,4 @@
-use std::time::Duration;
+use chrono::TimeDelta;
 use ticknode_shared::condition::{CompareOp, Condition, Join, MatchCase, Operand};
 use ticknode_shared::{
     DataType, DataValue, NodeId, NodeTimer, ServerMessage, TypeRegistry, input_value_fits, text,
@@ -73,7 +73,7 @@ fn ticks_parse_format_coerce_and_round_trip() {
     }
     assert_eq!(
         text::default_of(&DataType::Duration),
-        DataValue::Duration(Duration::from_secs(1))
+        DataValue::Duration(TimeDelta::try_seconds(1).unwrap())
     );
 }
 
@@ -90,7 +90,7 @@ fn duration_connections_convert_ticks_and_lists() {
     assert_eq!(format.apply(DataValue::Ticks(10)), Some("10t".into()));
     assert_eq!(
         parse.apply("5s".into()),
-        Some(DataValue::Duration(Duration::from_secs(5)))
+        Some(DataValue::Duration(TimeDelta::try_seconds(5).unwrap()))
     );
     let conversion = types
         .convertible(
@@ -108,7 +108,7 @@ fn duration_connections_convert_ticks_and_lists() {
             element_type: DataType::Duration,
             elements: vec![
                 DataValue::Ticks(2),
-                DataValue::Duration(Duration::from_secs(1))
+                DataValue::Duration(TimeDelta::try_seconds(1).unwrap())
             ],
         })
     );
@@ -121,7 +121,7 @@ fn duration_connections_convert_ticks_and_lists() {
 #[test]
 fn match_compares_only_durations_with_the_same_unit_basis() {
     use CompareOp::*;
-    let time = DataValue::Duration(Duration::from_secs(10));
+    let time = DataValue::Duration(TimeDelta::try_seconds(10).unwrap());
     for op in [Eq, Ne, Lt, Le, Gt, Ge] {
         let holds = |a: DataValue, b: DataValue| {
             Condition {

@@ -279,7 +279,10 @@ fn duration_input_adapts_constant_before_connecting_as_one_history_entry() {
     );
     assert_eq!(
         instance.model.properties,
-        vec![("value".into(), DataValue::Duration(Duration::from_secs(1)))]
+        vec![(
+            "value".into(),
+            DataValue::Duration(ticknode_shared::TimeDelta::try_seconds(1).unwrap()),
+        )]
     );
     let connection = ConnectionModel {
         src_node: id,

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use chrono::TimeDelta;
 
 use ticknode_shared::text::*;
 use ticknode_shared::*;
@@ -22,7 +22,7 @@ fn defaults_hints_and_text_errors_are_stable() {
         ),
         (
             DataType::Duration,
-            DataValue::Duration(Duration::from_secs(1)),
+            DataValue::Duration(TimeDelta::try_seconds(1).unwrap()),
             "10t / 1h 30m / 45s",
         ),
         (
@@ -133,16 +133,20 @@ fn invalid_colors_and_duration_parts_are_rejected() {
     ] {
         assert_eq!(parse_color(text), None, "{text}");
     }
-    for text in ["", " ", "s", "-1s", "1s 2", "1.2.3h", "5 parsecs"] {
+    for text in ["", " ", "s", "1s 2", "1.2.3h", "5 parsecs"] {
         assert_eq!(parse_duration(text), None, "{text}");
     }
     assert_eq!(
+        parse_duration("-1s"),
+        Some(TimeDelta::try_seconds(-1).unwrap())
+    );
+    assert_eq!(
         parse_duration("1 H 2 min 3 sec 4 MS"),
-        Some(Duration::from_millis(3_723_004))
+        Some(TimeDelta::try_milliseconds(3_723_004).unwrap())
     );
     assert_eq!(
         parse_duration("1д 2год 3хв 4с 5мс"),
-        Some(Duration::from_millis(93_784_005))
+        Some(TimeDelta::try_milliseconds(93_784_005).unwrap())
     );
 }
 
@@ -172,8 +176,10 @@ fn duration_formatting_handles_zero_milliseconds_and_whole_seconds() {
         (1001, "1.001s"),
         (60_000, "1m"),
         (60_001, "1m 0.001s"),
+        (-1000, "-1s"),
+        (-1500, "-1.5s"),
     ] {
-        let duration = Duration::from_millis(millis);
+        let duration = TimeDelta::try_milliseconds(millis).unwrap();
         assert_eq!(format_duration(duration), expected);
         assert_eq!(parse_duration(expected), Some(duration));
     }

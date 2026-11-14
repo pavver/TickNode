@@ -69,8 +69,8 @@ pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NodeId,
     NumberValue, ObjectField, PinDefinition, PinDirection, PinId, PinType, PluginManifest,
     PropertyDefinition, PropertyKind, PropertyOption, ResourceAction, ResourceCollection,
-    SettingDefinition, SettingKind, TypeDefinition, TypeKind, UiMessage, fluent_slug as slug,
-    quantity,
+    SettingDefinition, SettingKind, TimeDelta, TypeDefinition, TypeKind, UiMessage,
+    fluent_slug as slug, quantity,
 };
 
 /// A translatable error for the user: `UiError::new("my-plugin-error-no-token", "Token is not set")`

@@ -133,7 +133,12 @@ fn typed_comparisons() {
                 "n" => num(5),
                 "m" => Some(DataValue::Number(NumberValue::Float(5.0))),
                 "t" => Some(DataValue::Time(crate::text::parse_time("07:30").unwrap())),
-                "d" => Some(DataValue::Duration(std::time::Duration::from_secs(90))),
+                "d" => Some(DataValue::Duration(
+                    chrono::TimeDelta::try_seconds(90).unwrap(),
+                )),
+                "neg_d" => Some(DataValue::Duration(
+                    chrono::TimeDelta::try_seconds(-90).unwrap(),
+                )),
                 "l" => Some(list.clone()),
                 "o" => Some(object.clone()),
                 "f" => Some(DataValue::Bool(false)),
@@ -152,6 +157,13 @@ fn typed_comparisons() {
     // Time, duration — string constant is coerced to the input type
     assert!(holds("t < \"08:00\"") && holds("t = \"07:30\"") && !holds("t > \"07:30:01\""));
     assert!(holds("d > \"1m\"") && holds("d = 90") && holds("d < \"2m\""));
+    assert!(
+        holds("neg_d < d")
+            && holds("neg_d < 0")
+            && holds("neg_d = -90")
+            && holds("neg_d > \"-2m\"")
+            && holds("neg_d < \"-1m\"")
+    );
     // Lists, objects, booleans
     assert!(
         holds("l contains 5")

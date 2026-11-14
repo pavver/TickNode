@@ -275,7 +275,7 @@ fn console_formats_scalars_and_nested_collections_for_the_user() {
             "2026-01-01 00:00:00 UTC",
         ),
         (
-            DataValue::Duration(std::time::Duration::from_millis(1500)),
+            DataValue::Duration(chrono::TimeDelta::try_milliseconds(1500).unwrap()),
             "1.5s",
         ),
         (

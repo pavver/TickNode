@@ -92,7 +92,7 @@ fn delay_queue_fires_after_delay() {
     // 500 ms at 100 ms per tick is 5 ticks.
     constant(
         &mut engine,
-        DataValue::Duration(std::time::Duration::from_millis(500)),
+        DataValue::Duration(chrono::TimeDelta::try_milliseconds(500).unwrap()),
         delay,
         2,
     );
@@ -174,7 +174,7 @@ fn removing_plugin_node_cancels_tasks() {
     engine.create_node(delay, "delay/queue", &[]).unwrap();
     constant(
         &mut engine,
-        DataValue::Duration(std::time::Duration::from_secs(1)),
+        DataValue::Duration(chrono::TimeDelta::try_seconds(1).unwrap()),
         delay,
         2,
     );

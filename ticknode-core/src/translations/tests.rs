@@ -170,7 +170,8 @@ fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
             labels.bool_text(true),
             if locale == "uk" { "так" } else { "true" }
         );
-        let duration = ticknode_shared::DataValue::Duration(std::time::Duration::from_secs(5400));
+        let duration =
+            ticknode_shared::DataValue::Duration(chrono::TimeDelta::try_seconds(5400).unwrap());
         assert_eq!(
             ticknode_shared::to_text::to_text(
                 &duration,

@@ -228,7 +228,9 @@ pub fn to_text_with_identifiers(
                 t.format("%Y-%m-%d %H:%M").to_string()
             }
         }
-        DataValue::Duration(d) if !options.show_units => format_number(d.as_secs_f64(), 15, labels),
+        DataValue::Duration(d) if !options.show_units => {
+            format_number(crate::delta_to_secs_f64(*d), 15, labels)
+        }
         DataValue::Duration(d) => {
             // Reuse the canonical decomposition, replacing only the numeric separator and unit labels.
             text::format_duration(*d)

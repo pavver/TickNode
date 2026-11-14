@@ -1,7 +1,7 @@
 use super::*;
 use crate::entities::test_state;
+use chrono::TimeDelta;
 use serde_json::json;
-use std::time::Duration;
 
 #[test]
 fn durations_infer_from_class_or_numeric_states_and_convert_each_unit() {
@@ -24,7 +24,9 @@ fn durations_infer_from_class_or_numeric_states_and_convert_each_unit() {
             assert_eq!(infer_value_type(&state), ValueType::Duration, "{unit}");
             assert_eq!(
                 typed_value(&state, ValueType::Duration),
-                Some(DataValue::Duration(Duration::from_secs_f64(2.5 * seconds)))
+                Some(DataValue::Duration(
+                    ticknode_shared::delta_from_secs_f64(2.5 * seconds).unwrap()
+                ))
             );
         }
         let state = test_state(
@@ -40,7 +42,6 @@ fn durations_infer_from_class_or_numeric_states_and_convert_each_unit() {
 #[test]
 fn duration_conversion_rejects_invalid_values_units_and_overflow() {
     for text in [
-        "-1",
         "NaN",
         "inf",
         "-inf",
@@ -53,6 +54,11 @@ fn duration_conversion_rejects_invalid_values_units_and_overflow() {
         let state = test_state("sensor.elapsed", text, json!({"unit_of_measurement":"d"}));
         assert_eq!(typed_value(&state, ValueType::Duration), None, "{text}");
     }
+    let state_neg = test_state("sensor.elapsed", "-1", json!({"unit_of_measurement":"d"}));
+    assert_eq!(
+        typed_value(&state_neg, ValueType::Duration),
+        Some(DataValue::Duration(TimeDelta::try_days(-1).unwrap()))
+    );
     for unit in [json!(null), json!(""), json!("widgets"), json!("m")] {
         let state = test_state("sensor.elapsed", "2", json!({"unit_of_measurement":unit}));
         assert_eq!(typed_value(&state, ValueType::Duration), None);
@@ -61,7 +67,7 @@ fn duration_conversion_rejects_invalid_values_units_and_overflow() {
     let state = test_state("sensor.elapsed", "0", json!({"unit_of_measurement":"s"}));
     assert_eq!(
         typed_value(&state, ValueType::Duration),
-        Some(DataValue::Duration(Duration::ZERO))
+        Some(DataValue::Duration(TimeDelta::zero()))
     );
 }
 
@@ -102,11 +108,11 @@ fn duration_selection_persists_and_previous_values_use_their_own_units() {
     let outputs = change_outputs(&change, ValueType::Duration, FireOn::State);
     assert!(outputs.contains(&Output::Data(
         PinId(1),
-        DataValue::Duration(Duration::from_secs(120))
+        DataValue::Duration(TimeDelta::try_seconds(120).unwrap())
     )));
     assert!(outputs.contains(&Output::Data(
         PinId(2),
-        DataValue::Duration(Duration::from_secs(30))
+        DataValue::Duration(TimeDelta::try_seconds(30).unwrap())
     )));
     let ticknode_plugin_sdk::PropertyKind::Select(options) = value::type_property().kind else {
         panic!("expected select options")

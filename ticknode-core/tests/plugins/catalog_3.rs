@@ -199,7 +199,8 @@ fn delay_queue_timers_and_sdk_time_rounding() {
             node,
             PinId(2),
             Some(DataValue::Duration(
-                std::time::Duration::from_millis(100) + std::time::Duration::from_nanos(1),
+                chrono::TimeDelta::try_milliseconds(100).unwrap()
+                    + chrono::TimeDelta::nanoseconds(1),
             )),
         )
         .unwrap();
@@ -226,7 +227,7 @@ fn delay_queue_timers_and_sdk_time_rounding() {
         .set_input_value(
             node,
             PinId(2),
-            Some(DataValue::Duration(std::time::Duration::from_nanos(1))),
+            Some(DataValue::Duration(chrono::TimeDelta::nanoseconds(1))),
         )
         .unwrap();
     engine.trigger_node(node, PinId(0));

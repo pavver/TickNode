@@ -4,7 +4,7 @@ mod config;
 mod node;
 mod outputs;
 
-pub use config::{TriggerConfig, build, duration};
+pub use config::{TriggerConfig, build};
 pub use node::TriggerNode;
 pub use outputs::outputs;
 

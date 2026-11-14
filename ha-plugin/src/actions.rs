@@ -25,7 +25,11 @@ pub fn field_json(value: &DataValue) -> Value {
     match value {
         DataValue::Color(c) => json!([c.r, c.g, c.b]),
         DataValue::Duration(d) => {
-            json!({"hours": d.as_secs() / 3600, "minutes": d.as_secs() / 60 % 60, "seconds": d.as_secs_f64() % 60.0})
+            let total_whole = d.num_seconds();
+            let hours = total_whole / 3600;
+            let minutes = (total_whole / 60) % 60;
+            let seconds = (total_whole % 60) as f64 + f64::from(d.subsec_nanos()) / 1e9;
+            json!({"hours": hours, "minutes": minutes, "seconds": seconds})
         }
         other => value_to_json(other),
     }

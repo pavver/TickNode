@@ -16,8 +16,16 @@ fn every_runtime_type_has_a_readable_presentation() {
         "07:30"
     );
     assert_eq!(
-        show(DataValue::Duration(std::time::Duration::from_secs(5400))),
+        show(DataValue::Duration(
+            chrono::TimeDelta::try_seconds(5400).unwrap()
+        )),
         "1h 30m"
+    );
+    assert_eq!(
+        show(DataValue::Duration(
+            chrono::TimeDelta::try_seconds(-5400).unwrap()
+        )),
+        "-1h 30m"
     );
     assert_eq!(show(DataValue::Ticks(12)), "12t");
     assert_eq!(
@@ -74,11 +82,19 @@ fn options_and_declared_list_elements_are_respected() {
     assert_eq!(show(&1970i64.into(), &power, &o), "2");
     assert_eq!(
         show(
-            &DataValue::Duration(std::time::Duration::from_secs(5400)),
+            &DataValue::Duration(chrono::TimeDelta::try_seconds(5400).unwrap()),
             &DataType::Duration,
             &o
         ),
         "5400"
+    );
+    assert_eq!(
+        show(
+            &DataValue::Duration(chrono::TimeDelta::try_seconds(-5400).unwrap()),
+            &DataType::Duration,
+            &o
+        ),
+        "-5400"
     );
     o.true_text = "on".into();
     o.false_text = "off".into();

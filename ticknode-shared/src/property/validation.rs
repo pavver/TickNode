@@ -1,9 +1,9 @@
 //! Interactive property validation shared by the engine and editor.
 use crate::{DataValue, PropertyKind, UiMessage, text};
-use std::time::Duration;
+use chrono::TimeDelta;
 
 /// Parses unsigned property durations, including HH:MM:SS with unbounded hours.
-pub fn parse_property_duration(input: &str) -> Option<Duration> {
+pub fn parse_property_duration(input: &str) -> Option<TimeDelta> {
     let input = input.trim();
     if input.contains(':') {
         let parts: Vec<_> = input.split(':').collect();
@@ -20,8 +20,10 @@ pub fn parse_property_duration(input: &str) -> Option<Duration> {
         if minutes >= 60 || !(0.0..60.0).contains(&seconds) {
             return None;
         }
-        Duration::from_secs(hours.checked_mul(3600)?.checked_add(minutes * 60)?)
-            .checked_add(Duration::try_from_secs_f64(seconds).ok()?)
+        let whole_secs = hours.checked_mul(3600)?.checked_add(minutes * 60)?;
+        let base = TimeDelta::try_seconds(i64::try_from(whole_secs).ok()?)?;
+        let sub = crate::delta_from_secs_f64(seconds)?;
+        base.checked_add(&sub)
     } else {
         text::parse_duration(input)
     }
@@ -158,7 +160,7 @@ mod tests {
     fn duration_clock_checks_overflow_and_ranges() {
         assert_eq!(
             parse_property_duration("27:30:01"),
-            Some(Duration::from_secs(99001))
+            TimeDelta::try_seconds(99001)
         );
         assert!(parse_property_duration("18446744073709551615:00:00").is_none());
         assert!(parse_property_duration("-01:00:00").is_none());

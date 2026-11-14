@@ -25,11 +25,47 @@ fn round_trips() {
 
 #[test]
 fn durations() {
-    assert_eq!(parse_duration("90"), Some(Duration::from_secs(90)));
-    assert_eq!(parse_duration("2хв 10с"), Some(Duration::from_secs(130)));
-    assert_eq!(parse_duration("1.5h"), Some(Duration::from_secs(5400)));
+    assert_eq!(
+        parse_duration("90"),
+        Some(chrono::TimeDelta::try_seconds(90).unwrap())
+    );
+    assert_eq!(
+        parse_duration("-90"),
+        Some(chrono::TimeDelta::try_seconds(-90).unwrap())
+    );
+    assert_eq!(
+        parse_duration("2хв 10с"),
+        Some(chrono::TimeDelta::try_seconds(130).unwrap())
+    );
+    assert_eq!(
+        parse_duration("1.5h"),
+        Some(chrono::TimeDelta::try_seconds(5400).unwrap())
+    );
+    assert_eq!(
+        parse_duration("-1h 30m"),
+        Some(chrono::TimeDelta::try_seconds(-5400).unwrap())
+    );
+    assert_eq!(
+        parse_duration("-500ms"),
+        Some(chrono::TimeDelta::try_milliseconds(-500).unwrap())
+    );
+    assert_eq!(
+        parse_duration("−500ms"),
+        Some(chrono::TimeDelta::try_milliseconds(-500).unwrap())
+    );
     assert_eq!(parse_duration("5 parsecs"), None);
-    assert_eq!(format_duration(Duration::from_millis(1500)), "1.5s");
+    assert_eq!(
+        format_duration(chrono::TimeDelta::try_milliseconds(1500).unwrap()),
+        "1.5s"
+    );
+    assert_eq!(
+        format_duration(chrono::TimeDelta::try_milliseconds(-1500).unwrap()),
+        "-1.5s"
+    );
+    assert_eq!(
+        format_duration(chrono::TimeDelta::try_seconds(-5400).unwrap()),
+        "-1h 30m"
+    );
 }
 
 #[test]
@@ -43,14 +79,21 @@ fn errors_and_coercion() {
     );
     assert_eq!(
         coerce_to(DataValue::Number(NumberValue::Int(60)), &DataType::Duration),
-        DataValue::Duration(Duration::from_secs(60))
+        DataValue::Duration(chrono::TimeDelta::try_seconds(60).unwrap())
+    );
+    assert_eq!(
+        coerce_to(
+            DataValue::Number(NumberValue::Int(-60)),
+            &DataType::Duration
+        ),
+        DataValue::Duration(chrono::TimeDelta::try_seconds(-60).unwrap())
     );
     assert_eq!(
         coerce_to(DataValue::String("abc".into()), &DataType::Time),
         DataValue::String("abc".into())
     );
-    // Infinity and out-of-range numbers are not converted (and do not panic)
-    for n in [f64::INFINITY, 1e30, -1.0] {
+    // Non-finite and out-of-range numbers are not converted (and do not panic)
+    for n in [f64::INFINITY, f64::NEG_INFINITY, 1e30] {
         let v = DataValue::Number(NumberValue::Float(n));
         assert_eq!(coerce_to(v.clone(), &DataType::Duration), v);
     }

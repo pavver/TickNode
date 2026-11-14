@@ -150,7 +150,7 @@
   "Duration": {
     "STRUCT": [
       {
-        "secs": "U64"
+        "secs": "I64"
       },
       {
         "nanos": "U32"

@@ -6,8 +6,6 @@
 //! - duration — seconds (`90`, `1.5`) or with units: `1h 30m`, `45s`, `500ms`, or ticks: `10t` (including localized unit suffixes);
 //! - color — `#rrggbb` or `#rrggbbaa`.
 
-use std::time::Duration;
-
 use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 
 use crate::{Color, DataType, DataValue, NumberValue, TypeRegistry};
@@ -197,7 +195,9 @@ pub fn default_of(t: &DataType) -> DataValue {
         DataType::Bool => DataValue::Bool(true),
         DataType::Time => DataValue::Time(NaiveTime::MIN),
         DataType::DateTime => DataValue::DateTime(DateTime::<Utc>::UNIX_EPOCH),
-        DataType::Duration => DataValue::Duration(Duration::from_secs(1)),
+        DataType::Duration => {
+            DataValue::Duration(chrono::TimeDelta::try_seconds(1).unwrap_or_default())
+        }
         DataType::Color => DataValue::Color(Color {
             r: 255,
             g: 255,
@@ -325,12 +325,13 @@ pub fn coerce_to(value: DataValue, like: &DataType) -> DataValue {
             | DataType::Duration
             | DataType::Color,
         ) => parse_value(s, like).unwrap_or(value),
-        // Infinity, negative, or out-of-range numbers remain numbers — comparison will yield a type mismatch
-        (DataValue::Number(n), DataType::Duration) => match Duration::try_from_secs_f64(n.to_f64())
-        {
-            Ok(d) => DataValue::Duration(d),
-            Err(_) => value,
-        },
+        // Non-finite or out-of-range numbers remain numbers — comparison will yield a type mismatch
+        (DataValue::Number(n), DataType::Duration) => {
+            match crate::delta_from_secs_f64(n.to_f64()) {
+                Some(d) => DataValue::Duration(d),
+                None => value,
+            }
+        }
         _ => value,
     }
 }

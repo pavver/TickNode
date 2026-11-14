@@ -1,6 +1,6 @@
 use chrono::{NaiveTime, TimeZone, Utc};
 use serde_reflection::{Samples, Tracer, TracerConfig};
-use std::{collections::BTreeMap, fs, path::Path, time::Duration};
+use std::{collections::BTreeMap, fs, path::Path};
 use ticknode_shared::{Color, DataType, DataValue, NumberValue, ObjectField};
 
 const UPDATE_HINT: &str = "The plugin value format changed; plugins must be rebuilt. Run \
@@ -32,7 +32,7 @@ fn plugin_value_format() {
         DataValue::String("value".into()),
         DataValue::Time(NaiveTime::from_hms_opt(12, 34, 56).unwrap()),
         DataValue::DateTime(Utc.with_ymd_and_hms(2026, 1, 2, 12, 34, 56).unwrap()),
-        DataValue::Duration(Duration::new(1, 2)),
+        DataValue::Duration(chrono::TimeDelta::new(1, 2).unwrap()),
         DataValue::Color(Color {
             r: 1,
             g: 2,

@@ -1,7 +1,6 @@
 //! Duration parsing and lossless number/unit presentation, independent of the DOM.
 
 use crate::i18n::t;
-use std::time::Duration;
 use ticknode_shared::{DataValue, UiMessage, text};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,10 +65,10 @@ impl Unit {
         match value {
             DataValue::Ticks(n) if self == Self::Ticks => Some(n.to_string()),
             DataValue::Duration(d) => {
-                let size = self.nanos()?;
-                d.as_nanos()
-                    .is_multiple_of(size)
-                    .then(|| (d.as_nanos() / size).to_string())
+                let size = self.nanos()? as i128;
+                let total_nanos =
+                    (d.num_seconds() as i128) * 1_000_000_000 + (d.subsec_nanos() as i128);
+                (total_nanos % size == 0).then(|| (total_nanos / size).to_string())
             }
             _ => None,
         }
@@ -94,7 +93,15 @@ pub(crate) fn presentation(value: Option<&DataValue>, preferred: Option<Unit>) -
     }
     // The shared formatter truncates sub-millisecond values; keep them exact in an editable field.
     let text = match value {
-        DataValue::Duration(d) => format!("{}.{:09}s", d.as_secs(), d.subsec_nanos()),
+        DataValue::Duration(d) => {
+            let num_secs = d.num_seconds();
+            let subsec = d.subsec_nanos();
+            if *d < ticknode_shared::TimeDelta::zero() {
+                format!("-{}.{:09}s", num_secs.abs(), subsec.abs())
+            } else {
+                format!("{num_secs}.{subsec:09}s")
+            }
+        }
         _ => text::format_value(value),
     };
     (text, preferred.unwrap_or(Unit::Seconds))
@@ -109,22 +116,28 @@ pub(crate) fn parse(input: &str, unit: Unit) -> Result<Option<DataValue>, UiMess
     let parsed = if normalized.parse::<f64>().is_ok() {
         if unit == Unit::Ticks {
             input.parse::<u64>().ok().map(DataValue::Ticks)
-        } else if let Ok(number) = input.parse::<u128>() {
-            // Integer input avoids rounding large values through f64.
-            number.checked_mul(unit.nanos().unwrap()).and_then(|nanos| {
-                Some(DataValue::Duration(Duration::new(
-                    u64::try_from(nanos / 1_000_000_000).ok()?,
-                    (nanos % 1_000_000_000) as u32,
-                )))
-            })
-        } else {
-            normalized
-                .parse::<f64>()
-                .ok()
-                .and_then(|n| {
-                    Duration::try_from_secs_f64(n * unit.nanos().unwrap() as f64 / 1e9).ok()
+        } else if let Some(unit_nanos) = unit.nanos() {
+            if let Ok(number) = input.parse::<i128>() {
+                // Integer input avoids rounding large values through f64.
+                let size = unit_nanos as i128;
+                number.checked_mul(size).and_then(|nanos| {
+                    let secs = nanos.div_euclid(1_000_000_000);
+                    let sub_nanos = nanos.rem_euclid(1_000_000_000) as u32;
+                    ticknode_shared::delta_serde::combine_delta(
+                        i64::try_from(secs).ok()?,
+                        sub_nanos,
+                    )
+                    .map(DataValue::Duration)
                 })
-                .map(DataValue::Duration)
+            } else {
+                normalized
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(|n| ticknode_shared::delta_from_secs_f64(n * unit_nanos as f64 / 1e9))
+                    .map(DataValue::Duration)
+            }
+        } else {
+            None
         }
     } else {
         text::parse_duration_value(input)
@@ -152,9 +165,9 @@ pub(crate) fn parse_property(input: &str, unit: Unit) -> Result<Option<DataValue
     } else {
         parse(input, unit).map_err(|_| invalid())
     }?;
-    if matches!(parsed, Some(DataValue::Ticks(_))) {
-        Err(invalid())
-    } else {
-        Ok(parsed)
+    match parsed {
+        Some(DataValue::Ticks(_)) => Err(invalid()),
+        Some(DataValue::Duration(d)) if d < ticknode_shared::TimeDelta::zero() => Err(invalid()),
+        _ => Ok(parsed),
     }
 }

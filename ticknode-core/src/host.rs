@@ -105,9 +105,16 @@ impl HostState {
     }
 
     /// Number of ticks needed to cover `duration` (rounded up).
-    pub fn ticks_for(&self, duration: Duration) -> u64 {
+    /// Negative durations treat delay as zero ticks.
+    pub fn ticks_for(&self, duration: chrono::TimeDelta) -> u64 {
+        if duration <= chrono::TimeDelta::zero() {
+            return 0;
+        }
         let tick = self.tick_duration.max(Duration::from_millis(1)).as_nanos();
-        duration.as_nanos().div_ceil(tick).min(u128::from(u64::MAX)) as u64
+        let secs = duration.num_seconds().max(0) as u128;
+        let nanos = duration.subsec_nanos().max(0) as u128;
+        let total_nanos = secs * 1_000_000_000 + nanos;
+        total_nanos.div_ceil(tick).min(u128::from(u64::MAX)) as u64
     }
 
     /// Tick durations pass through; wall-clock durations round up to whole engine ticks.

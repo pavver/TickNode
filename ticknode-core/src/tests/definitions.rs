@@ -275,7 +275,9 @@ fn adaptation_reconciles_contracts_connections_and_cached_values() {
     assert_eq!(current.pins[0].pin_type, PinType::Data(DataType::Duration));
     assert_eq!(
         engine.pull_data(constant, PinId(0), &mut vec![]),
-        Some(DataValue::Duration(std::time::Duration::from_secs(1)))
+        Some(DataValue::Duration(
+            chrono::TimeDelta::try_seconds(1).unwrap(),
+        ))
     );
     assert!(engine.frozen_changes(constant).is_empty());
     engine

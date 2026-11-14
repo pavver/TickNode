@@ -62,7 +62,7 @@ fn format_scalar_log(val: &DataValue) -> Option<String> {
         DataValue::String(s) => s.clone(),
         DataValue::Time(t) => t.to_string(),
         DataValue::DateTime(dt) => dt.to_string(),
-        DataValue::Duration(d) => format!("{:?}", d),
+        DataValue::Duration(d) => text::format_duration(*d),
         DataValue::Ticks(_) => text::format_value(val),
         DataValue::Color(c) => format!("Color(r:{}, g:{}, b:{}, a:{})", c.r, c.g, c.b, c.a),
         _ => return None,

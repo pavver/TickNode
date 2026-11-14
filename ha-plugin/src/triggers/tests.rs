@@ -1,4 +1,4 @@
-use super::config::signed_duration;
+use super::config::{duration, signed_duration};
 use super::*;
 use chrono::TimeDelta;
 use ha_core_client::{TriggerFired, triggers::*};

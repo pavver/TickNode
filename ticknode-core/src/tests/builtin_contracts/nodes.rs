@@ -168,13 +168,21 @@ fn sleep_duration_and_tick_values_deliver_on_the_expected_tick() {
         (Some(DataValue::Ticks(0)), 1),
         (Some(DataValue::Ticks(1)), 1),
         (Some(DataValue::Ticks(3)), 3),
-        (Some(DataValue::Duration(std::time::Duration::ZERO)), 1),
+        (Some(DataValue::Duration(chrono::TimeDelta::zero())), 1),
         (
-            Some(DataValue::Duration(std::time::Duration::from_nanos(1))),
+            Some(DataValue::Duration(
+                chrono::TimeDelta::try_seconds(-5).unwrap(),
+            )),
             1,
         ),
         (
-            Some(DataValue::Duration(std::time::Duration::from_millis(250))),
+            Some(DataValue::Duration(chrono::TimeDelta::nanoseconds(1))),
+            1,
+        ),
+        (
+            Some(DataValue::Duration(
+                chrono::TimeDelta::try_milliseconds(250).unwrap(),
+            )),
             3,
         ),
     ] {

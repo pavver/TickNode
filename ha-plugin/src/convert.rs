@@ -77,7 +77,8 @@ pub fn value_to_json(value: &DataValue) -> Value {
         DataValue::Time(t) => Value::String(t.format("%H:%M:%S").to_string()),
         DataValue::DateTime(dt) => Value::String(dt.to_rfc3339()),
         DataValue::Duration(d) => {
-            Number::from_f64(d.as_secs_f64()).map_or(Value::Null, Value::Number)
+            let secs = d.num_seconds() as f64 + f64::from(d.subsec_nanos()) / 1e9;
+            Number::from_f64(secs).map_or(Value::Null, Value::Number)
         }
         DataValue::Color(_) | DataValue::Ticks(_) => Value::String(text::format_value(value)),
         DataValue::List { elements, .. } => {
@@ -247,7 +248,7 @@ mod tests {
         fields.insert("name".to_string(), DataValue::from("x"));
         fields.insert(
             "t".to_string(),
-            DataValue::Duration(std::time::Duration::from_millis(1500)),
+            DataValue::Duration(chrono::TimeDelta::try_milliseconds(1500).unwrap()),
         );
         assert_eq!(
             value_to_json(&object(fields)),

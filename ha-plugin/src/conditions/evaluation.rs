@@ -13,8 +13,7 @@ fn offset(text: &str) -> Result<TimeDelta, String> {
     let (sign, text) = text
         .strip_prefix('-')
         .map_or((1, text.strip_prefix('+').unwrap_or(text)), |s| (-1, s));
-    crate::triggers::duration(text)
-        .and_then(|d| TimeDelta::from_std(d).ok())
+    ticknode_shared::property::parse_property_duration(text)
         .map(|d| d * sign)
         .ok_or_else(|| "Invalid duration".into())
 }

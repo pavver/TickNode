@@ -35,8 +35,7 @@ pub(crate) fn schema(def: &NodeDefinition, name: &str, value: &DataValue) -> Res
     })?;
     if matches!(property.kind, PropertyKind::Duration { signed: true }) && !text.trim().is_empty() {
         let magnitude = text.trim().trim_start_matches(['-', '+']);
-        let fits = ticknode_shared::property::parse_property_duration(magnitude)
-            .is_some_and(|d| chrono::TimeDelta::from_std(d).is_ok());
+        let fits = ticknode_shared::property::parse_property_duration(magnitude).is_some();
         if !fits {
             return Err(error(
                 "signed-duration",

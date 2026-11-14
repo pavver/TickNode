@@ -52,7 +52,14 @@ pub fn delay_for(value: &DataValue) -> Result<TaskId, String> {
     match value {
         DataValue::Ticks(n) => delay_ticks(*n),
         DataValue::Duration(d) => {
-            delay_ms(d.as_nanos().div_ceil(1_000_000).min(u128::from(u64::MAX)) as u64)
+            if *d <= ticknode_shared::TimeDelta::zero() {
+                delay_ms(0)
+            } else {
+                let secs = d.num_seconds().max(0) as u128;
+                let nanos = d.subsec_nanos().max(0) as u128;
+                let total_nanos = secs * 1_000_000_000 + nanos;
+                delay_ms(total_nanos.div_ceil(1_000_000).min(u128::from(u64::MAX)) as u64)
+            }
         }
         _ => Err("Delay must be a duration in ticks or time".into()),
     }

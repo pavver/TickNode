@@ -59,6 +59,7 @@ Do not start that migration unless asked, but keep new UI code compatible with i
 ### Git
 * Conventional Commits in English (`feat(editor): ...`, `fix(core): ...`).
 * No automated or AI signatures in commit messages.
+* Commit messages, PR descriptions and tags never mention AI assistants or agents (Claude, Codex, Gemini/Antigravity, …): no `Co-Authored-By` trailers, "generated with" lines or similar. Existing commits stay as they are.
 
 ## Commands
 

@@ -389,3 +389,77 @@ fn test_date_and_strftime_examples_with_fixed_time() {
         .expect("%Y item");
     assert_eq!(y_item.detail, format!("{}", fixed_time.format("%Y")));
 }
+
+#[test]
+fn test_now_completion_and_infer_offers_date_and_ago() {
+    let (inputs, types) = setup_test_context();
+
+    // 1. Function completion offers now() with DateTime detail
+    let (_, res) = complete_at("{{ no|^| }}", &inputs, &types);
+    let c = res.expect("completion for now function");
+    let now_item = c.items.iter().find(|i| i.label == "now").expect("now item");
+    assert_eq!(now_item.detail, "now() → DateTime");
+    assert_eq!(now_item.insert, "now()");
+    assert_eq!(
+        now_item.help.as_ref().map(|h| h.key.as_str()),
+        Some("template-help-function-now")
+    );
+
+    // 2. Trailing now() infers DateTime and offers date, strftime, ago
+    let (_, res_pipe) = complete_at("{{ now() | |^| }}", &inputs, &types);
+    let c_pipe = res_pipe.expect("completion after now() | ");
+    let labels: Vec<_> = c_pipe.items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"date"), "should contain date: {labels:?}");
+    assert!(
+        labels.contains(&"strftime"),
+        "should contain strftime: {labels:?}"
+    );
+    assert!(labels.contains(&"ago"), "should contain ago: {labels:?}");
+    assert!(
+        !labels.contains(&"round"),
+        "should not contain number filter round: {labels:?}"
+    );
+}
+
+#[test]
+fn test_duration_pattern_completion_offers_presets_and_tokens() {
+    let (inputs, types) = setup_test_context();
+    let labels = crate::quantity::CanonicalLabels;
+
+    let (_, res) = complete_at_full(
+        "{{ dur | duration('|^|') }}",
+        &inputs,
+        &types,
+        None,
+        Some(&labels),
+    );
+    let c = res.expect("completion inside duration");
+    let items_by_label: std::collections::HashMap<_, _> =
+        c.items.iter().map(|i| (i.label.as_str(), i)).collect();
+
+    // Presets
+    let short = items_by_label.get("short").expect("short preset");
+    assert_eq!(short.detail, "1d 2h 5m 7.25s");
+    assert_eq!(
+        short.help.as_ref().map(|h| h.key.as_str()),
+        Some("template-help-duration-preset-short")
+    );
+
+    let long = items_by_label.get("long").expect("long preset");
+    assert_eq!(long.detail, "1 day 2 hours 5 minutes 7 seconds");
+    assert_eq!(
+        long.help.as_ref().map(|h| h.key.as_str()),
+        Some("template-help-duration-preset-long")
+    );
+
+    // Tokens
+    assert_eq!(items_by_label.get("d").unwrap().detail, "1");
+    assert_eq!(items_by_label.get("H").unwrap().detail, "26");
+    assert_eq!(items_by_label.get("HH").unwrap().detail, "26");
+    assert_eq!(items_by_label.get("m").unwrap().detail, "1565");
+    assert_eq!(items_by_label.get("mm").unwrap().detail, "1565");
+    assert_eq!(items_by_label.get("s").unwrap().detail, "7");
+    assert_eq!(items_by_label.get("ss").unwrap().detail, "07");
+    assert_eq!(items_by_label.get("SSS").unwrap().detail, "250");
+    assert!(items_by_label.contains_key("[text]"));
+}

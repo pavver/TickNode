@@ -1,6 +1,7 @@
 //! Pure MiniJinja template analysis, syntax validation and rendering.
 
 use crate::{DataType, DataValue};
+use chrono::{DateTime, Utc};
 use minijinja::{
     Environment, Value,
     machinery::{Token, tokenize},
@@ -9,11 +10,16 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 
+pub mod ago;
 pub mod dates;
+pub mod duration;
 pub mod plural;
 #[cfg(test)]
 mod tests;
 mod values;
+
+pub use ago::ago_filter;
+pub use duration::{duration_filter, format_duration_pattern, format_duration_preset};
 
 pub mod complete;
 pub use complete::{
@@ -83,13 +89,12 @@ pub fn environment() -> Environment<'static> {
     // `render` replaces this placeholder with a presentation-aware filter.
     env.add_filter("text", |value: Value| value.to_string());
     env.add_global("text", Value::from_iter(Vec::<(String, Value)>::new()));
-    dates::register(&mut env, Arc::new(crate::quantity::CanonicalLabels));
-    plural::register(
-        &mut env,
-        Arc::new(crate::quantity::CanonicalLabels),
-        None,
-        String::new(),
-    );
+    env.add_function("now", || Utc::now().to_rfc3339());
+    let canonical = Arc::new(crate::quantity::CanonicalLabels);
+    dates::register(&mut env, canonical.clone());
+    ago::register(&mut env, canonical.clone(), Utc::now());
+    duration::register(&mut env, canonical.clone());
+    plural::register(&mut env, canonical, None, String::new());
     env
 }
 
@@ -147,6 +152,22 @@ pub fn variables(source: &str) -> Result<Vec<String>, TemplateError> {
 /// Formats values computed inside a template for the `| text` filter.
 pub type RuntimeText = Arc<dyn Fn(&DataValue) -> String + Send + Sync>;
 
+/// Runtime environment for localized template rendering.
+#[derive(Clone)]
+pub struct RenderEnv {
+    pub labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
+    pub now: DateTime<Utc>,
+}
+
+impl RenderEnv {
+    pub fn new(
+        labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self { labels, now }
+    }
+}
+
 /// A parsed template kept between renders, so a pure node does not reparse on every evaluation.
 pub struct CompiledTemplate {
     env: Environment<'static>,
@@ -166,10 +187,14 @@ impl CompiledTemplate {
         inputs: &[(String, Option<DataValue>, DataType)],
         format: &dyn Fn(&DataValue, &DataType) -> String,
         runtime_text: RuntimeText,
-        labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
+        env_ctx: RenderEnv,
     ) -> Result<String, TemplateError> {
         let mut env = self.env.clone();
-        dates::register(&mut env, labels.clone());
+        let now_iso = env_ctx.now.to_rfc3339();
+        env.add_function("now", move || now_iso.clone());
+        dates::register(&mut env, env_ctx.labels.clone());
+        ago::register(&mut env, env_ctx.labels.clone(), env_ctx.now);
+        duration::register(&mut env, env_ctx.labels.clone());
         let text_map: Value = inputs
             .iter()
             .filter_map(|(name, value, ty)| {
@@ -181,7 +206,7 @@ impl CompiledTemplate {
         let int_decimal_suffix = zero.strip_prefix('0').unwrap_or("").to_string();
         plural::register(
             &mut env,
-            labels,
+            env_ctx.labels,
             Some(runtime_text.clone()),
             int_decimal_suffix.clone(),
         );
@@ -220,7 +245,10 @@ impl CompiledTemplate {
             inputs,
             format,
             runtime_text,
-            Arc::new(crate::quantity::CanonicalLabels),
+            RenderEnv {
+                labels: Arc::new(crate::quantity::CanonicalLabels),
+                now: Utc::now(),
+            },
         )
     }
 }

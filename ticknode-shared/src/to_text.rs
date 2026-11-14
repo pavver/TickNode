@@ -231,23 +231,7 @@ pub fn to_text_with_identifiers(
         DataValue::Duration(d) if !options.show_units => {
             format_number(crate::delta_to_secs_f64(*d), 15, labels)
         }
-        DataValue::Duration(d) => {
-            // Reuse the canonical decomposition, replacing only the numeric separator and unit labels.
-            text::format_duration(*d)
-                .split_whitespace()
-                .map(|part| {
-                    let i = part
-                        .find(|c: char| c.is_ascii_alphabetic())
-                        .unwrap_or(part.len());
-                    format!(
-                        "{}{}",
-                        part[..i].replace('.', &labels.decimal_separator()),
-                        labels.duration_unit(&part[i..])
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" ")
-        }
+        DataValue::Duration(d) => crate::template::duration::format_duration_short(*d, labels),
         DataValue::Ticks(_) | DataValue::Color(_) => text::format_value(value),
         DataValue::List {
             elements,

@@ -619,6 +619,81 @@ text-weekday-7-short = нд
 text-am = дп
 text-pm = пп
 
+text-ago-now = щойно
+text-ago-past-seconds-one = { $n } секунду тому
+text-ago-past-seconds-few = { $n } секунди тому
+text-ago-past-seconds-many = { $n } секунд тому
+text-ago-past-seconds-other = { $n } секунди тому
+text-ago-future-seconds-one = через { $n } секунду
+text-ago-future-seconds-few = через { $n } секунди
+text-ago-future-seconds-many = через { $n } секунд
+text-ago-future-seconds-other = через { $n } секунди
+
+text-ago-past-minutes-one = { $n } хвилину тому
+text-ago-past-minutes-few = { $n } хвилини тому
+text-ago-past-minutes-many = { $n } хвилин тому
+text-ago-past-minutes-other = { $n } хвилини тому
+text-ago-future-minutes-one = через { $n } хвилину
+text-ago-future-minutes-few = через { $n } хвилини
+text-ago-future-minutes-many = через { $n } хвилин
+text-ago-future-minutes-other = через { $n } хвилини
+
+text-ago-past-hours-one = { $n } годину тому
+text-ago-past-hours-few = { $n } години тому
+text-ago-past-hours-many = { $n } годин тому
+text-ago-past-hours-other = { $n } години тому
+text-ago-future-hours-one = через { $n } годину
+text-ago-future-hours-few = через { $n } години
+text-ago-future-hours-many = через { $n } годин
+text-ago-future-hours-other = через { $n } години
+
+text-ago-past-days-one = { $n } день тому
+text-ago-past-days-few = { $n } дні тому
+text-ago-past-days-many = { $n } днів тому
+text-ago-past-days-other = { $n } дня тому
+text-ago-future-days-one = через { $n } день
+text-ago-future-days-few = через { $n } дні
+text-ago-future-days-many = через { $n } днів
+text-ago-future-days-other = через { $n } дня
+
+text-ago-past-months-one = { $n } місяць тому
+text-ago-past-months-few = { $n } місяці тому
+text-ago-past-months-many = { $n } місяців тому
+text-ago-past-months-other = { $n } місяця тому
+text-ago-future-months-one = через { $n } місяць
+text-ago-future-months-few = через { $n } місяці
+text-ago-future-months-many = через { $n } місяців
+text-ago-future-months-other = через { $n } місяця
+
+text-ago-past-years-one = { $n } рік тому
+text-ago-past-years-few = { $n } роки тому
+text-ago-past-years-many = { $n } років тому
+text-ago-past-years-other = { $n } року тому
+text-ago-future-years-one = через { $n } рік
+text-ago-future-years-few = через { $n } роки
+text-ago-future-years-many = через { $n } років
+text-ago-future-years-other = через { $n } року
+
+text-duration-long-days-one = { $n } день
+text-duration-long-days-few = { $n } дні
+text-duration-long-days-many = { $n } днів
+text-duration-long-days-other = { $n } дня
+
+text-duration-long-hours-one = { $n } година
+text-duration-long-hours-few = { $n } години
+text-duration-long-hours-many = { $n } годин
+text-duration-long-hours-other = { $n } години
+
+text-duration-long-minutes-one = { $n } хвилина
+text-duration-long-minutes-few = { $n } хвилини
+text-duration-long-minutes-many = { $n } хвилин
+text-duration-long-minutes-other = { $n } хвилини
+
+text-duration-long-seconds-one = { $n } секунда
+text-duration-long-seconds-few = { $n } секунди
+text-duration-long-seconds-many = { $n } секунд
+text-duration-long-seconds-other = { $n } секунди
+
 # Extended sensor quantities and units.
 type-quantity-reactive-power-title = Реактивна потужність
 type-quantity-reactive-power-description = Реактивна потужність у фізичних одиницях
@@ -919,7 +994,7 @@ node-text-template-help =
 
     Приклади: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
 
-    Дати й час: { "{" }{ "{" } when | date { "}" }{ "}" } використовує типовий формат мови форматування, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } приймає зрозумілий шаблон (YYYY, MM, MMMM назва місяця, DD, ddd/dddd день тижня, HH, hh, mm, ss, A; текст у [дужках] зберігається), доступні готові шаблони 'date', 'time', 'datetime', 'long' та 'iso', а { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } приймає формати chrono strftime. Дата й час відображаються у часовому поясі сервера. Форми множини: { "{" }{ "{" } count | plural('файл', 'файли', 'файлів') { "}" }{ "}" } вибирає текст за правилами CLDR для мови рушія (позиційні форми за порядком цілих категорій або ключові слова zero/one/two/few/many/other), замінюючи # на відформатоване число.
+    Дати й час: { "{" }{ "{" } when | date { "}" }{ "}" } використовує типовий формат мови форматування, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } приймає зрозумілий шаблон (YYYY, MM, MMMM назва місяця, DD, ddd/dddd день тижня, HH, hh, mm, ss, A; текст у [дужках] зберігається), доступні готові шаблони 'date', 'time', 'datetime', 'long' та 'iso', а { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } приймає формати chrono strftime. Дата й час відображаються у часовому поясі сервера. Форми множини: { "{" }{ "{" } count | plural('файл', 'файли', 'файлів') { "}" }{ "}" } вибирає текст за правилами CLDR для мови рушія (позиційні форми за порядком цілих категорій або ключові слова zero/one/two/few/many/other), замінюючи # на відформатоване число. Поточний час, відносний час і тривалість: { "{" }{ "{" } now() { "}" }{ "}" } повертає поточний момент, { "{" }{ "{" } when | ago { "}" }{ "}" } виводить відносний час на зразок '5 хвилин тому', а { "{" }{ "{" } elapsed | duration { "}" }{ "}" } форматує тривалість за допомогою 'short', 'long' або шаблонів 'H:mm'.
 
     Входи є звичайними значеннями Jinja, тому арифметика, порівняння, тести та стандартні фільтри працюють звичним чином. Глобальна мапа text форматує кожен вхід так само, як вузол «У текст», використовуючи оголошений тип під’єднаного джерела, правила відображення проєкту й мову форматування рушія: { "{" }{ "{" } text.power { "}" }{ "}" } може вивести 1,2 кВт. Списки та структури зберігають оголошені типи елементів і полів у цьому поданні. Одиниці вимірювання надає text.name.
 

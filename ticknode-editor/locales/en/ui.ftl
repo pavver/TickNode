@@ -590,6 +590,9 @@ template-help-filter-strftime = Formats a date-time or time using strftime forma
 template-help-filter-text = Formats a value using its unit and locale rules
 template-help-filter-plural = Selects a plural form: positional forms follow the formatting language's rules (e.g. one, few, many), keywords zero/one/two/few/many/other, and # is replaced by the formatted number
 template-help-filter-default = Fallback value when the input is undefined or empty
+template-help-function-now = Current date and time as an ISO 8601 / RFC 3339 string
+template-help-filter-ago = Formats relative time, e.g. '5 minutes ago' or 'in 2 hours'
+template-help-filter-duration = Formats a duration using compact units ('short'), words ('long'), or an 'H:mm' pattern
 
 template-help-date-preset-datetime = Standard date and time
 template-help-date-preset-date = Date only
@@ -641,3 +644,16 @@ template-help-strftime-p = AM or PM designation
 template-help-strftime-z = UTC offset (+HHMM or -HHMM)
 template-help-strftime-upper-z = Time zone name or abbreviation
 template-help-strftime-percent = Literal % character
+
+template-help-duration-preset-short = Compact localized units
+template-help-duration-preset-long = Spelled-out words with plural forms
+
+template-help-duration-token-days = Whole days
+template-help-duration-token-hours2 = Hours, 2 digits (within the day if d is present, otherwise total hours)
+template-help-duration-token-hours1 = Hours, 1 or 2 digits (within the day if d is present, otherwise total hours)
+template-help-duration-token-minutes2 = Minutes, 2 digits (within the hour if d/H/HH is present, otherwise total minutes)
+template-help-duration-token-minutes1 = Minutes, 1 or 2 digits (within the hour if d/H/HH is present, otherwise total minutes)
+template-help-duration-token-seconds2 = Seconds within the minute, 2 digits
+template-help-duration-token-seconds1 = Seconds within the minute, 1 or 2 digits
+template-help-duration-token-millis = Milliseconds, 3 digits
+template-help-duration-literal = Text in square brackets is printed as is, e.g. [h]

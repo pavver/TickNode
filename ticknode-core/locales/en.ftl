@@ -619,6 +619,81 @@ text-weekday-7-short = Sun
 text-am = AM
 text-pm = PM
 
+text-ago-now = just now
+text-ago-past-seconds-one = { $n } second ago
+text-ago-past-seconds-few = { $n } seconds ago
+text-ago-past-seconds-many = { $n } seconds ago
+text-ago-past-seconds-other = { $n } seconds ago
+text-ago-future-seconds-one = in { $n } second
+text-ago-future-seconds-few = in { $n } seconds
+text-ago-future-seconds-many = in { $n } seconds
+text-ago-future-seconds-other = in { $n } seconds
+
+text-ago-past-minutes-one = { $n } minute ago
+text-ago-past-minutes-few = { $n } minutes ago
+text-ago-past-minutes-many = { $n } minutes ago
+text-ago-past-minutes-other = { $n } minutes ago
+text-ago-future-minutes-one = in { $n } minute
+text-ago-future-minutes-few = in { $n } minutes
+text-ago-future-minutes-many = in { $n } minutes
+text-ago-future-minutes-other = in { $n } minutes
+
+text-ago-past-hours-one = { $n } hour ago
+text-ago-past-hours-few = { $n } hours ago
+text-ago-past-hours-many = { $n } hours ago
+text-ago-past-hours-other = { $n } hours ago
+text-ago-future-hours-one = in { $n } hour
+text-ago-future-hours-few = in { $n } hours
+text-ago-future-hours-many = in { $n } hours
+text-ago-future-hours-other = in { $n } hours
+
+text-ago-past-days-one = { $n } day ago
+text-ago-past-days-few = { $n } days ago
+text-ago-past-days-many = { $n } days ago
+text-ago-past-days-other = { $n } days ago
+text-ago-future-days-one = in { $n } day
+text-ago-future-days-few = in { $n } days
+text-ago-future-days-many = in { $n } days
+text-ago-future-days-other = in { $n } days
+
+text-ago-past-months-one = { $n } month ago
+text-ago-past-months-few = { $n } months ago
+text-ago-past-months-many = { $n } months ago
+text-ago-past-months-other = { $n } months ago
+text-ago-future-months-one = in { $n } month
+text-ago-future-months-few = in { $n } months
+text-ago-future-months-many = in { $n } months
+text-ago-future-months-other = in { $n } months
+
+text-ago-past-years-one = { $n } year ago
+text-ago-past-years-few = { $n } years ago
+text-ago-past-years-many = { $n } years ago
+text-ago-past-years-other = { $n } years ago
+text-ago-future-years-one = in { $n } year
+text-ago-future-years-few = in { $n } years
+text-ago-future-years-many = in { $n } years
+text-ago-future-years-other = in { $n } years
+
+text-duration-long-days-one = { $n } day
+text-duration-long-days-few = { $n } days
+text-duration-long-days-many = { $n } days
+text-duration-long-days-other = { $n } days
+
+text-duration-long-hours-one = { $n } hour
+text-duration-long-hours-few = { $n } hours
+text-duration-long-hours-many = { $n } hours
+text-duration-long-hours-other = { $n } hours
+
+text-duration-long-minutes-one = { $n } minute
+text-duration-long-minutes-few = { $n } minutes
+text-duration-long-minutes-many = { $n } minutes
+text-duration-long-minutes-other = { $n } minutes
+
+text-duration-long-seconds-one = { $n } second
+text-duration-long-seconds-few = { $n } seconds
+text-duration-long-seconds-many = { $n } seconds
+text-duration-long-seconds-other = { $n } seconds
+
 # Extended sensor quantities and units.
 type-quantity-reactive-power-title = Reactive power
 type-quantity-reactive-power-description = Reactive power in physical units
@@ -919,7 +994,7 @@ node-text-template-help =
 
     Examples: Power: { "{" }{ "{" } text.power { "}" }{ "}" }; { "{" }% if power > 1000 %{ "}" }high{ "{" }% endif %{ "}" }; { "{" }{ "{" } (power / 1000) | round(1) { "}" }{ "}" } kW; { "{" }% for item in items %{ "}" }{ "{" }{ "{" } item { "}" }{ "}" } { "{" }% endfor %{ "}" }; { "{" }{ "{" } name | default('—') { "}" }{ "}" }.
 
-    Date-times and times: { "{" }{ "{" } when | date { "}" }{ "}" } uses the formatting language's default, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } accepts chrono strftime formats. Date-times are shown in the server time zone. Plural forms: { "{" }{ "{" } count | plural('file', 'files') { "}" }{ "}" } selects text using CLDR cardinal rules for the engine language (positional categories in integer order or keywords zero/one/two/few/many/other), replacing # with the formatted number.
+    Date-times and times: { "{" }{ "{" } when | date { "}" }{ "}" } uses the formatting language's default, { "{" }{ "{" } when | date('DD.MM.YYYY HH:mm') { "}" }{ "}" } takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and { "{" }{ "{" } when | strftime('%d.%m.%Y') { "}" }{ "}" } accepts chrono strftime formats. Date-times are shown in the server time zone. Plural forms: { "{" }{ "{" } count | plural('file', 'files') { "}" }{ "}" } selects text using CLDR cardinal rules for the engine language (positional categories in integer order or keywords zero/one/two/few/many/other), replacing # with the formatted number. Current time, relative time and duration: { "{" }{ "{" } now() { "}" }{ "}" } returns the current instant, { "{" }{ "{" } when | ago { "}" }{ "}" } renders relative time such as '5 minutes ago', and { "{" }{ "{" } elapsed | duration { "}" }{ "}" } formats wall-clock durations using 'short', 'long' or 'H:mm' patterns.
 
     Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: { "{" }{ "{" } text.power { "}" }{ "}" } can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
 

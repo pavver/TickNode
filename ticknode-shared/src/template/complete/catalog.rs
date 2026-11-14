@@ -76,6 +76,7 @@ pub const TESTS: &[&str] = &[
 
 pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("abs", "abs()"),
+    ("ago", "ago()"),
     ("attr", "attr(name)"),
     ("batch", "batch(size, [fill_with])"),
     ("bool", "bool()"),
@@ -85,6 +86,7 @@ pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("date", "date([pattern])"),
     ("default", "default(value)"),
     ("dictsort", "dictsort()"),
+    ("duration", "duration([pattern])"),
     ("e", "e()"),
     ("escape", "escape()"),
     ("first", "first()"),
@@ -129,6 +131,7 @@ pub const FUNCTIONS: &[(&str, &str)] = &[
     ("debug", "debug()"),
     ("dict", "dict(...)"),
     ("namespace", "namespace(...)"),
+    ("now", "now() → DateTime"),
     ("range", "range([start], stop, [step])"),
 ];
 
@@ -147,6 +150,8 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
     }
     match name {
         "date" | "strftime" => matches!(input, ValueKind::DateTime | ValueKind::Time),
+        "ago" => matches!(input, ValueKind::DateTime),
+        "duration" => matches!(input, ValueKind::Duration | ValueKind::Number),
         "abs" | "round" | "plural" => matches!(input, ValueKind::Number),
         "int" => matches!(
             input,
@@ -181,15 +186,17 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
 pub fn filter_output_kind(name: &str, input: &ValueKind) -> ValueKind {
     if matches!(input, ValueKind::Any) {
         return match name {
-            "date" | "strftime" | "text" | "string" | "pprint" | "safe" | "escape" | "e"
-            | "plural" => ValueKind::String,
+            "date" | "strftime" | "ago" | "duration" | "text" | "string" | "pprint" | "safe"
+            | "escape" | "e" | "plural" => ValueKind::String,
             "bool" => ValueKind::Bool,
             _ => ValueKind::Any,
         };
     }
 
     match name {
-        "date" | "strftime" | "text" | "string" | "pprint" | "plural" => ValueKind::String,
+        "date" | "strftime" | "ago" | "duration" | "text" | "string" | "pprint" | "plural" => {
+            ValueKind::String
+        }
         "bool" => ValueKind::Bool,
         "default" | "d" => input.clone(),
         "capitalize" | "lower" | "upper" | "title" | "trim" | "replace" | "indent" | "format"
@@ -255,6 +262,14 @@ fn make_filter_item(
         "strftime" => Some(crate::UiMessage::new(
             "template-help-filter-strftime",
             "Formats a date-time or time using strftime format codes",
+        )),
+        "ago" => Some(crate::UiMessage::new(
+            "template-help-filter-ago",
+            "Formats relative time, e.g. '5 minutes ago' or 'in 2 hours'",
+        )),
+        "duration" => Some(crate::UiMessage::new(
+            "template-help-filter-duration",
+            "Formats a duration using compact units ('short'), words ('long'), or an 'H:mm' pattern",
         )),
         "text" => Some(crate::UiMessage::new(
             "template-help-filter-text",
@@ -395,12 +410,21 @@ pub fn tag_keyword_items() -> Vec<CompletionItem> {
 pub fn function_items() -> Vec<CompletionItem> {
     FUNCTIONS
         .iter()
-        .map(|&(name, sig)| CompletionItem {
-            label: name.to_string(),
-            kind: CompletionKind::Function,
-            detail: sig.to_string(),
-            insert: format!("{name}()"),
-            help: None,
+        .map(|&(name, sig)| {
+            let help = match name {
+                "now" => Some(crate::UiMessage::new(
+                    "template-help-function-now",
+                    "Current date and time as an ISO 8601 / RFC 3339 string",
+                )),
+                _ => None,
+            };
+            CompletionItem {
+                label: name.to_string(),
+                kind: CompletionKind::Function,
+                detail: sig.to_string(),
+                insert: format!("{name}()"),
+                help,
+            }
         })
         .collect()
 }

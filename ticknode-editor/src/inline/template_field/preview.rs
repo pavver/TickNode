@@ -167,7 +167,10 @@ pub fn evaluate_preview(
         inputs,
         &format,
         runtime_text,
-        Arc::new(crate::i18n::UiQuantityLabels),
+        ticknode_shared::template::RenderEnv {
+            labels: Arc::new(crate::i18n::UiQuantityLabels),
+            now: chrono::Utc::now(),
+        },
     ) {
         Ok(text) if text.is_empty() => PreviewStatus::Empty,
         Ok(text) => PreviewStatus::Text(text),

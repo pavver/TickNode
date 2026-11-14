@@ -41,6 +41,38 @@ const DATE_TOKENS: &[(&str, &str, &str)] = &[
     ("Z", "offset-colon", "UTC offset with colon, e.g. +02:00"),
 ];
 
+const DURATION_PRESETS: &[(&str, &str, &str)] = &[
+    ("short", "short", "Compact localized units"),
+    ("long", "long", "Spelled-out words with plural forms"),
+];
+
+const DURATION_TOKENS: &[(&str, &str, &str)] = &[
+    ("d", "days", "Whole days"),
+    (
+        "HH",
+        "hours2",
+        "Hours, 2 digits (within the day if d is present, otherwise total hours)",
+    ),
+    (
+        "H",
+        "hours1",
+        "Hours, 1 or 2 digits (within the day if d is present, otherwise total hours)",
+    ),
+    (
+        "mm",
+        "minutes2",
+        "Minutes, 2 digits (within the hour if d/H/HH is present, otherwise total minutes)",
+    ),
+    (
+        "m",
+        "minutes1",
+        "Minutes, 1 or 2 digits (within the hour if d/H/HH is present, otherwise total minutes)",
+    ),
+    ("ss", "seconds2", "Seconds within the minute, 2 digits"),
+    ("s", "seconds1", "Seconds within the minute, 1 or 2 digits"),
+    ("SSS", "millis", "Milliseconds, 3 digits"),
+];
+
 const STRFTIME_TOKENS: &[(&str, &str, &str)] = &[
     ("%Y", "upper-y", "Year, 4 digits"),
     ("%y", "y", "Year, 2 digits (00–99)"),
@@ -92,6 +124,8 @@ pub(crate) fn try_complete_date_pattern(
         complete_date_arg(input, quote, quote_pos, caret)
     } else if is_first_arg_of_filter(before_quote, "strftime") {
         complete_strftime_arg(input, quote, quote_pos, caret)
+    } else if is_first_arg_of_filter(before_quote, "duration") {
+        complete_duration_arg(input, quote, quote_pos, caret)
     } else {
         None
     }
@@ -232,6 +266,85 @@ fn complete_strftime_arg(
                 )),
             });
         }
+    }
+
+    Some(Completion { range, items })
+}
+
+fn complete_duration_arg(
+    input: &CompletionInput,
+    quote: u8,
+    quote_pos: usize,
+    caret: usize,
+) -> Option<Completion> {
+    let s_before = if quote_pos < caret && caret <= input.source.len() {
+        &input.source[quote_pos + 1..caret]
+    } else {
+        ""
+    };
+
+    let bytes = input.source.as_bytes();
+    let mut start = caret;
+    while start > quote_pos + 1 && bytes[start - 1].is_ascii_alphabetic() {
+        start -= 1;
+    }
+    let mut end = caret;
+    while end < bytes.len() && bytes[end] != quote && bytes[end].is_ascii_alphabetic() {
+        end += 1;
+    }
+    let range = start..end;
+    let partial = &input.source[start..caret];
+
+    let presets_allowed = s_before.chars().all(|c| c.is_ascii_alphabetic());
+
+    let mut items = Vec::new();
+
+    if presets_allowed {
+        let partial_lower = partial.to_ascii_lowercase();
+        for &(preset, slug, fallback) in DURATION_PRESETS {
+            if preset.starts_with(&partial_lower) {
+                let detail = crate::template::duration::example(preset, input.labels);
+                items.push(CompletionItem {
+                    label: preset.to_string(),
+                    kind: CompletionKind::Format,
+                    detail,
+                    insert: preset.to_string(),
+                    help: Some(crate::UiMessage::new(
+                        format!("template-help-duration-preset-{slug}"),
+                        fallback,
+                    )),
+                });
+            }
+        }
+    }
+
+    for &(token, slug, fallback) in DURATION_TOKENS {
+        if token.starts_with(partial) {
+            let detail = crate::template::duration::example(token, input.labels);
+            items.push(CompletionItem {
+                label: token.to_string(),
+                kind: CompletionKind::Format,
+                detail,
+                insert: token.to_string(),
+                help: Some(crate::UiMessage::new(
+                    format!("template-help-duration-token-{slug}"),
+                    fallback,
+                )),
+            });
+        }
+    }
+
+    if partial.is_empty() {
+        items.push(CompletionItem {
+            label: "[text]".to_string(),
+            kind: CompletionKind::Format,
+            detail: String::new(),
+            insert: "[]".to_string(),
+            help: Some(crate::UiMessage::new(
+                "template-help-duration-literal",
+                "Text in square brackets is printed as is, e.g. [h]",
+            )),
+        });
     }
 
     Some(Completion { range, items })

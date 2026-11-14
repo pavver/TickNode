@@ -139,6 +139,9 @@ fn infer_base_expr(s: &str, ctx: &InferContext) -> ValueKind {
 
     // 4. Parentheses or function call
     if s.ends_with(')') {
+        if is_trailing_call(s, "now") {
+            return ValueKind::DateTime;
+        }
         return ValueKind::Any;
     }
 
@@ -254,4 +257,38 @@ fn resolve_dotted_path_kind(path: &[String], ctx: &InferContext) -> ValueKind {
     }
 
     kinds::kind_of(&current_type, ctx.types)
+}
+
+fn is_trailing_call(s: &str, func_name: &str) -> bool {
+    let s = s.trim_end();
+    if !s.ends_with(')') {
+        return false;
+    }
+    let bytes = s.as_bytes();
+    let mut depth = 0;
+    let mut open_pos = None;
+    for (i, &b) in bytes.iter().enumerate().rev() {
+        if b == b')' {
+            depth += 1;
+        } else if b == b'(' {
+            depth -= 1;
+            if depth == 0 {
+                open_pos = Some(i);
+                break;
+            }
+        }
+    }
+    let Some(open_idx) = open_pos else {
+        return false;
+    };
+    let before_paren = s[..open_idx].trim_end();
+    if let Some(rest) = before_paren.strip_suffix(func_name)
+        && (rest.is_empty()
+            || rest.ends_with(|c: char| {
+                c.is_whitespace() || (!c.is_alphanumeric() && c != '_' && c != '.')
+            }))
+    {
+        return true;
+    }
+    false
 }

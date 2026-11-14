@@ -25,7 +25,10 @@ fn render_template(
         inputs,
         &|v, _| crate::text::format_value(v),
         Arc::new(crate::text::format_value),
-        labels,
+        crate::template::RenderEnv {
+            labels,
+            now: chrono::Utc::now(),
+        },
     )
 }
 

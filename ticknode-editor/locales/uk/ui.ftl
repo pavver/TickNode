@@ -605,6 +605,9 @@ template-help-filter-strftime = Форматує дату й час або ча�
 template-help-filter-text = Форматує значення з урахуванням одиниці вимірювання та локалі
 template-help-filter-plural = Вибирає форму множини: позиційні форми відповідають правилам мови форматування (напр. one, few, many), ключові слова zero/one/two/few/many/other, а # замінюється на відформатоване число
 template-help-filter-default = Резервне значення, якщо вхідне значення невизначене або порожнє
+template-help-function-now = Поточна дата й час як рядок ISO 8601 / RFC 3339
+template-help-filter-ago = Форматує відносний час, наприклад '5 хвилин тому' або 'через 2 години'
+template-help-filter-duration = Форматує тривалість за допомогою компактних одиниць ('short'), слів ('long') чи шаблону 'H:mm'
 
 template-help-date-preset-datetime = Стандартні дата й час
 template-help-date-preset-date = Тільки дата
@@ -656,3 +659,16 @@ template-help-strftime-p = Позначення AM або PM
 template-help-strftime-z = Зсув UTC (+HHMM або -HHMM)
 template-help-strftime-upper-z = Назва або абревіатура часового поясу
 template-help-strftime-percent = Символ % без змін
+
+template-help-duration-preset-short = Компактні локалізовані одиниці
+template-help-duration-preset-long = Слова з формами множини
+
+template-help-duration-token-days = Повні дні
+template-help-duration-token-hours2 = Години, 2 цифри (у межах дня за наявності d, інакше загальні години)
+template-help-duration-token-hours1 = Години, 1 або 2 цифри (у межах дня за наявності d, інакше загальні години)
+template-help-duration-token-minutes2 = Хвилини, 2 цифри (у межах години за наявності d/H/HH, інакше загальні хвилини)
+template-help-duration-token-minutes1 = Хвилини, 1 або 2 цифри (у межах години за наявності d/H/HH, інакше загальні хвилини)
+template-help-duration-token-seconds2 = Секунди в межах хвилини, 2 цифри
+template-help-duration-token-seconds1 = Секунди в межах хвилини, 1 або 2 цифри
+template-help-duration-token-millis = Мілісекунди, 3 цифри
+template-help-duration-literal = Текст у квадратних дужках виводиться без змін, наприклад [год]

@@ -260,3 +260,24 @@ fn ukrainian_locale_renders_format_context_month() {
         Some(format!("{day} листопада").into())
     );
 }
+
+#[test]
+fn ago_renders_in_ukrainian_with_host_state_clock_override() {
+    use chrono::{DateTime, TimeDelta, Utc};
+
+    let (mut engine, id) = setup("{{ t | ago }}");
+    engine.set_locale("uk");
+
+    let now = DateTime::parse_from_rfc3339("2026-11-14T12:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+    engine.host_state.clock_override = Some(now);
+
+    let past_5m = now - TimeDelta::minutes(5);
+    inline(&mut engine, id, "t", DataValue::DateTime(past_5m));
+    assert_eq!(render(&mut engine, id), Some("5 хвилин тому".into()));
+
+    let future_2h = now + TimeDelta::hours(2);
+    inline(&mut engine, id, "t", DataValue::DateTime(future_2h));
+    assert_eq!(render(&mut engine, id), Some("через 2 години".into()));
+}

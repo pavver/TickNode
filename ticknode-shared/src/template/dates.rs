@@ -11,7 +11,7 @@ mod tests;
 mod tokens;
 use tokens::*;
 
-enum Moment {
+pub(crate) enum Moment {
     DateTime(DateTime<chrono::Local>),
     Time(NaiveTime),
 }
@@ -29,7 +29,10 @@ fn parse_timestamp(f: f64) -> Option<DateTime<chrono::Local>> {
     DateTime::from_timestamp(secs, nanos).map(|dt| dt.with_timezone(&chrono::Local))
 }
 
-fn parse_moment(value: &Value, filter: &str) -> Result<Option<Moment>, minijinja::Error> {
+pub(crate) fn parse_moment(
+    value: &Value,
+    filter: &str,
+) -> Result<Option<Moment>, minijinja::Error> {
     if value.is_undefined() || value.is_none() {
         return Ok(None);
     }

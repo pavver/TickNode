@@ -241,6 +241,7 @@ impl TickEngine {
         }
         Ok(())
     }
+
     fn check_generated_types(
         &self,
         generated: &[String],
@@ -272,4 +273,22 @@ fn check_node_types(types: &TypeRegistry, nodes: &[NodeDefinition]) -> Result<()
         }
     }
     Ok(())
+}
+
+/// Registers `Make <Type>` and `Break <Type>` nodes for a struct type in the given node registry.
+pub fn register_struct_type_nodes(registry: &mut crate::NodeRegistry, def: &TypeDefinition) {
+    let def = Arc::new(def.clone());
+    let make_def = def.clone();
+    registry.register(Box::new(move |id| {
+        Box::new(TypeMakeNode {
+            id,
+            def: make_def.clone(),
+        })
+    }));
+    registry.register(Box::new(move |id| {
+        Box::new(TypeBreakNode {
+            id,
+            def: def.clone(),
+        })
+    }));
 }

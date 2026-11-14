@@ -258,8 +258,10 @@ async fn plugins_are_managed_over_websocket() {
     assert!(
         !definitions
             .iter()
-            .any(|d| d.type_name == "test/greeter" || d.type_name.starts_with("type/make/"))
-            && types.iter().all(|t| t.name.starts_with("quantity."))
+            .any(|d| d.type_name == "test/greeter" || d.type_name == "type/make/test.point")
+            && types
+                .iter()
+                .all(|t| t.name.starts_with("quantity.") || t.name.starts_with("media."))
     );
     assert!(
         !translations

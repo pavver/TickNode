@@ -238,6 +238,12 @@ impl TypeRegistry {
                     def.name
                 ));
             }
+            if def.name.starts_with("media.") {
+                return Err(format!(
+                    "Data type {} uses the reserved media namespace",
+                    def.name
+                ));
+            }
             if !is_type_name(&def.name) {
                 return Err(format!(
                     "Invalid type name {:?}: expected something like \"plugin.type\"",

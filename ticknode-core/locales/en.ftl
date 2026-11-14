@@ -1171,3 +1171,52 @@ node-time-in-range-pin-To = To
 node-time-in-range-pin-in-range = In range
 
 error-time-shift-overflow = Date-time shift arithmetic overflowed
+
+# Core media data types
+
+type-media-photo-title = Photo
+type-media-photo-description = Photographic image reference
+type-media-photo-field-url = URL
+type-media-photo-field-file_id = File ID
+type-media-photo-field-mime_type = MIME type
+type-media-photo-field-file_name = File name
+type-media-photo-field-size = Size
+type-media-photo-field-width = Width
+type-media-photo-field-height = Height
+type-media-photo-field-duration = Duration
+
+type-media-audio-title = Audio
+type-media-audio-description = Audio recording reference
+type-media-audio-field-url = URL
+type-media-audio-field-file_id = File ID
+type-media-audio-field-mime_type = MIME type
+type-media-audio-field-file_name = File name
+type-media-audio-field-size = Size
+type-media-audio-field-width = Width
+type-media-audio-field-height = Height
+type-media-audio-field-duration = Duration
+
+type-media-video-title = Video
+type-media-video-description = Video recording reference
+type-media-video-field-url = URL
+type-media-video-field-file_id = File ID
+type-media-video-field-mime_type = MIME type
+type-media-video-field-file_name = File name
+type-media-video-field-size = Size
+type-media-video-field-width = Width
+type-media-video-field-height = Height
+type-media-video-field-duration = Duration
+
+type-media-document-title = File
+type-media-document-description = Document or generic file reference
+type-media-document-field-url = URL
+type-media-document-field-file_id = File ID
+type-media-document-field-mime_type = MIME type
+type-media-document-field-file_name = File name
+type-media-document-field-size = Size
+type-media-document-field-width = Width
+type-media-document-field-height = Height
+type-media-document-field-duration = Duration
+
+error-media-missing-source = Media object must have either url or file_id set
+

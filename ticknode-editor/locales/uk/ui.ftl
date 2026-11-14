@@ -556,6 +556,8 @@ language-uk = Українська
 quantity-unit-title = Одиниця вимірювання
 parse-error-quantity = «{ $value }» не є значенням типу { $type }.
 error-plugin-quantity-type = Плагін { $plugin } не може оголошувати зарезервований тип фізичної величини { $type }.
+error-plugin-media-type = Плагін { $plugin } не може оголошувати зарезервований тип медіа { $type }.
+error-media-missing-source = Об'єкт медіа повинен містити url або file_id
 
 settings-display = Одиниці та форматування
 settings-display-description = Правила використовують модуль канонічного значення. Пороги вводяться в обраній одиниці. Правила діють для всіх аркушів і серверного тексту.

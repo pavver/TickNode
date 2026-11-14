@@ -39,6 +39,9 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
         "include_edited" | "silent" | "disable_preview" if !["yes", "no"].contains(&text) => {
             return Err(error("choice", "Select a valid option"));
         }
+        "kind" if !["photo", "audio", "video", "document"].contains(&text) => {
+            return Err(error("choice", "Select a valid option"));
+        }
         "parse_mode" if !["none", "HTML", "MarkdownV2"].contains(&text) => {
             return Err(error("choice", "Select a valid option"));
         }

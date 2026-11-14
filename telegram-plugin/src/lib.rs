@@ -18,6 +18,7 @@ impl Plugin for Telegram {
         "telegram/command",
         "telegram/callback",
         "telegram/send",
+        "telegram/send_media",
         "telegram/edit",
         "telegram/delete",
     ];
@@ -44,7 +45,7 @@ impl Plugin for Telegram {
         let kind = name.strip_prefix("telegram/")?;
         Some(match kind {
             "message" | "command" | "callback" => Box::new(triggers::TriggerNode::new(kind, node)),
-            "send" | "edit" | "delete" => Box::new(actions::ActionNode::new(kind)),
+            "send" | "send_media" | "edit" | "delete" => Box::new(actions::ActionNode::new(kind)),
             _ => return None,
         })
     }

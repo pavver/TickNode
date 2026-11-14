@@ -21,7 +21,7 @@ fn format_node_uses_explicit_and_server_locales_and_persists_properties() {
     let mut e = TickEngine::new();
     assert_eq!(
         e.types.definitions().len(),
-        ticknode_shared::quantity::catalog().len()
+        ticknode_shared::quantity::catalog().len() + ticknode_shared::builtin_media_types().len()
     );
     let id = add(
         &mut e,

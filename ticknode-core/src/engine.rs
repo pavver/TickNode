@@ -80,6 +80,8 @@ impl Default for TickEngine {
 
 impl TickEngine {
     pub fn new() -> Self {
+        let mut defs = quantity::builtin_quantities();
+        defs.extend(media::builtin_media_types());
         Self {
             budget: Default::default(),
             node_errors: Default::default(),
@@ -96,7 +98,7 @@ impl TickEngine {
             live_nodes: BTreeSet::new(),
             connections: ConnectionIndex::default(),
             registry: NodeRegistry::new(),
-            types: TypeRegistry::from_definitions(quantity::builtin_quantities()),
+            types: TypeRegistry::from_definitions(defs),
             type_owners: HashMap::new(),
             plugins: Default::default(),
             data_cache: HashMap::new(),

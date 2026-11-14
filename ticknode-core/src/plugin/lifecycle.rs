@@ -107,7 +107,7 @@ impl TickEngine {
                 )));
             }
         }
-        check_quantity_types(name, &types)?;
+        check_reserved_types(name, &types)?;
         let node_definitions: Vec<NodeDefinition> =
             definitions.iter().map(|(d, _)| d.clone()).collect();
         self.register_types_owned(Some(name), &types, &node_definitions)
@@ -275,7 +275,7 @@ fn uses_owned_types(plugin: &super::PluginSlot, owned: &[&String]) -> bool {
 }
 
 /// Keep the reserved-type rejection translatable at the plugin boundary.
-fn check_quantity_types(plugin: &str, types: &[TypeDefinition]) -> Result<(), UiMessage> {
+fn check_reserved_types(plugin: &str, types: &[TypeDefinition]) -> Result<(), UiMessage> {
     if let Some(def) = types
         .iter()
         .find(|d| d.name.starts_with("quantity.") || d.quantity().is_some())
@@ -290,24 +290,36 @@ fn check_quantity_types(plugin: &str, types: &[TypeDefinition]) -> Result<(), Ui
         .arg("plugin", plugin)
         .arg("type", &def.name));
     }
+    if let Some(def) = types.iter().find(|d| d.name.starts_with("media.")) {
+        return Err(UiMessage::new(
+            "error-plugin-media-type",
+            format!(
+                "Plugin {plugin} cannot declare reserved media type {}",
+                def.name
+            ),
+        )
+        .arg("plugin", plugin)
+        .arg("type", &def.name));
+    }
     Ok(())
 }
 
 #[cfg(test)]
-mod quantity_tests {
+mod reserved_type_tests {
     use super::*;
+
     #[test]
     fn reserved_quantity_registration_returns_a_translatable_plugin_error() {
         for definition in [
             TypeDefinition::new_enum("quantity.fake", "Fake", &[("x", "X")]),
             quantity::builtin_quantities().remove(0),
         ] {
-            let error = check_quantity_types("example", &[definition.clone()]).unwrap_err();
+            let error = check_reserved_types("example", &[definition.clone()]).unwrap_err();
             assert_eq!(error.key, "error-plugin-quantity-type");
             assert!(error.args.contains(&("type".into(), definition.name)));
         }
         assert!(
-            check_quantity_types(
+            check_reserved_types(
                 "example",
                 &[TypeDefinition::new_enum(
                     "example.mode",
@@ -317,5 +329,13 @@ mod quantity_tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn reserved_media_registration_returns_a_translatable_plugin_error() {
+        let definition = TypeDefinition::new_enum("media.fake", "Fake", &[("x", "X")]);
+        let error = check_reserved_types("example", &[definition.clone()]).unwrap_err();
+        assert_eq!(error.key, "error-plugin-media-type");
+        assert!(error.args.contains(&("type".into(), definition.name)));
     }
 }

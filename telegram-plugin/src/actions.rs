@@ -1,6 +1,8 @@
 //! Node-owned HTTP actions. Telegram rate limits wait through a node-owned delay task.
 mod body;
 #[cfg(test)]
+mod media_tests;
+#[cfg(test)]
 mod tests;
 use crate::{
     api,
@@ -41,7 +43,7 @@ impl ActionNode {
             Output::Data(PinId(12), error.fallback.into()),
             Output::Exec(PinId(11)),
         ];
-        if self.kind == "send" {
+        if self.kind == "send" || self.kind == "send_media" {
             outputs.extend([Output::Clear(PinId(13)), Output::Clear(PinId(14))]);
         }
         outputs
@@ -84,7 +86,7 @@ impl ActionNode {
                         ));
                     }
                 };
-                if self.kind == "send" {
+                if self.kind == "send" || self.kind == "send_media" {
                     hub.lookup(chat, now);
                 }
                 self.pending = Some(Pending {
@@ -141,7 +143,7 @@ impl ActionNode {
                 match api::response(result) {
                     Ok(value) => {
                         let mut outputs = vec![Output::Clear(PinId(12))];
-                        if self.kind == "send" {
+                        if self.kind == "send" || self.kind == "send_media" {
                             let Ok(message) = serde_json::from_value::<Message>(value) else {
                                 return self.failed(validation::error(
                                     "response",
@@ -163,17 +165,15 @@ impl ActionNode {
                         if failure.code == 401 {
                             hub.unauthorized();
                         }
-                        if failure.code == 429 && pending.retries < 5 {
-                            match env.delay(failure.retry_after.unwrap_or(1).max(1)) {
-                                Ok(task) => {
-                                    pending.task = task;
-                                    pending.waiting = true;
-                                    pending.retries += 1;
-                                    self.pending = Some(pending);
-                                    return Vec::new();
-                                }
-                                Err(_) => {}
-                            }
+                        if failure.code == 429
+                            && pending.retries < 5
+                            && let Ok(task) = env.delay(failure.retry_after.unwrap_or(1).max(1))
+                        {
+                            pending.task = task;
+                            pending.waiting = true;
+                            pending.retries += 1;
+                            self.pending = Some(pending);
+                            return Vec::new();
                         }
                         self.failed(failure.ui())
                     }
@@ -184,10 +184,10 @@ impl ActionNode {
 }
 impl PluginNode for ActionNode {
     fn definition(&self) -> NodeDefinition {
-        schema::definition(&self.kind)
+        schema::action_definition(&self.kind, &self.props)
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        schema::definition(&self.kind)
+        schema::action_definition(&self.kind, &self.props)
             .properties
             .into_iter()
             .map(|p| {

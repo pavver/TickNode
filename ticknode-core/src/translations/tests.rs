@@ -134,6 +134,36 @@ fn quantity_catalog_has_titles_descriptions_and_unit_symbols_in_both_locales() {
 }
 
 #[test]
+fn media_catalog_has_titles_descriptions_and_field_labels_in_both_locales() {
+    for (locale, source) in CORE_TRANSLATIONS {
+        let ids = message_ids(source);
+        for d in ticknode_shared::builtin_media_types() {
+            for suffix in ["title", "description"] {
+                let key = format!("type-{}-{suffix}", fluent_slug(&d.name));
+                assert!(ids.contains(&key), "missing {key} in locale {locale}");
+                if locale == "en" {
+                    let expected = if suffix == "title" {
+                        &d.title
+                    } else {
+                        &d.description
+                    };
+                    assert!(
+                        source
+                            .lines()
+                            .any(|line| line == format!("{key} = {expected}")),
+                        "{key}"
+                    );
+                }
+            }
+            for f in d.fields() {
+                let key = format!("type-{}-field-{}", fluent_slug(&d.name), f.name);
+                assert!(ids.contains(&key), "missing {key} in locale {locale}");
+            }
+        }
+    }
+}
+
+#[test]
 fn to_text_properties_and_localized_defaults_cover_every_adaptive_form() {
     use crate::{Node, builtin::ToTextNode};
     use ticknode_shared::{DataType, NodeId, quantity::QuantityLabels};

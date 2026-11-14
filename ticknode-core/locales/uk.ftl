@@ -1171,3 +1171,52 @@ node-time-in-range-pin-To = До
 node-time-in-range-pin-in-range = У діапазоні
 
 error-time-shift-overflow = Переповнення під час зсуву дати й часу
+
+# Базові типи медіаданих
+
+type-media-photo-title = Світлина
+type-media-photo-description = Посилання на фотозображення
+type-media-photo-field-url = URL
+type-media-photo-field-file_id = ID файлу
+type-media-photo-field-mime_type = MIME-тип
+type-media-photo-field-file_name = Назва файлу
+type-media-photo-field-size = Розмір
+type-media-photo-field-width = Ширина
+type-media-photo-field-height = Висота
+type-media-photo-field-duration = Тривалість
+
+type-media-audio-title = Аудіо
+type-media-audio-description = Посилання на аудіозапис
+type-media-audio-field-url = URL
+type-media-audio-field-file_id = ID файлу
+type-media-audio-field-mime_type = MIME-тип
+type-media-audio-field-file_name = Назва файлу
+type-media-audio-field-size = Розмір
+type-media-audio-field-width = Ширина
+type-media-audio-field-height = Висота
+type-media-audio-field-duration = Тривалість
+
+type-media-video-title = Відео
+type-media-video-description = Посилання на відеозапис
+type-media-video-field-url = URL
+type-media-video-field-file_id = ID файлу
+type-media-video-field-mime_type = MIME-тип
+type-media-video-field-file_name = Назва файлу
+type-media-video-field-size = Розмір
+type-media-video-field-width = Ширина
+type-media-video-field-height = Висота
+type-media-video-field-duration = Тривалість
+
+type-media-document-title = Файл
+type-media-document-description = Посилання на документ або довільний файл
+type-media-document-field-url = URL
+type-media-document-field-file_id = ID файлу
+type-media-document-field-mime_type = MIME-тип
+type-media-document-field-file_name = Назва файлу
+type-media-document-field-size = Розмір
+type-media-document-field-width = Ширина
+type-media-document-field-height = Висота
+type-media-document-field-duration = Тривалість
+
+error-media-missing-source = Об'єкт медіа повинен містити url або file_id
+

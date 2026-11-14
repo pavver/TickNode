@@ -1,5 +1,5 @@
-use super::routes::{route_points, segment_controls};
 use super::*;
+use crate::geometry::routes::{route_points, segment_controls};
 
 #[test]
 fn routes_are_consecutive_cubics_and_empty_route_is_the_original_wire() {

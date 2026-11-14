@@ -16,12 +16,19 @@ Only one `getUpdates` request is pending, with a 50-second Telegram timeout and 
 | Command | Validated `status` or `/status`; accepts `/status@BotName`; returns raw Arguments and quote-aware Args |
 | Button pressed | Callback data equality/prefix matching; automatically answers callbacks, with optional toast text |
 | Send message | Chat picker or typed input, optional Topic and Reply to, required Text, parse mode, silent sends, link preview setting, inline buttons |
+| Send media | Chat picker or typed input, kind selector (photo/audio/video/document), required Media, optional Caption (1024 characters), Topic, Reply to, parse mode, silent sends, inline buttons |
 | Edit message | Chat, Message id and Text, with optional parse mode |
 | Delete message | Chat and Message id |
 
 Triggers cost 2. Each node has a 128-event FIFO queue, emits at most one pulse per tick and logs overflow when dropping the oldest event. Missing optional values clear their output pins. Callbacks are acknowledged even if no trigger matches; when multiple triggers match, the first registered node in node-ID order supplies the toast text. Auxiliary requests have a bounded queue and leave HTTP slots available for polling.
 
 Actions cost 50 and start node-owned HTTP tasks; removing a node cancels its request or retry delay. A node accepts one pending action. HTTP results arrive through the node's task callback; errors report translated node messages and fire Failed with English diagnostic text on Error. A 429 schedules a node-owned delay for `retry_after` before resending the original body (up to five retries). Credential changes invalidate pending actions. Text outside 1–4096 Unicode characters fails without truncation. Telegram can also reject formatted text or markup.
+
+Send media sends a `media.photo`, `media.audio`, `media.video`, or `media.document` object to Telegram using `sendPhoto`, `sendAudio`, `sendVideo`, or `sendDocument`.
+The Media pin's declared type updates when switching the `kind` property, preserving connections on all other pins.
+The request transmits `file_id` when set, falling back to `url`.
+Requests are serialized as JSON; multipart form-data upload is not supported currently and is reserved for future work.
+Captions are optional, accept inline text values, and cannot exceed 1024 characters.
 
 Buttons use one keyboard row per line and `|` between buttons:
 
@@ -37,6 +44,9 @@ For a `/status` reply, connect Command Received to Send message In and Command C
 ## Directory and identifiers
 
 `telegram.chat_id`, `telegram.user_id`, `telegram.message_id` and `telegram.topic_id` are opaque signed integer types. Message IDs have no labels. `telegram.user` and `telegram.message` are typed structs with optional fields and stable positional definitions.
+Received messages expose media references via optional `photo`, `audio`, `video`, and `document` fields on `telegram.message`.
+Photos select the highest resolution `PhotoSize` entry.
+Captions on incoming media messages populate the `text` field when message text is omitted.
 
 Chats, users and topics are learned from all updates, including chat membership, callback senders, topic creation/editing and quoted topic creation service messages. Current names replace stored names immediately. Historical quoted messages only fill unknown records, so they cannot undo a later rename. Options are republished on name changes. Chat and user usernames appear in option details. Icons distinguish private users/chats, groups and topics.
 

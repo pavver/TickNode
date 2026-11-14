@@ -541,6 +541,8 @@ language-uk = Ukrainian
 quantity-unit-title = Unit
 parse-error-quantity = “{ $value }” is not a value of { $type }.
 error-plugin-quantity-type = Plugin { $plugin } cannot declare reserved quantity type { $type }.
+error-plugin-media-type = Plugin { $plugin } cannot declare reserved media type { $type }.
+error-media-missing-source = Media object must have either url or file_id set
 
 settings-display = Units and formatting
 settings-display-description = Rules use absolute canonical values. Thresholds are entered in the selected unit. Rules apply to all sheets and server text.

@@ -8,10 +8,12 @@ pub const PLUGIN_API: &str = env!("TICKNODE_PLUGIN_API");
 
 pub mod condition;
 pub mod convert;
+pub mod media;
 pub mod plural;
 pub mod quantity;
 pub mod text;
 pub mod to_text;
+pub use media::*;
 pub use quantity::{DisplayRules, NumberDisplay, QuantityDisplay, Rounding, UnitStep};
 pub mod plugin;
 pub mod property;

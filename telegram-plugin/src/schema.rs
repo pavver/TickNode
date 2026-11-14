@@ -47,13 +47,37 @@ pub fn types() -> Vec<TypeDefinition> {
                 FieldDefinition::new("reply_to", "Reply to", named("message_id")).optional(),
                 FieldDefinition::new("chat_title", "Chat title", DataType::String).optional(),
                 FieldDefinition::new("chat_type", "Chat type", DataType::String),
+                FieldDefinition::new("photo", "Photo", DataType::Named("media.photo".into()))
+                    .optional(),
+                FieldDefinition::new("audio", "Audio", DataType::Named("media.audio".into()))
+                    .optional(),
+                FieldDefinition::new("video", "Video", DataType::Named("media.video".into()))
+                    .optional(),
+                FieldDefinition::new("document", "File", DataType::Named("media.document".into()))
+                    .optional(),
             ],
         )
-        .described("A Telegram message with chat, topic, sender and text"),
+        .described("A Telegram message with chat, topic, sender, text and media"),
     ]
 }
 
+fn media_type_for_kind(kind: Option<&str>) -> &'static str {
+    match kind {
+        Some("audio") => "media.audio",
+        Some("video") => "media.video",
+        Some("document") => "media.document",
+        _ => "media.photo",
+    }
+}
+
 pub fn definition(kind: &str) -> NodeDefinition {
+    action_definition(kind, &std::collections::BTreeMap::new())
+}
+
+pub fn action_definition(
+    kind: &str,
+    props: &std::collections::BTreeMap<String, String>,
+) -> NodeDefinition {
     let trigger = matches!(kind, "message" | "command" | "callback");
     let (title, description, help) = match kind {
         "message" => (
@@ -75,6 +99,11 @@ pub fn definition(kind: &str) -> NodeDefinition {
             "Send message",
             "Send text and inline buttons to Telegram",
             "Connect In, Chat and Text. Leave the Chat property empty to use its input. For /status replies, wire Command Chat to Chat and Text from template to Text. Reply to keeps the original topic when known; Topic overrides it. Buttons: one row per line, e.g. Refresh=status | Open=https://example.org. Text is limited to 4096 characters. Done and Message are emitted on success; Failed and Error on failure.",
+        ),
+        "send_media" => (
+            "Send media",
+            "Send photo, audio, video or document to Telegram",
+            "Connect In, Chat and Media. Select kind (photo, audio, video or document): the Media pin type follows the kind. Optional Caption allows up to 1024 characters. Send file_id when present, else url. Reply to keeps the original topic when known; Topic overrides it. Buttons: one row per line, e.g. Refresh=status | Open=https://example.org. Done and Message are emitted on success; Failed and Error on failure.",
         ),
         "edit" => (
             "Edit message",
@@ -167,6 +196,28 @@ pub fn definition(kind: &str) -> NodeDefinition {
                 yes_no("disable_preview", "Disable link preview"),
                 PropertyDefinition::multiline("buttons", "Buttons"),
             ]);
+        } else if kind == "send_media" {
+            let media_type = media_type_for_kind(props.get("kind").map(String::as_str));
+            pins.extend([
+                data_in(2, "Topic", named("topic_id")),
+                data_in(3, "Media", DataType::Named(media_type.into())).required(),
+                data_in(4, "Caption", DataType::String),
+                data_in(5, "Reply to", named("message_id")),
+            ]);
+            properties.extend([
+                PropertyDefinition::select(
+                    "kind",
+                    "Kind",
+                    &[
+                        ("photo", "Photo"),
+                        ("audio", "Audio"),
+                        ("video", "Video"),
+                        ("document", "File"),
+                    ],
+                ),
+                yes_no("silent", "Silent"),
+                PropertyDefinition::multiline("buttons", "Buttons"),
+            ]);
         } else {
             pins.push(data_in(2, "Message id", named("message_id")).required());
             if kind == "edit" {
@@ -189,7 +240,7 @@ pub fn definition(kind: &str) -> NodeDefinition {
             exec_out(11, "Failed"),
             data_out(12, "Error", DataType::String),
         ]);
-        if kind == "send" {
+        if kind == "send" || kind == "send_media" {
             pins.extend([
                 data_out(13, "Message", named("message")),
                 data_out(14, "Message id", named("message_id")),

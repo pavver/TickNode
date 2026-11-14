@@ -8,6 +8,7 @@ mod legacy_nodes;
 mod match_execution;
 mod match_modes;
 mod math_quantities;
+mod media;
 mod mutation_contracts;
 mod property_input;
 mod property_validation;

@@ -29,12 +29,12 @@ pub(super) fn build(
         .arg("chat", chat.to_string()));
     }
     let mut body = json!({"chat_id":chat});
-    if kind != "send" {
+    if kind != "send" && kind != "send_media" {
         body["message_id"] = id(inputs, 2)
             .ok_or_else(|| validation::error("message", "A Telegram message ID is required"))?
             .into();
     }
-    if kind != "delete" {
+    if kind == "send" || kind == "edit" {
         let Some(DataValue::String(text)) = inputs.get(PinId(3)) else {
             return Err(validation::error("text", "Message text is required"));
         };
@@ -47,6 +47,53 @@ pub(super) fn build(
         body["text"] = text.clone().into();
         if prop("parse_mode") != "none" {
             body["parse_mode"] = prop("parse_mode").into();
+        }
+    }
+    if kind == "send_media" {
+        let media_kind = match prop("kind") {
+            "audio" => "audio",
+            "video" => "video",
+            "document" => "document",
+            _ => "photo",
+        };
+        let Some(media_val) = inputs.get(PinId(3)) else {
+            return Err(validation::error(
+                "media",
+                "A media value must have either url or file_id set",
+            ));
+        };
+        let file_id = field_string(media_val, "file_id").filter(|s| !s.trim().is_empty());
+        let url = field_string(media_val, "url").filter(|s| !s.trim().is_empty());
+        let media_ref = file_id.or(url).ok_or_else(|| {
+            validation::error("media", "A media value must have either url or file_id set")
+        })?;
+        body[media_kind] = media_ref.into();
+
+        if let Some(DataValue::String(caption)) = inputs.get(PinId(4))
+            && !caption.is_empty()
+        {
+            if caption.chars().count() > 1024 {
+                return Err(validation::error(
+                    "caption",
+                    "Telegram caption cannot exceed 1024 characters",
+                ));
+            }
+            body["caption"] = caption.clone().into();
+            if prop("parse_mode") != "none" {
+                body["parse_mode"] = prop("parse_mode").into();
+            }
+        }
+
+        let reply = id(inputs, 5);
+        if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
+            body["message_thread_id"] = topic.into();
+        }
+        if let Some(reply) = reply {
+            body["reply_parameters"] = json!({"message_id": reply});
+        }
+        body["disable_notification"] = (prop("silent") == "yes").into();
+        if !prop("buttons").trim().is_empty() {
+            body["reply_markup"] = validation::buttons(prop("buttons"))?;
         }
     }
     if kind == "send" {
@@ -66,6 +113,12 @@ pub(super) fn build(
     Ok((
         match kind {
             "send" => "sendMessage",
+            "send_media" => match prop("kind") {
+                "audio" => "sendAudio",
+                "video" => "sendVideo",
+                "document" => "sendDocument",
+                _ => "sendPhoto",
+            },
             "edit" => "editMessageText",
             _ => "deleteMessage",
         },

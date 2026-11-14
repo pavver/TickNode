@@ -109,7 +109,8 @@
 }
 .inline-value.multiline.template-source::-webkit-scrollbar { display: none; }
 .inline-value.multiline.template-source::selection {
-    background: var(--selection);
+    /* The textarea lies above the highlight layer: a translucent selection keeps the coloured text visible. */
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: transparent;
 }
 .template-highlight .tk-delimiter { color: var(--tk-delimiter); }
@@ -127,7 +128,7 @@
 .template-highlight .tk-text { color: var(--text-primary); }
 .template-highlight .tk-error { text-decoration: underline wavy var(--error); }
 .template-highlight .st-lint { text-decoration: underline wavy var(--warning); }
-.template-status { height: calc(var(--du) * 6); display: flex; align-items: center; gap: calc(var(--du) * 1.5); padding: 0 calc(var(--du) * 2.5); font-size: 11px; line-height: calc(var(--du) * 6); min-width: 0; overflow: hidden; }
+.template-status { height: calc(var(--du) * 6); display: flex; align-items: center; gap: calc(var(--du) * 1.5); padding: 0 calc(var(--du) * 2.5); font-size: calc(var(--tu) * 11); line-height: calc(var(--du) * 6); min-width: 0; overflow: hidden; }
 .template-status.error { color: var(--error); }
 .template-status.warning { color: var(--warning); }
 .template-status.preview { color: var(--text-secondary); }

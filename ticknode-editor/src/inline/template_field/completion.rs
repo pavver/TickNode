@@ -18,8 +18,8 @@ pub struct TemplateCompletionState {
     pub selected: usize,
 }
 
-/// Checks whether the user typed a trigger character: identifier, `.`, `|`,
-/// a space after `is` / `{%`, or explicitly invoked completion via Ctrl+Space.
+/// Checks whether the user typed a trigger character: identifier, `.`, `|`, `'`, `"`, `%`,
+/// a space after `is` / `{%` / `|` (not `||`) / `(` / `,`, or explicitly invoked completion via Ctrl+Space.
 pub fn is_completion_trigger_char(prefix: &str, is_explicit: bool) -> bool {
     if is_explicit {
         return true;
@@ -27,12 +27,25 @@ pub fn is_completion_trigger_char(prefix: &str, is_explicit: bool) -> bool {
     let Some(last_char) = prefix.chars().last() else {
         return false;
     };
-    if last_char.is_alphanumeric() || last_char == '_' || last_char == '.' || last_char == '|' {
+    if last_char.is_alphanumeric()
+        || last_char == '_'
+        || last_char == '.'
+        || last_char == '|'
+        || last_char == '\''
+        || last_char == '"'
+        || last_char == '%'
+    {
         return true;
     }
     if last_char == ' ' {
         let trimmed = prefix.trim_end();
-        if trimmed.ends_with("is") || trimmed.ends_with("{%") || trimmed.ends_with("{%-") {
+        if trimmed.ends_with("is")
+            || trimmed.ends_with("{%")
+            || trimmed.ends_with("{%-")
+            || (trimmed.ends_with('|') && !trimmed.ends_with("||"))
+            || trimmed.ends_with('(')
+            || trimmed.ends_with(',')
+        {
             return true;
         }
     }
@@ -49,6 +62,7 @@ pub fn completion_kind_icon(kind: &CompletionKind) -> &'static str {
         CompletionKind::Function => "mdi-function",
         CompletionKind::Keyword => "mdi-key-variant",
         CompletionKind::Attribute => "mdi-tag-outline",
+        CompletionKind::Format => "mdi-calendar-clock-outline",
     }
 }
 
@@ -162,6 +176,8 @@ fn TemplateCompletionPopup(state: TemplateCompletionState) -> impl IntoView {
         place.left, place.width, place.max_height
     );
 
+    let help_msg = items.get(selected_index).and_then(|it| it.help.clone());
+
     view! {
         <div class="picker-popup template-completion-popup" style=style on:pointerdown=|ev| ev.stop_propagation()>
             <div class="picker-list">
@@ -195,6 +211,14 @@ fn TemplateCompletionPopup(state: TemplateCompletionState) -> impl IntoView {
                     }
                 }).collect_view()}
             </div>
+            {help_msg.as_ref().map(|msg| {
+                let text = crate::i18n::ui_text(msg);
+                view! {
+                    <div class="template-completion-help">
+                        {text}
+                    </div>
+                }
+            })}
         </div>
     }
 }

@@ -21,6 +21,8 @@ fn complete_at<'a>(
         caret,
         inputs,
         types,
+        now: None,
+        labels: None,
     };
     let completion = complete(&input);
     (source, completion)

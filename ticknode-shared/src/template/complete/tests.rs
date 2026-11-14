@@ -22,6 +22,8 @@ fn complete_at<'a>(
         caret,
         inputs,
         types,
+        now: None,
+        labels: None,
     };
     let completion = complete(&input);
     (source, completion)
@@ -360,6 +362,8 @@ fn unparsable_for_header_keeps_endfor_balanced() {
         caret: source.len(),
         inputs: &inputs,
         types: &types,
+        now: None,
+        labels: None,
     })
     .unwrap();
     assert!(result.items.iter().any(|i| i.label == "a"));

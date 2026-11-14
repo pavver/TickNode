@@ -13,11 +13,11 @@ pub(crate) enum ScanState {
     Comment,
     Interpolation {
         expr_start: usize,
-        in_str: Option<u8>,
+        in_str: Option<(u8, usize)>,
     },
     Tag {
         expr_start: usize,
-        in_str: Option<u8>,
+        in_str: Option<(u8, usize)>,
     },
 }
 
@@ -82,7 +82,7 @@ pub(crate) fn scan_prefix(
                 }
             }
             ScanState::Interpolation { expr_start, in_str } => {
-                if let Some(quote) = in_str {
+                if let Some((quote, _)) = in_str {
                     if bytes[i] == b'\\' {
                         i += 2;
                     } else if bytes[i] == quote {
@@ -96,10 +96,11 @@ pub(crate) fn scan_prefix(
                     }
                 } else if bytes[i] == b'\'' || bytes[i] == b'"' {
                     let quote = bytes[i];
+                    let quote_pos = i;
                     i += 1;
                     state = ScanState::Interpolation {
                         expr_start,
-                        in_str: Some(quote),
+                        in_str: Some((quote, quote_pos)),
                     };
                 } else if bytes[i..].starts_with(b"-}}") || bytes[i..].starts_with(b"+}}") {
                     i += 3;
@@ -112,7 +113,7 @@ pub(crate) fn scan_prefix(
                 }
             }
             ScanState::Tag { expr_start, in_str } => {
-                if let Some(quote) = in_str {
+                if let Some((quote, _)) = in_str {
                     if bytes[i] == b'\\' {
                         i += 2;
                     } else if bytes[i] == quote {
@@ -126,10 +127,11 @@ pub(crate) fn scan_prefix(
                     }
                 } else if bytes[i] == b'\'' || bytes[i] == b'"' {
                     let quote = bytes[i];
+                    let quote_pos = i;
                     i += 1;
                     state = ScanState::Tag {
                         expr_start,
-                        in_str: Some(quote),
+                        in_str: Some((quote, quote_pos)),
                     };
                 } else if bytes[i..].starts_with(b"-%}") || bytes[i..].starts_with(b"+%}") {
                     let tag_text = &source[expr_start..i];
@@ -276,6 +278,7 @@ pub(crate) fn resolve_dot_context(
                     kind: CompletionKind::Variable,
                     detail: type_label(data_type, types),
                     insert: name.clone(),
+                    help: None,
                 })
                 .collect();
             items.sort_by(|a, b| a.label.cmp(&b.label));
@@ -327,6 +330,7 @@ pub(crate) fn resolve_dot_context(
                         kind: CompletionKind::Field,
                         detail: type_label(&f.data_type, types),
                         insert: f.name.clone(),
+                        help: None,
                     })
                     .collect();
                 items.sort_by(|a, b| a.label.cmp(&b.label));

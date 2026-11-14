@@ -1,3 +1,4 @@
+use crate::quantity::QuantityLabels;
 use crate::{DataType, TypeRegistry};
 use std::collections::HashSet;
 use std::ops::Range;
@@ -5,6 +6,7 @@ use std::ops::Range;
 mod catalog;
 #[cfg(test)]
 mod context_tests;
+mod date_format;
 #[cfg(test)]
 mod date_tests;
 mod infer;
@@ -22,6 +24,8 @@ pub struct CompletionInput<'a> {
     /// Template inputs: name + declared/connected type (Any if unknown), in pin order.
     pub inputs: &'a [(String, DataType)],
     pub types: &'a TypeRegistry,
+    pub now: Option<chrono::DateTime<chrono::Local>>,
+    pub labels: Option<&'a dyn QuantityLabels>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +37,7 @@ pub enum CompletionKind {
     Function,
     Keyword,
     Attribute,
+    Format,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +46,7 @@ pub struct CompletionItem {
     pub kind: CompletionKind,
     pub detail: String,
     pub insert: String,
+    pub help: Option<crate::UiMessage>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,11 +102,17 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
     let (expr_start, is_tag) = match state {
         scan::ScanState::Plain | scan::ScanState::Comment => return None,
         scan::ScanState::Interpolation {
-            in_str: Some(_), ..
+            expr_start,
+            in_str: Some((quote, quote_pos)),
         }
         | scan::ScanState::Tag {
-            in_str: Some(_), ..
-        } => return None,
+            expr_start,
+            in_str: Some((quote, quote_pos)),
+        } => {
+            return date_format::try_complete_date_pattern(
+                input, expr_start, quote, quote_pos, caret,
+            );
+        }
         scan::ScanState::Interpolation {
             expr_start,
             in_str: None,
@@ -168,6 +180,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
                 kind: CompletionKind::Variable,
                 detail: type_label(data_type, input.types),
                 insert: name.clone(),
+                help: None,
             });
         }
     }
@@ -191,6 +204,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
                     kind: CompletionKind::Variable,
                     detail: detail.clone(),
                     insert: var.clone(),
+                    help: None,
                 });
             }
         }
@@ -203,6 +217,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             kind: CompletionKind::Variable,
             detail: String::new(),
             insert: var.clone(),
+            help: None,
         });
     }
 
@@ -213,6 +228,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             kind: CompletionKind::Variable,
             detail: "loop context".to_string(),
             insert: "loop".to_string(),
+            help: None,
         });
     }
 
@@ -223,6 +239,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             kind: CompletionKind::Variable,
             detail: "formatted inputs".to_string(),
             insert: "text".to_string(),
+            help: None,
         });
     }
 
@@ -233,6 +250,7 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             kind: CompletionKind::Function,
             detail: "range([start], stop, [step])".to_string(),
             insert: "range()".to_string(),
+            help: None,
         });
     } else {
         raw_items.extend(catalog::function_items());

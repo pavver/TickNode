@@ -142,6 +142,8 @@ pub fn TemplateField(
                     caret: caret_byte,
                     inputs: &input_pins,
                     types,
+                    now: Some(chrono::Local::now()),
+                    labels: Some(&crate::i18n::UiQuantityLabels),
                 })
             });
 

@@ -346,6 +346,34 @@ fn strftime_filter(value: Value, format_str: Option<String>) -> Result<Value, mi
     Ok(Value::from(output))
 }
 
+/// Formats a single date pattern or preset with a given local time and quantity labels.
+pub fn example(
+    pattern: &str,
+    now: DateTime<chrono::Local>,
+    labels: &dyn QuantityLabels,
+) -> Option<String> {
+    if pattern == "iso" {
+        return Some(now.to_rfc3339());
+    }
+    let resolved_pattern = match pattern {
+        "datetime" => labels
+            .message("text-date-format-datetime")
+            .unwrap_or_else(|| "YYYY-MM-DD HH:mm".to_string()),
+        "date" => labels
+            .message("text-date-format-date")
+            .unwrap_or_else(|| "YYYY-MM-DD".to_string()),
+        "time" => labels
+            .message("text-date-format-time")
+            .unwrap_or_else(|| "HH:mm".to_string()),
+        "long" => labels
+            .message("text-date-format-long")
+            .unwrap_or_else(|| "MMMM D, YYYY HH:mm".to_string()),
+        other => other.to_string(),
+    };
+    let moment = Moment::DateTime(now);
+    format_pattern(&moment, &resolved_pattern, labels).ok()
+}
+
 pub(super) fn register(
     env: &mut Environment<'static>,
     labels: Arc<dyn QuantityLabels + Send + Sync>,

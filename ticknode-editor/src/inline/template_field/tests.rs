@@ -188,6 +188,13 @@ fn trigger_chars_identify_completion_positions() {
     assert!(is_completion_trigger_char("{{ v", false));
     assert!(is_completion_trigger_char("{{ a.", false));
     assert!(is_completion_trigger_char("{{ a|", false));
+    assert!(is_completion_trigger_char("{{ a | ", false));
+    assert!(!is_completion_trigger_char("{{ a || ", false));
+    assert!(is_completion_trigger_char("{{ a | date( ", false));
+    assert!(is_completion_trigger_char("{{ a | date('x', ", false));
+    assert!(is_completion_trigger_char("date('", false));
+    assert!(is_completion_trigger_char("date(\"", false));
+    assert!(is_completion_trigger_char("%", false));
     assert!(is_completion_trigger_char("{{ a is ", false));
     assert!(is_completion_trigger_char("{% ", false));
     assert!(is_completion_trigger_char("{%- ", false));

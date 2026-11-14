@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 
-mod dates;
+pub mod dates;
 #[cfg(test)]
 mod tests;
 mod values;

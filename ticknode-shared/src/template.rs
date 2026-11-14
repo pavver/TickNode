@@ -16,10 +16,12 @@ pub mod duration;
 pub mod plural;
 #[cfg(test)]
 mod tests;
+pub mod unit;
 mod values;
 
 pub use ago::ago_filter;
 pub use duration::{duration_filter, format_duration_pattern, format_duration_preset};
+pub use unit::unit_filter;
 
 pub mod complete;
 pub use complete::{
@@ -51,10 +53,19 @@ impl std::fmt::Display for TemplateError {
 impl std::error::Error for TemplateError {}
 
 impl TemplateError {
-    pub fn from_minijinja(err: &minijinja::Error, source: &str) -> Self {
-        let range = err.range();
-        let line = err.line().or_else(|| {
-            range.as_ref().map(|r| {
+    pub fn from_minijinja_mapped(
+        err: &minijinja::Error,
+        source: &str,
+        insertions: &[(usize, usize)],
+    ) -> Self {
+        let range = err.range().map(|r| {
+            let start = unit::map_offset(r.start, insertions);
+            let end = unit::map_offset(r.end, insertions);
+            start..end.max(start)
+        });
+        let line = range
+            .as_ref()
+            .map(|r| {
                 let prefix = if r.start <= source.len() {
                     &source[..r.start]
                 } else {
@@ -62,7 +73,7 @@ impl TemplateError {
                 };
                 prefix.split('\n').count()
             })
-        });
+            .or_else(|| err.line());
         let column = range.as_ref().and_then(|r| {
             if r.start <= source.len() {
                 let prefix = &source[..r.start];
@@ -79,6 +90,10 @@ impl TemplateError {
             range,
         }
     }
+
+    pub fn from_minijinja(err: &minijinja::Error, source: &str) -> Self {
+        Self::from_minijinja_mapped(err, source, &[])
+    }
 }
 
 /// Creates a standard MiniJinja environment configured for TickNode templates.
@@ -88,6 +103,7 @@ pub fn environment() -> Environment<'static> {
     env.set_fuel(Some(FUEL));
     // `render` replaces this placeholder with a presentation-aware filter.
     env.add_filter("text", |value: Value| value.to_string());
+    env.add_filter("unit", |value: Value| value.to_string());
     env.add_global("text", Value::from_iter(Vec::<(String, Value)>::new()));
     env.add_function("now", || Utc::now().to_rfc3339());
     let canonical = Arc::new(crate::quantity::CanonicalLabels);
@@ -152,33 +168,74 @@ pub fn variables(source: &str) -> Result<Vec<String>, TemplateError> {
 /// Formats values computed inside a template for the `| text` filter.
 pub type RuntimeText = Arc<dyn Fn(&DataValue) -> String + Send + Sync>;
 
+/// Formats a value using To text logic for templates.
+pub type ToTextFn =
+    Arc<dyn Fn(&DataValue, &DataType, &crate::to_text::ToTextOptions) -> String + Send + Sync>;
+
 /// Runtime environment for localized template rendering.
 #[derive(Clone)]
 pub struct RenderEnv {
     pub labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
     pub now: DateTime<Utc>,
+    pub to_text: ToTextFn,
 }
 
 impl RenderEnv {
     pub fn new(
         labels: Arc<dyn crate::quantity::QuantityLabels + Send + Sync>,
         now: DateTime<Utc>,
+        to_text: ToTextFn,
     ) -> Self {
-        Self { labels, now }
+        Self {
+            labels,
+            now,
+            to_text,
+        }
+    }
+}
+
+impl Default for RenderEnv {
+    fn default() -> Self {
+        Self {
+            labels: Arc::new(crate::quantity::CanonicalLabels),
+            now: Utc::now(),
+            to_text: Arc::new(|value, declared, options| {
+                crate::to_text::to_text(
+                    value,
+                    declared,
+                    options,
+                    &crate::DisplayRules::default(),
+                    &crate::quantity::CanonicalLabels,
+                )
+            }),
+        }
     }
 }
 
 /// A parsed template kept between renders, so a pure node does not reparse on every evaluation.
 pub struct CompiledTemplate {
     env: Environment<'static>,
+    source: String,
+    insertions: Vec<(usize, usize)>,
 }
 
 impl CompiledTemplate {
     pub fn new(source: &str) -> Result<Self, TemplateError> {
+        validate(source)?;
+        let (rewritten, insertions) = unit::rewrite_unit_paths(source);
         let mut env = environment();
-        env.add_template_owned("template", source.to_string())
-            .map_err(|err| TemplateError::from_minijinja(&err, source))?;
-        Ok(Self { env })
+        env.add_template_owned("template", rewritten)
+            .map_err(|err| TemplateError::from_minijinja_mapped(&err, source, &insertions))?;
+        Ok(Self {
+            env,
+            source: source.to_string(),
+            insertions,
+        })
+    }
+
+    /// The original template source.
+    pub fn source(&self) -> &str {
+        &self.source
     }
 
     /// Renders with the fuel budget, input context, the `text` presentation map, and localized date/time filters.
@@ -188,6 +245,7 @@ impl CompiledTemplate {
         format: &dyn Fn(&DataValue, &DataType) -> String,
         runtime_text: RuntimeText,
         env_ctx: RenderEnv,
+        types: &crate::TypeRegistry,
     ) -> Result<String, TemplateError> {
         let mut env = self.env.clone();
         let now_iso = env_ctx.now.to_rfc3339();
@@ -195,6 +253,7 @@ impl CompiledTemplate {
         dates::register(&mut env, env_ctx.labels.clone());
         ago::register(&mut env, env_ctx.labels.clone(), env_ctx.now);
         duration::register(&mut env, env_ctx.labels.clone());
+        unit::register(&mut env, &env_ctx, inputs, types);
         let text_map: Value = inputs
             .iter()
             .filter_map(|(name, value, ty)| {
@@ -228,10 +287,9 @@ impl CompiledTemplate {
         let template = env
             .get_template("template")
             .expect("compiled template is registered");
-        let source = template.source().to_string();
-        template
-            .render(context)
-            .map_err(|err| TemplateError::from_minijinja(&err, &source))
+        template.render(context).map_err(|err| {
+            TemplateError::from_minijinja_mapped(&err, &self.source, &self.insertions)
+        })
     }
 
     /// Renders with canonical (English/ISO) labels; prefer [`Self::render_localized`] for UI/locale-specific rendering.
@@ -241,14 +299,13 @@ impl CompiledTemplate {
         format: &dyn Fn(&DataValue, &DataType) -> String,
         runtime_text: RuntimeText,
     ) -> Result<String, TemplateError> {
+        let dummy_types = crate::TypeRegistry::new();
         self.render_localized(
             inputs,
             format,
             runtime_text,
-            RenderEnv {
-                labels: Arc::new(crate::quantity::CanonicalLabels),
-                now: Utc::now(),
-            },
+            RenderEnv::default(),
+            &dummy_types,
         )
     }
 }

@@ -608,6 +608,8 @@ template-help-filter-default = Резервне значення, якщо вх�
 template-help-function-now = Поточна дата й час як рядок ISO 8601 / RFC 3339
 template-help-filter-ago = Форматує відносний час, наприклад '5 хвилин тому' або 'через 2 години'
 template-help-filter-duration = Форматує тривалість за допомогою компактних одиниць ('short'), слів ('long') чи шаблону 'H:mm'
+template-help-filter-unit = Форматує число або фізичну величину за правилами відображення проєкту чи вказаною одиницею вимірювання
+template-help-unit-symbol = Одиниця вимірювання для { $quantity }
 
 template-help-date-preset-datetime = Стандартні дата й час
 template-help-date-preset-date = Тільки дата

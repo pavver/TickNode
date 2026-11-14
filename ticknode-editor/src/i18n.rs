@@ -112,7 +112,7 @@ fn build_bundles(runtime: &[(String, String)]) -> Bundles {
 thread_local! {
     static BUNDLES: RefCell<Bundles> = RefCell::new(build_bundles(&[]));
     /// Types known to the editor: needed to translate Make/Break node pins (their labels are field titles).
-    static TYPES: RefCell<TypeRegistry> = RefCell::new(TypeRegistry::new());
+    pub(crate) static TYPES: RefCell<TypeRegistry> = RefCell::new(TypeRegistry::new());
     /// Bumped when server translations change, so reactive texts are re-evaluated.
     static TRANSLATIONS_VERSION: Cell<Option<RwSignal<u32>>> = const { Cell::new(None) };
     /// Active locale signal for calls outside the component tree (e.g., WebSocket callbacks).

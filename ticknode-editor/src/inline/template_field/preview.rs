@@ -162,16 +162,38 @@ pub fn evaluate_preview(
     let format = |v: &DataValue, t: &DataType| crate::i18n::value_as_text(v, t);
     let runtime_text: Arc<dyn Fn(&DataValue) -> String + Send + Sync> =
         Arc::new(|v| crate::i18n::value_as_text(v, &DataType::Any));
+    let rules = crate::i18n::display_rules();
+    let to_text_closure: ticknode_shared::template::ToTextFn = Arc::new(move |v, t, opt| {
+        crate::i18n::TYPES.with(|types| {
+            ticknode_shared::to_text::to_text_with_identifiers(
+                v,
+                t,
+                opt,
+                &rules,
+                &crate::i18n::UiQuantityLabels,
+                &types.borrow(),
+                &|name: &str, id: i64| {
+                    crate::i18n::identifier_label(name, id).map(|label| format!("{label} ({id})"))
+                },
+            )
+        })
+    });
 
-    match compiled.render_localized(
-        inputs,
-        &format,
-        runtime_text,
-        ticknode_shared::template::RenderEnv {
-            labels: Arc::new(crate::i18n::UiQuantityLabels),
-            now: chrono::Utc::now(),
-        },
-    ) {
+    let res = crate::i18n::TYPES.with(|types| {
+        compiled.render_localized(
+            inputs,
+            &format,
+            runtime_text,
+            ticknode_shared::template::RenderEnv {
+                labels: Arc::new(crate::i18n::UiQuantityLabels),
+                now: chrono::Utc::now(),
+                to_text: to_text_closure,
+            },
+            &types.borrow(),
+        )
+    });
+
+    match res {
         Ok(text) if text.is_empty() => PreviewStatus::Empty,
         Ok(text) => PreviewStatus::Text(text),
         // A missing input usually explains the failure (`msg.chat` on an undefined `msg`): wait for values.

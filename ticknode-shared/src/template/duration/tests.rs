@@ -119,7 +119,9 @@ fn render_duration(
         RenderEnv {
             labels,
             now: Utc::now(),
+            ..Default::default()
         },
+        &crate::TypeRegistry::new(),
     )
 }
 

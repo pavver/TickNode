@@ -593,6 +593,8 @@ template-help-filter-default = Fallback value when the input is undefined or emp
 template-help-function-now = Current date and time as an ISO 8601 / RFC 3339 string
 template-help-filter-ago = Formats relative time, e.g. '5 minutes ago' or 'in 2 hours'
 template-help-filter-duration = Formats a duration using compact units ('short'), words ('long'), or an 'H:mm' pattern
+template-help-filter-unit = Formats a number or physical quantity using project display rules or an explicit unit symbol
+template-help-unit-symbol = Unit of measurement for { $quantity }
 
 template-help-date-preset-datetime = Standard date and time
 template-help-date-preset-date = Date only

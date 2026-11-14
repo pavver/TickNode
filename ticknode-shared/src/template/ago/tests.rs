@@ -153,7 +153,12 @@ fn render_ago(
         &inputs,
         &|v, _| crate::text::format_value(v),
         Arc::new(crate::text::format_value),
-        RenderEnv { labels, now },
+        RenderEnv {
+            labels,
+            now,
+            ..Default::default()
+        },
+        &crate::TypeRegistry::new(),
     )
 }
 
@@ -299,7 +304,9 @@ fn test_now_injected_instant_and_variables() {
             RenderEnv {
                 labels: Arc::new(crate::quantity::CanonicalLabels),
                 now,
+                ..Default::default()
             },
+            &crate::TypeRegistry::new(),
         )
         .unwrap();
     assert_eq!(res, "2026-11-14T15:30:00+00:00");

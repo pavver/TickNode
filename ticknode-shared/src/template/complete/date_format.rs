@@ -95,17 +95,27 @@ const STRFTIME_TOKENS: &[(&str, &str, &str)] = &[
     ("%%", "percent", "Literal % character"),
 ];
 
-fn is_first_arg_of_filter(before_quote: &str, filter_name: &str) -> bool {
+fn parse_first_arg_of_filter(before_quote: &str) -> Option<(&str, &str)> {
     let s = before_quote.trim_end();
-    let Some(without_paren) = s.strip_suffix('(') else {
-        return false;
-    };
+    let without_paren = s.strip_suffix('(')?;
     let without_name = without_paren.trim_end();
-    let Some(without_name) = without_name.strip_suffix(filter_name) else {
-        return false;
-    };
-    let without_pipe = without_name.trim_end();
-    without_pipe.ends_with('|') && !without_pipe.ends_with("||")
+    let name_end = without_name.len();
+    let mut name_start = name_end;
+    let bytes = without_name.as_bytes();
+    while name_start > 0 && super::scan::is_ident_char(bytes[name_start - 1]) {
+        name_start -= 1;
+    }
+    if name_start == name_end {
+        return None;
+    }
+    let filter_name = &without_name[name_start..name_end];
+    let without_pipe = without_name[..name_start].trim_end();
+    if without_pipe.ends_with('|') && !without_pipe.ends_with("||") {
+        let left_expr = without_pipe[..without_pipe.len() - 1].trim();
+        Some((filter_name, left_expr))
+    } else {
+        None
+    }
 }
 
 pub(crate) fn try_complete_date_pattern(
@@ -119,16 +129,63 @@ pub(crate) fn try_complete_date_pattern(
         return None;
     }
     let before_quote = &input.source[expr_start..quote_pos];
-
-    if is_first_arg_of_filter(before_quote, "date") {
-        complete_date_arg(input, quote, quote_pos, caret)
-    } else if is_first_arg_of_filter(before_quote, "strftime") {
-        complete_strftime_arg(input, quote, quote_pos, caret)
-    } else if is_first_arg_of_filter(before_quote, "duration") {
-        complete_duration_arg(input, quote, quote_pos, caret)
-    } else {
-        None
+    let (filter_name, left_expr) = parse_first_arg_of_filter(before_quote)?;
+    match filter_name {
+        "date" => complete_date_arg(input, quote, quote_pos, caret),
+        "strftime" => complete_strftime_arg(input, quote, quote_pos, caret),
+        "duration" => complete_duration_arg(input, quote, quote_pos, caret),
+        "unit" => complete_unit_arg(input, left_expr, quote, quote_pos, caret),
+        _ => None,
     }
+}
+
+fn complete_unit_arg(
+    input: &CompletionInput,
+    left_expr: &str,
+    quote: u8,
+    quote_pos: usize,
+    caret: usize,
+) -> Option<Completion> {
+    let decl_type = super::infer::infer_dotted_path_type(left_expr, input.inputs, input.types)?;
+    let crate::DataType::Named(ref type_name) = decl_type else {
+        return None;
+    };
+    let kind = crate::quantity::kind(type_name)?;
+
+    let bytes = input.source.as_bytes();
+    let mut start = caret;
+    while start > quote_pos + 1
+        && !bytes[start - 1].is_ascii_whitespace()
+        && bytes[start - 1] != quote
+    {
+        start -= 1;
+    }
+    let mut end = caret;
+    while end < bytes.len() && !bytes[end].is_ascii_whitespace() && bytes[end] != quote {
+        end += 1;
+    }
+    let range = start..end;
+    let partial = &input.source[start..caret];
+
+    let mut items = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    for u in &kind.units {
+        if seen.insert(&u.symbol) && u.symbol.starts_with(partial) {
+            items.push(CompletionItem {
+                label: u.symbol.clone(),
+                kind: CompletionKind::Format,
+                detail: u.id.clone(),
+                insert: u.symbol.clone(),
+                help: Some(
+                    crate::UiMessage::new("template-help-unit-symbol", "Unit of measurement")
+                        .arg("quantity", type_name),
+                ),
+            });
+        }
+    }
+
+    Some(Completion { range, items })
 }
 
 fn complete_date_arg(

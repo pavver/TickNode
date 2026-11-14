@@ -124,6 +124,7 @@ pub const BUILTIN_FILTERS: &[(&str, &str)] = &[
     ("title", "title()"),
     ("trim", "trim()"),
     ("unique", "unique()"),
+    ("unit", "unit([symbol], digits=, decimals=, units=)"),
     ("upper", "upper()"),
 ];
 
@@ -152,6 +153,14 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
         "date" | "strftime" => matches!(input, ValueKind::DateTime | ValueKind::Time),
         "ago" => matches!(input, ValueKind::DateTime),
         "duration" => matches!(input, ValueKind::Duration | ValueKind::Number),
+        "unit" => matches!(
+            input,
+            ValueKind::Number
+                | ValueKind::Duration
+                | ValueKind::DateTime
+                | ValueKind::Time
+                | ValueKind::Any
+        ),
         "abs" | "round" | "plural" => matches!(input, ValueKind::Number),
         "int" => matches!(
             input,
@@ -186,17 +195,16 @@ pub fn filter_accepts(name: &str, input: &ValueKind) -> bool {
 pub fn filter_output_kind(name: &str, input: &ValueKind) -> ValueKind {
     if matches!(input, ValueKind::Any) {
         return match name {
-            "date" | "strftime" | "ago" | "duration" | "text" | "string" | "pprint" | "safe"
-            | "escape" | "e" | "plural" => ValueKind::String,
+            "date" | "strftime" | "ago" | "duration" | "unit" | "text" | "string" | "pprint"
+            | "safe" | "escape" | "e" | "plural" => ValueKind::String,
             "bool" => ValueKind::Bool,
             _ => ValueKind::Any,
         };
     }
 
     match name {
-        "date" | "strftime" | "ago" | "duration" | "text" | "string" | "pprint" | "plural" => {
-            ValueKind::String
-        }
+        "date" | "strftime" | "ago" | "duration" | "unit" | "text" | "string" | "pprint"
+        | "plural" => ValueKind::String,
         "bool" => ValueKind::Bool,
         "default" | "d" => input.clone(),
         "capitalize" | "lower" | "upper" | "title" | "trim" | "replace" | "indent" | "format"
@@ -270,6 +278,10 @@ fn make_filter_item(
         "duration" => Some(crate::UiMessage::new(
             "template-help-filter-duration",
             "Formats a duration using compact units ('short'), words ('long'), or an 'H:mm' pattern",
+        )),
+        "unit" => Some(crate::UiMessage::new(
+            "template-help-filter-unit",
+            "Formats a number or physical quantity using project display rules or an explicit unit symbol",
         )),
         "text" => Some(crate::UiMessage::new(
             "template-help-filter-text",

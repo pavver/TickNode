@@ -57,6 +57,30 @@ fn text_map_keeps_source_type_while_filter_uses_only_runtime_kind() {
 }
 
 #[test]
+fn test_template_unit_filter_uk_locale() {
+    let (mut engine, id) = setup("{{ power | unit }}");
+    let source = NodeId::generate();
+    engine
+        .create_node(
+            source,
+            "const",
+            &[
+                ("value_type".into(), "quantity.power".into()),
+                ("value".into(), 1970.into()),
+            ],
+        )
+        .unwrap();
+    let pin = pins(&engine, id)
+        .into_iter()
+        .find(|(n, _)| n == "power")
+        .unwrap()
+        .1;
+    engine.connect_data(source, PinId(0), id, pin).unwrap();
+    engine.set_locale("uk");
+    assert_eq!(render(&mut engine, id), Some("1,97 кВт".into()));
+}
+
+#[test]
 fn text_map_matches_to_text_for_every_value_kind_in_both_locales() {
     let cases = vec![
         true.into(),

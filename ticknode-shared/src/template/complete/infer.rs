@@ -292,3 +292,25 @@ fn is_trailing_call(s: &str, func_name: &str) -> bool {
     }
     false
 }
+
+/// Infers the declared `DataType` of a dotted input path, resolving struct fields via `TypeRegistry`.
+pub(crate) fn infer_dotted_path_type(
+    s: &str,
+    inputs: &[(String, DataType)],
+    types: &TypeRegistry,
+) -> Option<DataType> {
+    let path = scan::parse_dotted_path(s)?;
+    if path.is_empty() {
+        return None;
+    }
+    let root = &path[0];
+    if root == "text" || root == "loop" {
+        return None;
+    }
+    let (_, root_type) = inputs.iter().find(|(name, _)| name == root)?;
+    let mut current_type = root_type.clone();
+    for field in &path[1..] {
+        current_type = scan::resolve_struct_field(&current_type, field, types)?;
+    }
+    Some(current_type)
+}

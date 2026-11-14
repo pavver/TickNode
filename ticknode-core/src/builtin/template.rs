@@ -16,7 +16,7 @@ const HELP: &str = r#"Formats a MiniJinja template. Undeclared variables become 
 
 Examples: Power: {{ text.power }}; {% if power > 1000 %}high{% endif %}; {{ (power / 1000) | round(1) }} kW; {% for item in items %}{{ item }} {% endfor %}; {{ name | default('—') }}.
 
-Date-times and times: {{ when | date }} uses the formatting language's default, {{ when | date('DD.MM.YYYY HH:mm') }} takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and {{ when | strftime('%d.%m.%Y') }} accepts chrono strftime formats. Date-times are shown in the server time zone. Plural forms: {{ count | plural('file', 'files') }} selects text using CLDR cardinal rules for the engine language (positional categories in integer order or keywords zero/one/two/few/many/other), replacing # with the formatted number. Current time, relative time and duration: {{ now() }} returns the current instant, {{ when | ago }} renders relative time such as '5 minutes ago', and {{ elapsed | duration }} formats wall-clock durations using 'short', 'long' or 'H:mm' patterns.
+Date-times and times: {{ when | date }} uses the formatting language's default, {{ when | date('DD.MM.YYYY HH:mm') }} takes a readable pattern (YYYY, MM, MMMM month name, DD, ddd/dddd weekday, HH, hh, mm, ss, A; text in [brackets] is kept), presets 'date', 'time', 'datetime', 'long' and 'iso' are available, and {{ when | strftime('%d.%m.%Y') }} accepts chrono strftime formats. Date-times are shown in the server time zone. Plural forms: {{ count | plural('file', 'files') }} selects text using CLDR cardinal rules for the engine language (positional categories in integer order or keywords zero/one/two/few/many/other), replacing # with the formatted number. Current time, relative time and duration: {{ now() }} returns the current instant, {{ when | ago }} renders relative time such as '5 minutes ago', and {{ elapsed | duration }} formats wall-clock durations using 'short', 'long' or 'H:mm' patterns. Physical quantities and numbers: {{ power | unit }} formats using project display rules and the input's declared type (e.g. 1.97 kW), {{ power | unit('W') }} fixes the unit symbol, and keyword arguments digits, decimals or units=false override rounding or hide the unit.
 
 Inputs are plain Jinja values, so arithmetic, comparisons, tests and standard filters work normally. The global text map formats each input exactly like To text, using the connected source's declared type, project display rules and engine formatting language: {{ text.power }} can render 1.2 kW. Lists and structures retain their declared element and field types in this presentation. Units come from text.name.
 
@@ -119,6 +119,19 @@ impl TemplateNode {
         };
         let display = ctx.host_state.display.clone();
         let labels = crate::quantity::labels(&ctx.host_state.locale);
+        let to_text_display = ctx.host_state.display.clone();
+        let to_text_closure: ticknode_shared::template::ToTextFn =
+            std::sync::Arc::new(move |value, declared, options| {
+                to_text_with_identifiers(
+                    value,
+                    declared,
+                    options,
+                    &to_text_display,
+                    labels,
+                    &TypeRegistry::new(),
+                    &|_: &str, _: i64| None,
+                )
+            });
         compiled.render_localized(
             &inputs,
             &|value, declared| {
@@ -146,7 +159,9 @@ impl TemplateNode {
             ticknode_shared::template::RenderEnv {
                 labels: std::sync::Arc::new(labels),
                 now: ctx.host_state.now(),
+                to_text: to_text_closure,
             },
+            ctx.types,
         )
     }
 }

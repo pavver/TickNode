@@ -49,7 +49,9 @@ fn render_template(
         crate::template::RenderEnv {
             labels,
             now: chrono::Utc::now(),
+            ..Default::default()
         },
+        &crate::TypeRegistry::new(),
     )
 }
 

@@ -1,9 +1,9 @@
 //! Node-owned HTTP actions. Telegram rate limits wait through a node-owned delay task.
 mod body;
 #[cfg(test)]
-mod keyboard_tests;
+mod edit_tests;
 #[cfg(test)]
-mod media_tests;
+mod send_tests;
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -45,7 +45,7 @@ impl ActionNode {
             Output::Data(PinId(12), error.fallback.into()),
             Output::Exec(PinId(11)),
         ];
-        if self.kind == "send" || self.kind == "send_media" {
+        if self.kind == "send" {
             outputs.extend([Output::Clear(PinId(13)), Output::Clear(PinId(14))]);
         }
         outputs
@@ -102,7 +102,7 @@ impl ActionNode {
                 ));
             }
         };
-        if self.kind == "send" || self.kind == "send_media" {
+        if self.kind == "send" {
             hub.lookup(chat, now);
         }
         self.pending = Some(Pending {
@@ -189,7 +189,7 @@ impl ActionNode {
         match api::response(result) {
             Ok(value) => {
                 let mut outputs = vec![Output::Clear(PinId(12))];
-                if self.kind == "send" || self.kind == "send_media" {
+                if self.kind == "send" {
                     let Ok(message) = serde_json::from_value::<Message>(value) else {
                         return self.failed(validation::error(
                             "response",

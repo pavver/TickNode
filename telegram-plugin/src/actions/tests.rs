@@ -1,55 +1,28 @@
 use super::*;
 use crate::tests::*;
 use serde_json::json;
-fn inputs(values: &[(u32, DataValue)]) -> Inputs {
+pub(crate) fn inputs(values: &[(u32, DataValue)]) -> Inputs {
     values
         .iter()
         .map(|(id, v)| (PinId(*id), v.clone()))
         .collect()
 }
-fn sending() -> Inputs {
+
+pub(crate) fn sending() -> Inputs {
     inputs(&[(1, (-100i64).into()), (3, "Hello".into())])
 }
-#[test]
-fn send_body_has_parse_mode_silent_previews_buttons_reply_and_inferred_topic() {
-    let (mut hub, _) = authenticated();
-    let mut original = message(-100, 50, "/status");
-    original["message_thread_id"] = 7.into();
-    hub.remember(&serde_json::from_value(original).unwrap());
-    let mut node = ActionNode::new("send");
-    for (key, value) in [
-        ("parse_mode", "HTML"),
-        ("silent", "yes"),
-        ("disable_preview", "yes"),
-        (
-            "buttons",
-            "Refresh=status | Open=https://example.org\nOther=other",
-        ),
-    ] {
-        node.props.insert(key.into(), value.into());
+
+pub(crate) fn media_val(type_name: &str, file_id: Option<&str>, url: Option<&str>) -> DataValue {
+    let mut s = StructValue::new(type_name);
+    if let Some(fid) = file_id {
+        s = s.field("file_id", fid);
     }
-    let values = inputs(&[
-        (1, (-100i64).into()),
-        (3, "<b>Status</b>".into()),
-        (4, 50i64.into()),
-    ]);
-    let (method, body) = body::build("send", &node.props, &values, &hub).unwrap();
-    assert_eq!(method, "sendMessage");
-    assert_eq!(body["chat_id"], -100);
-    assert_eq!(body["message_thread_id"], 7);
-    assert_eq!(body["reply_parameters"], json!({"message_id":50}));
-    assert_eq!(body["parse_mode"], "HTML");
-    assert_eq!(body["disable_notification"], true);
-    assert_eq!(body["link_preview_options"]["is_disabled"], true);
-    assert_eq!(
-        body["reply_markup"]["inline_keyboard"][0][0]["callback_data"],
-        "status"
-    );
-    assert_eq!(
-        body["reply_markup"]["inline_keyboard"][0][1]["url"],
-        "https://example.org"
-    );
+    if let Some(u) = url {
+        s = s.field("url", u);
+    }
+    s.build()
 }
+
 #[test]
 fn explicit_topic_overrides_reply_and_chat_property_replaces_input() {
     let (hub, _) = authenticated();
@@ -73,13 +46,12 @@ fn explicit_topic_overrides_reply_and_chat_property_replaces_input() {
 #[test]
 fn edit_and_delete_bodies_use_chat_message_id_and_optional_parse_mode() {
     let (hub, _) = authenticated();
-    let mut props = schema::defaults("edit");
-    props.insert("parse_mode".into(), "MarkdownV2".into());
-    let values = inputs(&[
-        (1, (-100i64).into()),
-        (2, 51i64.into()),
-        (3, "Updated".into()),
-    ]);
+    let props = schema::defaults("edit");
+    let outgoing = StructValue::new("telegram.outgoing")
+        .field("text", "Updated")
+        .field("parse_mode", "markdown_v2")
+        .build();
+    let values = inputs(&[(1, (-100i64).into()), (2, 51i64.into()), (3, outgoing)]);
     assert_eq!(
         body::build("edit", &props, &values, &hub).unwrap(),
         (
@@ -110,21 +82,6 @@ fn text_limit_counts_unicode_characters_without_truncation() {
             );
         }
     }
-}
-#[test]
-fn buttons_reject_empty_labels_invalid_links_and_oversized_callback_bytes() {
-    for text in [
-        "Missing equal",
-        "=data",
-        "Label=",
-        "Label=http://example.org",
-        "Label=https://",
-        "Label=https://bad url",
-    ] {
-        assert!(validation::buttons(text).is_err(), "{text}");
-    }
-    assert!(validation::buttons(&format!("Label={}", "я".repeat(33))).is_err());
-    assert!(validation::buttons(&format!("Label={}", "я".repeat(32))).is_ok());
 }
 #[test]
 fn allowlist_refuses_send_edit_delete_with_node_error_and_no_http() {
@@ -250,10 +207,10 @@ fn unauthorized_action_reports_failed_and_settings_error_on_plugin_tick() {
     assert_eq!(env.errors[0].key, "telegram-error-unauthorized");
 }
 #[test]
-fn send_and_send_media_trigger_chat_lookup_but_edit_does_not() {
+fn send_triggers_chat_lookup_but_edit_does_not() {
     let (mut hub, mut env) = authenticated();
-    let mut send = ActionNode::new("send");
-    send.run(
+    let mut send1 = ActionNode::new("send");
+    send1.run(
         Trigger::Pin(PinId(0)),
         &inputs(&[(1, 12345i64.into()), (3, "hello".into())]),
         1_700_000_000,
@@ -262,9 +219,9 @@ fn send_and_send_media_trigger_chat_lookup_but_edit_does_not() {
     );
     assert!(hub.has_chat_lookup(12345));
 
-    let mut send_media = ActionNode::new("send_media");
-    let photo = media_tests::media_val("media.photo", Some("file_123"), None);
-    send_media.run(
+    let mut send2 = ActionNode::new("send");
+    let photo = media_val("media.photo", Some("file_123"), None);
+    send2.run(
         Trigger::Pin(PinId(0)),
         &inputs(&[(1, 67890i64.into()), (3, photo)]),
         1_700_000_000,

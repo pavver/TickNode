@@ -269,7 +269,7 @@ fn telegram_plugin_catalog_registers_translations_identifiers_and_property_input
         definition
             .pins
             .iter()
-            .any(|pin| pin.id == PinId(3) && pin.required)
+            .any(|pin| pin.id == PinId(3) && pin.required && pin.pin_type == PinType::Data(DataType::Any))
     );
     engine.set_node_property(send, "chat", "".into()).unwrap();
     assert!(
@@ -282,8 +282,16 @@ fn telegram_plugin_catalog_registers_translations_identifiers_and_property_input
     );
     assert!(
         engine
-            .set_node_property(send, "buttons", "Bad markup".into())
+            .set_node_property(send, "disable_preview", "invalid".into())
             .is_err()
+    );
+    assert!(
+        !engine
+            .node_definition(send)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|p| p.name == "buttons")
     );
     let receive = NodeId::generate();
     engine

@@ -179,18 +179,6 @@ fn translations_cover_every_definition_and_error() {
                 }
             }
         }
-        if *name == "send" || *name == "send_media" {
-            let mut reply_node = Telegram::create(name, NodeId::generate()).unwrap();
-            reply_node.set_property("keyboard", "reply".into());
-            for prop in reply_node.definition().properties {
-                has(format!("{base}-prop-{}-title", prop.name));
-                if let PropertyKind::Select(options) = prop.kind {
-                    for (value, _) in options {
-                        has(format!("{base}-prop-{}-option-{}", prop.name, slug(&value)));
-                    }
-                }
-            }
-        }
         if *name == "keyboard" {
             let mut reply_node = Telegram::create(name, NodeId::generate()).unwrap();
             reply_node.set_property("kind", "reply".into());
@@ -229,8 +217,8 @@ fn translations_cover_every_definition_and_error() {
         "connecting",
         "id",
         "command",
-        "buttons",
-        "reply-buttons",
+        "edit-media",
+        "edit-keyboard",
         "regex",
         "toast",
         "choice",

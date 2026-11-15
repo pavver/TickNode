@@ -85,7 +85,7 @@ pub fn button_definition() -> NodeDefinition {
         title: "Button".into(),
         category: "Telegram".into(),
         description: "Build a Telegram keyboard button".into(),
-        help: "Builds a Telegram button value. Action determines how the button behaves: callback sends data to the bot, url opens a link, text/contact/location are used in reply keyboards. If data is omitted for callback, the button text is used. Connect to a Keyboard node.".into(),
+        help: "Creates a button for the Keyboard node. Text is required for the button label. Select an action: Callback (for inline keyboards, sends callback data or the button text if Data is empty), URL (for inline keyboards, opens a web link from Data), Text (for reply keyboards, sends text), or Share contact / Share location (for reply keyboards). Connect Button to a Keyboard input.".into(),
         pins: vec![
             data_out(0, "Button", named("button")),
             data_in(1, "Text", DataType::String).required(),
@@ -167,7 +167,7 @@ pub fn keyboard_definition(props: &BTreeMap<String, String>) -> NodeDefinition {
         title: "Keyboard".into(),
         category: "Telegram".into(),
         description: "Build a Telegram keyboard layout".into(),
-        help: "Combines buttons into an inline or reply keyboard, or creates a keyboard removal command. Buttons fill rows left to right according to the columns setting. For reply keyboards, additional options configure height adjustment, one-time visibility and placeholder text. Connect to a Compose message node.".into(),
+        help: "Combines button values or plain text into an inline, reply or remove keyboard layout. Buttons sets the number of input pins, and Columns arranges them into rows left to right. Button inputs accept a button from the Button node or plain text (converted to a callback button for inline keyboards or a text button for reply keyboards). Empty inputs are skipped. Connect Keyboard to Compose message.".into(),
         pins,
         properties,
         adaptive: false,
@@ -181,8 +181,8 @@ pub fn compose_definition() -> NodeDefinition {
         type_name: "telegram/compose".into(),
         title: "Compose message".into(),
         category: "Telegram".into(),
-        description: "Compose an outgoing Telegram message".into(),
-        help: "Combines text, media and a keyboard into an outgoing message value. Provide text (up to 4096 characters without media, or a caption up to 1024 characters with media) or media (photo, audio, video or document). Formatting is selected via parse mode.".into(),
+        description: "Compose an outgoing Telegram message with text, media and keyboard".into(),
+        help: "Combines text, media and a keyboard into an outgoing message value for Send message or Edit message. Provide text (up to 4096 characters without media, or a caption up to 1024 characters with media) or media (photo, audio, video or document). Formatting is selected via parse mode.".into(),
         pins: vec![
             data_out(0, "Message", named("outgoing")),
             data_in(1, "Text", DataType::String),

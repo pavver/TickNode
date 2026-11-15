@@ -1,5 +1,4 @@
 //! Shared interactive and restored configuration validation.
-use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use ticknode_plugin_sdk::*;
 
@@ -25,7 +24,6 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
                 "Command must contain 1–32 lowercase letters, digits or underscores",
             ));
         }
-        "buttons" => validate_buttons_property(kind, text, props)?,
         "placeholder" if text.chars().count() > 64 => {
             return Err(error(
                 "placeholder",
@@ -77,33 +75,12 @@ fn validate_id_property(text: &str) -> Result<(), UiError> {
     Ok(())
 }
 
-fn validate_buttons_property(kind: &str, text: &str, props: &Properties) -> Result<(), UiError> {
-    if kind == "edit" {
-        buttons(text)?;
-    } else {
-        let keyboard = props
-            .get("keyboard")
-            .map(String::as_str)
-            .unwrap_or("inline");
-        if keyboard == "reply" {
-            reply_buttons(text)?;
-        } else if keyboard == "inline" {
-            buttons(text)?;
-        }
-    }
-    Ok(())
-}
-
 fn validate_choice_property(name: &str, text: &str) -> Result<(), UiError> {
     let valid = match name {
-        "keyboard" => ["inline", "reply", "remove", "none"].contains(&text),
         "keep_buttons" | "resize" | "one_time" | "persistent" | "include_edited" | "silent"
         | "disable_preview" => ["yes", "no"].contains(&text),
         "action" => ["callback", "url", "text", "contact", "location"].contains(&text),
-        "kind" => [
-            "photo", "audio", "video", "document", "inline", "reply", "remove",
-        ]
-        .contains(&text),
+        "kind" => ["inline", "reply", "remove"].contains(&text),
         "parse_mode" => {
             ["none", "HTML", "MarkdownV2", "plain", "html", "markdown_v2"].contains(&text)
         }
@@ -147,131 +124,6 @@ pub fn stored(kind: &str, props: &Properties) -> Result<(), UiError> {
         property(kind, name, value, props)?;
     }
     Ok(())
-}
-pub fn buttons(text: &str) -> Result<Value, UiError> {
-    let invalid = || {
-        error(
-            "buttons",
-            "Buttons need Label=callback_data (1–64 bytes) or Label=https://url, separated by |; one row per line",
-        )
-    };
-    let mut rows = Vec::new();
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        let mut row = Vec::new();
-        for button in line.split('|') {
-            row.push(parse_inline_button(button)?);
-        }
-        if row.len() > 8 {
-            return Err(invalid());
-        }
-        rows.push(row);
-    }
-    if rows.iter().map(Vec::len).sum::<usize>() > 100 {
-        return Err(invalid());
-    }
-    Ok(json!({"inline_keyboard":rows}))
-}
-
-fn parse_inline_button(button: &str) -> Result<Value, UiError> {
-    let invalid = || {
-        error(
-            "buttons",
-            "Buttons need Label=callback_data (1–64 bytes) or Label=https://url, separated by |; one row per line",
-        )
-    };
-    let (label, data) = button.trim().split_once('=').ok_or_else(invalid)?;
-    let (label, data) = (label.trim(), data.trim());
-    if label.is_empty() || data.is_empty() {
-        return Err(invalid());
-    }
-    if data.starts_with("https://") {
-        if url::Url::parse(data)
-            .ok()
-            .is_none_or(|url| url.host_str().is_none())
-            || data.chars().any(char::is_whitespace)
-        {
-            return Err(invalid());
-        }
-        Ok(json!({"text":label,"url":data}))
-    } else {
-        if data.contains("://") || data.len() > 64 {
-            return Err(invalid());
-        }
-        Ok(json!({"text":label,"callback_data":data}))
-    }
-}
-
-pub fn reply_buttons(text: &str) -> Result<Vec<Vec<Value>>, UiError> {
-    let invalid = || {
-        error(
-            "reply-buttons",
-            "Reply keyboard requires at least one button: Label, Label=contact or Label=location, separated by |; one row per line",
-        )
-    };
-    let mut rows = Vec::new();
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        let mut row = Vec::new();
-        for button in line.split('|') {
-            row.push(parse_reply_button(button)?);
-        }
-        if row.len() > 12 {
-            return Err(invalid());
-        }
-        rows.push(row);
-    }
-    let total: usize = rows.iter().map(Vec::len).sum();
-    if rows.is_empty() || total > 100 {
-        return Err(invalid());
-    }
-    Ok(rows)
-}
-
-fn parse_reply_button(button: &str) -> Result<Value, UiError> {
-    let invalid = || {
-        error(
-            "reply-buttons",
-            "Reply keyboard requires at least one button: Label, Label=contact or Label=location, separated by |; one row per line",
-        )
-    };
-    let button = button.trim();
-    if button.is_empty() {
-        return Err(invalid());
-    }
-    if let Some((label, action)) = button.split_once('=') {
-        let (label, action) = (label.trim(), action.trim());
-        if label.is_empty() || label.chars().count() > 128 {
-            return Err(invalid());
-        }
-        match action {
-            "contact" => Ok(json!({"text": label, "request_contact": true})),
-            "location" => Ok(json!({"text": label, "request_location": true})),
-            _ => Err(invalid()),
-        }
-    } else {
-        if button.chars().count() > 128 {
-            return Err(invalid());
-        }
-        Ok(json!({"text": button}))
-    }
-}
-
-pub fn reply_keyboard(text: &str, props: &Properties) -> Result<Value, UiError> {
-    let rows = reply_buttons(text)?;
-    let mut markup = json!({
-        "keyboard": rows,
-        "resize_keyboard": props.get("resize").map(String::as_str).unwrap_or("yes") == "yes",
-        "one_time_keyboard": props.get("one_time").map(String::as_str).unwrap_or("no") == "yes",
-        "is_persistent": props.get("persistent").map(String::as_str).unwrap_or("no") == "yes",
-    });
-    let placeholder = props
-        .get("placeholder")
-        .map(String::as_str)
-        .unwrap_or("")
-        .trim();
-    if !placeholder.is_empty() {
-        markup["input_field_placeholder"] = placeholder.into();
-    }
-    Ok(markup)
 }
 
 struct ArgParser {

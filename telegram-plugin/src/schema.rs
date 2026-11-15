@@ -65,15 +65,6 @@ pub fn types() -> Vec<TypeDefinition> {
     list
 }
 
-fn media_type_for_kind(kind: Option<&str>) -> &'static str {
-    match kind {
-        Some("audio") => "media.audio",
-        Some("video") => "media.video",
-        Some("document") => "media.document",
-        _ => "media.photo",
-    }
-}
-
 pub fn definition(kind: &str) -> NodeDefinition {
     action_definition(kind, &std::collections::BTreeMap::new())
 }
@@ -104,18 +95,13 @@ pub fn action_definition(
         ),
         "send" => (
             "Send Message",
-            "Send text and inline buttons to Telegram",
-            "Connect In, Chat and Text. Leave the Chat property empty to use its input. For /status replies, wire Command Chat to Chat and Text from template to Text. Reply to keeps the original topic when known; Topic overrides it. Choose keyboard mode: inline, reply, remove or none. Inline buttons: Refresh=status | Open=https://example.org. Reply buttons: plain text, Text=contact or Text=location. Text is limited to 4096 characters. Done and Message are emitted on success; Failed and Error on failure.",
-        ),
-        "send_media" => (
-            "Send Media",
-            "Send photo, audio, video or document to Telegram",
-            "Connect In, Chat and Media. Select kind (photo, audio, video or document): the Media pin type follows the kind. Optional Caption allows up to 1024 characters. Send file_id when present, else url. Reply to keeps the original topic when known; Topic overrides it. Choose keyboard mode: inline, reply, remove or none. Done and Message are emitted on success; Failed and Error on failure.",
+            "Send text, media or composed message to Telegram",
+            "Connect In and Chat. Message takes plain text (type it right on the node or connect Text from template), a message from Compose message (text + media + keyboard), or media directly. Leave the Chat property empty to use its input. Reply to keeps the original topic when known; Topic overrides it. Done and Message are emitted on success; Failed and Error on failure.",
         ),
         "edit" => (
             "Edit Message",
-            "Replace a Telegram message's text",
-            "Connect In, Chat, Message id and Text. Use Message id from Send message or Break Telegram message. Select none, HTML or MarkdownV2. Optional inline buttons replace the keyboard; Keep buttons controls whether editing text keeps existing buttons when none are specified. Done means the edit succeeded; Failed and Error describe a failure. Text is limited to 4096 characters.",
+            "Replace a Telegram message's text or keyboard",
+            "Connect In, Chat, Message id and Message. Message takes plain text (type it right on the node or connect Text from template) or a message from Compose message with text and an optional inline keyboard. Editing media or using reply keyboards is not supported. Keep buttons controls whether existing buttons remain when the message has no keyboard. Done means the edit succeeded; Failed and Error describe a failure.",
         ),
         _ => (
             "Delete Message",
@@ -195,67 +181,27 @@ pub fn action_definition(
         if kind == "send" {
             pins.extend([
                 data_in(2, "Topic", named("topic_id")),
-                data_in(3, "Text", DataType::String).required(),
+                data_in(3, "Message", DataType::Any).required(),
                 data_in(4, "Reply to", named("message_id")),
             ]);
-            properties.extend([
-                yes_no("silent", "Silent"),
-                yes_no("disable_preview", "Disable link preview"),
-            ]);
-            keyboard_properties(&mut properties, props);
-        } else if kind == "send_media" {
-            let media_type = media_type_for_kind(props.get("kind").map(String::as_str));
-            pins.extend([
-                data_in(2, "Topic", named("topic_id")),
-                data_in(3, "Media", DataType::Named(media_type.into())).required(),
-                data_in(4, "Caption", DataType::String),
-                data_in(5, "Reply to", named("message_id")),
-            ]);
-            properties.extend([
-                PropertyDefinition::select(
-                    "kind",
-                    "Kind",
-                    &[
-                        ("photo", "Photo"),
-                        ("audio", "Audio"),
-                        ("video", "Video"),
-                        ("document", "File"),
-                    ],
-                ),
-                yes_no("silent", "Silent"),
-            ]);
-            keyboard_properties(&mut properties, props);
+            properties.push(yes_no("disable_preview", "Disable link preview"));
         } else {
             pins.push(data_in(2, "Message id", named("message_id")).required());
             if kind == "edit" {
-                pins.push(data_in(3, "Text", DataType::String).required());
-                properties.extend([
-                    PropertyDefinition::multiline("buttons", "Buttons"),
-                    PropertyDefinition::select(
-                        "keep_buttons",
-                        "Keep buttons",
-                        &[("yes", "Yes"), ("no", "No")],
-                    ),
-                ]);
+                pins.push(data_in(3, "Message", DataType::Any).required());
+                properties.push(PropertyDefinition::select(
+                    "keep_buttons",
+                    "Keep buttons",
+                    &[("yes", "Yes"), ("no", "No")],
+                ));
             }
-        }
-        if kind != "delete" {
-            properties.push(PropertyDefinition::select(
-                "parse_mode",
-                "Parse mode",
-                &[
-                    ("none", "None"),
-                    ("HTML", "HTML"),
-                    ("MarkdownV2", "MarkdownV2"),
-                ],
-            ));
         }
         pins.extend([
             exec_out(10, "Done"),
             exec_out(11, "Failed"),
             data_out(12, "Error", DataType::String),
         ]);
-        if kind == "send" || kind == "send_media" {
+        if kind == "send" {
             pins.extend([
                 data_out(13, "Message", named("message")),
                 data_out(14, "Message id", named("message_id")),
@@ -276,44 +222,6 @@ pub fn action_definition(
         ..Default::default()
     }
 }
-fn keyboard_properties(
-    properties: &mut Vec<PropertyDefinition>,
-    props: &std::collections::BTreeMap<String, String>,
-) {
-    properties.extend([
-        PropertyDefinition::select(
-            "keyboard",
-            "Keyboard",
-            &[
-                ("inline", "Inline"),
-                ("reply", "Reply"),
-                ("remove", "Remove"),
-                ("none", "None"),
-            ],
-        ),
-        PropertyDefinition::multiline("buttons", "Buttons"),
-    ]);
-    if props.get("keyboard").map(String::as_str) == Some("reply") {
-        properties.extend([
-            PropertyDefinition::select(
-                "resize",
-                "Resize keyboard",
-                &[("yes", "Yes"), ("no", "No")],
-            ),
-            PropertyDefinition::select(
-                "one_time",
-                "One-time keyboard",
-                &[("no", "No"), ("yes", "Yes")],
-            ),
-            PropertyDefinition::text("placeholder", "Input placeholder"),
-            PropertyDefinition::select(
-                "persistent",
-                "Persistent keyboard",
-                &[("no", "No"), ("yes", "Yes")],
-            ),
-        ]);
-    }
-}
 fn yes_no(name: &str, title: &str) -> PropertyDefinition {
     PropertyDefinition::select(name, title, &[("no", "No"), ("yes", "Yes")])
 }
@@ -332,16 +240,10 @@ pub fn defaults(kind: &str) -> std::collections::BTreeMap<String, String> {
             (p.name, value)
         })
         .collect::<std::collections::BTreeMap<String, String>>();
-    if kind == "send" || kind == "send_media" {
-        map.entry("keyboard".into())
-            .or_insert_with(|| "inline".into());
-        map.entry("resize".into()).or_insert_with(|| "yes".into());
-        map.entry("one_time".into()).or_insert_with(|| "no".into());
-        map.entry("placeholder".into()).or_default();
-        map.entry("persistent".into())
+    if kind == "send" {
+        map.entry("disable_preview".into())
             .or_insert_with(|| "no".into());
     } else if kind == "edit" {
-        map.entry("buttons".into()).or_default();
         map.entry("keep_buttons".into())
             .or_insert_with(|| "yes".into());
     }

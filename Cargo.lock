@@ -3155,7 +3155,6 @@ dependencies = [
  "serde",
  "serde_json",
  "ticknode-plugin-sdk",
- "url",
 ]
 
 [[package]]

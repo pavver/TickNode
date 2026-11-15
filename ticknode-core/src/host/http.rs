@@ -75,7 +75,7 @@ pub(crate) fn spawn_http(
     let req_url = request.url.clone();
 
     Ok(runtime.spawn(async move {
-        let mut response = req.send().await.map_err(|e| e.to_string())?;
+        let mut response = req.send().await.map_err(request_error)?;
         let status = response.status().as_u16();
         let headers: Vec<(String, String)> = response
             .headers()
@@ -86,7 +86,7 @@ pub(crate) fn spawn_http(
         if save_to_blob && (200..300).contains(&status) {
             let mut body = Vec::new();
             while (body.len() as u64) < crate::blobs::BLOB_STORE_QUOTA {
-                let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? else {
+                let Some(chunk) = response.chunk().await.map_err(request_error)? else {
                     break;
                 };
                 if (body.len() as u64).saturating_add(chunk.len() as u64)
@@ -117,7 +117,7 @@ pub(crate) fn spawn_http(
         } else {
             let mut body = Vec::new();
             while body.len() < MAX_HTTP_BODY {
-                let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? else {
+                let Some(chunk) = response.chunk().await.map_err(request_error)? else {
                     break;
                 };
                 body.extend_from_slice(&chunk[..chunk.len().min(MAX_HTTP_BODY - body.len())]);
@@ -160,4 +160,34 @@ pub(crate) fn parse_filename(headers: &[(String, String)], url: &str) -> Option<
         return Some(seg.to_string());
     }
     None
+}
+
+/// reqwest errors embed the request URL, which may carry secrets (a bot token in the path,
+/// `user:password@` credentials); task errors reach node outputs and logs, so drop it.
+fn request_error(error: reqwest::Error) -> String {
+    error.without_url().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Needs loopback networking: connects to a closed local port.
+    #[test]
+    fn transport_errors_never_contain_the_url_or_its_secrets() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let request = HttpRequest::get("http://user:s3cret@127.0.0.1:1/botTOKEN123/getMe");
+        let store: Arc<dyn crate::blobs::BlobStore> =
+            Arc::new(crate::blobs::MemoryBlobStore::new());
+        let task = spawn_http(runtime.handle(), request, store).expect("spawned");
+        let error = runtime
+            .block_on(task)
+            .expect("joined")
+            .expect_err("closed port");
+        assert!(!error.contains("TOKEN123"), "{error}");
+        assert!(!error.contains("s3cret"), "{error}");
+    }
 }

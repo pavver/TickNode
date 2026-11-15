@@ -89,40 +89,12 @@ where
         ExprKind::VariableRef(vref) => var_lookup(vref),
         ExprKind::Unary { op, expr: inner } => {
             let val = eval_expr_with(inner, lookup, var_lookup)?;
-            match op {
-                UnaryOp::Not => Ok(FormulaValue::Bool(!val.is_truthy())),
-                UnaryOp::Pos => Ok(val),
-                UnaryOp::Neg => {
-                    let res = match val.to_number_value() {
-                        NumberValue::Int(i) => i
-                            .checked_neg()
-                            .map(NumberValue::Int)
-                            .unwrap_or_else(|| NumberValue::Float(-(i as f64))),
-                        NumberValue::Float(f) => NumberValue::Float(-f).normalize(),
-                    };
-                    Ok(FormulaValue::Number(res))
-                }
-            }
+            Ok(eval_unary(*op, val))
         }
         ExprKind::Binary { op, left, right } => {
-            // Short-circuiting logical operators
-            if *op == BinaryOp::And {
-                let l = eval_expr_with(left, lookup, var_lookup)?;
-                if !l.is_truthy() {
-                    return Ok(FormulaValue::Bool(false));
-                }
-                let r = eval_expr_with(right, lookup, var_lookup)?;
-                return Ok(FormulaValue::Bool(r.is_truthy()));
+            if let Some(res) = eval_binary_logical(*op, left, right, lookup, var_lookup)? {
+                return Ok(res);
             }
-            if *op == BinaryOp::Or {
-                let l = eval_expr_with(left, lookup, var_lookup)?;
-                if l.is_truthy() {
-                    return Ok(FormulaValue::Bool(true));
-                }
-                let r = eval_expr_with(right, lookup, var_lookup)?;
-                return Ok(FormulaValue::Bool(r.is_truthy()));
-            }
-
             let l = eval_expr_with(left, lookup, var_lookup)?;
             let r = eval_expr_with(right, lookup, var_lookup)?;
             eval_binary_op(*op, l, r, expr.span.clone())
@@ -140,25 +112,89 @@ where
             }
         }
         ExprKind::Call { name, args } => {
-            // Short-circuiting if(c, a, b)
-            if name == "if" {
-                let cond = eval_expr_with(&args[0], lookup, var_lookup)?;
-                return if cond.is_truthy() {
-                    eval_expr_with(&args[1], lookup, var_lookup)
-                } else {
-                    eval_expr_with(&args[2], lookup, var_lookup)
-                };
-            }
-
-            let vals: Vec<FormulaValue> = args
-                .iter()
-                .map(|a| eval_expr_with(a, lookup, var_lookup))
-                .collect::<Result<_, _>>()?;
-
-            let nums: Vec<NumberValue> = vals.iter().map(FormulaValue::to_number_value).collect();
-            functions::eval_call(name, &nums, expr.span.clone())
+            eval_call_expr(name, args, expr.span.clone(), lookup, var_lookup)
         }
     }
+}
+
+fn eval_unary(op: UnaryOp, val: FormulaValue) -> FormulaValue {
+    match op {
+        UnaryOp::Not => FormulaValue::Bool(!val.is_truthy()),
+        UnaryOp::Pos => val,
+        UnaryOp::Neg => {
+            let res = match val.to_number_value() {
+                NumberValue::Int(i) => i
+                    .checked_neg()
+                    .map(NumberValue::Int)
+                    .unwrap_or_else(|| NumberValue::Float(-(i as f64))),
+                NumberValue::Float(f) => NumberValue::Float(-f).normalize(),
+            };
+            FormulaValue::Number(res)
+        }
+    }
+}
+
+fn eval_binary_logical<F, V>(
+    op: BinaryOp,
+    left: &Expr,
+    right: &Expr,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<Option<FormulaValue>, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    match op {
+        BinaryOp::And => {
+            let l = eval_expr_with(left, lookup, var_lookup)?;
+            if !l.is_truthy() {
+                Ok(Some(FormulaValue::Bool(false)))
+            } else {
+                let r = eval_expr_with(right, lookup, var_lookup)?;
+                Ok(Some(FormulaValue::Bool(r.is_truthy())))
+            }
+        }
+        BinaryOp::Or => {
+            let l = eval_expr_with(left, lookup, var_lookup)?;
+            if l.is_truthy() {
+                Ok(Some(FormulaValue::Bool(true)))
+            } else {
+                let r = eval_expr_with(right, lookup, var_lookup)?;
+                Ok(Some(FormulaValue::Bool(r.is_truthy())))
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+fn eval_call_expr<F, V>(
+    name: &str,
+    args: &[Expr],
+    span: Range<usize>,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    if name == "if" {
+        let cond = eval_expr_with(&args[0], lookup, var_lookup)?;
+        return if cond.is_truthy() {
+            eval_expr_with(&args[1], lookup, var_lookup)
+        } else {
+            eval_expr_with(&args[2], lookup, var_lookup)
+        };
+    }
+
+    let vals: Vec<FormulaValue> = args
+        .iter()
+        .map(|a| eval_expr_with(a, lookup, var_lookup))
+        .collect::<Result<_, _>>()?;
+
+    let nums: Vec<NumberValue> = vals.iter().map(FormulaValue::to_number_value).collect();
+    functions::eval_call(name, &nums, span)
 }
 
 fn eval_binary_op(

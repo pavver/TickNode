@@ -169,3 +169,23 @@ fn property_change_prunes_invalid_connections() {
     // connection from brk to sink survives:
     assert_eq!(engine.connections.data().len(), 1);
 }
+
+#[test]
+fn test_object_break_validate_property() {
+    let mut engine = setup_engine();
+    let brk = NodeId::generate();
+    engine.create_node(brk, "object/break", &[]).unwrap();
+
+    assert!(
+        engine
+            .set_node_property(brk, "type", "ha.state".into())
+            .is_ok()
+    );
+    assert!(engine.set_node_property(brk, "type", "".into()).is_ok());
+    assert!(
+        engine
+            .set_node_property(brk, "type", "nonexistent.type".into())
+            .is_err()
+    );
+    assert!(engine.set_node_property(brk, "type", 123.into()).is_err());
+}

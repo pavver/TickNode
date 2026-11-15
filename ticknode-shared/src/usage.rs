@@ -84,3 +84,47 @@ pub struct UsageReport {
     /// Current engine tick number.
     pub current_tick: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_usage_bucket_is_idle() {
+        let mut b = UsageBucket::default();
+        assert!(b.is_idle());
+
+        b.plugins.push(PluginUsage::default());
+        assert!(b.is_idle());
+
+        let mut b1 = b.clone();
+        b1.total_spent = 1;
+        assert!(!b1.is_idle());
+
+        let mut b2 = b.clone();
+        b2.other_node_cost = 1;
+        assert!(!b2.is_idle());
+
+        let mut b3 = b.clone();
+        b3.deferred_activations = 1;
+        assert!(!b3.is_idle());
+
+        let mut b4 = b.clone();
+        b4.top_nodes.push(NodeUsage {
+            node_id: NodeId::generate(),
+            type_name: "test".into(),
+            sheet_id: None,
+            executions: 1,
+            cost: 1,
+        });
+        assert!(!b4.is_idle());
+
+        let mut b5 = b.clone();
+        b5.plugins[0].fuel = 100;
+        assert!(!b5.is_idle());
+
+        let mut b6 = b.clone();
+        b6.plugins[0].calls = 1;
+        assert!(!b6.is_idle());
+    }
+}

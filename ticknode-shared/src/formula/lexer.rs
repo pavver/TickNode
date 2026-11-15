@@ -101,7 +101,14 @@ impl<'a> Lexer<'a> {
         let start = self.cursor;
         let b = self.current_byte();
 
-        // Multi-byte or single-byte symbols
+        match b {
+            b'0'..=b'9' => self.lex_number(start),
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.lex_ident_or_keyword(start),
+            _ => self.lex_symbol(start, b),
+        }
+    }
+
+    fn lex_symbol(&mut self, start: usize, b: u8) -> Result<Token, FormulaError> {
         match b {
             b'+' => {
                 self.cursor += 1;
@@ -278,8 +285,6 @@ impl<'a> Lexer<'a> {
                     span: start..self.cursor,
                 })
             }
-            b'0'..=b'9' => self.lex_number(start),
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.lex_ident_or_keyword(start),
             _ => {
                 // Determine character boundary for utf-8
                 let mut end = self.cursor + 1;

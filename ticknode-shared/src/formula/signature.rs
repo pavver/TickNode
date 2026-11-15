@@ -59,60 +59,21 @@ pub fn signature_at(source: &str, caret: usize) -> Option<SignatureHelp> {
 
     while i < len {
         let b = bytes[i];
-
         if is_ident_char(b) {
-            let start = i;
-            while i < len && is_ident_char(bytes[i]) {
-                i += 1;
-            }
-            let ident = &source[start..i];
-
-            // Check if immediately followed by '(' (ignoring whitespace)
-            let mut next_k = i;
-            while next_k < len && bytes[next_k].is_ascii_whitespace() {
-                next_k += 1;
-            }
-            if next_k < len && bytes[next_k] == b'(' {
-                i = next_k + 1;
+            let (next_i, maybe_call) = scan_ident_call(source, bytes, i, len);
+            i = next_i;
+            if let Some(ident) = maybe_call {
                 paren_depth += 1;
                 call_stack.push(OpenCall {
                     func_name: ident.to_string(),
                     paren_depth,
                     active_arg: 0,
                 });
-                continue;
             }
-            continue;
-        }
-
-        if b == b'(' {
-            paren_depth += 1;
+        } else {
+            update_call_stack(b, &mut paren_depth, &mut call_stack);
             i += 1;
-            continue;
         }
-
-        if b == b')' {
-            if let Some(top) = call_stack.last()
-                && top.paren_depth == paren_depth
-            {
-                call_stack.pop();
-            }
-            paren_depth = paren_depth.saturating_sub(1);
-            i += 1;
-            continue;
-        }
-
-        if b == b',' {
-            if let Some(top) = call_stack.last_mut()
-                && top.paren_depth == paren_depth
-            {
-                top.active_arg += 1;
-            }
-            i += 1;
-            continue;
-        }
-
-        i += 1;
     }
 
     let top = call_stack.last()?;
@@ -143,4 +104,48 @@ pub fn signature_at(source: &str, caret: usize) -> Option<SignatureHelp> {
         params,
         help: UiMessage::new(format!("formula-fn-{}", doc.name), doc.description),
     })
+}
+
+fn update_call_stack(b: u8, paren_depth: &mut usize, call_stack: &mut Vec<OpenCall>) {
+    match b {
+        b'(' => *paren_depth += 1,
+        b')' => {
+            if let Some(top) = call_stack.last()
+                && top.paren_depth == *paren_depth
+            {
+                call_stack.pop();
+            }
+            *paren_depth = paren_depth.saturating_sub(1);
+        }
+        b',' => {
+            if let Some(top) = call_stack.last_mut()
+                && top.paren_depth == *paren_depth
+            {
+                top.active_arg += 1;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn scan_ident_call<'a>(
+    source: &'a str,
+    bytes: &[u8],
+    mut i: usize,
+    len: usize,
+) -> (usize, Option<&'a str>) {
+    let start = i;
+    while i < len && is_ident_char(bytes[i]) {
+        i += 1;
+    }
+    let ident = &source[start..i];
+    let mut next_k = i;
+    while next_k < len && bytes[next_k].is_ascii_whitespace() {
+        next_k += 1;
+    }
+    if next_k < len && bytes[next_k] == b'(' {
+        (next_k + 1, Some(ident))
+    } else {
+        (i, None)
+    }
 }

@@ -136,7 +136,7 @@ impl DisplayRules {
         for (name, rule) in &self.quantities {
             let invalid = |reason: &str| {
                 UiMessage::new(
-                    &format!("error-display-{reason}"),
+                    format!("error-display-{reason}"),
                     format!("Invalid display rule for {name}: {reason}"),
                 )
                 .arg("quantity", name)

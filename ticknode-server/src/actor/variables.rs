@@ -14,24 +14,7 @@ impl Actor {
                     .arg("name", &var.key.name),
             );
         }
-        match var.key.scope {
-            VariableScope::Sheet => {
-                let Some(sheet_id) = var.key.sheet else {
-                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
-                };
-                if !self.sheets.iter().any(|s| s.id == sheet_id) {
-                    return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
-                }
-            }
-            VariableScope::Global | VariableScope::Persistent => {
-                if var.key.sheet.is_some() {
-                    return Err(UiMessage::new(
-                        "error-variable-scope",
-                        "Global and persistent variables cannot have a sheet",
-                    ));
-                }
-            }
-        }
+        validate_variable_scope(&var.key, &self.sheets)?;
         if self.engine.variables.len() >= MAX_VARIABLES
             && !self.engine.variables.contains_key(&var.key)
         {
@@ -122,4 +105,26 @@ impl Actor {
         }
         Ok(())
     }
+}
+
+fn validate_variable_scope(key: &VariableKey, sheets: &[SheetInfo]) -> Result<(), UiMessage> {
+    match key.scope {
+        VariableScope::Sheet => {
+            let Some(sheet_id) = key.sheet else {
+                return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
+            };
+            if !sheets.iter().any(|s| s.id == sheet_id) {
+                return Err(UiMessage::new("error-sheet-not-found", "Sheet not found"));
+            }
+        }
+        VariableScope::Global | VariableScope::Persistent => {
+            if key.sheet.is_some() {
+                return Err(UiMessage::new(
+                    "error-variable-scope",
+                    "Global and persistent variables cannot have a sheet",
+                ));
+            }
+        }
+    }
+    Ok(())
 }

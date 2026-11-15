@@ -195,3 +195,14 @@ fn test_persistence_roundtrip() {
     let restored_x = def.pins.iter().find(|p| p.name == "x").unwrap();
     assert_eq!(restored_x.pin_type, PinType::Data(power));
 }
+
+#[test]
+fn test_expression_variables_helper() {
+    let vars = expression_variables("b + a * c");
+    assert_eq!(vars.get("a"), Some(&PinId(1)));
+    assert_eq!(vars.get("b"), Some(&PinId(2)));
+    assert_eq!(vars.get("c"), Some(&PinId(3)));
+
+    let invalid = expression_variables("1 + * 2");
+    assert!(invalid.is_empty());
+}

@@ -282,3 +282,46 @@ fn reply_to_a_known_topic_root_uses_the_persisted_directory_without_a_message_ca
     .unwrap();
     assert_eq!(body["message_thread_id"], 7);
 }
+
+#[test]
+fn edit_failed_outputs_do_not_clear_send_pins() {
+    let (mut hub, mut env) = authenticated();
+    let mut edit_node = ActionNode::new("edit");
+    // Missing message ID causes failure
+    let out = edit_node.run(
+        Trigger::Pin(PinId(0)),
+        &inputs(&[(1, (-100i64).into()), (3, "test".into())]),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+    assert!(out.contains(&Output::Exec(PinId(11))));
+    assert!(!out.contains(&Output::Clear(PinId(13))));
+    assert!(!out.contains(&Output::Clear(PinId(14))));
+
+    let mut send_node = ActionNode::new("send");
+    // Missing text causes failure
+    let out_send = send_node.run(
+        Trigger::Pin(PinId(0)),
+        &inputs(&[(1, (-100i64).into())]),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+    assert!(out_send.contains(&Output::Exec(PinId(11))));
+    assert!(out_send.contains(&Output::Clear(PinId(13))));
+    assert!(out_send.contains(&Output::Clear(PinId(14))));
+}
+
+#[test]
+fn photo_largest_selection_by_area() {
+    let mut msg_json = message(-100, 1, "");
+    msg_json["photo"] = json!([
+        {"file_id": "tall_thin", "width": 10, "height": 100},
+        {"file_id": "square_small", "width": 20, "height": 20}
+    ]);
+    let msg: Message = serde_json::from_value(msg_json).unwrap();
+    let val = msg.value();
+    let photo = field(&val, "photo").expect("photo present");
+    assert_eq!(field_string(photo, "file_id"), Some("tall_thin"));
+}

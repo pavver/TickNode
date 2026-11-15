@@ -27,27 +27,7 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
                 "Command must contain 1–32 lowercase letters, digits or underscores",
             ));
         }
-        "buttons" => {
-            if kind == "edit" {
-                buttons(text)?;
-            } else {
-                let keyboard = props
-                    .get("keyboard")
-                    .map(String::as_str)
-                    .unwrap_or("inline");
-                if keyboard == "reply" {
-                    reply_buttons(text)?;
-                } else if keyboard == "inline" {
-                    buttons(text)?;
-                }
-            }
-        }
-        "keyboard" if !["inline", "reply", "remove", "none"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        "keep_buttons" | "resize" | "one_time" | "persistent" if !["yes", "no"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
+        "buttons" => validate_buttons_property(kind, text, props)?,
         "placeholder" if text.chars().count() > 64 => {
             return Err(error(
                 "placeholder",
@@ -60,45 +40,70 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
                 "Callback toast text cannot exceed 200 characters",
             ));
         }
-        "include_edited" | "silent" | "disable_preview" if !["yes", "no"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        "kind" if !["photo", "audio", "video", "document"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        "parse_mode" if !["none", "HTML", "MarkdownV2"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        "text_mode" if !["any", "equals", "contains", "starts_with", "regex"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        "data_mode" if !["equals", "prefix"].contains(&text) => {
-            return Err(error("choice", "Select a valid option"));
-        }
-        _ => {}
+        _ => validate_choice_property(name, text)?,
     }
     if kind == "message" {
-        let mode = if name == "text_mode" {
-            text
-        } else {
-            props.get("text_mode").map(String::as_str).unwrap_or("any")
-        };
-        let pattern = if name == "pattern" {
-            text
-        } else {
-            props.get("pattern").map(String::as_str).unwrap_or("")
-        };
-        if mode == "regex"
-            && regex::RegexBuilder::new(pattern)
-                .size_limit(256_000)
-                .build()
-                .is_err()
-        {
-            return Err(error(
-                "regex",
-                "Enter a valid regular expression (maximum compiled size 256 KB)",
-            ));
+        validate_message_regex(name, text, props)?;
+    }
+    Ok(())
+}
+
+fn validate_buttons_property(kind: &str, text: &str, props: &Properties) -> Result<(), UiError> {
+    if kind == "edit" {
+        buttons(text)?;
+    } else {
+        let keyboard = props
+            .get("keyboard")
+            .map(String::as_str)
+            .unwrap_or("inline");
+        if keyboard == "reply" {
+            reply_buttons(text)?;
+        } else if keyboard == "inline" {
+            buttons(text)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_choice_property(name: &str, text: &str) -> Result<(), UiError> {
+    let valid = match name {
+        "keyboard" => ["inline", "reply", "remove", "none"].contains(&text),
+        "keep_buttons" | "resize" | "one_time" | "persistent" | "include_edited" | "silent"
+        | "disable_preview" => ["yes", "no"].contains(&text),
+        "kind" => ["photo", "audio", "video", "document"].contains(&text),
+        "parse_mode" => ["none", "HTML", "MarkdownV2"].contains(&text),
+        "text_mode" => ["any", "equals", "contains", "starts_with", "regex"].contains(&text),
+        "data_mode" => ["equals", "prefix"].contains(&text),
+        _ => true,
+    };
+    if !valid {
+        Err(error("choice", "Select a valid option"))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_message_regex(name: &str, text: &str, props: &Properties) -> Result<(), UiError> {
+    let mode = if name == "text_mode" {
+        text
+    } else {
+        props.get("text_mode").map(String::as_str).unwrap_or("any")
+    };
+    let pattern = if name == "pattern" {
+        text
+    } else {
+        props.get("pattern").map(String::as_str).unwrap_or("")
+    };
+    if mode == "regex"
+        && regex::RegexBuilder::new(pattern)
+            .size_limit(256_000)
+            .build()
+            .is_err()
+    {
+        return Err(error(
+            "regex",
+            "Enter a valid regular expression (maximum compiled size 256 KB)",
+        ));
     }
     Ok(())
 }

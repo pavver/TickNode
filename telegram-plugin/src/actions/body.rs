@@ -38,11 +38,21 @@ pub(super) fn build(
     inputs: &Inputs,
     hub: &Hub,
 ) -> Result<(&'static str, Value), UiError> {
-    let prop = |key: &str| props.get(key).map(String::as_str).unwrap_or("");
-    let chat = if prop("chat").is_empty() {
+    let chat = resolve_chat(props, inputs, hub)?;
+    match kind {
+        "send" => build_send(chat, props, inputs, hub),
+        "send_media" => build_send_media(chat, props, inputs, hub),
+        "edit" => build_edit(chat, props, inputs),
+        _ => build_delete(chat, inputs),
+    }
+}
+
+fn resolve_chat(props: &Properties, inputs: &Inputs, hub: &Hub) -> Result<i64, UiError> {
+    let prop = props.get("chat").map(String::as_str).unwrap_or("");
+    let chat = if prop.is_empty() {
         id(inputs, 1)
     } else {
-        prop("chat").parse::<i64>().ok()
+        prop.parse::<i64>().ok()
     }
     .ok_or_else(|| validation::error("chat", "A Telegram chat ID is required"))?;
     if !hub.permits(chat) {
@@ -52,104 +62,158 @@ pub(super) fn build(
         )
         .arg("chat", chat.to_string()));
     }
-    let mut body = json!({"chat_id":chat});
-    if kind != "send" && kind != "send_media" {
-        body["message_id"] = id(inputs, 2)
-            .ok_or_else(|| validation::error("message", "A Telegram message ID is required"))?
-            .into();
+    Ok(chat)
+}
+
+fn build_send(
+    chat: i64,
+    props: &Properties,
+    inputs: &Inputs,
+    hub: &Hub,
+) -> Result<(&'static str, Value), UiError> {
+    let prop = |key: &str| props.get(key).map(String::as_str).unwrap_or("");
+    let Some(DataValue::String(text)) = inputs.get(PinId(3)) else {
+        return Err(validation::error("text", "Message text is required"));
+    };
+    if text.is_empty() || text.chars().count() > 4096 {
+        return Err(validation::error(
+            "length",
+            "Telegram message text must contain 1–4096 characters",
+        ));
     }
-    if kind == "send" || kind == "edit" {
-        let Some(DataValue::String(text)) = inputs.get(PinId(3)) else {
-            return Err(validation::error("text", "Message text is required"));
-        };
-        if text.is_empty() || text.chars().count() > 4096 {
+    let mut body = json!({
+        "chat_id": chat,
+        "text": text,
+        "disable_notification": prop("silent") == "yes",
+        "link_preview_options": {"is_disabled": prop("disable_preview") == "yes"},
+    });
+    if prop("parse_mode") != "none" {
+        body["parse_mode"] = prop("parse_mode").into();
+    }
+
+    let reply = id(inputs, 4);
+    if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
+        body["message_thread_id"] = topic.into();
+    }
+    if let Some(reply) = reply {
+        body["reply_parameters"] = json!({"message_id": reply});
+    }
+    attach_keyboard(&mut body, props)?;
+    Ok(("sendMessage", body))
+}
+
+fn extract_media_ref(inputs: &Inputs) -> Result<&str, UiError> {
+    let Some(media_val) = inputs.get(PinId(3)) else {
+        return Err(validation::error(
+            "media",
+            "A media value must have either url or file_id set",
+        ));
+    };
+    let file_id = field_string(media_val, "file_id").filter(|s| !s.trim().is_empty());
+    let url = field_string(media_val, "url").filter(|s| !s.trim().is_empty());
+    file_id.or(url).ok_or_else(|| {
+        validation::error("media", "A media value must have either url or file_id set")
+    })
+}
+
+fn attach_caption(body: &mut Value, inputs: &Inputs, parse_mode: &str) -> Result<(), UiError> {
+    if let Some(DataValue::String(caption)) = inputs.get(PinId(4))
+        && !caption.is_empty()
+    {
+        if caption.chars().count() > 1024 {
             return Err(validation::error(
-                "length",
-                "Telegram message text must contain 1–4096 characters",
+                "caption",
+                "Telegram caption cannot exceed 1024 characters",
             ));
         }
-        body["text"] = text.clone().into();
-        if prop("parse_mode") != "none" {
-            body["parse_mode"] = prop("parse_mode").into();
+        body["caption"] = caption.clone().into();
+        if parse_mode != "none" {
+            body["parse_mode"] = parse_mode.into();
         }
     }
-    if kind == "send_media" {
-        let media_kind = match prop("kind") {
-            "audio" => "audio",
-            "video" => "video",
-            "document" => "document",
-            _ => "photo",
-        };
-        let Some(media_val) = inputs.get(PinId(3)) else {
-            return Err(validation::error(
-                "media",
-                "A media value must have either url or file_id set",
-            ));
-        };
-        let file_id = field_string(media_val, "file_id").filter(|s| !s.trim().is_empty());
-        let url = field_string(media_val, "url").filter(|s| !s.trim().is_empty());
-        let media_ref = file_id.or(url).ok_or_else(|| {
-            validation::error("media", "A media value must have either url or file_id set")
-        })?;
-        body[media_kind] = media_ref.into();
+    Ok(())
+}
 
-        if let Some(DataValue::String(caption)) = inputs.get(PinId(4))
-            && !caption.is_empty()
-        {
-            if caption.chars().count() > 1024 {
-                return Err(validation::error(
-                    "caption",
-                    "Telegram caption cannot exceed 1024 characters",
-                ));
-            }
-            body["caption"] = caption.clone().into();
-            if prop("parse_mode") != "none" {
-                body["parse_mode"] = prop("parse_mode").into();
-            }
-        }
+fn build_send_media(
+    chat: i64,
+    props: &Properties,
+    inputs: &Inputs,
+    hub: &Hub,
+) -> Result<(&'static str, Value), UiError> {
+    let prop = |key: &str| props.get(key).map(String::as_str).unwrap_or("");
+    let media_kind = match prop("kind") {
+        "audio" => "audio",
+        "video" => "video",
+        "document" => "document",
+        _ => "photo",
+    };
+    let media_ref = extract_media_ref(inputs)?;
 
-        let reply = id(inputs, 5);
-        if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
-            body["message_thread_id"] = topic.into();
-        }
-        if let Some(reply) = reply {
-            body["reply_parameters"] = json!({"message_id": reply});
-        }
-        body["disable_notification"] = (prop("silent") == "yes").into();
-        attach_keyboard(&mut body, props)?;
+    let mut body = json!({
+        "chat_id": chat,
+        media_kind: media_ref,
+        "disable_notification": prop("silent") == "yes",
+    });
+
+    attach_caption(&mut body, inputs, prop("parse_mode"))?;
+
+    let reply = id(inputs, 5);
+    if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
+        body["message_thread_id"] = topic.into();
     }
-    if kind == "send" {
-        let reply = id(inputs, 4);
-        if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
-            body["message_thread_id"] = topic.into();
-        }
-        if let Some(reply) = reply {
-            body["reply_parameters"] = json!({"message_id":reply});
-        }
-        body["disable_notification"] = (prop("silent") == "yes").into();
-        body["link_preview_options"] = json!({"is_disabled":prop("disable_preview") == "yes"});
-        attach_keyboard(&mut body, props)?;
+    if let Some(reply) = reply {
+        body["reply_parameters"] = json!({"message_id": reply});
     }
-    if kind == "edit" {
-        let buttons = prop("buttons");
-        if !buttons.trim().is_empty() {
-            body["reply_markup"] = validation::buttons(buttons)?;
-        } else if prop("keep_buttons") == "no" {
-            body["reply_markup"] = json!({"inline_keyboard": []});
-        }
+    attach_keyboard(&mut body, props)?;
+
+    let method = match prop("kind") {
+        "audio" => "sendAudio",
+        "video" => "sendVideo",
+        "document" => "sendDocument",
+        _ => "sendPhoto",
+    };
+    Ok((method, body))
+}
+
+fn build_edit(
+    chat: i64,
+    props: &Properties,
+    inputs: &Inputs,
+) -> Result<(&'static str, Value), UiError> {
+    let prop = |key: &str| props.get(key).map(String::as_str).unwrap_or("");
+    let message_id = id(inputs, 2)
+        .ok_or_else(|| validation::error("message", "A Telegram message ID is required"))?;
+    let Some(DataValue::String(text)) = inputs.get(PinId(3)) else {
+        return Err(validation::error("text", "Message text is required"));
+    };
+    if text.is_empty() || text.chars().count() > 4096 {
+        return Err(validation::error(
+            "length",
+            "Telegram message text must contain 1–4096 characters",
+        ));
     }
+    let mut body = json!({
+        "chat_id": chat,
+        "message_id": message_id,
+        "text": text,
+    });
+    if prop("parse_mode") != "none" {
+        body["parse_mode"] = prop("parse_mode").into();
+    }
+    let buttons = prop("buttons");
+    if !buttons.trim().is_empty() {
+        body["reply_markup"] = validation::buttons(buttons)?;
+    } else if prop("keep_buttons") == "no" {
+        body["reply_markup"] = json!({"inline_keyboard": []});
+    }
+    Ok(("editMessageText", body))
+}
+
+fn build_delete(chat: i64, inputs: &Inputs) -> Result<(&'static str, Value), UiError> {
+    let message_id = id(inputs, 2)
+        .ok_or_else(|| validation::error("message", "A Telegram message ID is required"))?;
     Ok((
-        match kind {
-            "send" => "sendMessage",
-            "send_media" => match prop("kind") {
-                "audio" => "sendAudio",
-                "video" => "sendVideo",
-                "document" => "sendDocument",
-                _ => "sendPhoto",
-            },
-            "edit" => "editMessageText",
-            _ => "deleteMessage",
-        },
-        body,
+        "deleteMessage",
+        json!({"chat_id": chat, "message_id": message_id}),
     ))
 }

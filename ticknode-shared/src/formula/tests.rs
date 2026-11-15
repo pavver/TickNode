@@ -256,6 +256,19 @@ fn test_source_limits_and_errors() {
     let err = compile("1 + * 2").unwrap_err();
     assert_eq!(err.range, 4..5);
     assert_eq!(err.message.key, "error-formula-unexpected-token");
+
+    // Single &, |, = errors
+    assert!(compile("1 & 2").is_err());
+    assert!(compile("1 | 2").is_err());
+    assert!(compile("1 = 2").is_err());
+    assert!(compile("1 @ 2").is_err());
+
+    // Scientific notation
+    let f1 = compile("1e2 + 1.5e-1").unwrap();
+    assert_eq!(
+        f1.eval(&|_| None).unwrap(),
+        FormulaValue::Number(100.15.into())
+    );
 }
 
 #[test]
@@ -273,4 +286,60 @@ fn test_formula_variable_evaluation() {
         .unwrap();
 
     assert_eq!(val, FormulaValue::Number(25.into()));
+}
+
+#[test]
+fn test_formula_comparisons_and_equality() {
+    let check_bool = |expr: &str, expected: bool| {
+        let f = compile(expr).unwrap();
+        assert_eq!(f.eval(&|_| None).unwrap(), FormulaValue::Bool(expected));
+    };
+
+    check_bool("1 == 1", true);
+    check_bool("1 == 2", false);
+    check_bool("1.5 == 1.5", true);
+    check_bool("1.5 == 2.5", false);
+    check_bool("true == true", true);
+    check_bool("true == false", false);
+    check_bool("1 != 2", true);
+    check_bool("1 != 1", false);
+    check_bool("1.5 != 2.5", true);
+    check_bool("1.5 != 1.5", false);
+    check_bool("true != false", true);
+    check_bool("true != true", false);
+
+    check_bool("1 < 2", true);
+    check_bool("2 < 2", false);
+    check_bool("2 <= 2", true);
+    check_bool("3 <= 2", false);
+    check_bool("3 > 2", true);
+    check_bool("2 > 2", false);
+    check_bool("2 >= 2", true);
+    check_bool("1 >= 2", false);
+
+    check_bool("!true", false);
+    check_bool("!false", true);
+    check_bool("not (1 == 2)", true);
+
+    check_bool("false && (1 / 0 == 0)", false);
+    check_bool("true || (1 / 0 == 0)", true);
+    check_bool("false and (1 / 0 == 0)", false);
+    check_bool("true or (1 / 0 == 0)", true);
+}
+
+#[test]
+fn test_formula_value_conversions_and_fallbacks() {
+    use crate::DataValue;
+    assert_eq!(
+        DataValue::from(FormulaValue::Number(42.into())),
+        DataValue::Number(42.into())
+    );
+    assert_eq!(
+        DataValue::from(FormulaValue::Bool(true)),
+        DataValue::Bool(true)
+    );
+
+    let f = compile("var.missing").unwrap();
+    let err = f.eval(&|_| None).unwrap_err();
+    assert_eq!(err.message.key, "error-variable-missing");
 }

@@ -54,10 +54,25 @@ pub fn complete_with_variables(
     let prefix_lower = prefix.to_ascii_lowercase();
 
     let mut items = Vec::new();
+    collect_inputs(inputs, prefix, &prefix_lower, &mut items);
+    collect_variables(variables, prefix, &prefix_lower, &mut items);
+    collect_constants(prefix, &prefix_lower, &mut items);
+    collect_functions(prefix, &prefix_lower, &mut items);
 
-    // 1. Inputs
+    Completion {
+        range: prefix_start..aligned_caret,
+        items,
+    }
+}
+
+fn collect_inputs(
+    inputs: &[(String, DataType)],
+    prefix: &str,
+    prefix_lower: &str,
+    items: &mut Vec<CompletionItem>,
+) {
     for (name, data_type) in inputs {
-        if prefix.is_empty() || name.to_ascii_lowercase().starts_with(&prefix_lower) {
+        if prefix.is_empty() || name.to_ascii_lowercase().starts_with(prefix_lower) {
             let detail = crate::template::complete::type_label(data_type, &Default::default());
             items.push(CompletionItem {
                 label: name.clone(),
@@ -69,8 +84,14 @@ pub fn complete_with_variables(
             });
         }
     }
+}
 
-    // 2. Numeric / quantity variables
+fn collect_variables(
+    variables: &[crate::Variable],
+    prefix: &str,
+    prefix_lower: &str,
+    items: &mut Vec<CompletionItem>,
+) {
     let mut seen_candidates = std::collections::HashSet::new();
     for v in variables {
         if !is_numeric_type(&v.data_type) {
@@ -88,7 +109,7 @@ pub fn complete_with_variables(
         }
         for cand in candidates {
             if seen_candidates.insert(cand.clone())
-                && (prefix.is_empty() || cand.to_ascii_lowercase().starts_with(&prefix_lower))
+                && (prefix.is_empty() || cand.to_ascii_lowercase().starts_with(prefix_lower))
             {
                 items.push(CompletionItem {
                     label: cand.clone(),
@@ -101,10 +122,11 @@ pub fn complete_with_variables(
             }
         }
     }
+}
 
-    // 2. Constants
+fn collect_constants(prefix: &str, prefix_lower: &str, items: &mut Vec<CompletionItem>) {
     for (name, detail, desc) in CONSTANTS {
-        if prefix.is_empty() || name.starts_with(&prefix_lower) {
+        if prefix.is_empty() || name.starts_with(prefix_lower) {
             items.push(CompletionItem {
                 label: (*name).to_string(),
                 kind: CompletionKind::Constant,
@@ -115,10 +137,11 @@ pub fn complete_with_variables(
             });
         }
     }
+}
 
-    // 3. Functions from catalog (including aliases)
+fn collect_functions(prefix: &str, prefix_lower: &str, items: &mut Vec<CompletionItem>) {
     for doc in CATALOG {
-        if prefix.is_empty() || doc.name.to_ascii_lowercase().starts_with(&prefix_lower) {
+        if prefix.is_empty() || doc.name.to_ascii_lowercase().starts_with(prefix_lower) {
             items.push(CompletionItem {
                 label: doc.name.to_string(),
                 kind: CompletionKind::Function,
@@ -132,7 +155,7 @@ pub fn complete_with_variables(
             });
         }
         for alias in doc.aliases {
-            if prefix.is_empty() || alias.to_ascii_lowercase().starts_with(&prefix_lower) {
+            if prefix.is_empty() || alias.to_ascii_lowercase().starts_with(prefix_lower) {
                 items.push(CompletionItem {
                     label: (*alias).to_string(),
                     kind: CompletionKind::Function,
@@ -146,10 +169,5 @@ pub fn complete_with_variables(
                 });
             }
         }
-    }
-
-    Completion {
-        range: prefix_start..aligned_caret,
-        items,
     }
 }

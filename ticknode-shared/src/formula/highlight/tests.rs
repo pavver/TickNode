@@ -98,3 +98,55 @@ fn test_highlight_operator_keywords() {
             .any(|h| h.class == TokenClass::Operator && &source[h.range.clone()] == "or")
     );
 }
+
+#[test]
+fn test_highlight_scientific_and_namespaces() {
+    let source = ".5 + 1e5 + 2E+3 + 3e-2 + .4e1 + 1e + var.x + global::y";
+    let inputs = vec!["var.x".to_string(), "global::y".to_string()];
+    let highlights = highlight(source, &inputs);
+
+    // Verify contiguous coverage
+    let mut cursor = 0;
+    for h in &highlights {
+        assert_eq!(h.range.start, cursor);
+        assert!(h.range.end > h.range.start);
+        cursor = h.range.end;
+    }
+    assert_eq!(cursor, source.len());
+
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Number && &source[h.range.clone()] == ".5")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Number && &source[h.range.clone()] == "1e5")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Number && &source[h.range.clone()] == "2E+3")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Number && &source[h.range.clone()] == "3e-2")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Number && &source[h.range.clone()] == ".4e1")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Input && &source[h.range.clone()] == "var.x")
+    );
+    assert!(
+        highlights
+            .iter()
+            .any(|h| h.class == TokenClass::Input && &source[h.range.clone()] == "global::y")
+    );
+}

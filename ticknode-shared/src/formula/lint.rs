@@ -41,42 +41,14 @@ fn scan_calls(source: &str) -> Vec<CallSpan> {
                 next_k += 1;
             }
             if next_k < len && bytes[next_k] == b'(' {
-                let lparen_pos = next_k;
-                let mut pos = lparen_pos + 1;
-                let mut depth = 1;
-                let mut args = 0;
-                let mut has_token_in_arg = false;
-
-                while pos < len && depth > 0 {
-                    let b = bytes[pos];
-                    if b == b'(' {
-                        depth += 1;
-                        has_token_in_arg = true;
-                    } else if b == b')' {
-                        depth -= 1;
-                        if depth == 0 {
-                            if has_token_in_arg {
-                                args += 1;
-                            }
-                            break;
-                        }
-                    } else if b == b',' && depth == 1 {
-                        args += 1;
-                        has_token_in_arg = false;
-                    } else if !b.is_ascii_whitespace() {
-                        has_token_in_arg = true;
-                    }
-                    pos += 1;
-                }
-
-                let call_end = if pos < len { pos + 1 } else { pos };
+                let (args, call_end) = scan_call_args(bytes, next_k, len);
                 calls.push(CallSpan {
                     name: name.to_string(),
                     name_range,
                     call_range: start..call_end,
                     arg_count: args,
                 });
-                i = pos;
+                i = call_end;
                 continue;
             }
         }
@@ -84,6 +56,38 @@ fn scan_calls(source: &str) -> Vec<CallSpan> {
     }
 
     calls
+}
+
+fn scan_call_args(bytes: &[u8], lparen_pos: usize, len: usize) -> (usize, usize) {
+    let mut pos = lparen_pos + 1;
+    let mut depth = 1;
+    let mut args = 0;
+    let mut has_token_in_arg = false;
+
+    while pos < len && depth > 0 {
+        let b = bytes[pos];
+        if b == b'(' {
+            depth += 1;
+            has_token_in_arg = true;
+        } else if b == b')' {
+            depth -= 1;
+            if depth == 0 {
+                if has_token_in_arg {
+                    args += 1;
+                }
+                break;
+            }
+        } else if b == b',' && depth == 1 {
+            args += 1;
+            has_token_in_arg = false;
+        } else if !b.is_ascii_whitespace() {
+            has_token_in_arg = true;
+        }
+        pos += 1;
+    }
+
+    let call_end = if pos < len { pos + 1 } else { pos };
+    (args, call_end)
 }
 
 /// Analyzes a formula for unknown functions, arity errors, and physical quantity inference mismatches.

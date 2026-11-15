@@ -246,3 +246,88 @@ fn test_snapshot_init_filters_variables() {
     assert!(!names_home.contains(&"var1"));
     assert!(!names_home.contains(&"var2"));
 }
+
+#[test]
+fn test_create_variable_validation_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = test_actor(dir.path());
+    let (reply, _) = mpsc::unbounded_channel();
+
+    // 1. Invalid name (empty or leading/trailing whitespace)
+    let err = actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: VariableKey::global(""),
+                data_type: DataType::Number,
+                value: DataValue::from(1),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap_err();
+    assert_eq!(err.key, "error-variable-name");
+
+    // 2. Global with sheet id
+    let mut bad_key = VariableKey::global("v");
+    bad_key.sheet = Some(SheetId::generate());
+    let err = actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: bad_key,
+                data_type: DataType::Number,
+                value: DataValue::from(1),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap_err();
+    assert_eq!(err.key, "error-variable-scope");
+
+    // 3. Sheet scope without sheet id
+    let mut bad_sheet_key = VariableKey {
+        scope: VariableScope::Sheet,
+        sheet: None,
+        name: "v".into(),
+    };
+    let err = actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: bad_sheet_key.clone(),
+                data_type: DataType::Number,
+                value: DataValue::from(1),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap_err();
+    assert_eq!(err.key, "error-sheet-not-found");
+
+    // 4. Sheet scope with non-existent sheet id
+    bad_sheet_key.sheet = Some(SheetId::generate());
+    let err = actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: bad_sheet_key,
+                data_type: DataType::Number,
+                value: DataValue::from(1),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap_err();
+    assert_eq!(err.key, "error-sheet-not-found");
+
+    // 5. Value does not match variable type
+    let err = actor
+        .apply(
+            ClientMessage::CreateVariable(Variable {
+                key: VariableKey::global("bad_val"),
+                data_type: DataType::Number,
+                value: DataValue::from("not a number"),
+            }),
+            None,
+            &reply,
+        )
+        .unwrap_err();
+    assert_eq!(err.key, "error-variable-type");
+}

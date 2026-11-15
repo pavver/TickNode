@@ -28,57 +28,7 @@ pub fn infer_type(
         ExprKind::Binary { op, left, right } => {
             let tl = infer_type(left, input_types)?;
             let tr = infer_type(right, input_types)?;
-            match op {
-                BinaryOp::And | BinaryOp::Or => Ok(DataType::Bool),
-                BinaryOp::Eq
-                | BinaryOp::Ne
-                | BinaryOp::Lt
-                | BinaryOp::Le
-                | BinaryOp::Gt
-                | BinaryOp::Ge => {
-                    if let (DataType::Named(q1), DataType::Named(q2)) = (&tl, &tr)
-                        && q1 != q2
-                    {
-                        return Err(FormulaError::incompatible_quantities(
-                            expr.span.clone(),
-                            q1,
-                            q2,
-                        ));
-                    }
-                    Ok(DataType::Bool)
-                }
-                BinaryOp::Add | BinaryOp::Sub => match (&tl, &tr) {
-                    (DataType::Named(q1), DataType::Named(q2)) => {
-                        if q1 != q2 {
-                            return Err(FormulaError::incompatible_quantities(
-                                expr.span.clone(),
-                                q1,
-                                q2,
-                            ));
-                        }
-                        Ok(DataType::Named(q1.clone()))
-                    }
-                    (DataType::Named(q), _) | (_, DataType::Named(q)) => {
-                        Ok(DataType::Named(q.clone()))
-                    }
-                    _ => Ok(DataType::Number),
-                },
-                BinaryOp::Mul => match (&tl, &tr) {
-                    (DataType::Named(q), DataType::Number)
-                    | (DataType::Number, DataType::Named(q)) => Ok(DataType::Named(q.clone())),
-                    _ => Ok(DataType::Number),
-                },
-                BinaryOp::Div => match (&tl, &tr) {
-                    (DataType::Named(q1), DataType::Named(q2)) if q1 == q2 => Ok(DataType::Number),
-                    (DataType::Named(q), DataType::Number) => Ok(DataType::Named(q.clone())),
-                    _ => Ok(DataType::Number),
-                },
-                BinaryOp::Rem => match (&tl, &tr) {
-                    (DataType::Named(q), _) => Ok(DataType::Named(q.clone())),
-                    _ => Ok(DataType::Number),
-                },
-                BinaryOp::Pow => Ok(DataType::Number),
-            }
+            infer_binary(*op, &tl, &tr, expr.span.clone())
         }
         ExprKind::Ternary {
             cond,
@@ -95,46 +45,97 @@ pub fn infer_type(
                 .iter()
                 .map(|a| infer_type(a, input_types))
                 .collect::<Result<_, _>>()?;
+            infer_call(name, &arg_types, args, expr.span.clone())
+        }
+    }
+}
 
-            match name.as_str() {
-                "if" => reconcile_branches(&arg_types[1], &arg_types[2], expr.span.clone()),
-                "between" | "isnan" | "isfinite" => Ok(DataType::Bool),
-                "min" | "max" | "clamp" | "avg" | "mean" | "sum" | "median" | "lerp" | "abs"
-                | "round" | "floor" | "ceil" | "trunc" | "frac" => {
-                    let mut found_quantity: Option<String> = None;
-                    for (i, ty) in arg_types.iter().enumerate() {
-                        if let DataType::Named(q) = ty {
-                            if let Some(existing) = &found_quantity {
-                                if existing != q {
-                                    return Err(FormulaError::incompatible_quantities(
-                                        args[i].span.clone(),
-                                        existing,
-                                        q,
-                                    ));
-                                }
-                            } else {
-                                found_quantity = Some(q.clone());
-                            }
+fn infer_binary(
+    op: BinaryOp,
+    tl: &DataType,
+    tr: &DataType,
+    span: std::ops::Range<usize>,
+) -> Result<DataType, FormulaError> {
+    match op {
+        BinaryOp::And | BinaryOp::Or => Ok(DataType::Bool),
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            if let (DataType::Named(q1), DataType::Named(q2)) = (tl, tr)
+                && q1 != q2
+            {
+                return Err(FormulaError::incompatible_quantities(span, q1, q2));
+            }
+            Ok(DataType::Bool)
+        }
+        BinaryOp::Add | BinaryOp::Sub => match (tl, tr) {
+            (DataType::Named(q1), DataType::Named(q2)) => {
+                if q1 != q2 {
+                    return Err(FormulaError::incompatible_quantities(span, q1, q2));
+                }
+                Ok(DataType::Named(q1.clone()))
+            }
+            (DataType::Named(q), _) | (_, DataType::Named(q)) => Ok(DataType::Named(q.clone())),
+            _ => Ok(DataType::Number),
+        },
+        BinaryOp::Mul => match (tl, tr) {
+            (DataType::Named(q), DataType::Number) | (DataType::Number, DataType::Named(q)) => {
+                Ok(DataType::Named(q.clone()))
+            }
+            _ => Ok(DataType::Number),
+        },
+        BinaryOp::Div => match (tl, tr) {
+            (DataType::Named(q1), DataType::Named(q2)) if q1 == q2 => Ok(DataType::Number),
+            (DataType::Named(q), DataType::Number) => Ok(DataType::Named(q.clone())),
+            _ => Ok(DataType::Number),
+        },
+        BinaryOp::Rem => match (tl, tr) {
+            (DataType::Named(q), _) => Ok(DataType::Named(q.clone())),
+            _ => Ok(DataType::Number),
+        },
+        BinaryOp::Pow => Ok(DataType::Number),
+    }
+}
+
+fn infer_call(
+    name: &str,
+    arg_types: &[DataType],
+    args: &[Expr],
+    span: std::ops::Range<usize>,
+) -> Result<DataType, FormulaError> {
+    match name {
+        "if" => reconcile_branches(&arg_types[1], &arg_types[2], span),
+        "between" | "isnan" | "isfinite" => Ok(DataType::Bool),
+        "min" | "max" | "clamp" | "avg" | "mean" | "sum" | "median" | "lerp" | "abs" | "round"
+        | "floor" | "ceil" | "trunc" | "frac" => {
+            let mut found_quantity: Option<String> = None;
+            for (i, ty) in arg_types.iter().enumerate() {
+                if let DataType::Named(q) = ty {
+                    if let Some(existing) = &found_quantity {
+                        if existing != q {
+                            return Err(FormulaError::incompatible_quantities(
+                                args[i].span.clone(),
+                                existing,
+                                q,
+                            ));
                         }
-                    }
-                    if let Some(q) = found_quantity {
-                        Ok(DataType::Named(q))
                     } else {
-                        Ok(DataType::Number)
+                        found_quantity = Some(q.clone());
                     }
                 }
-                "map" => match (&arg_types[3], &arg_types[4]) {
-                    (DataType::Named(q1), DataType::Named(q2)) if q1 == q2 => {
-                        Ok(DataType::Named(q1.clone()))
-                    }
-                    (DataType::Named(q), _) | (_, DataType::Named(q)) => {
-                        Ok(DataType::Named(q.clone()))
-                    }
-                    _ => Ok(DataType::Number),
-                },
-                _ => Ok(DataType::Number),
+            }
+            if let Some(q) = found_quantity {
+                Ok(DataType::Named(q))
+            } else {
+                Ok(DataType::Number)
             }
         }
+        "map" => match (&arg_types[3], &arg_types[4]) {
+            (DataType::Named(q1), DataType::Named(q2)) if q1 == q2 => {
+                Ok(DataType::Named(q1.clone()))
+            }
+            (DataType::Named(q), _) | (_, DataType::Named(q)) => Ok(DataType::Named(q.clone())),
+            _ => Ok(DataType::Number),
+        },
+        _ => Ok(DataType::Number),
     }
 }
 

@@ -66,3 +66,35 @@ fn test_complete_constant_doc_key() {
         Some("formula-const-pi")
     );
 }
+
+#[test]
+fn test_complete_with_variables() {
+    use crate::{Variable, VariableKey};
+
+    let vars = vec![
+        Variable {
+            key: VariableKey::sheet(crate::SheetId::generate(), "counter"),
+            data_type: DataType::Number,
+            value: crate::DataValue::Number(0.into()),
+        },
+        Variable {
+            key: VariableKey::global("target"),
+            data_type: DataType::Named("quantity.power".into()),
+            value: crate::DataValue::Number(100.into()),
+        },
+        Variable {
+            key: VariableKey::global("ignored_text"),
+            data_type: DataType::String,
+            value: crate::DataValue::String("hello".into()),
+        },
+    ];
+
+    let res = complete_with_variables("var.c", 5, &[], &vars);
+    assert!(res.items.iter().any(|i| i.label == "var.counter"));
+
+    let res_global = complete_with_variables("global.t", 8, &[], &vars);
+    assert!(res_global.items.iter().any(|i| i.label == "global.target"));
+
+    let res_sheet = complete_with_variables("sheet.c", 7, &[], &vars);
+    assert!(res_sheet.items.iter().any(|i| i.label == "sheet.counter"));
+}

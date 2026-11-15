@@ -48,8 +48,24 @@ pub fn load_recent_hour_buckets(
         return Ok(Vec::new());
     }
 
+    let files = collect_stats_files(&dir)?;
+    let mut buckets: Vec<UsageBucket> = Vec::new();
+
+    for file in files {
+        read_buckets_from_file(&file, &mut buckets);
+    }
+
+    if buckets.len() > max_count {
+        let excess = buckets.len() - max_count;
+        buckets.drain(..excess);
+    }
+
+    Ok(buckets)
+}
+
+fn collect_stats_files(dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut files: Vec<PathBuf> = Vec::new();
-    let entries = fs::read_dir(&dir)
+    let entries = fs::read_dir(dir)
         .with_context(|| format!("failed to read stats directory {}", dir.display()))?;
 
     for entry in entries {
@@ -65,44 +81,36 @@ pub fn load_recent_hour_buckets(
     }
 
     files.sort();
+    Ok(files)
+}
 
-    let mut buckets: Vec<UsageBucket> = Vec::new();
-
-    for file in files {
-        let f = match fs::File::open(&file) {
-            Ok(f) => f,
-            Err(e) => {
-                warn!("Failed to open stats file {}: {e}", file.display());
-                continue;
+fn read_buckets_from_file(file: &Path, buckets: &mut Vec<UsageBucket>) {
+    let f = match fs::File::open(file) {
+        Ok(f) => f,
+        Err(e) => {
+            warn!("Failed to open stats file {}: {e}", file.display());
+            return;
+        }
+    };
+    let reader = BufReader::new(f);
+    for line in reader.lines() {
+        match line {
+            Ok(line_str) => {
+                let trimmed = line_str.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                match serde_json::from_str::<UsageBucket>(trimmed) {
+                    Ok(b) => buckets.push(b),
+                    Err(e) => warn!("Skipping invalid line in {}: {e}", file.display()),
+                }
             }
-        };
-        let reader = BufReader::new(f);
-        for line in reader.lines() {
-            match line {
-                Ok(line_str) => {
-                    let trimmed = line_str.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    match serde_json::from_str::<UsageBucket>(trimmed) {
-                        Ok(b) => buckets.push(b),
-                        Err(e) => warn!("Skipping invalid line in {}: {e}", file.display()),
-                    }
-                }
-                Err(e) => {
-                    warn!("Error reading line from {}: {e}", file.display());
-                    break;
-                }
+            Err(e) => {
+                warn!("Error reading line from {}: {e}", file.display());
+                break;
             }
         }
     }
-
-    if buckets.len() > max_count {
-        let excess = buckets.len() - max_count;
-        buckets.drain(..excess);
-    }
-
-    Ok(buckets)
 }
 
 pub fn prune_old_stats(
@@ -187,5 +195,31 @@ mod tests {
 
         let after_prune = load_recent_hour_buckets(data_dir, 10).unwrap();
         assert_eq!(after_prune.len(), 0);
+    }
+
+    #[test]
+    fn test_stats_edge_cases() {
+        let temp = tempfile::tempdir().unwrap();
+        let data_dir = temp.path();
+
+        // Non-existent stats dir
+        assert_eq!(load_recent_hour_buckets(data_dir, 10).unwrap().len(), 0);
+        assert_eq!(prune_old_stats(data_dir, 6, Utc::now()).unwrap(), 0);
+
+        // Invalid line and empty lines in file
+        let dir = stats_dir(data_dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("usage-2023-11.jsonl");
+        let valid_bucket = UsageBucket {
+            timestamp: 1700000000,
+            ticks: 5,
+            ..Default::default()
+        };
+        let valid_json = serde_json::to_string(&valid_bucket).unwrap();
+        fs::write(&file_path, format!("\n   \n{valid_json}\nnot json\n")).unwrap();
+
+        let loaded = load_recent_hour_buckets(data_dir, 10).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].ticks, 5);
     }
 }

@@ -38,6 +38,39 @@ impl RsTriggerNode {
             exec_reset_this_tick: false,
         }
     }
+
+    fn update_tick_pulses(&mut self, current_tick: u64, trigger_pin: Option<PinId>) {
+        if self.last_tick != Some(current_tick) {
+            self.last_tick = Some(current_tick);
+            self.exec_set_this_tick = false;
+            self.exec_reset_this_tick = false;
+        }
+        if trigger_pin == Some(PinId(0)) {
+            self.exec_set_this_tick = true;
+        } else if trigger_pin == Some(PinId(1)) {
+            self.exec_reset_this_tick = true;
+        }
+    }
+}
+
+fn next_state(
+    current: bool,
+    is_set: bool,
+    is_reset: bool,
+    priority_set: bool,
+    trigger_pin: Option<PinId>,
+) -> bool {
+    if is_set && is_reset {
+        priority_set
+    } else if is_set {
+        true
+    } else if is_reset {
+        false
+    } else if trigger_pin == Some(PinId(2)) {
+        !current
+    } else {
+        current
+    }
 }
 
 impl Node for RsTriggerNode {
@@ -107,35 +140,15 @@ impl Node for RsTriggerNode {
     }
 
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let tick = ctx.host_state.current_tick;
-        if self.last_tick != Some(tick) {
-            self.last_tick = Some(tick);
-            self.exec_set_this_tick = false;
-            self.exec_reset_this_tick = false;
-        }
-
-        if trigger_pin == Some(PinId(0)) {
-            self.exec_set_this_tick = true;
-        } else if trigger_pin == Some(PinId(1)) {
-            self.exec_reset_this_tick = true;
-        }
+        self.update_tick_pulses(ctx.host_state.current_tick, trigger_pin);
 
         let s_level = ctx.get_bool(PinId(3), false);
         let r_level = ctx.get_bool(PinId(4), false);
-
         let is_set = self.exec_set_this_tick || s_level;
         let is_reset = self.exec_reset_this_tick || r_level;
 
         let previous = self.state;
-        if is_set && is_reset {
-            self.state = self.priority_set;
-        } else if is_set {
-            self.state = true;
-        } else if is_reset {
-            self.state = false;
-        } else if trigger_pin == Some(PinId(2)) {
-            self.state = !self.state;
-        }
+        self.state = next_state(previous, is_set, is_reset, self.priority_set, trigger_pin);
 
         let mut outputs = vec![NodeOutput::Data(PinId(0), DataValue::Bool(self.state))];
         if self.state != previous {

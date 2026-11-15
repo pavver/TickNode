@@ -114,3 +114,134 @@ fn test_comparisons_and_logic_yield_bool() {
         DataType::Bool
     );
 }
+
+#[test]
+fn test_reconcile_branches_and_conditionals() {
+    let power = DataType::Named("quantity.power".into());
+    let energy = DataType::Named("quantity.energy".into());
+
+    assert_eq!(
+        infer(
+            "flag ? p1 : p2",
+            &[
+                ("flag", DataType::Bool),
+                ("p1", power.clone()),
+                ("p2", power.clone()),
+            ]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer(
+            "flag ? p1 : 10",
+            &[("flag", DataType::Bool), ("p1", power.clone())]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer(
+            "flag ? 10 : p1",
+            &[("flag", DataType::Bool), ("p1", power.clone())]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer("flag ? true : false", &[("flag", DataType::Bool)]).unwrap(),
+        DataType::Bool
+    );
+    assert_eq!(
+        infer("flag ? 10 : 20", &[("flag", DataType::Bool)]).unwrap(),
+        DataType::Number
+    );
+
+    assert_eq!(
+        infer(
+            "if(flag, p1, p2)",
+            &[
+                ("flag", DataType::Bool),
+                ("p1", power.clone()),
+                ("p2", power.clone()),
+            ]
+        )
+        .unwrap(),
+        power
+    );
+
+    assert!(
+        infer(
+            "flag ? p1 : en",
+            &[
+                ("flag", DataType::Bool),
+                ("p1", power.clone()),
+                ("en", energy.clone()),
+            ]
+        )
+        .is_err()
+    );
+
+    assert!(
+        infer(
+            "if(flag, p1, en)",
+            &[
+                ("flag", DataType::Bool),
+                ("p1", power.clone()),
+                ("en", energy.clone()),
+            ]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn test_map_and_clamp_incompatible_quantities() {
+    let power = DataType::Named("quantity.power".into());
+    let energy = DataType::Named("quantity.energy".into());
+
+    assert_eq!(
+        infer(
+            "map(p, 0, 100, p1, p2)",
+            &[
+                ("p", DataType::Number),
+                ("p1", power.clone()),
+                ("p2", power.clone()),
+            ]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer(
+            "map(p, 0, 100, 0, p2)",
+            &[("p", DataType::Number), ("p2", power.clone())]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer(
+            "map(p, 0, 100, p1, 100)",
+            &[("p", DataType::Number), ("p1", power.clone())]
+        )
+        .unwrap(),
+        power
+    );
+    assert_eq!(
+        infer("map(p, 0, 100, 0, 100)", &[("p", DataType::Number)]).unwrap(),
+        DataType::Number
+    );
+
+    assert!(
+        infer(
+            "clamp(p, p1, en)",
+            &[
+                ("p", power.clone()),
+                ("p1", power.clone()),
+                ("en", energy.clone()),
+            ]
+        )
+        .is_err()
+    );
+}

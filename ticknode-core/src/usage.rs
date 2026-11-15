@@ -161,7 +161,7 @@ impl BucketAccumulator {
                 executions,
             })
             .collect();
-        sheets.sort_by(|a, b| b.cost.cmp(&a.cost));
+        sheets.sort_by_key(|a| std::cmp::Reverse(a.cost));
 
         let mut plugins: Vec<PluginUsage> = self
             .plugin_fuel
@@ -173,7 +173,7 @@ impl BucketAccumulator {
                 traps,
             })
             .collect();
-        plugins.sort_by(|a, b| b.fuel.cmp(&a.fuel));
+        plugins.sort_by_key(|a| std::cmp::Reverse(a.fuel));
 
         UsageBucket {
             timestamp,

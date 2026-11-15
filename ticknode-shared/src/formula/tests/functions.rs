@@ -287,3 +287,91 @@ fn test_arity_and_unknown_function_errors() {
         matches!(eval("unknown_fn(1)"), Err(FormulaError { ref message, .. }) if message.key == "error-formula-unknown-function")
     );
 }
+
+#[test]
+fn test_float_functions_and_domain_errors() {
+    assert_eq!(
+        eval("abs(-9223372036854775808)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(9223372036854775808.0))
+    );
+    assert_eq!(
+        eval("sign(3.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(1))
+    );
+    assert_eq!(
+        eval("sign(-2.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(-1))
+    );
+    assert_eq!(
+        eval("sign(0.0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(0))
+    );
+
+    assert_eq!(
+        eval("min(3.5, 1.2)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(1.2))
+    );
+    assert_eq!(
+        eval("max(3.5, 1.2)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(3.5))
+    );
+    assert_eq!(
+        eval("clamp(3.5, 0.0, 2.0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(2))
+    );
+    assert_eq!(
+        eval("avg(1.0, 2.0, 3.0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(2))
+    );
+    assert_eq!(
+        eval("sum(1.5, 2.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(4.0))
+    );
+
+    assert_eq!(
+        eval("round(1.555, 2)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(1.56))
+    );
+    assert_eq!(
+        eval("floor(1.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(1))
+    );
+    assert_eq!(
+        eval("ceil(1.2)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(2))
+    );
+    assert_eq!(
+        eval("trunc(1.8)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(1))
+    );
+    assert_eq!(
+        eval("frac(1.25)").unwrap(),
+        FormulaValue::Number(NumberValue::Float(0.25))
+    );
+
+    assert_eq!(
+        eval("mod(7.5, 2.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(0))
+    );
+    assert!(eval("mod(5, 0)").is_err());
+    assert!(eval("sqrt(-1)").is_err());
+    assert!(eval("asin(2)").is_err());
+    assert!(eval("acos(2)").is_err());
+
+    assert_eq!(
+        eval("sinh(0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(0))
+    );
+    assert_eq!(
+        eval("cosh(0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(1))
+    );
+    assert_eq!(
+        eval("lerp(0.0, 10.0, 0.5)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(5))
+    );
+    assert_eq!(
+        eval("map(5.0, 0.0, 10.0, 0.0, 100.0)").unwrap(),
+        FormulaValue::Number(NumberValue::Int(50))
+    );
+}

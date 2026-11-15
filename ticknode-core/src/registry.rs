@@ -107,13 +107,7 @@ impl NodeRegistry {
         for op in [MathOp::Add, MathOp::Sub, MathOp::Mul, MathOp::Div] {
             self.register(Box::new(move |id| Box::new(PureMathNode::new(id, op))));
         }
-        self.register(Box::new(|id| {
-            Box::new(MathExpressionNode {
-                id,
-                expression: "a + b".to_string(),
-                variable_mapping: expression_variables("a + b"),
-            })
-        }));
+        self.register(Box::new(|id| Box::new(MathExpressionNode::new(id))));
         for op in [LogOp::And, LogOp::Or, LogOp::Not] {
             self.register(Box::new(move |id| Box::new(LogicalNode { id, op })));
         }

@@ -1,6 +1,4 @@
 use crate::{Node, NodeContext};
-use evalexpr::*;
-use std::collections::HashMap;
 use ticknode_shared::*;
 
 /// `value_type` is Number or a physical quantity: Add/Sub keep it on A, B and Res; Mul/Div scale A by a plain B.
@@ -124,102 +122,8 @@ impl Node for PureMathNode {
     }
 }
 
-pub struct MathExpressionNode {
-    pub id: NodeId,
-    pub expression: String,
-    pub variable_mapping: HashMap<String, PinId>,
-}
-impl Node for MathExpressionNode {
-    fn id(&self) -> NodeId {
-        self.id
-    }
-    fn is_pure(&self) -> bool {
-        true
-    }
-    fn definition(&self) -> NodeDefinition {
-        let mut pins = vec![PinDefinition {
-            id: PinId(0),
-            name: "Res".to_string(),
-            pin_type: PinType::Data(DataType::Number),
-            direction: PinDirection::Output,
-            required: false,
-        }];
-        let mut vars: Vec<_> = self.variable_mapping.iter().collect();
-        vars.sort_by_key(|(_, pin)| pin.0);
-        for (name, pin_id) in vars {
-            pins.push(PinDefinition {
-                id: *pin_id,
-                name: name.clone(),
-                pin_type: PinType::Data(DataType::Number),
-                direction: PinDirection::Input,
-                required: false,
-            });
-        }
-        NodeDefinition {
-            adaptive: false,
-            cost: 1,
-            properties: Vec::new(),
-            type_name: "math/expression".to_string(),
-            title: "Expression".to_string(),
-            category: "Math".to_string(),
-            description: "Evaluates an arbitrary mathematical formula".to_string(),
-            help: "Evaluates the formula set directly on the node (\"Formula\" row), such as `(a + b) / 2` or `x * x - 1`.\n\nEach variable in the formula automatically becomes an input pin (in alphabetical order). An unconnected variable uses the value set next to the pin, or defaults to 0. If the formula is invalid, the result is 0.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
-            pins,
-        }
-    }
-    fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        let mut context = HashMapContext::new();
-        for (name, pin) in &self.variable_mapping {
-            let val = ctx.get_number(*pin, NumberValue::Int(0));
-            let _ = context.set_value(name.clone().into(), Value::from(val.to_f64()));
-        }
-        let result = match eval_with_context(&self.expression, &context) {
-            Ok(val) => {
-                if let Ok(f) = val.as_float() {
-                    NumberValue::Float(f).normalize()
-                } else if let Ok(i) = val.as_int() {
-                    NumberValue::Int(i).normalize()
-                } else {
-                    NumberValue::Int(0)
-                }
-            }
-            Err(_) => NumberValue::Int(0),
-        };
-        vec![NodeOutput::Data(PinId(0), DataValue::Number(result))]
-    }
-    fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![(
-            "expression".to_string(),
-            DataValue::String(self.expression.clone()),
-        )]
-    }
-    fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "expression" {
-            if let DataValue::String(s) = value {
-                self.variable_mapping = expression_variables(&s);
-                self.expression = s;
-            }
-        }
-    }
-}
-
-/// Formula variables become input pins (1, 2, ...) in alphabetical order.
-pub fn expression_variables(expression: &str) -> HashMap<String, PinId> {
-    let mut names: Vec<String> = match build_operator_tree(expression) {
-        Ok(tree) => tree
-            .iter_read_variable_identifiers()
-            .map(str::to_string)
-            .collect(),
-        Err(_) => Vec::new(),
-    };
-    names.sort();
-    names.dedup();
-    names
-        .into_iter()
-        .enumerate()
-        .map(|(i, n)| (n, PinId(i as u32 + 1)))
-        .collect()
-}
+mod expression;
+pub use expression::*;
 
 fn operation_identity(op: MathOp) -> (&'static str, &'static str) {
     match op {

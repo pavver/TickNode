@@ -44,11 +44,11 @@ fn logical_nodes_use_inline_values_and_default_to_false() {
 #[test]
 fn expressions_evaluate_variables_and_preserve_zero_fallback() {
     for (expression, expected) in [
-        ("2 + 3", 5.0),
-        ("2.5", 2.5),
-        ("true", 0.0),
-        ("(", 0.0),
-        ("a * 2 + b", 6.0),
+        ("2 + 3", Some(DataValue::from(5.0))),
+        ("2.5", Some(DataValue::from(2.5))),
+        ("true", Some(DataValue::Bool(true))),
+        ("(", None),
+        ("a * 2 + b", Some(DataValue::from(6.0))),
     ] {
         let mut engine = TickEngine::new();
         let id = add(
@@ -61,11 +61,7 @@ fn expressions_evaluate_variables_and_preserve_zero_fallback() {
                 .set_input_value(id, PinId(1), Some(DataValue::from(3i64)))
                 .unwrap();
         }
-        assert_eq!(
-            pull(&mut engine, id, 0),
-            Some(DataValue::from(expected)),
-            "{expression}"
-        );
+        assert_eq!(pull(&mut engine, id, 0), expected, "{expression}");
         let model = engine.node_model(id).unwrap();
         assert!(
             model

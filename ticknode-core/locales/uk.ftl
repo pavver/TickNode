@@ -70,15 +70,32 @@ node-math-div-pin-B = B
 node-math-div-pin-Res = Res
 
 # math/expression
-node-math-expression-title = Expression
+node-math-expression-title = Формула
 node-math-expression-description = Обчислює довільну математичну формулу
 node-math-expression-help =
-    Обчислює формулу, задану прямо на ноді (рядок «Формула»), наприклад `(a + b) / 2` або `x * x - 1`.
+    Обчислює довільну математичну формулу, задану безпосередньо на ноді (рядок «Формула»).
 
-    Кожна змінна у формулі автоматично стає вхідним піном (в абетковому порядку). Непід'єднана змінна бере значення, задане біля піна, а без нього дорівнює 0. Якщо формула некоректна — результат 0.
+    Синтаксис:
+    • Числа: цілі (42, 1_000_000), дробові (3.14), науковий запис (1e-3).
+    • Булеві значення: true, false.
+    • Константи: pi, e, tau, inf, nan.
+    • Арифметика: + - * / % (остача від ділення за знаком дільника), ^ або ** (піднесення до степеня, правоасоціативне).
+    • Порівняння: == != < <= > >=; Логіка: && || ! (and or not); Тернарний оператор: c ? a : b.
+    • Функції: abs, sign, min, max, clamp(x, lo, hi), round(x[, digits]), floor, ceil, trunc, frac, sqrt, cbrt, pow, exp, ln, log(x[, base]), log10, log2, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, deg, rad, sum, avg/mean, median, lerp(a, b, t), map(x, in_lo, in_hi, out_lo, out_hi), if(c, a, b), mod(a, b), gcd, lcm, between(x, lo, hi), isnan, isfinite/finite.
+    • Сумісність: підтримує назви функцій evalexpr, такі як `math::sqrt(x)`.
 
-    Чиста нода: не має exec-пінів і обчислюється щоразу, коли її результат потрібен іншій ноді.
+    Змінні та піни:
+    Кожна змінна у формулі автоматично стає вхідним піном. Змінні є необов'язковими з типовим значенням 0. Перейменування однієї змінної зберігає її ідентифікатор піна та з'єднання.
+
+    Фізичні величини:
+    Входи та виходи підтримують фізичні величини (quantity.*). Операції над однаковими величинами зберігають їх тип. Додавання або віднімання звичайного числа розглядає його в канонічних одиницях. Множення або ділення величини на число зберігає величину. Ділення двох однакових величин дає безрозмірне число. Тип виходу за замовчуванням «auto» (виводиться автоматично) або може бути заданий явно.
+
+    Чиста нода: обчислюється щоразу, коли її результат потрібен іншим нодам.
 node-math-expression-pin-Res = Res
+node-math-expression-prop-expression-title = Формула
+node-math-expression-prop-expression-description = Математична формула; змінні стають вхідними пінами.
+node-math-expression-prop-value_type-title = Тип виходу
+node-math-expression-prop-value_type-description = Тип результату («auto» виводиться з входів або явне число чи фізична величина).
 
 # logical/and
 node-logical-and-title = Logical And
@@ -1073,6 +1090,20 @@ node-text-template-prop-blocks-option-trim = Прибирати
 error-object-unknown-type = Невідомий структурний тип: { $type }
 error-template-syntax = Некоректний синтаксис шаблону: { $message }
 error-template-render = Помилка виконання шаблону: { $message }
+error-formula-too-large = Розмір формули ({ $len } байтів) перевищує ліміт у { $max } байтів
+error-formula-depth-exceeded = Рівень вкладеності формули перевищує ліміт у { $max }
+error-formula-unexpected-token = Неочікуваний токен «{ $token }»
+error-formula-unclosed-paren = Незакрита дужка у формулі
+error-formula-unknown-function = Невідома функція «{ $name }»
+error-formula-wrong-arity = Функція «{ $name }» очікує { $expected } аргументів, отримано { $got }
+error-formula-reserved-name = Назва змінної «{ $name }» зарезервована
+error-formula-division-by-zero = Ділення на нуль у формулі
+error-formula-domain-error = Помилка області визначення у функції «{ $name }»
+error-formula-overflow = Арифметичне переповнення у формулі
+error-formula-incompatible-quantities = Несумісні фізичні величини: неможливо поєднати { $a } та { $b }
+error-formula-type-mismatch = Невідповідність типів: очікується { $expected }, отримано { $got }
+error-formula-syntax = Некоректний синтаксис формули
+error-formula-eval = Помилка обчислення формули: { $message }
 
 # time/now
 node-time-now-title = Зараз

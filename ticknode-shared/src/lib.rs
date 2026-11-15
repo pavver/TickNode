@@ -35,6 +35,9 @@ pub use variables::*;
 pub mod template;
 pub use template::*;
 
+pub mod formula;
+pub use formula::{CompiledFormula, FormulaError, FormulaValue};
+
 mod definitions;
 mod graph;
 mod signatures;

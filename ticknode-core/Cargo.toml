@@ -13,7 +13,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
-evalexpr = "11.3.0"
 minijinja = { workspace = true }
 reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
 futures = { workspace = true }

@@ -70,15 +70,32 @@ node-math-div-pin-B = B
 node-math-div-pin-Res = Res
 
 # math/expression
-node-math-expression-title = Expression
+node-math-expression-title = Formula
 node-math-expression-description = Evaluates an arbitrary mathematical formula
 node-math-expression-help =
-    Evaluates the formula set directly on the node ("Formula" row), such as `(a + b) / 2` or `x * x - 1`.
+    Evaluates an arbitrary mathematical formula set directly on the node ("Formula" row).
 
-    Each variable in the formula automatically becomes an input pin (in alphabetical order). An unconnected variable uses the value set next to the pin, or defaults to 0. If the formula is invalid, the result is 0.
+    Syntax:
+    • Numbers: integers (42, 1_000_000), decimals (3.14), scientific notation (1e-3).
+    • Booleans: true, false.
+    • Constants: pi, e, tau, inf, nan.
+    • Arithmetic: + - * / % (modulo with sign of divisor), ^ or ** (power, right-associative).
+    • Comparisons: == != < <= > >=; Logic: && || ! (and or not); Ternary: c ? a : b.
+    • Functions: abs, sign, min, max, clamp(x, lo, hi), round(x[, digits]), floor, ceil, trunc, frac, sqrt, cbrt, pow, exp, ln, log(x[, base]), log10, log2, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, deg, rad, sum, avg/mean, median, lerp(a, b, t), map(x, in_lo, in_hi, out_lo, out_hi), if(c, a, b), mod(a, b), gcd, lcm, between(x, lo, hi), isnan, isfinite/finite.
+    • Compatibility: supports evalexpr names such as `math::sqrt(x)`.
 
-    Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
+    Variables and pins:
+    Each variable in the formula automatically becomes an input pin. Undeclared variables stay optional with an inline default of 0. Renaming a single variable in place preserves its pin ID and wire.
+
+    Physical quantities:
+    Inputs and outputs support physical quantities (quantity.*). Operations between the same quantity keep that quantity. Adding or subtracting a plain number treats it as canonical units. Multiplying or dividing a quantity by a number keeps that quantity. Dividing two identical quantities produces a dimensionless Number. Output type defaults to 'auto' (inferred) or can be fixed to a specific quantity or Number.
+
+    Pure node: evaluated whenever its output is needed.
 node-math-expression-pin-Res = Res
+node-math-expression-prop-expression-title = Formula
+node-math-expression-prop-expression-description = Mathematical formula; variables become input pins.
+node-math-expression-prop-value_type-title = Output type
+node-math-expression-prop-value_type-description = Output data type ('auto' inferred from inputs or an explicit number/quantity).
 
 # logical/and
 node-logical-and-title = Logical And
@@ -1073,6 +1090,20 @@ node-text-template-prop-blocks-option-trim = Trim
 error-object-unknown-type = Unknown struct type: { $type }
 error-template-syntax = Invalid template syntax: { $message }
 error-template-render = Template rendering failed: { $message }
+error-formula-too-large = Formula source length ({ $len } bytes) exceeds limit of { $max } bytes
+error-formula-depth-exceeded = Formula nesting depth exceeds limit of { $max }
+error-formula-unexpected-token = Unexpected token '{ $token }'
+error-formula-unclosed-paren = Unclosed parenthesis in formula
+error-formula-unknown-function = Unknown function '{ $name }'
+error-formula-wrong-arity = Function '{ $name }' expects { $expected } arguments, got { $got }
+error-formula-reserved-name = Variable name '{ $name }' is reserved
+error-formula-division-by-zero = Division by zero in formula
+error-formula-domain-error = Mathematical domain error in function '{ $name }'
+error-formula-overflow = Arithmetic overflow in formula
+error-formula-incompatible-quantities = Incompatible physical quantities: cannot combine { $a } and { $b }
+error-formula-type-mismatch = Type mismatch: expected { $expected }, got { $got }
+error-formula-syntax = Invalid formula syntax
+error-formula-eval = Formula evaluation failed: { $message }
 
 # time/now
 node-time-now-title = Now

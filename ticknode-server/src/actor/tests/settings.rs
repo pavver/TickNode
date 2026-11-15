@@ -84,7 +84,15 @@ fn settings_paste_preserves_id_position_valid_wires_and_undo_restores_removed_wi
         model.properties,
         vec![
             ("expression".into(), DataValue::from("a + b")),
-            ("in:1".into(), DataValue::from(7.0))
+            (
+                "pin_ids".into(),
+                DataValue::List {
+                    element_type: DataType::String,
+                    elements: vec!["1:a".into(), "2:b".into()],
+                }
+            ),
+            ("next_pin".into(), DataValue::Number(NumberValue::Int(3))),
+            ("in:1".into(), DataValue::from(7.0)),
         ]
     );
     assert_eq!(actor.positions[&id], Position { x: 36.0, y: 80.0 });

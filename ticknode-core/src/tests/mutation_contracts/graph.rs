@@ -229,7 +229,13 @@ fn a_new_loop_ignores_next_and_break_until_started() {
 fn splitting_one_input_preserves_another_unsplit_struct_input() {
     let mut e = TickEngine::new();
     point_type(&mut e);
-    let source = add(&mut e, "type/make/test.point");
+    let source = NodeId::generate();
+    e.create_node(
+        source,
+        "object/make",
+        &[("type".into(), "test.point".into())],
+    )
+    .unwrap();
     e.set_input_value(source, PinId(1), Some(41i64.into()))
         .unwrap();
     e.variables

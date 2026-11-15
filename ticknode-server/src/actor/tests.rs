@@ -73,11 +73,19 @@ fn split_protocol_round_trip_updates_effective_pins_and_disconnects() {
     let sink = NodeId::generate();
     actor
         .engine
-        .create_node(source, "type/make/test.point", &[])
+        .create_node(
+            source,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     actor
         .engine
-        .create_node(sink, "type/break/test.point", &[])
+        .create_node(
+            sink,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     actor.node_sheet.insert(source, sheet_id);
     actor.node_sheet.insert(sink, sheet_id);

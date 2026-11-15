@@ -1,21 +1,10 @@
 //! Translated node, property, category, type and setting definitions.
 
-use super::{TYPES, lookup, slug, t};
+use super::{TYPES, lookup, slug};
 use ticknode_shared::*;
 
 fn node_slug(type_name: &str) -> String {
     slug(type_name)
-}
-
-const MAKE_PREFIX: &str = "type/make/";
-const BREAK_PREFIX: &str = "type/break/";
-
-/// For the automatic Make/Break nodes of a struct: (`"make"` | `"break"`, the type's name).
-fn custom_node_kind(type_name: &str) -> Option<(&'static str, &str)> {
-    type_name
-        .strip_prefix(MAKE_PREFIX)
-        .map(|t| ("make", t))
-        .or_else(|| type_name.strip_prefix(BREAK_PREFIX).map(|t| ("break", t)))
 }
 
 /// Translated title of a data type; `None` if the server shipped no translation for it.
@@ -23,42 +12,17 @@ fn translated_type_title(type_name: &str) -> Option<String> {
     lookup(&format!("type-{}-title", slug(type_name)))
 }
 
-fn translated_custom_node(type_name: &str) -> Option<(&'static str, &str, String)> {
-    let (kind, name) = custom_node_kind(type_name)?;
-    Some((kind, name, translated_type_title(name)?))
-}
-
 pub fn node_title(def: &NodeDefinition) -> String {
-    if let Some((kind, _, title)) = translated_custom_node(&def.type_name) {
-        return t!(if kind == "make" { "custom-make-title" } else { "custom-break-title" }, type = title);
-    }
     lookup(&format!("node-{}-title", node_slug(&def.type_name)))
         .unwrap_or_else(|| def.title.clone())
 }
 
 pub fn node_description(def: &NodeDefinition) -> String {
-    if let Some((kind, _, title)) = translated_custom_node(&def.type_name) {
-        return t!(if kind == "make" { "custom-make-description" } else { "custom-break-description" }, type = title);
-    }
     lookup(&format!("node-{}-description", node_slug(&def.type_name)))
         .unwrap_or_else(|| def.description.clone())
 }
 
 pub fn node_help(def: &NodeDefinition) -> String {
-    if let Some((kind, type_name, title)) = translated_custom_node(&def.type_name) {
-        let key = if kind == "make" {
-            "custom-make-help"
-        } else {
-            "custom-break-help"
-        };
-        let description = lookup(&format!("type-{}-description", slug(type_name)))
-            .or_else(|| {
-                TYPES.with(|types| types.borrow().get(type_name).map(|d| d.description.clone()))
-            })
-            .unwrap_or_default();
-        let text = t!(key, type = title, name = type_name);
-        return format!("{text}\n\n{description}").trim_end().to_string();
-    }
     lookup(&format!("node-{}-help", node_slug(&def.type_name))).unwrap_or_else(|| {
         if def.help.trim().is_empty() {
             node_description(def)
@@ -69,14 +33,8 @@ pub fn node_help(def: &NodeDefinition) -> String {
 }
 
 /// Pin label. Convention: `node-<type slug>-pin-<name>` where the name is the pin's name as written when it
-/// consists of `[A-Za-z0-9_-]`, otherwise its slug (`Delay ms` -> `delay-ms`). The Make/Break nodes of a
-/// struct take their pin labels from the type's (translated) title and field titles.
+/// consists of `[A-Za-z0-9_-]`, otherwise its slug (`Delay ms` -> `delay-ms`).
 pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
-    if let Some((_, struct_name)) = custom_node_kind(type_name) {
-        if let Some(label) = custom_pin_label(struct_name, pin_name) {
-            return label;
-        }
-    }
     let base = format!("node-{}-pin-", node_slug(type_name));
     if !pin_name.is_empty()
         && pin_name
@@ -177,25 +135,6 @@ pub fn property_option_short_label(
 /// Whether a named pin type has an expandable struct definition in the current catalog.
 pub(crate) fn pin_can_split(pin: &PinDefinition) -> bool {
     TYPES.with(|types| splittable_type(&types.borrow(), pin).is_some())
-}
-
-/// Make/Break pins are named after the type (pin 0) and the field titles (the rest).
-fn custom_pin_label(struct_name: &str, pin_name: &str) -> Option<String> {
-    TYPES.with(|types| {
-        let types = types.borrow();
-        let def = types.get(struct_name)?;
-        if pin_name == def.title {
-            return translated_type_title(struct_name);
-        }
-        let field = def.fields().iter().find(|f| {
-            if f.title.is_empty() {
-                f.name == pin_name
-            } else {
-                f.title == pin_name
-            }
-        })?;
-        lookup(&format!("type-{}-field-{}", slug(struct_name), field.name))
-    })
 }
 
 /// Translated category name for categories without a built-in label (`category-<slug>`).

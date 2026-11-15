@@ -256,9 +256,7 @@ async fn plugins_are_managed_over_websocket() {
         panic!("expected Catalog")
     };
     assert!(
-        !definitions
-            .iter()
-            .any(|d| d.type_name == "test/greeter" || d.type_name == "type/make/test.point")
+        !definitions.iter().any(|d| d.type_name == "test/greeter")
             && types
                 .iter()
                 .all(|t| t.name.starts_with("quantity.") || t.name.starts_with("media."))

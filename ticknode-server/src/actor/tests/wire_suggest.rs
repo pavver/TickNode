@@ -10,9 +10,13 @@ fn history_state(actor: &Actor) -> HistoryState {
 }
 
 fn seed(actor: &mut Actor, kind: &str) -> NodeId {
+    seed_props(actor, kind, &[])
+}
+
+fn seed_props(actor: &mut Actor, kind: &str, properties: &[(String, DataValue)]) -> NodeId {
     let sheet_id = actor.sheets[0].id;
     let id = NodeId::generate();
-    actor.engine.create_node(id, kind, &[]).unwrap();
+    actor.engine.create_node(id, kind, properties).unwrap();
     actor.node_sheet.insert(id, sheet_id);
     id
 }
@@ -179,7 +183,7 @@ fn rejection_rolls_back_node_positions_events_and_history() {
         command(existing, 999, "for_loop", 1),
         command(NodeId::generate(), 0, "for_loop", 1),
         command(existing, 5, "missing", 0),
-        command(existing, 1, "type/make/test.point", 0),
+        command(existing, 1, "time/now", 1),
     ] {
         assert!(actor.apply(cmd, Some(sheet_id), &reply).is_err());
         assert_eq!(actor.graph_snapshot(), before);
@@ -249,7 +253,11 @@ fn split_field_origin_uses_its_effective_data_type() {
             &[],
         )
         .unwrap();
-    let source = seed(&mut actor, "type/make/test.point");
+    let source = seed_props(
+        &mut actor,
+        "object/make",
+        &[("type".into(), "test.point".into())],
+    );
     actor.engine.set_pin_split(source, PinId(0), true).unwrap();
     let field = split_field_pin(PinId(0), 0).unwrap();
     let (events, id) = apply(&mut actor, command(source, field.0, "for_loop", 1));

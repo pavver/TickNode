@@ -216,7 +216,9 @@ mod tests {
 
     fn make(engine: &mut TickEngine) -> NodeId {
         let id = NodeId::generate();
-        engine.create_node(id, "type/make/test.point", &[]).unwrap();
+        engine
+            .create_node(id, "object/make", &[("type".into(), "test.point".into())])
+            .unwrap();
         engine
             .set_input_value(id, PinId(1), Some(42i64.into()))
             .unwrap();
@@ -228,7 +230,12 @@ mod tests {
         let mut e = engine();
         let source = make(&mut e);
         let sink = NodeId::generate();
-        e.create_node(sink, "type/break/test.point", &[]).unwrap();
+        e.create_node(
+            sink,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
+        .unwrap();
         e.connect_data(source, PinId(0), sink, PinId(0)).unwrap();
         assert_eq!(
             e.set_pin_split(source, PinId(0), true).unwrap().data.len(),
@@ -266,7 +273,8 @@ mod tests {
     fn input_assembly_tag_required_fields_and_persistence() {
         let mut e = engine();
         let id = NodeId::generate();
-        e.create_node(id, "type/break/test.point", &[]).unwrap();
+        e.create_node(id, "object/break", &[("type".into(), "test.point".into())])
+            .unwrap();
         e.set_pin_split(id, PinId(0), true).unwrap();
         let x = split_field_pin(PinId(0), 0).unwrap();
         let label = split_field_pin(PinId(0), 1).unwrap();

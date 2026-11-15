@@ -35,11 +35,19 @@ fn one_unit_of_prior_work_defers_an_oversized_activation() {
 }
 
 #[test]
-fn generated_make_and_break_charge_for_pulled_work() {
+fn universal_make_and_break_charge_for_pulled_work() {
     let mut e = TickEngine::new();
     point_type(&mut e);
-    let make = add(&mut e, "type/make/test.point");
-    let split = add(&mut e, "type/break/test.point");
+    let make = NodeId::generate();
+    e.create_node(make, "object/make", &[("type".into(), "test.point".into())])
+        .unwrap();
+    let split = NodeId::generate();
+    e.create_node(
+        split,
+        "object/break",
+        &[("type".into(), "test.point".into())],
+    )
+    .unwrap();
     let console = add(&mut e, "console");
     e.set_input_value(make, PinId(1), Some(17i64.into()))
         .unwrap();

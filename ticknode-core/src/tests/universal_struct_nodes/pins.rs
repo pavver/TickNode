@@ -1,21 +1,33 @@
 use super::*;
 
 #[test]
-fn universal_nodes_have_identical_pins_to_per_type_nodes() {
+fn universal_nodes_have_expected_pin_layout_for_struct_types() {
     let mut engine = setup_engine();
 
     for struct_type in ["telegram.user", "telegram.message", "ha.state"] {
-        let per_type_make = NodeId::generate();
-        let per_type_break = NodeId::generate();
+        assert!(
+            engine
+                .registry
+                .get_definition(&format!("type/make/{struct_type}"))
+                .is_none()
+        );
+        assert!(
+            engine
+                .registry
+                .get_definition(&format!("type/break/{struct_type}"))
+                .is_none()
+        );
+
+        let fields = engine
+            .types
+            .get(struct_type)
+            .unwrap_or_else(|| panic!("missing struct type {struct_type}"))
+            .fields()
+            .to_vec();
+
         let univ_make = NodeId::generate();
         let univ_break = NodeId::generate();
 
-        engine
-            .create_node(per_type_make, &format!("type/make/{struct_type}"), &[])
-            .unwrap();
-        engine
-            .create_node(per_type_break, &format!("type/break/{struct_type}"), &[])
-            .unwrap();
         engine
             .create_node(
                 univ_make,
@@ -31,43 +43,44 @@ fn universal_nodes_have_identical_pins_to_per_type_nodes() {
             )
             .unwrap();
 
-        let pt_make_def = engine.fresh_node_definition(per_type_make).unwrap();
         let univ_make_def = engine.fresh_node_definition(univ_make).unwrap();
-        let pt_break_def = engine.fresh_node_definition(per_type_break).unwrap();
         let univ_break_def = engine.fresh_node_definition(univ_break).unwrap();
 
-        // 1. Compare Make pins: pin 0 is Output Named(struct_type), pins 1..=N are field Inputs.
+        // 1. Check Make pins: pin 0 is Output Named(struct_type), pins 1..=N are field Inputs.
         assert_eq!(
             univ_make_def.pins.len(),
-            pt_make_def.pins.len(),
+            fields.len() + 1,
             "Make pin count mismatch for {struct_type}"
         );
-        for (u_pin, pt_pin) in univ_make_def.pins.iter().zip(pt_make_def.pins.iter()) {
-            assert_eq!(u_pin.id, pt_pin.id, "Make pin id mismatch on {struct_type}");
-            assert_eq!(
-                u_pin.direction, pt_pin.direction,
-                "Make pin direction mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
-            assert_eq!(
-                u_pin.pin_type, pt_pin.pin_type,
-                "Make pin type mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
-            assert_eq!(
-                u_pin.required, pt_pin.required,
-                "Make pin required mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
+        assert_eq!(univ_make_def.pins[0].id, PinId(0));
+        assert_eq!(univ_make_def.pins[0].direction, PinDirection::Output);
+        assert_eq!(
+            univ_make_def.pins[0].pin_type,
+            PinType::Data(DataType::Named(struct_type.to_string()))
+        );
+        assert!(!univ_make_def.pins[0].required);
+        assert_eq!(univ_make_def.pins[0].name, "Value");
+
+        for (i, field) in fields.iter().enumerate() {
+            let pin = &univ_make_def.pins[i + 1];
+            assert_eq!(pin.id, PinId(i as u32 + 1));
+            assert_eq!(pin.direction, PinDirection::Input);
+            assert_eq!(pin.pin_type, PinType::Data(field.data_type.clone()));
+            assert_eq!(pin.required, !field.optional);
+            let expected_name = if field.title.is_empty() {
+                &field.name
+            } else {
+                &field.title
+            };
+            assert_eq!(&pin.name, expected_name);
         }
 
-        // 2. Compare Break pins: pin 0 is Input Named(struct_type), pins 1..=N are field Outputs.
+        // 2. Check Break pins: pin 0 is Input Named(struct_type), pins 1..=N are field Outputs.
         assert_eq!(
             univ_break_def.pins.len(),
-            pt_break_def.pins.len(),
+            fields.len() + 1,
             "Break pin count mismatch for {struct_type}"
         );
-        // Pin 0 contract:
         assert_eq!(univ_break_def.pins[0].id, PinId(0));
         assert_eq!(univ_break_def.pins[0].direction, PinDirection::Input);
         assert_eq!(
@@ -75,36 +88,20 @@ fn universal_nodes_have_identical_pins_to_per_type_nodes() {
             PinType::Data(DataType::Named(struct_type.to_string()))
         );
         assert!(univ_break_def.pins[0].required);
+        assert_eq!(univ_break_def.pins[0].name, "Value");
 
-        // Field pins 1..=N match per-type break node identically:
-        for (u_pin, pt_pin) in univ_break_def.pins[1..]
-            .iter()
-            .zip(pt_break_def.pins[1..].iter())
-        {
-            assert_eq!(
-                u_pin.id, pt_pin.id,
-                "Break pin id mismatch on {struct_type}"
-            );
-            assert_eq!(
-                u_pin.direction, pt_pin.direction,
-                "Break pin direction mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
-            assert_eq!(
-                u_pin.pin_type, pt_pin.pin_type,
-                "Break pin type mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
-            assert_eq!(
-                u_pin.required, pt_pin.required,
-                "Break pin required mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
-            assert_eq!(
-                u_pin.name, pt_pin.name,
-                "Break pin name mismatch on {struct_type} pin {:?}",
-                u_pin.id
-            );
+        for (i, field) in fields.iter().enumerate() {
+            let pin = &univ_break_def.pins[i + 1];
+            assert_eq!(pin.id, PinId(i as u32 + 1));
+            assert_eq!(pin.direction, PinDirection::Output);
+            assert_eq!(pin.pin_type, PinType::Data(field.data_type.clone()));
+            assert!(!pin.required);
+            let expected_name = if field.title.is_empty() {
+                &field.name
+            } else {
+                &field.title
+            };
+            assert_eq!(&pin.name, expected_name);
         }
     }
 }

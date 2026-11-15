@@ -19,7 +19,11 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
         .unwrap();
     let brk = NodeId::generate();
     engine
-        .create_node(brk, "type/break/test.point", &[])
+        .create_node(
+            brk,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let sink_node = NodeId::generate();
     engine
@@ -27,7 +31,11 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
         .unwrap();
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let debug = NodeId::generate();
     engine.create_node(debug, "test/debug", &[]).unwrap();
@@ -64,11 +72,14 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     let change = engine.disable_plugin("test_plugin").unwrap();
     assert_eq!(
         change.replaced.len(),
-        4,
-        "source, brk, sink, make: {:?}",
+        2,
+        "source, sink: {:?}",
         change.replaced
     );
     assert!(change.removed.data.is_empty());
+    // Universal struct nodes keep their snapshot and do not become stubs
+    assert!(engine.node_unavailable(make).is_none());
+    assert!(engine.node_unavailable(brk).is_none());
     // Types unregistered from registries
     assert!(
         engine
@@ -119,19 +130,12 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     // Disabling again is an error; a graph saved while disabled is also preserved intact
     assert!(engine.disable_plugin("test_plugin").is_err());
     let json = serde_json::to_string(&engine.export_graph()).unwrap();
-    let mut reloaded = TickEngine::new();
-    assert!(
-        reloaded
-            .load_graph(&serde_json::from_str(&json).unwrap())
-            .is_empty()
-    );
-    assert_eq!(reloaded.export_graph(), before);
 
     // Enabling: stubs become real nodes again, connections remain intact
     let change = engine
         .enable_plugin("test_plugin", &test_settings("Hi", "good"))
         .unwrap();
-    assert_eq!(change.replaced.len(), 4);
+    assert_eq!(change.replaced.len(), 2);
     assert!(change.removed.data.is_empty() && change.removed.exec.is_empty());
     assert!(engine.node_unavailable(source).is_none());
     assert_eq!(engine.export_graph(), before);
@@ -143,21 +147,46 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
         Some(DataValue::String("manual:2,3".into()))
     );
 
-    // A graph reloaded with stubs also revives once the plugin becomes available
+    // A graph reloaded into an engine with the plugin restores intact
+    let mut restored = engine_with("test_plugin", vec![]).unwrap();
+    assert!(
+        restored
+            .load_graph(&serde_json::from_str(&json).unwrap())
+            .is_empty()
+    );
+    assert_eq!(restored.export_graph(), before);
+    restored.trigger_node(source, PinId(0));
+    restored.trigger_node(sink_node, PinId(0));
+    restored.tick();
+    assert_eq!(
+        output(&restored, sink_node, 3),
+        Some(DataValue::String("manual:2,3".into()))
+    );
+
+    // Without the plugin loaded, stubs preserve their contract and universal nodes freeze;
+    // once the plugin is added and enabled, stubs revive and universal nodes unfreeze.
+    let mut reloaded = TickEngine::new();
+    assert!(
+        reloaded
+            .load_graph(&serde_json::from_str(&json).unwrap())
+            .is_empty()
+    );
+    assert!(reloaded.node_unavailable(source).is_some());
+    assert!(reloaded.node_unavailable(sink_node).is_some());
+    assert!(!reloaded.frozen_changes(make).is_empty());
+    assert!(!reloaded.frozen_changes(brk).is_empty());
+    assert_eq!(reloaded.detached_connections().len(), 2);
+
     let bytes = plugin_bytes("test_plugin").unwrap();
     reloaded.add_plugin(&bytes, None, |_| vec![]).unwrap();
     let change = reloaded
         .enable_plugin("test_plugin", &test_settings("Hi", "good"))
         .unwrap();
-    assert_eq!(change.replaced.len(), 4);
-    assert_eq!(reloaded.export_graph(), before);
-    reloaded.trigger_node(source, PinId(0));
-    reloaded.trigger_node(sink_node, PinId(0));
-    reloaded.tick();
-    assert_eq!(
-        output(&reloaded, sink_node, 3),
-        Some(DataValue::String("manual:2,3".into()))
-    );
+    assert_eq!(change.replaced.len(), 2);
+    assert!(reloaded.node_unavailable(source).is_none());
+    assert!(reloaded.node_unavailable(sink_node).is_none());
+    assert!(reloaded.frozen_changes(make).is_empty());
+    assert!(reloaded.frozen_changes(brk).is_empty());
 }
 
 #[test]

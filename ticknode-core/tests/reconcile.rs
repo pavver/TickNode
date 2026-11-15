@@ -82,7 +82,14 @@ fn reconcile_properties_inline_values_and_split_pins() {
         )
         .unwrap();
     let constant = node(&mut engine, "const");
-    let maker = node(&mut engine, "type/make/test.point");
+    let maker = NodeId::generate();
+    engine
+        .create_node(
+            maker,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
+        .unwrap();
     engine.set_pin_split(maker, PinId(0), true).unwrap();
     engine
         .set_input_value(maker, PinId(1), Some(DataValue::from(7.0)))

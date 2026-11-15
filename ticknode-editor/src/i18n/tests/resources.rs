@@ -184,37 +184,31 @@ fn broken_runtime_resources_do_not_break_the_bundles() {
 }
 
 #[test]
-fn make_and_break_nodes_use_the_translated_type() {
+fn type_definition_and_options_use_the_translated_type() {
     let mut registry = TypeRegistry::new();
-    registry
-        .insert_all(&[TypeDefinition::new_struct(
-            "weather.state",
-            "State",
-            vec![FieldDefinition::new("temp", "Temp", DataType::Number)],
-        )])
-        .unwrap();
+    let def_struct = TypeDefinition::new_struct(
+        "weather.state",
+        "State",
+        vec![FieldDefinition::new("temp", "Temp", DataType::Number)],
+    );
+    registry.insert_all(&[def_struct.clone()]).unwrap();
     set_known_types(&registry);
     set_runtime_translations(&[("uk".to_string(), PLUGIN_UK.to_string())]);
-    let make = NodeDefinition {
-        type_name: "type/make/weather.state".into(),
-        title: "Make State".into(),
-        ..def("x")
-    };
     with_locale(Locale::Uk, || {
-        assert_eq!(node_title(&make), "Створити Стан");
-        assert_eq!(node_description(&make), "Збирає значення «Стан» з полів");
-        assert_eq!(node_pin_label("type/make/weather.state", "State"), "Стан");
+        assert_eq!(type_def_title(&def_struct), "Стан");
         assert_eq!(
-            node_pin_label("type/make/weather.state", "Temp"),
-            "Температура"
-        );
-        assert_eq!(
-            node_pin_label("type/break/weather.state", "Temp"),
-            "Температура"
+            property_option_label("object/make", "type", "weather.state", "State"),
+            "Стан"
         );
     });
     // No translated type: the server's text is kept
-    with_locale(Locale::En, || assert_eq!(node_title(&make), "Make State"));
+    with_locale(Locale::En, || {
+        assert_eq!(type_def_title(&def_struct), "State");
+        assert_eq!(
+            property_option_label("object/make", "type", "weather.state", "State"),
+            "State"
+        );
+    });
 }
 
 #[test]

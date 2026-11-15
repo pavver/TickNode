@@ -67,24 +67,6 @@ error-condition-not-number = "{ $text }" is not a number
 error-condition-doubled-operator = "{ $char }" — probably "{ $char }{ $char }"
 error-condition-unexpected-char = Unexpected character "{ $char }"
 
-# Automatic nodes of plugin data types
-custom-make-title = Make { $type }
-custom-make-description = Builds a "{ $type }" value from fields
-custom-break-title = Break { $type }
-custom-break-description = Breaks "{ $type }" into fields
-custom-make-help =
-    Builds a value of type "{ $type }" ({ $name }) from individual fields.
-
-    Each field is an input: connect a source or set the value right on the node. Required fields are required inputs: without them no value is created (an error appears in the node's log). An optional field without a value is skipped.
-
-    Pure node: evaluated whenever its result is needed by another node.
-custom-break-help =
-    Breaks a value of type "{ $type }" ({ $name }) into individual fields: each field is an output pin.
-
-    An optional field that is absent from the value has no value (the pin is empty).
-
-    Pure node: evaluated whenever its result is needed by another node.
-
 # Node categories
 category-events = Events
 category-control-flow = Control Flow

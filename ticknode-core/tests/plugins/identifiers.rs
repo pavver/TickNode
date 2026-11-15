@@ -11,6 +11,14 @@ fn identifier_plugins_validate_outputs_inline_values_and_connection_contracts() 
     assert!(chat.is_identifier());
     assert_eq!(chat.plugin.as_deref(), Some("test_plugin"));
     assert!(engine.registry.get_definition("type/make/opaque.chat").is_none());
+    let make = NodeId::generate();
+    assert!(engine
+        .create_node_interactive(
+            make,
+            "object/make",
+            &[("type".into(), "opaque.chat".into())]
+        )
+        .is_err());
     let source = NodeId::generate();
     let target = NodeId::generate();
     engine.create_node(source, "test/identifier", &[]).unwrap();

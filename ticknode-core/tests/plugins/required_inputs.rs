@@ -7,7 +7,11 @@ fn make_requires_its_required_fields() {
     };
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let def = engine.node_definition(make).unwrap();
     let required: Vec<_> = def
@@ -83,7 +87,11 @@ fn connected_source_without_value_skips_silently() {
     };
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let source = NodeId::generate();
     engine.create_node(source, "test/counter", &[]).unwrap(); // Count has no value yet

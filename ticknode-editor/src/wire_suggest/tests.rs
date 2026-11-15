@@ -178,7 +178,7 @@ fn bool_output_skips_number_inputs_including_adaptive_math() {
 }
 
 #[test]
-fn named_struct_prefers_its_break_over_object_and_rejects_reverse() {
+fn named_struct_prefers_exact_named_input_over_object_and_rejects_reverse() {
     let types = TypeRegistry::from_definitions(vec![TypeDefinition::new_struct(
         "test.point",
         "Point",
@@ -187,7 +187,7 @@ fn named_struct_prefers_its_break_over_object_and_rejects_reverse() {
     let named = DataType::Named("test.point".into());
     let catalog = [
         node(
-            "type/break/test.point",
+            "object/break",
             vec![(0, PinDirection::Input, PinType::Data(named.clone()))],
         ),
         node(
@@ -203,7 +203,7 @@ fn named_struct_prefers_its_break_over_object_and_rejects_reverse() {
     );
     assert_eq!(
         (result[0].type_name.as_str(), result[0].rank),
-        ("type/break/test.point", 0)
+        ("object/break", 0)
     );
     assert_eq!(result[1].rank, 1);
     let catalog = [node(

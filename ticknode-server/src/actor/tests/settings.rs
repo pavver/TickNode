@@ -237,17 +237,20 @@ fn settings_paste_is_allowed_in_batch_and_replaces_split_properties() {
     let id = NodeId::generate();
     actor
         .engine
-        .create_node(id, "type/break/test.point", &[])
+        .create_node(id, "object/break", &[("type".into(), "test.point".into())])
         .unwrap();
     actor.node_sheet.insert(id, sheet_id);
     let before = actor.graph_snapshot();
-    let properties = vec![("split:0".into(), DataValue::Bool(true))];
+    let properties = vec![
+        ("type".into(), DataValue::String("test.point".into())),
+        ("split:0".into(), DataValue::Bool(true)),
+    ];
     apply(
         &mut actor,
         ClientMessage::Batch(vec![
             ClientMessage::PasteSettings {
                 id,
-                type_name: "type/break/test.point".into(),
+                type_name: "object/break".into(),
                 properties: properties.clone(),
             },
             ClientMessage::MoveNode {

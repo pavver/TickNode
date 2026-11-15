@@ -10,7 +10,7 @@ fn mode_type() -> DataType {
 
 #[test]
 fn plugin_types_are_registered_with_make_and_break_nodes() {
-    let Some(engine) = engine_with("test_plugin", vec![]) else {
+    let Some(mut engine) = engine_with("test_plugin", vec![]) else {
         return;
     };
     let point = engine
@@ -21,11 +21,35 @@ fn plugin_types_are_registered_with_make_and_break_nodes() {
     assert_eq!(point.color.as_deref(), Some("#e0a030"));
     assert_eq!(engine.types.get("test.mode").unwrap().values().len(), 2);
 
-    let make = engine
-        .registry
-        .get_definition("type/make/test.point")
+    assert!(
+        engine
+            .registry
+            .get_definition("type/make/test.point")
+            .is_none()
+    );
+    assert!(
+        engine
+            .registry
+            .get_definition("type/break/test.point")
+            .is_none()
+    );
+    assert!(
+        engine
+            .registry
+            .get_definition("type/make/test.mode")
+            .is_none()
+    );
+
+    let make_id = NodeId::generate();
+    engine
+        .create_node(
+            make_id,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
-    assert_eq!(make.title, "Make Point");
+    let make = engine.node_definition(make_id).unwrap();
+    assert_eq!(make.title, "Make Object");
     assert_eq!(make.category, "Data");
     assert!(!make.help.is_empty());
     assert!(make.pins.iter().any(|p| p.id == PinId(0)
@@ -38,22 +62,20 @@ fn plugin_types_are_registered_with_make_and_break_nodes() {
             .count(),
         3
     );
-    let brk = engine
-        .registry
-        .get_definition("type/break/test.point")
+    let brk_id = NodeId::generate();
+    engine
+        .create_node(
+            brk_id,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
+    let brk = engine.node_definition(brk_id).unwrap();
     assert!(!brk.help.is_empty());
     assert!(
         brk.pins
             .iter()
             .any(|p| p.id == PinId(0) && p.direction == PinDirection::Input)
-    );
-    // Make/Break nodes are not generated for enums
-    assert!(
-        engine
-            .registry
-            .get_definition("type/make/test.mode")
-            .is_none()
     );
 }
 
@@ -115,9 +137,10 @@ fn type_conflicts_and_unknown_types_are_rejected() {
         engine
             .registry
             .get_definition("type/make/other.nested")
-            .is_some()
+            .is_none()
     );
-    assert_eq!(engine.registry.get_definitions().len(), before + 2);
+    assert_eq!(engine.registry.get_definitions().len(), before);
+    assert!(engine.types.get("other.nested").is_some());
 
     // Failed attempt left no partial state behind
     assert!(engine.types.get("other.thing").is_none());
@@ -130,11 +153,19 @@ fn pin_compatibility_respects_named_types() {
     };
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let brk = NodeId::generate();
     engine
-        .create_node(brk, "type/break/test.point", &[])
+        .create_node(
+            brk,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let sink = NodeId::generate();
     engine.create_node(sink, "test/point_sink", &[]).unwrap();
@@ -217,7 +248,11 @@ fn make_and_break_roundtrip_through_plugin_nodes() {
         .unwrap();
     let brk = NodeId::generate();
     engine
-        .create_node(brk, "type/break/test.point", &[])
+        .create_node(
+            brk,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     engine
         .connect_data(source, PinId(1), brk, PinId(0))
@@ -225,7 +260,11 @@ fn make_and_break_roundtrip_through_plugin_nodes() {
 
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     engine.connect_data(brk, PinId(1), make, PinId(1)).unwrap();
     // y is an inline value on the node; label is optional but provided
@@ -279,7 +318,11 @@ fn break_skips_missing_optional_field() {
         .unwrap();
     let brk = NodeId::generate();
     engine
-        .create_node(brk, "type/break/test.point", &[])
+        .create_node(
+            brk,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     engine
         .connect_data(source, PinId(1), brk, PinId(0))
@@ -363,11 +406,19 @@ fn graph_with_named_nodes_survives_save_and_load() {
         .unwrap();
     let brk = NodeId::generate();
     engine
-        .create_node(brk, "type/break/test.point", &[])
+        .create_node(
+            brk,
+            "object/break",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let make = NodeId::generate();
     engine
-        .create_node(make, "type/make/test.point", &[])
+        .create_node(
+            make,
+            "object/make",
+            &[("type".into(), "test.point".into())],
+        )
         .unwrap();
     let sink = NodeId::generate();
     engine.create_node(sink, "test/point_sink", &[]).unwrap();
@@ -397,10 +448,14 @@ fn graph_with_named_nodes_survives_save_and_load() {
         Some(DataValue::String("auto:2,3".into()))
     );
 
-    // Without the plugin, the typed node is not lost: a stub preserves its type, properties, and connections
+    // Without the plugin, plugin nodes become stubs while universal struct nodes freeze
     let mut bare = TickEngine::new();
     assert!(bare.load_graph(&graph).is_empty());
-    assert_eq!(bare.export_graph(), graph);
     assert!(bare.node_unavailable(source).is_some());
+    assert!(bare.node_unavailable(sink).is_some());
+    assert!(!bare.frozen_changes(make).is_empty());
+    assert!(!bare.frozen_changes(brk).is_empty());
+    assert_eq!(bare.data_connections().len(), 2);
+    assert_eq!(bare.detached_connections().len(), 2);
 }
 

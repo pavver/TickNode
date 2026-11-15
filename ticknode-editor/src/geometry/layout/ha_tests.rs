@@ -11,7 +11,7 @@ fn text(label: &str, size: f64) -> f64 {
 
 fn check(node: &dyn PluginNode) {
     let props = node.properties();
-    let mut def = node.definition();
+    let mut def: ticknode_shared::NodeDefinition = node.definition().into();
     // The host projects property-or-input pins before sending the definition to the editor.
     def.pins.retain(|pin| {
         !def.properties.iter().any(|prop| {

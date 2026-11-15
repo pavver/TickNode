@@ -4,6 +4,8 @@ use ticknode_shared::*;
 use crate::custom_types::field_pin;
 use crate::{Node, NodeContext};
 
+use super::snapshot::{decode_fields_snapshot, encode_fields_snapshot};
+
 pub struct ObjectBreakNode {
     pub id: NodeId,
     pub type_name: String,
@@ -64,6 +66,12 @@ impl Node for ObjectBreakNode {
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiMessage> {
+        if name == "fields" {
+            return Err(
+                UiMessage::new("error-invalid-property", "Invalid property: fields")
+                    .arg("property", "fields"),
+            );
+        }
         if name == "type" {
             let DataValue::String(s) = value else {
                 return Err(
@@ -88,24 +96,54 @@ impl Node for ObjectBreakNode {
                 return;
             };
             if s != self.type_name {
+                let prev_empty = self.type_name.is_empty();
                 self.type_name = s;
                 if let Some(def) = self.struct_defs.get(&self.type_name) {
                     self.type_title = def.title.clone();
                     self.fields_snapshot = def.fields().to_vec();
-                } else if self.type_name.is_empty() {
+                } else if self.type_name.is_empty() || !prev_empty {
                     self.type_title.clear();
                     self.fields_snapshot.clear();
                 }
                 self.revision += 1;
             }
+        } else if name == "fields" {
+            let DataValue::String(json) = value else {
+                return;
+            };
+            let Some(snapshot) = decode_fields_snapshot(&json) else {
+                return;
+            };
+            if !self.type_name.is_empty() && self.struct_defs.contains_key(&self.type_name) {
+                return;
+            }
+            if self.fields_snapshot != snapshot.fields || self.type_title != snapshot.title {
+                self.type_title = snapshot.title;
+                self.fields_snapshot = snapshot.fields;
+                self.revision += 1;
+            }
+        }
+    }
+
+    fn restored(&mut self) {
+        if self.type_name.is_empty() {
+            self.type_title.clear();
+            self.fields_snapshot.clear();
         }
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        vec![(
+        let mut props = vec![(
             "type".to_string(),
             DataValue::String(self.type_name.clone()),
-        )]
+        )];
+        if !self.type_name.is_empty()
+            && !self.fields_snapshot.is_empty()
+            && let Some(json) = encode_fields_snapshot(&self.type_title, &self.fields_snapshot)
+        {
+            props.push(("fields".to_string(), DataValue::String(json)));
+        }
+        props
     }
 
     fn types_changed(&mut self, types: &TypeRegistry) {
@@ -154,6 +192,7 @@ impl Node for ObjectBreakNode {
         let properties = vec![
             PropertyDefinition::select("type", "Type", &options_ref)
                 .described("Object struct type to break into fields"),
+            PropertyDefinition::hidden("fields"),
         ];
 
         let mut pins = Vec::new();

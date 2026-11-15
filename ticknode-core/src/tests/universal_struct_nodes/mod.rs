@@ -4,6 +4,7 @@ use ticknode_shared::*;
 mod execution;
 mod lifecycle;
 mod pins;
+mod snapshot;
 
 pub(crate) fn named(name: &str) -> DataType {
     DataType::Named(name.to_string())

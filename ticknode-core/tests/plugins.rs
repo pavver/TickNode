@@ -81,3 +81,4 @@ include!("plugins/identifiers.rs");
 include!("plugins/plugin_http.rs");
 
 include!("plugins/telegram.rs");
+include!("plugins/struct_snapshot.rs");

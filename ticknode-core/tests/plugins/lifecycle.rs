@@ -163,8 +163,8 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
         Some(DataValue::String("manual:2,3".into()))
     );
 
-    // Without the plugin loaded, stubs preserve their contract and universal nodes freeze;
-    // once the plugin is added and enabled, stubs revive and universal nodes unfreeze.
+    // Without the plugin loaded, stubs preserve their contract and universal struct nodes restore their snapshot;
+    // once the plugin is added and enabled, stubs revive and the live type refreshes universal nodes.
     let mut reloaded = TickEngine::new();
     assert!(
         reloaded
@@ -173,9 +173,10 @@ fn disabling_plugin_keeps_nodes_as_stubs_and_enabling_restores_them() {
     );
     assert!(reloaded.node_unavailable(source).is_some());
     assert!(reloaded.node_unavailable(sink_node).is_some());
-    assert!(!reloaded.frozen_changes(make).is_empty());
-    assert!(!reloaded.frozen_changes(brk).is_empty());
-    assert_eq!(reloaded.detached_connections().len(), 2);
+    assert!(reloaded.frozen_changes(make).is_empty());
+    assert!(reloaded.frozen_changes(brk).is_empty());
+    assert!(reloaded.detached_connections().is_empty());
+    assert_eq!(reloaded.data_connections().len(), 5);
 
     let bytes = plugin_bytes("test_plugin").unwrap();
     reloaded.add_plugin(&bytes, None, |_| vec![]).unwrap();

@@ -259,7 +259,10 @@ fn settings_paste_is_allowed_in_batch_and_replaces_split_properties() {
             },
         ]),
     );
-    assert_eq!(actor.engine.node_model(id).unwrap().properties, properties);
+    let props = actor.engine.node_model(id).unwrap().properties;
+    assert!(props.contains(&("type".into(), DataValue::String("test.point".into()))));
+    assert!(props.contains(&("split:0".into(), DataValue::Bool(true))));
+    assert!(props.iter().any(|(k, _)| k == "fields"));
     assert!(
         actor
             .engine

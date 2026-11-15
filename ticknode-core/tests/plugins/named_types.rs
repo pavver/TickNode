@@ -448,14 +448,14 @@ fn graph_with_named_nodes_survives_save_and_load() {
         Some(DataValue::String("auto:2,3".into()))
     );
 
-    // Without the plugin, plugin nodes become stubs while universal struct nodes freeze
+    // Without the plugin, plugin nodes become stubs while universal struct nodes restore their snapshot
     let mut bare = TickEngine::new();
     assert!(bare.load_graph(&graph).is_empty());
     assert!(bare.node_unavailable(source).is_some());
     assert!(bare.node_unavailable(sink).is_some());
-    assert!(!bare.frozen_changes(make).is_empty());
-    assert!(!bare.frozen_changes(brk).is_empty());
-    assert_eq!(bare.data_connections().len(), 2);
-    assert_eq!(bare.detached_connections().len(), 2);
+    assert!(bare.frozen_changes(make).is_empty());
+    assert!(bare.frozen_changes(brk).is_empty());
+    assert_eq!(bare.data_connections().len(), 4);
+    assert!(bare.detached_connections().is_empty());
 }
 

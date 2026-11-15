@@ -62,20 +62,20 @@ impl Node for VariableGetNode {
     }
 
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        if let Some(var) = ctx.variable(&self.name, self.lookup) {
-            if let Some(val) = fit_typed_variable_value(
+        if let Some(var) = ctx.variable(&self.name, self.lookup)
+            && let Some(val) = fit_typed_variable_value(
                 ctx.types,
                 var.value.clone(),
                 &var.data_type,
                 &self.value_type,
                 &ctx.host_state.display,
                 crate::quantity::labels(&ctx.host_state.locale),
-            ) {
-                return vec![
-                    NodeOutput::Data(PinId(0), val),
-                    NodeOutput::Data(PinId(1), DataValue::Bool(true)),
-                ];
-            }
+            )
+        {
+            return vec![
+                NodeOutput::Data(PinId(0), val),
+                NodeOutput::Data(PinId(1), DataValue::Bool(true)),
+            ];
         }
         vec![
             NodeOutput::Clear(PinId(0)),

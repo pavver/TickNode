@@ -313,10 +313,10 @@ impl TickEngine {
         next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
     ) -> bool {
         let mut changed = false;
-        if valid_variable_name(&name) {
-            if let Some(key) = self.variables.resolve(&name, lookup, sheet) {
-                changed = self.variables.delete(&key);
-            }
+        if valid_variable_name(&name)
+            && let Some(key) = self.variables.resolve(&name, lookup, sheet)
+        {
+            changed = self.variables.delete(&key);
         }
         fired.push(PinId(1));
         self.queue_exec_output(node_id, PinId(1), next_tick_queue);

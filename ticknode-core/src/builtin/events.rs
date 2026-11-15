@@ -33,10 +33,10 @@ impl Node for ClickButtonNode {
         vec![NodeOutput::Execution(PinId(0))]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "label" {
-            if let DataValue::String(s) = value {
-                self.label = s;
-            }
+        if name == "label"
+            && let DataValue::String(s) = value
+        {
+            self.label = s;
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

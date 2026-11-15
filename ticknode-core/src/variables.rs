@@ -160,16 +160,16 @@ impl VariableStore {
     /// Sets the value of an existing variable.
     /// Returns true if value actually changed, false if value was identical or variable not found.
     pub fn set(&mut self, key: &VariableKey, value: DataValue) -> bool {
-        if let Some(existing) = self.variables.get_mut(key) {
-            if existing.value != value {
-                existing.value = value;
-                let var = existing.clone();
-                self.pending_changes.insert(key.clone(), Some(var));
-                if key.scope == VariableScope::Persistent {
-                    self.persistent_dirty = true;
-                }
-                return true;
+        if let Some(existing) = self.variables.get_mut(key)
+            && existing.value != value
+        {
+            existing.value = value;
+            let var = existing.clone();
+            self.pending_changes.insert(key.clone(), Some(var));
+            if key.scope == VariableScope::Persistent {
+                self.persistent_dirty = true;
             }
+            return true;
         }
         false
     }

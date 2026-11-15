@@ -49,10 +49,10 @@ impl TickEngine {
             return val;
         }
 
-        if let Some(cached_node_vals) = self.pure_cache.get(&node_id) {
-            if let Some(val) = cached_node_vals.get(&pin_id) {
-                return Some(val.clone());
-            }
+        if let Some(cached_node_vals) = self.pure_cache.get(&node_id)
+            && let Some(val) = cached_node_vals.get(&pin_id)
+        {
+            return Some(val.clone());
         }
 
         let is_pure = self

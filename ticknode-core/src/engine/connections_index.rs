@@ -25,18 +25,18 @@ impl ConnectionIndex {
         let c = c.borrow();
         self.exec_out
             .get(&(c.src_node, c.src_pin))
-            .map_or(false, |list| list.contains(c))
+            .is_some_and(|list| list.contains(c))
     }
 
     pub fn contains_data(&self, c: impl Borrow<ConnectionModel>) -> bool {
         let c = c.borrow();
         self.data_in
             .get(&c.dst_node)
-            .map_or(false, |list| list.contains(c))
+            .is_some_and(|list| list.contains(c))
     }
 
     pub fn add_exec(&mut self, c: ConnectionModel) {
-        if !self.contains_exec(&c) {
+        if !self.contains_exec(c) {
             self.exec.push(c);
             self.exec_out
                 .entry((c.src_node, c.src_pin))

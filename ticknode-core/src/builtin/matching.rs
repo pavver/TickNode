@@ -218,10 +218,10 @@ impl Node for MatchNode {
             if case.matches_in(
                 ctx.types,
                 |name| {
-                    if let Some(vref) = VariableRef::parse(name) {
-                        if let Some(v) = ctx.variable(&vref.name, vref.lookup) {
-                            return v.data_type.clone();
-                        }
+                    if let Some(vref) = VariableRef::parse(name)
+                        && let Some(v) = ctx.variable(&vref.name, vref.lookup)
+                    {
+                        return v.data_type.clone();
                     }
                     self.inputs
                         .iter()

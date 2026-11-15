@@ -23,7 +23,7 @@ fn add_and_remove_exec_keeps_lookups_consistent() {
     index.add_exec(c2);
 
     assert_eq!(index.exec(), &[c1, c2]);
-    assert!(index.contains_exec(&c1));
+    assert!(index.contains_exec(c1));
     assert!(index.contains_exec(c2));
     assert_eq!(index.exec_successors(n1, PinId(0)), &[c1, c2]);
     assert_eq!(index.exec_successors(n1, PinId(1)), &[]);
@@ -34,9 +34,9 @@ fn add_and_remove_exec_keeps_lookups_consistent() {
     assert_eq!(index.exec_successors(n1, PinId(0)), &[c1, c2]);
 
     // Remove first connection
-    assert!(index.remove_exec(&c1));
+    assert!(index.remove_exec(c1));
     assert_eq!(index.exec(), &[c2]);
-    assert!(!index.contains_exec(&c1));
+    assert!(!index.contains_exec(c1));
     assert!(index.contains_exec(c2));
     assert_eq!(index.exec_successors(n1, PinId(0)), &[c2]);
 
@@ -80,7 +80,7 @@ fn set_data_replaces_old_source_and_keeps_lookups_consistent() {
     // Connect first data connection
     assert_eq!(index.set_data(c1), None);
     assert_eq!(index.data(), &[c1]);
-    assert!(index.contains_data(&c1));
+    assert!(index.contains_data(c1));
     assert_eq!(index.data_into(dst), &[c1]);
     assert_eq!(index.data_source(dst, pin_in1), Some(c1));
 
@@ -101,8 +101,8 @@ fn set_data_replaces_old_source_and_keeps_lookups_consistent() {
 
     // Order semantics: old c1 removed, c1_replaced appended
     assert_eq!(index.data(), &[c2, c1_replaced]);
-    assert!(!index.contains_data(&c1));
-    assert!(index.contains_data(&c1_replaced));
+    assert!(!index.contains_data(c1));
+    assert!(index.contains_data(c1_replaced));
     assert_eq!(index.data_into(dst), &[c2, c1_replaced]);
     assert_eq!(index.data_source(dst, pin_in1), Some(c1_replaced));
     assert_eq!(index.data_source(dst, pin_in2), Some(c2));
@@ -110,7 +110,7 @@ fn set_data_replaces_old_source_and_keeps_lookups_consistent() {
     // Remove data input
     assert_eq!(index.remove_data_input(dst, pin_in1), Some(c1_replaced));
     assert_eq!(index.data(), &[c2]);
-    assert!(!index.contains_data(&c1_replaced));
+    assert!(!index.contains_data(c1_replaced));
     assert_eq!(index.data_into(dst), &[c2]);
     assert_eq!(index.data_source(dst, pin_in1), None);
 

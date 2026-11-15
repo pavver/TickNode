@@ -34,13 +34,15 @@ impl Node for ClockNode {
         true
     }
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
-        (host.current_tick % self.interval_ticks.max(1) == 0).then_some(PinId(0))
+        host.current_tick
+            .is_multiple_of(self.interval_ticks.max(1))
+            .then_some(PinId(0))
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "interval_ticks" {
-            if let DataValue::Number(n) = value {
-                self.interval_ticks = n.to_f64().max(1.0) as u64;
-            }
+        if name == "interval_ticks"
+            && let DataValue::Number(n) = value
+        {
+            self.interval_ticks = n.to_f64().max(1.0) as u64;
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

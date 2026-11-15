@@ -89,7 +89,7 @@ impl TickEngine {
             dst_node,
             dst_pin,
         };
-        self.connections.remove_exec(&c)
+        self.connections.remove_exec(c)
     }
 
     /// Whether `start` depends (via data input pins) on `target`.

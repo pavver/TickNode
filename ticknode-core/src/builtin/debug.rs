@@ -107,10 +107,10 @@ impl Node for DebugNode {
         vec![NodeOutput::Execution(PinId(2))]
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "prefix" {
-            if let DataValue::String(s) = value {
-                self.prefix = s;
-            }
+        if name == "prefix"
+            && let DataValue::String(s) = value
+        {
+            self.prefix = s;
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

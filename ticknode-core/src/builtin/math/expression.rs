@@ -267,13 +267,13 @@ impl Node for MathExpressionNode {
         }
         if name == "value_type"
             && let DataValue::String(s) = value
+            && s != "auto"
+            && parse_data_type(s).filter(numeric_type).is_none()
         {
-            if s != "auto" && parse_data_type(s).filter(numeric_type).is_none() {
-                return Err(UiMessage::new(
-                    "error-formula-type-mismatch",
-                    format!("Invalid output type '{s}'"),
-                ));
-            }
+            return Err(UiMessage::new(
+                "error-formula-type-mismatch",
+                format!("Invalid output type '{s}'"),
+            ));
         }
         Ok(())
     }
@@ -387,10 +387,7 @@ impl Node for MathExpressionNode {
 
 /// Formula variables become input pins (1, 2, ...) in alphabetical order.
 pub fn expression_variables(expression: &str) -> HashMap<String, PinId> {
-    let mut names: Vec<String> = match formula::variables(expression) {
-        Ok(vars) => vars,
-        Err(_) => Vec::new(),
-    };
+    let mut names: Vec<String> = formula::variables(expression).unwrap_or_default();
     names.sort();
     names.dedup();
     names

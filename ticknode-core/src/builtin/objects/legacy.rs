@@ -251,11 +251,11 @@ impl Node for ObjectUnpackNode {
         outputs
     }
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if name == "fields_list" {
-            if let DataValue::String(s) = value {
-                self.fields_list = s;
-                self.parsed_fields = parse_fields_list(&self.fields_list);
-            }
+        if name == "fields_list"
+            && let DataValue::String(s) = value
+        {
+            self.fields_list = s;
+            self.parsed_fields = parse_fields_list(&self.fields_list);
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

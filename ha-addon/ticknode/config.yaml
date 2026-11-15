@@ -18,7 +18,7 @@ init: false
 startup: services
 boot: auto
 # /data (graph, plugin settings and plugin files) is persistent and included in backups.
-# Prebuilt images are not published yet, so `image:` is omitted and Home Assistant builds
-# the add-on locally from the Dockerfile. Enable the line below when images are published
-# to ghcr.io (and bump `version` for every release, the tag of the image is the version):
-# image: ghcr.io/pavver/ticknode-{arch}
+# Prebuilt images are published to ghcr.io by .github/workflows/addon.yml for every tag `vX.Y.Z`;
+# the image tag is `version`, so Home Assistant offers an update whenever `version` grows.
+# Release with scripts/release.sh, which bumps this version, the crates and the changelog together.
+image: ghcr.io/pavver/ticknode-{arch}

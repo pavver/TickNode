@@ -44,6 +44,14 @@ RUN cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugi
 RUN cd ticknode-editor && trunk build --release
 
 FROM debian:bookworm-slim
+ARG BUILD_VERSION=dev
+ARG BUILD_ARCH=amd64
+LABEL io.hass.type="addon" \
+      io.hass.name="TickNode" \
+      io.hass.version="${BUILD_VERSION}" \
+      io.hass.arch="${BUILD_ARCH}" \
+      org.opencontainers.image.source="https://github.com/pavver/TickNode" \
+      org.opencontainers.image.licenses="MPL-2.0"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 COPY --from=build /target/release/ticknode-server /usr/local/bin/ticknode-server
 COPY --from=build /src/ticknode-editor/dist /opt/ticknode/web

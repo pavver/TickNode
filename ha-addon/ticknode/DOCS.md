@@ -49,13 +49,9 @@ access token.
 
 ## Installation and updates
 
-Prebuilt images are not published yet, so Home Assistant builds the add-on locally on
-installation: it downloads the current `master` branch from GitHub and compiles the server, the
-plugins and the editor. This needs network access, several minutes, and a few gigabytes of free
-memory and disk space (the build on aarch64 devices has not been tested yet).
-
-Until images are published the add-on version stays the same, so Home Assistant does not offer
-updates by itself. To get the latest TickNode, open the add-on page and use **Rebuild**; your
-graph and settings in `/data` are kept. After an update that changes node pins, affected nodes are
+The add-on is installed from prebuilt images for `amd64` and `aarch64` (64-bit x86 and ARM, for
+example a Raspberry Pi 4 or 5 with a 64-bit system), so installation and updates take a minute.
+Home Assistant offers an update whenever a new TickNode version is released; your graph and
+settings in `/data` are kept. After an update that changes node pins, affected nodes are
 frozen until you confirm them in the editor (see the inspector), and wires that no longer fit are
 shown as detached wires.

@@ -205,18 +205,14 @@ pub fn FormulaField(
                 } => {
                     ev.prevent_default();
                     ev.stop_propagation();
-                    let (updated, _) = crate::inline::template_field::caret::apply_completion(
-                        &current, range, ins_text, None,
-                    );
-                    textarea.set_value(&updated);
-                    let u16_caret =
-                        crate::inline::template_field::caret::byte_to_utf16(&updated, new_caret)
-                            as u32;
-                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                    use crate::inline::undoable;
+                    let (u16_start, u16_end, u16_caret, _) =
+                        undoable::plan_replace(&current, range, ins_text, new_caret);
+                    let final_text =
+                        undoable::replace_range(&textarea, u16_start, u16_end, ins_text, u16_caret);
+                    draft.set(final_text);
+                    sync_scroll();
                     last_auto_close.set_value(Some(state));
-                    if let Ok(input_ev) = web_sys::Event::new("input") {
-                        let _ = textarea.dispatch_event(&input_ev);
-                    }
                 }
                 auto_close::AutoCloseAction::Wrap {
                     range,
@@ -225,18 +221,15 @@ pub fn FormulaField(
                 } => {
                     ev.prevent_default();
                     ev.stop_propagation();
-                    let (updated, _) = crate::inline::template_field::caret::apply_completion(
-                        &current, range, &new_text, None,
+                    use crate::inline::undoable;
+                    let (u16_start, u16_end, u16_caret, _) =
+                        undoable::plan_replace(&current, range, &new_text, new_caret);
+                    let final_text = undoable::replace_range(
+                        &textarea, u16_start, u16_end, &new_text, u16_caret,
                     );
-                    textarea.set_value(&updated);
-                    let u16_caret =
-                        crate::inline::template_field::caret::byte_to_utf16(&updated, new_caret)
-                            as u32;
-                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                    draft.set(final_text);
+                    sync_scroll();
                     last_auto_close.set_value(None);
-                    if let Ok(input_ev) = web_sys::Event::new("input") {
-                        let _ = textarea.dispatch_event(&input_ev);
-                    }
                 }
                 auto_close::AutoCloseAction::SkipChar { new_caret } => {
                     ev.prevent_default();
@@ -250,18 +243,14 @@ pub fn FormulaField(
                 auto_close::AutoCloseAction::DeletePair { range, new_caret } => {
                     ev.prevent_default();
                     ev.stop_propagation();
-                    let (updated, _) = crate::inline::template_field::caret::apply_completion(
-                        &current, range, "", None,
-                    );
-                    textarea.set_value(&updated);
-                    let u16_caret =
-                        crate::inline::template_field::caret::byte_to_utf16(&updated, new_caret)
-                            as u32;
-                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                    use crate::inline::undoable;
+                    let (u16_start, u16_end, u16_caret, _) =
+                        undoable::plan_replace(&current, range, "", new_caret);
+                    let final_text =
+                        undoable::replace_range(&textarea, u16_start, u16_end, "", u16_caret);
+                    draft.set(final_text);
+                    sync_scroll();
                     last_auto_close.set_value(None);
-                    if let Ok(input_ev) = web_sys::Event::new("input") {
-                        let _ = textarea.dispatch_event(&input_ev);
-                    }
                 }
             }
         }

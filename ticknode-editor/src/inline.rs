@@ -16,6 +16,7 @@ mod quantity;
 pub(crate) mod template_field;
 mod text_field;
 mod typed_properties;
+pub(crate) mod undoable;
 
 pub use formula_field::{FormulaDraft, FormulaField, FormulaStatusRow};
 pub use properties::*;

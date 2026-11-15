@@ -267,17 +267,14 @@ pub fn TemplateField(
 
                 #[cfg(target_arch = "wasm32")]
                 if let Some(textarea) = textarea_ref.get() {
-                    use caret::{apply_completion, byte_to_utf16};
+                    use crate::inline::undoable;
                     let current = textarea.value();
-                    let (new_text, _) = apply_completion(&current, range, text, None);
-                    textarea.set_value(&new_text);
-                    let u16_caret = byte_to_utf16(&new_text, new_caret) as u32;
-                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
-                    draft.set(new_text);
+                    let (u16_start, u16_end, u16_caret, _) =
+                        undoable::plan_replace(&current, range, text, new_caret);
+                    let final_text =
+                        undoable::replace_range(&textarea, u16_start, u16_end, text, u16_caret);
+                    draft.set(final_text);
                     sync_scroll();
-                    if let Ok(ev) = web_sys::Event::new("input") {
-                        let _ = textarea.dispatch_event(&ev);
-                    }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 let _ = (range, text, new_caret);
@@ -308,17 +305,19 @@ pub fn TemplateField(
 
                 #[cfg(target_arch = "wasm32")]
                 if let Some(textarea) = textarea_ref.get() {
-                    use caret::{apply_completion, byte_to_utf16};
+                    use crate::inline::undoable;
                     let current = textarea.value();
-                    let (new_text, _) = apply_completion(&current, range, replacement, None);
-                    textarea.set_value(&new_text);
-                    let u16_caret = byte_to_utf16(&new_text, new_caret) as u32;
-                    let _ = textarea.set_selection_range(u16_caret, u16_caret);
-                    draft.set(new_text);
+                    let (u16_start, u16_end, u16_caret, _) =
+                        undoable::plan_replace(&current, range, replacement, new_caret);
+                    let final_text = undoable::replace_range(
+                        &textarea,
+                        u16_start,
+                        u16_end,
+                        replacement,
+                        u16_caret,
+                    );
+                    draft.set(final_text);
                     sync_scroll();
-                    if let Ok(ev) = web_sys::Event::new("input") {
-                        let _ = textarea.dispatch_event(&ev);
-                    }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 let _ = (range, replacement, new_caret);

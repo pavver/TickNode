@@ -81,7 +81,7 @@ pub fn accept_completion_item(
 
     #[cfg(target_arch = "wasm32")]
     {
-        use crate::inline::template_field::caret::{apply_completion, byte_to_utf16};
+        use crate::inline::undoable;
         use wasm_bindgen::JsCast;
 
         if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -91,11 +91,10 @@ pub fn accept_completion_item(
                 .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok());
             if let Some(textarea) = textarea {
                 let current = textarea.value();
-                let (new_text, new_caret_byte) =
-                    apply_completion(&current, range, &item.insert, item.caret);
-                textarea.set_value(&new_text);
-                let u16_caret = byte_to_utf16(&new_text, new_caret_byte) as u32;
-                let _ = textarea.set_selection_range(u16_caret, u16_caret);
+                let (u16_start, u16_end, u16_caret, _, new_caret_byte) =
+                    undoable::plan_completion(&current, range, &item.insert, item.caret);
+                let final_text =
+                    undoable::replace_range(&textarea, u16_start, u16_end, &item.insert, u16_caret);
                 let _ = textarea.focus();
 
                 if let Some(pre) = doc
@@ -106,14 +105,10 @@ pub fn accept_completion_item(
                     pre.set_scroll_left(textarea.scroll_left());
                 }
 
-                // Dispatch an input event so that reactive listeners (draft, debounce timer) update
-                if let Ok(ev) = web_sys::Event::new("input") {
-                    let _ = textarea.dispatch_event(&ev);
-                }
-
                 // If the accepted snippet placed the caret inside quotes (e.g. date(''), strftime('')),
                 // immediately re-run completion so the pattern list opens.
-                let prefix = &new_text[..new_caret_byte];
+                let clamped_caret = new_caret_byte.min(final_text.len());
+                let prefix = &final_text[..clamped_caret];
                 if item.caret.is_some() && (prefix.ends_with('\'') || prefix.ends_with('"')) {
                     request_completion(ed, node, false);
                 }

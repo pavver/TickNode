@@ -83,6 +83,20 @@ fn apply_completion_snippet_places_caret_inside_quotes() {
 }
 
 #[test]
+fn undoable_plan_replace_computes_utf16_offsets() {
+    use crate::inline::undoable;
+    let source = "Привіт {{ va }}";
+    // "va" is at byte 16..18 (Cyrillic "Привіт" is 6 chars / 12 bytes + " {{ " is 4 bytes)
+    // UTF-16: 6 code units ("Привіт") + 1 (" ") + 2 ("{{") + 1 (" ") = 10 code units
+    let (start_u16, end_u16, caret_u16, new_text) =
+        undoable::plan_replace(source, 16..18, "value", 21);
+    assert_eq!(start_u16, 10);
+    assert_eq!(end_u16, 12);
+    assert_eq!(caret_u16, 15);
+    assert_eq!(new_text, "Привіт {{ value }}");
+}
+
+#[test]
 fn trigger_chars_identify_completion_positions() {
     use super::completion::is_completion_trigger_char;
 

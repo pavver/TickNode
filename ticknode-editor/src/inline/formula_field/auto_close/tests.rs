@@ -48,4 +48,15 @@ fn test_wrap_selection() {
             new_caret: 7,
         }
     );
+    if let AutoCloseAction::Wrap {
+        range,
+        new_text,
+        new_caret,
+    } = action
+    {
+        let (s16, e16, c16, res) =
+            crate::inline::undoable::plan_replace(source, range, &new_text, new_caret);
+        assert_eq!((s16, e16, c16), (0, 5, 7));
+        assert_eq!(res, "(a + b)");
+    }
 }

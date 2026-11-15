@@ -110,6 +110,7 @@ impl WasmNode {
             }
             Err(e) => Err(e),
         };
+        rt.record_fuel(matches!(result, Err(CallError::Trap(_))));
         if let Err(e) = &result {
             self.fail_call(&mut rt, e);
         }
@@ -291,6 +292,7 @@ impl Node for WasmNode {
         if existing.is_none() {
             let _ = resource.resource_drop(&mut *store);
         }
+        rt.record_fuel(result.is_err());
         match result {
             Ok(result) => result.map_err(|e| rt.ui_error(e)),
             Err(e) => {

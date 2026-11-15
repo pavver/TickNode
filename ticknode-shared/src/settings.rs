@@ -17,6 +17,12 @@ pub struct ServerSettings {
     pub locale: String,
     #[serde(default)]
     pub display: crate::DisplayRules,
+    #[serde(default = "default_true")]
+    pub usage_stats: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_locale() -> String {
@@ -30,6 +36,7 @@ impl Default for ServerSettings {
             display: Default::default(),
             tick_ms: DEFAULT_TICK_MS,
             tick_budget: DEFAULT_TICK_BUDGET,
+            usage_stats: true,
         }
     }
 }

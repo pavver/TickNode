@@ -67,24 +67,32 @@ fn automations(count: usize) -> (TickEngine, Vec<NodeId>) {
             )
             .unwrap();
         if numeric {
+            engine.variables.create(
+                VariableKey::global(format!("automation_{index}")),
+                DataType::Number,
+                number(0),
+            );
             engine
                 .set_node_property(source, "value", number(1))
                 .unwrap();
             engine
                 .set_node_property(
                     action,
-                    "var_name",
+                    "name",
                     DataValue::String(format!("automation_{index}")),
                 )
+                .unwrap();
+            engine
+                .set_input_value(action, PinId(3), Some(number(1)))
                 .unwrap();
         } else {
             engine
                 .set_input_value(source, PinId(0), Some(DataValue::Bool(false)))
                 .unwrap();
+            engine
+                .set_input_value(action, PinId(1), Some(number(1)))
+                .unwrap();
         }
-        engine
-            .set_input_value(action, PinId(1), Some(number(1)))
-            .unwrap();
         engine
             .connect_exec(trigger, PinId(0), condition, PinId(0))
             .unwrap();
@@ -169,14 +177,25 @@ fn hop(c: &mut Criterion) {
     let mut engine = TickEngine::new();
     let trigger = node(&mut engine, "test/click_button");
     let mut previous = trigger;
+    engine
+        .variables
+        .create(VariableKey::global("my_var"), DataType::Number, number(0));
     // 100 exec edges: one button followed by 100 variable writes, taking 101 ticks.
     for _ in 0..HOPS {
         let next = node(&mut engine, "variable/set");
         engine
-            .set_input_value(next, PinId(1), Some(number(1)))
+            .set_node_property(next, "name", DataValue::String("my_var".into()))
             .unwrap();
         engine
-            .connect_exec(previous, PinId(0), next, PinId(0))
+            .set_input_value(next, PinId(3), Some(number(1)))
+            .unwrap();
+        let from_pin = if previous == trigger {
+            PinId(0)
+        } else {
+            PinId(1)
+        };
+        engine
+            .connect_exec(previous, from_pin, next, PinId(0))
             .unwrap();
         previous = next;
     }

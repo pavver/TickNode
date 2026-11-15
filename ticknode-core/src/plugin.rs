@@ -50,6 +50,16 @@ pub(crate) struct PluginSlot {
     translations: Vec<(String, String)>,
 }
 
+impl PluginSlot {
+    pub(crate) fn take_metrics(&self) -> crate::usage::PluginUsageMetrics {
+        lock(&self.runtime).take_metrics()
+    }
+
+    pub(crate) fn metrics(&self) -> crate::usage::PluginUsageMetrics {
+        lock(&self.runtime).metrics
+    }
+}
+
 /// Graph changes after enabling or disabling a plugin.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct PluginChange {

@@ -45,6 +45,11 @@ impl Actor {
                 let events = self.configure_plugin(&name, values)?;
                 return Ok((events, None));
             }
+            ClientMessage::GetUsage => {
+                let report = self.engine.usage_report(chrono::Utc::now().timestamp());
+                let _ = reply.send(ServerMessage::Usage(report));
+                return Ok((vec![], None));
+            }
             // Sheet management commands
             ClientMessage::CreateSheet { title, caption } => {
                 let _id = self.create_sheet(title, caption, reply)?;

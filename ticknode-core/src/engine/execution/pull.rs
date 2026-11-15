@@ -167,7 +167,7 @@ impl TickEngine {
             host_state: &mut self.host_state,
         };
         let outputs = node.execute(None, &mut ctx);
-        self.last_tick.charge(definition.cost);
+        self.charge_node(node_id, definition.cost);
         self.nodes.insert(node_id, node);
         stack.pop();
 

@@ -49,6 +49,7 @@ mod routes;
 mod server_settings;
 mod settings;
 mod sheets;
+mod usage;
 mod variables;
 mod wire_suggest;
 

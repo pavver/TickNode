@@ -78,7 +78,7 @@ impl TickEngine {
                     .error(id, super::outputs::ui_error(&e), format!("[ERROR] {e}"));
             }
             if !outputs.is_empty() {
-                self.last_tick.charge(definition.cost);
+                self.charge_node(id, definition.cost);
                 self.apply_outputs(id, Vec::new(), outputs, next_tick_queue);
             }
         }

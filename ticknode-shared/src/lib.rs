@@ -21,6 +21,7 @@ pub mod settings;
 pub mod sheets;
 pub mod types;
 pub mod ui_message;
+pub mod usage;
 
 pub use plugin::*;
 pub use property::*;
@@ -28,6 +29,7 @@ pub use settings::*;
 pub use sheets::*;
 pub use types::*;
 pub use ui_message::*;
+pub use usage::*;
 
 pub mod variables;
 pub use variables::*;

@@ -51,6 +51,7 @@ impl TickEngine {
     }
 
     pub fn tick(&mut self) {
+        let tick_start = std::time::Instant::now();
         self.last_tick = Default::default();
         self.pure_cache.clear();
         self.executed.clear();
@@ -75,6 +76,10 @@ impl TickEngine {
 
         self.run_queue(&mut next_tick_queue);
         self.collect_node_errors();
+        let duration = tick_start.elapsed();
+        self.last_tick_duration = duration;
+        self.usage
+            .record_tick(duration, self.last_tick.spent, self.last_tick.deferred);
     }
 
     pub(crate) fn run_queue(&mut self, next_tick_queue: &mut VecDeque<(NodeId, PinId)>) {
@@ -114,7 +119,7 @@ impl TickEngine {
                 continue;
             };
             let outputs = node.execute(Some(trigger_pin), &mut ctx);
-            self.last_tick.charge(def.cost);
+            self.charge_node(node_id, def.cost);
             self.apply_outputs(node_id, traced, outputs, next_tick_queue);
         }
         self.execution_queue.append(next_tick_queue);
@@ -129,7 +134,7 @@ impl TickEngine {
             let Some(def) = self.definition_arc(node_id) else {
                 continue;
             };
-            self.last_tick.charge(def.cost);
+            self.charge_node(node_id, def.cost);
             let mut stack = Vec::new();
             let inputs = self.pull_inputs(node_id, &mut stack);
             let traced = trace_inputs(&inputs);
@@ -163,7 +168,7 @@ impl TickEngine {
             let Some(def) = self.definition_arc(id) else {
                 continue;
             };
-            self.last_tick.charge(def.cost);
+            self.charge_node(id, def.cost);
             let Some(node) = self.nodes.get_mut(&id) else {
                 continue;
             };

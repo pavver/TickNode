@@ -7,6 +7,7 @@ pub struct EngineSettingsDraft {
     pub display: super::display::logic::DisplayDraft,
     pub tick_ms: String,
     pub tick_budget: String,
+    pub usage_stats: bool,
 }
 
 impl EngineSettingsDraft {
@@ -16,6 +17,7 @@ impl EngineSettingsDraft {
             display: super::display::logic::DisplayDraft::new(&server.display),
             tick_ms: server.tick_ms.to_string(),
             tick_budget: server.tick_budget.to_string(),
+            usage_stats: server.usage_stats,
         }
     }
 
@@ -57,6 +59,7 @@ impl EngineSettingsDraft {
             || self.locale != server.locale
             || self.tick_ms.trim() != server.tick_ms.to_string()
             || self.tick_budget.trim() != server.tick_budget.to_string()
+            || self.usage_stats != server.usage_stats
     }
 
     pub fn can_save(&self, server: ServerSettings) -> bool {
@@ -67,6 +70,7 @@ impl EngineSettingsDraft {
                         || self.locale != server.locale
                         || tick != server.tick_ms
                         || budget != server.tick_budget
+                        || self.usage_stats != server.usage_stats
                 }
                 _ => false,
             }
@@ -82,6 +86,7 @@ impl EngineSettingsDraft {
                 tick_budget,
                 locale: self.locale.clone(),
                 display: self.display.parse()?,
+                usage_stats: self.usage_stats,
             }),
             _ => None,
         }

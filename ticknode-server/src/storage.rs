@@ -11,6 +11,8 @@ use ticknode_shared::{
 };
 use tracing::{info, warn};
 
+pub mod stats;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VariablesFile {
     pub variables: Vec<Variable>,
@@ -24,6 +26,12 @@ struct SettingsFile {
     locale: String,
     tick_ms: Option<u32>,
     tick_budget: Option<u32>,
+    #[serde(default = "default_true")]
+    usage_stats: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -105,14 +113,20 @@ impl Storage {
         path: &Path,
         env: &dyn Fn(&str) -> Option<String>,
     ) -> anyhow::Result<ServerSettings> {
-        let (file_tick_ms, file_tick_budget, locale, display) = if path.exists() {
+        let (file_tick_ms, file_tick_budget, locale, display, usage_stats) = if path.exists() {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("failed to read {}", path.display()))?;
             let file: SettingsFile = serde_json::from_str(&text)
                 .with_context(|| format!("invalid settings JSON in {}", path.display()))?;
-            (file.tick_ms, file.tick_budget, file.locale, file.display)
+            (
+                file.tick_ms,
+                file.tick_budget,
+                file.locale,
+                file.display,
+                file.usage_stats,
+            )
         } else {
-            (None, None, "en".into(), Default::default())
+            (None, None, "en".into(), Default::default(), true)
         };
 
         let tick_ms = file_tick_ms
@@ -134,6 +148,7 @@ impl Storage {
             tick_budget,
             locale,
             display,
+            usage_stats,
         }
         .validated())
     }
@@ -143,6 +158,21 @@ impl Storage {
             &self.settings_json_path(),
             &(serde_json::to_string_pretty(settings)? + "\n"),
         )
+    }
+
+    pub fn append_hour_bucket(&self, bucket: &ticknode_shared::UsageBucket) -> anyhow::Result<()> {
+        stats::append_hour_bucket(&self.data_dir, bucket)
+    }
+
+    pub fn load_recent_usage_hours(
+        &self,
+        max_count: usize,
+    ) -> anyhow::Result<Vec<ticknode_shared::UsageBucket>> {
+        stats::load_recent_hour_buckets(&self.data_dir, max_count)
+    }
+
+    pub fn prune_old_stats(&self, keep_months: u32) -> anyhow::Result<usize> {
+        stats::prune_old_stats(&self.data_dir, keep_months, chrono::Utc::now())
     }
 
     pub fn load_variables(&self) -> anyhow::Result<Vec<Variable>> {

@@ -65,6 +65,10 @@ pub struct TickEngine {
     pub execution_queue: VecDeque<(NodeId, PinId)>,
     // Shared state for async tasks and handles
     pub host_state: HostState,
+    /// Usage and load statistics tracker.
+    pub usage: crate::usage::UsageTracker,
+    /// Wall time duration of the most recent `tick()`.
+    pub last_tick_duration: std::time::Duration,
     /// Nodes executed during the last tick, with their inputs and outputs (telemetry for the editor).
     /// Pure nodes appear here when evaluated on demand.
     pub executed: Vec<NodeTrace>,
@@ -111,9 +115,71 @@ impl TickEngine {
             required_reported: Default::default(),
             execution_queue: VecDeque::new(),
             host_state: HostState::default(),
+            usage: crate::usage::UsageTracker::default(),
+            last_tick_duration: std::time::Duration::ZERO,
             executed: Vec::new(),
             executed_index: HashMap::new(),
         }
+    }
+
+    pub(crate) fn charge_node(&mut self, node_id: NodeId, cost: u32) {
+        self.last_tick.charge(cost);
+        self.usage.record_node(node_id, cost);
+        let sheet = self.node_sheets.get(&node_id).copied();
+        self.usage.record_sheet(sheet, cost);
+    }
+
+    /// Advances the usage tracker with the given timestamp and rolls over buckets.
+    /// Returns a completed hour bucket if an hour boundary was crossed.
+    pub fn step_usage(&mut self, now_ts: i64) -> Option<UsageBucket> {
+        let mut metrics = Vec::new();
+        for (name, slot) in &self.plugins {
+            metrics.push((name.as_str(), slot.take_metrics()));
+        }
+        let node_lookup = |id: NodeId| {
+            let def = self
+                .definitions
+                .get(&id)
+                .map(|(_, d)| d.type_name.clone())?;
+            let sheet = self.node_sheets.get(&id).copied();
+            Some((def, sheet))
+        };
+        self.usage.step_time(now_ts, &metrics, node_lookup)
+    }
+
+    /// Builds a snapshot usage report for the editor.
+    pub fn usage_report(&self, _now_ts: i64) -> UsageReport {
+        let mut metrics = Vec::new();
+        for (name, slot) in &self.plugins {
+            metrics.push((name.as_str(), slot.metrics()));
+        }
+        let node_lookup = |id: NodeId| {
+            let def = self
+                .definitions
+                .get(&id)
+                .map(|(_, d)| d.type_name.clone())?;
+            let sheet = self.node_sheets.get(&id).copied();
+            Some((def, sheet))
+        };
+        self.usage
+            .report(self.host_state.current_tick, &metrics, node_lookup)
+    }
+
+    /// Finalizes the active hour bucket for persistence on shutdown.
+    pub fn finalize_usage_hour(&mut self, _now_ts: i64) -> UsageBucket {
+        let mut metrics = Vec::new();
+        for (name, slot) in &self.plugins {
+            metrics.push((name.as_str(), slot.take_metrics()));
+        }
+        let node_lookup = |id: NodeId| {
+            let def = self
+                .definitions
+                .get(&id)
+                .map(|(_, d)| d.type_name.clone())?;
+            let sheet = self.node_sheets.get(&id).copied();
+            Some((def, sheet))
+        };
+        self.usage.finalize_current_hour(&metrics, node_lookup)
     }
 
     /// Changes server text formatting and invalidates cached pure results immediately.

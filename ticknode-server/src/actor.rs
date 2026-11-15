@@ -213,6 +213,7 @@ impl Actor {
                 Err(std_mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std_mpsc::RecvTimeoutError::Disconnected) => {
                     self.save();
+                    self.save_usage_stats_on_shutdown();
                     return;
                 }
             }
@@ -252,6 +253,7 @@ impl Actor {
             }
             Command::Shutdown(done) => {
                 self.save();
+                self.save_usage_stats_on_shutdown();
                 info!("Engine stopped");
                 let _ = done.send(());
                 return true;
@@ -275,6 +277,7 @@ impl Actor {
 
     fn tick(&mut self) {
         self.engine.tick();
+        self.step_usage();
         for name in self.engine.take_plugin_settings_changes() {
             if let Some(info) = self.plugins.info(&self.engine, &name) {
                 self.broadcast(None, &ServerMessage::PluginUpdated(info));
@@ -449,6 +452,7 @@ mod server_settings;
 mod settings;
 pub(crate) mod sheets;
 mod telemetry;
+mod usage;
 mod variables;
 
 #[cfg(test)]

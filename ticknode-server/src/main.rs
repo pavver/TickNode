@@ -53,11 +53,12 @@ async fn main() -> anyhow::Result<()> {
     let server_settings = storage.load_settings()?;
 
     let runtime = tokio::runtime::Handle::current();
-    let (data_dir, bundled_dir, tick_ms, tick_budget) = (
+    let (data_dir, bundled_dir, tick_ms, tick_budget, usage_stats) = (
         config.data_dir.clone(),
         config.bundled_plugins_dir.clone(),
         server_settings.tick_ms,
         server_settings.tick_budget,
+        server_settings.usage_stats,
     );
     // Plugin calls (configure, node creation) may use synchronous WASI (files), which panics on a
     // tokio worker thread: build the engine on a plain OS thread, like the actor that runs it.
@@ -73,6 +74,12 @@ async fn main() -> anyhow::Result<()> {
         let mut plugins = plugins::Plugins::new(&data_dir).with_bundled_dir(bundled_dir);
         plugins.load_all(&mut engine);
         let loaded = storage.load(&mut engine)?;
+        if usage_stats {
+            if let Ok(buckets) = storage.load_recent_usage_hours(48) {
+                engine.usage.set_hour_history(buckets);
+            }
+            let _ = storage.prune_old_stats(6);
+        }
         Ok((engine, plugins, loaded, storage))
     })
     .join()

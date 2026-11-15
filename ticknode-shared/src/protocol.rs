@@ -112,6 +112,7 @@ pub enum ClientMessage {
     },
     DeleteVariable(VariableKey),
     SetServerSettings(ServerSettings),
+    GetUsage,
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -263,4 +264,5 @@ pub enum ServerMessage {
         removed: Vec<VariableKey>,
     },
     ServerSettingsChanged(ServerSettings),
+    Usage(crate::UsageReport),
 }

@@ -3,6 +3,7 @@
 pub mod logic;
 mod settings;
 mod sheets;
+mod usage;
 
 use crate::i18n::t;
 use crate::plugins_panel::PluginCard;
@@ -11,6 +12,7 @@ use crate::ui::{IconButton, Terminal, icons};
 use leptos::prelude::*;
 use settings::SettingsSection;
 use sheets::SheetsSection;
+use usage::UsageSection;
 
 const HOME_SECTION_KEY: &str = "ticknode.home-section";
 
@@ -21,6 +23,7 @@ pub enum HomeSection {
     Variables,
     Plugins,
     Log,
+    Usage,
     Settings,
 }
 
@@ -35,6 +38,7 @@ fn load_home_section() -> HomeSection {
         Some("variables") => HomeSection::Variables,
         Some("plugins") => HomeSection::Plugins,
         Some("log") => HomeSection::Log,
+        Some("usage") => HomeSection::Usage,
         Some("settings") => HomeSection::Settings,
         _ => HomeSection::Sheets,
     }
@@ -47,6 +51,7 @@ fn save_home_section(sec: HomeSection) {
             HomeSection::Variables => "variables",
             HomeSection::Plugins => "plugins",
             HomeSection::Log => "log",
+            HomeSection::Usage => "usage",
             HomeSection::Settings => "settings",
         };
         let _ = storage.set_item(HOME_SECTION_KEY, val);
@@ -104,6 +109,15 @@ pub fn HomePage() -> impl IntoView {
                 </button>
                 <button
                     class="home-nav-item ctl"
+                    class:st-selected=move || section.get() == HomeSection::Usage
+                    title=move || t!("home-usage")
+                    on:click=move |_| select_section(HomeSection::Usage)
+                >
+                    <span class="mdi mdi-chart-box-outline" aria-hidden="true"></span>
+                    <span>{move || t!("home-usage")}</span>
+                </button>
+                <button
+                    class="home-nav-item ctl"
                     class:st-selected=move || section.get() == HomeSection::Settings
                     title=move || t!("home-settings")
                     on:click=move |_| select_section(HomeSection::Settings)
@@ -118,6 +132,7 @@ pub fn HomePage() -> impl IntoView {
                     HomeSection::Variables => view! { <HomeVariables /> }.into_any(),
                     HomeSection::Plugins => view! { <HomePlugins /> }.into_any(),
                     HomeSection::Log => view! { <HomeLog /> }.into_any(),
+                    HomeSection::Usage => view! { <UsageSection /> }.into_any(),
                     HomeSection::Settings => view! { <SettingsSection /> }.into_any(),
                 }}
             </div>

@@ -4,6 +4,7 @@ use super::lifecycle::crash_message;
 use super::{NodesApi, OptionStore, bindings, wit};
 use crate::host::HostState;
 use crate::translations::{AllowedIds, sanitize_ui_message};
+use crate::usage::PluginUsageMetrics;
 use crate::ws::{self, WsHub};
 use std::sync::{Arc, Mutex, OnceLock};
 use ticknode_shared::*;
@@ -46,9 +47,25 @@ pub(super) struct Runtime {
     /// on every tick would otherwise be recreated and reconnected every tick).
     pub(super) tick_backoff_until: u64,
     pub(super) options: Arc<Mutex<OptionStore>>,
+    pub(crate) metrics: PluginUsageMetrics,
 }
 
 impl Runtime {
+    pub(crate) fn record_fuel(&mut self, is_trap: bool) {
+        if let Some((store, _)) = self.instance.as_mut() {
+            let remaining = store.get_fuel().unwrap_or(0);
+            let consumed = FUEL_PER_CALL.saturating_sub(remaining);
+            self.metrics.fuel = self.metrics.fuel.saturating_add(consumed);
+            self.metrics.calls = self.metrics.calls.saturating_add(1);
+            if is_trap {
+                self.metrics.traps = self.metrics.traps.saturating_add(1);
+            }
+        }
+    }
+
+    pub(crate) fn take_metrics(&mut self) -> PluginUsageMetrics {
+        std::mem::take(&mut self.metrics)
+    }
     pub(super) fn instantiate(&mut self) -> wasmtime::Result<u64> {
         if self.instance.is_none() {
             let mut wasi = WasiCtxBuilder::new();
@@ -75,11 +92,17 @@ impl Runtime {
             // A recreated instance after a crash receives settings first — otherwise it would lose its config
             if let Some(settings) = &self.settings {
                 store.set_fuel(FUEL_PER_CALL)?;
-                self.configure_error = plugin
+                let res = plugin
                     .ticknode_plugin_nodes()
-                    .call_configure(&mut store, settings)?
-                    .err()
-                    .map(|e| self.ui_error(e));
+                    .call_configure(&mut store, settings);
+                let remaining = store.get_fuel().unwrap_or(0);
+                let consumed = FUEL_PER_CALL.saturating_sub(remaining);
+                self.metrics.fuel = self.metrics.fuel.saturating_add(consumed);
+                self.metrics.calls = self.metrics.calls.saturating_add(1);
+                if res.is_err() {
+                    self.metrics.traps = self.metrics.traps.saturating_add(1);
+                }
+                self.configure_error = res?.err().map(|e| self.ui_error(e));
             }
             self.instance = Some((store, plugin));
             self.generation += 1;
@@ -128,6 +151,7 @@ impl Runtime {
             }
             Err(e) => Err(e),
         };
+        self.record_fuel(outcome.is_err());
         match outcome {
             Ok(result) => {
                 let result = result.map_err(|e| self.ui_error(e));
@@ -185,6 +209,7 @@ impl Runtime {
                 .host;
             result
         });
+        self.record_fuel(outcome.is_err());
         outcome.map_err(|e| {
             warn!("Plugin crashed during plugin-tick: {e:?}");
             self.discard();

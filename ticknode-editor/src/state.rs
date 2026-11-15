@@ -326,6 +326,7 @@ pub struct Editor {
     /// Fit camera to the graph only after the first Init, not on every reconnect.
     fitted: StoredValue<bool>,
     next_log_id: StoredValue<u64>,
+    pub usage: RwSignal<Option<UsageReport>>,
 }
 
 pub fn use_editor() -> Editor {
@@ -406,6 +407,7 @@ impl Editor {
             nudge: StoredValue::new(Default::default()),
             fitted: StoredValue::new(false),
             next_log_id: StoredValue::new(0),
+            usage: RwSignal::new(None),
         }
     }
 
@@ -437,6 +439,10 @@ impl Editor {
                 logs.drain(..excess);
             }
         });
+    }
+
+    pub fn request_usage(&self) {
+        self.send(ClientMessage::GetUsage);
     }
 
     /// Groups a single user action into one server history entry.

@@ -200,6 +200,9 @@ impl Editor {
                 i18n::set_server_settings(&settings);
                 self.server_settings.set(settings);
             }
+            ServerMessage::Usage(report) => {
+                self.usage.set(Some(report));
+            }
             ServerMessage::Error(message) => {
                 self.pending_create_tracker.update(|t| t.clear());
                 self.error_seq.update(|n| *n += 1);

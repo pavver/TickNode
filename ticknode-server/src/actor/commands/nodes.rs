@@ -35,7 +35,7 @@ impl Actor {
         sheet: SheetId,
     ) -> Result<Applied, UiMessage> {
         for (k, _) in &properties {
-            if k.starts_with("in:") || k.starts_with("split:") {
+            if k.starts_with("in:") || k.starts_with("split:") || k.starts_with("var:") {
                 return Err(UiMessage::new(
                     "error-invalid-property",
                     format!("Invalid property: {k}"),

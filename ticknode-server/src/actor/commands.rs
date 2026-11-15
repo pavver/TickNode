@@ -177,6 +177,9 @@ impl Actor {
             ClientMessage::SetInputValue { id, pin, value } => {
                 only(self.set_input_value(id, pin, value, s)?)
             }
+            ClientMessage::SetInputVariable { id, pin, variable } => {
+                only(self.set_input_variable(id, pin, variable, s)?)
+            }
             ClientMessage::ConnectExec(c) => only(self.connect_exec(c, s)?),
             ClientMessage::DisconnectExec(c) => only(self.disconnect_exec(c, s)?),
             ClientMessage::ConnectData(c) => only(self.connect_data(c, s)?),

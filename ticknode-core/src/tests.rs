@@ -4,6 +4,7 @@ mod convert;
 mod definitions;
 mod engine_execution;
 mod hysteresis;
+mod input_variables;
 mod legacy_nodes;
 mod match_execution;
 mod match_modes;

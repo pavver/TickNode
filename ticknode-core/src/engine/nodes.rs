@@ -2,6 +2,9 @@ use crate::{EngineError, Node, RemovedConnections, TickEngine};
 use std::sync::Arc;
 use ticknode_shared::*;
 
+mod inputs;
+pub(crate) use inputs::*;
+
 impl TickEngine {
     /// Current host-delay timers, grouped by owner node.
     pub fn delay_timers(&self) -> Vec<NodeTimer> {
@@ -58,15 +61,15 @@ impl TickEngine {
         }
     }
 
-    /// Creates a node via the registry and applies its properties. Input values (`in:<pin>`) are returned
-    /// separately: they can only be set after properties because pins may depend on them.
+    /// Creates a node via the registry and applies its properties. Input values and variable bindings
+    /// are returned separately: they can only be set after properties because pins may depend on them.
     fn build_node(
         &self,
         id: NodeId,
         type_name: &str,
         properties: &[(String, DataValue)],
         validate: bool,
-    ) -> Result<(Box<dyn Node>, Vec<(PinId, DataValue)>), EngineError> {
+    ) -> Result<(Box<dyn Node>, Vec<PendingInput>), EngineError> {
         let mut node = self
             .registry
             .create_node(type_name, id)
@@ -74,17 +77,23 @@ impl TickEngine {
         node.types_changed(&self.types);
         let mut inputs = Vec::new();
         for (name, value) in properties {
-            match parse_input_value_property(name) {
-                Some(pin) => inputs.push((pin, value.clone())),
-                None if parse_split_pin_property(name).is_some() => {}
-                None => {
-                    let value = if validate {
-                        validated_property(node.as_ref(), name, value.clone())?
-                    } else {
-                        value.clone()
-                    };
-                    node.set_property(name, value);
+            if let Some(pin) = parse_input_value_property(name) {
+                inputs.push(PendingInput::Value(pin, value.clone()));
+            } else if let Some(pin) = input_variable_pin(name) {
+                if let DataValue::String(s) = value
+                    && let Some(var_ref) = VariableRef::parse(s)
+                {
+                    inputs.push(PendingInput::Variable(pin, var_ref));
                 }
+            } else if parse_split_pin_property(name).is_some() {
+                // split pins are handled separately after node creation
+            } else {
+                let value = if validate {
+                    validated_property(node.as_ref(), name, value.clone())?
+                } else {
+                    value.clone()
+                };
+                node.set_property(name, value);
             }
         }
         node.restored();
@@ -129,9 +138,16 @@ impl TickEngine {
                 self.split_pins.entry(id).or_default().insert(pin.0);
             }
         }
-        // Pins depend on properties, so input values are applied afterward
-        for (pin, value) in inputs {
-            let _ = self.set_input_value(id, pin, Some(value));
+        // Pins depend on properties, so input values and bindings are applied afterward
+        for input in inputs {
+            match input {
+                PendingInput::Value(pin, value) => {
+                    let _ = self.set_input_value(id, pin, Some(value));
+                }
+                PendingInput::Variable(pin, var_ref) => {
+                    let _ = self.set_input_variable(id, pin, Some(var_ref));
+                }
+            }
         }
         Ok(())
     }
@@ -219,6 +235,18 @@ impl TickEngine {
                         .flatten()
                         .map(|(pin, v)| (input_value_property(PinId(*pin)), v.clone())),
                 )
+                .chain(
+                    self.input_variables
+                        .get(&node_id)
+                        .into_iter()
+                        .flatten()
+                        .map(|(pin, v)| {
+                            (
+                                input_variable_property(PinId(*pin)),
+                                DataValue::String(v.to_str()),
+                            )
+                        }),
+                )
                 .collect(),
             position: Position::default(),
             pins: self.confirmed_pins.get(&node_id).cloned(),
@@ -238,6 +266,7 @@ impl TickEngine {
             .retain(|d| d.connection.src_node != node_id && d.connection.dst_node != node_id);
         self.update_roles(node_id);
         self.input_values.remove(&node_id);
+        self.input_variables.remove(&node_id);
         self.split_pins.remove(&node_id);
         self.required_reported.remove(&node_id);
         self.data_cache.remove(&node_id);
@@ -268,6 +297,30 @@ impl TickEngine {
         }
         if let Some(pin) = parse_input_value_property(name) {
             self.set_input_value(node_id, pin, Some(value))?;
+            return Ok(RemovedConnections::default());
+        }
+        if let Some(pin) = input_variable_pin(name) {
+            let variable = match value {
+                DataValue::String(ref s) => VariableRef::parse(s).ok_or_else(|| {
+                    EngineError::InvalidProperty(
+                        UiMessage::new(
+                            "error-invalid-variable-ref",
+                            format!("Invalid variable reference: {s}"),
+                        )
+                        .arg("reference", s),
+                    )
+                })?,
+                _ => {
+                    return Err(EngineError::InvalidProperty(
+                        UiMessage::new(
+                            "error-invalid-property",
+                            format!("Invalid property: {name}"),
+                        )
+                        .arg("property", name),
+                    ));
+                }
+            };
+            self.set_input_variable(node_id, pin, Some(variable))?;
             return Ok(RemovedConnections::default());
         }
         let node = self
@@ -317,6 +370,9 @@ impl TickEngine {
                     .is_some_and(|t| input_value_fits(&self.types, &t, v))
             });
         }
+        if let Some(vars) = self.input_variables.get_mut(&node_id) {
+            vars.retain(|pin, _| input_pin_type(&definition, PinId(*pin)).is_some());
+        }
 
         Ok(self.prune_connections(|c| c.src_node == node_id || c.dst_node == node_id))
     }
@@ -343,52 +399,6 @@ impl TickEngine {
         self.connections
             .retain(|c| !invalid_exec.contains(c), |c| !invalid_data.contains(c))
     }
-
-    /// Value of an unconnected data input (`None` clears it). Effective while nothing is connected to the pin.
-    pub fn set_input_value(
-        &mut self,
-        node_id: NodeId,
-        pin: PinId,
-        value: Option<DataValue>,
-    ) -> Result<(), EngineError> {
-        let node = self
-            .nodes
-            .get(&node_id)
-            .ok_or(EngineError::NodeNotFound(node_id))?;
-        if let Some(reason) = node.unavailable() {
-            return Err(EngineError::PluginUnavailable(reason));
-        }
-        let definition = self.node_definition(node_id).expect("node exists");
-        let values = self.input_values.entry(node_id).or_default();
-        match value {
-            Some(value) => {
-                let pin_type =
-                    input_pin_type(&definition, pin).ok_or(EngineError::InvalidPinConnection)?;
-                if !input_value_fits(&self.types, &pin_type, &value) {
-                    return Err(EngineError::TypeMismatch(value.get_type(), pin_type));
-                }
-                values.insert(pin.0, value);
-            }
-            None => {
-                values.remove(&pin.0);
-            }
-        }
-        self.pure_cache.clear();
-        self.clear_node_error(node_id);
-        Ok(())
-    }
-}
-
-/// Data type of an input pin (`None` if no such pin exists or it is an exec pin).
-pub(crate) fn input_pin_type(definition: &NodeDefinition, pin: PinId) -> Option<DataType> {
-    definition
-        .pins
-        .iter()
-        .find(|p| p.id == pin && p.direction == PinDirection::Input)
-        .and_then(|p| match &p.pin_type {
-            PinType::Data(t) => Some(t.clone()),
-            PinType::Exec => None,
-        })
 }
 
 /// Validate before invoking the infallible setter, including property-dependent schemas.

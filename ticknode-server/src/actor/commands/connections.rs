@@ -1,5 +1,5 @@
 use super::*;
-use ticknode_shared::ConnectionModel;
+use ticknode_shared::{ConnectionModel, VariableRef};
 
 impl Actor {
     pub(in crate::actor) fn require_session_connection(
@@ -70,6 +70,31 @@ impl Actor {
         let before = self.engine.node_model(id);
         self.engine
             .set_input_value(id, pin, value)
+            .map_err(|e| e.ui_message())?;
+        Ok(self.updated_events(id, before, RemovedConnections::default()))
+    }
+
+    pub(super) fn set_input_variable(
+        &mut self,
+        id: NodeId,
+        pin: PinId,
+        variable: Option<String>,
+        sheet: SheetId,
+    ) -> Result<Vec<ServerMessage>, UiMessage> {
+        self.require_session_node(id, sheet)?;
+        let var_ref = match variable {
+            Some(ref s) => Some(VariableRef::parse(s).ok_or_else(|| {
+                UiMessage::new(
+                    "error-invalid-variable-ref",
+                    format!("Invalid variable reference: {s}"),
+                )
+                .arg("reference", s)
+            })?),
+            None => None,
+        };
+        let before = self.engine.node_model(id);
+        self.engine
+            .set_input_variable(id, pin, var_ref)
             .map_err(|e| e.ui_message())?;
         Ok(self.updated_events(id, before, RemovedConnections::default()))
     }

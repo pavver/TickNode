@@ -112,6 +112,9 @@ impl TickEngine {
                     .is_some_and(|t| input_value_fits(&self.types, &t, value))
             });
         }
+        if let Some(vars) = self.input_variables.get_mut(&node) {
+            vars.retain(|id, _| super::input_pin_type(&effective, PinId(*id)).is_some());
+        }
         Ok(self.prune_connections(|c| c.src_node == node || c.dst_node == node))
     }
 

@@ -101,6 +101,20 @@ pub fn parse_input_value_property(name: &str) -> Option<PinId> {
         .map(PinId)
 }
 
+/// An unconnected input data pin can be bound to a variable under the property name `var:<pin id>`.
+const INPUT_VARIABLE_PREFIX: &str = "var:";
+
+pub fn input_variable_property(pin: PinId) -> String {
+    format!("{INPUT_VARIABLE_PREFIX}{}", pin.0)
+}
+
+pub fn input_variable_pin(name: &str) -> Option<PinId> {
+    name.strip_prefix(INPUT_VARIABLE_PREFIX)?
+        .parse()
+        .ok()
+        .map(PinId)
+}
+
 /// The 0x8000_0000..=0xbfff_ffff range belongs to engine-generated struct field pins.
 pub const VIRTUAL_PIN_BIT: u32 = 0x8000_0000;
 pub const VIRTUAL_PIN_MASK: u32 = 0xc000_0000;

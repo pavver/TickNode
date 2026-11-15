@@ -135,6 +135,77 @@ impl TickEngine {
                 .entry(PinId(*pin))
                 .or_insert_with(|| Some(value.clone()));
         }
+        let bound_vars: Vec<(u32, VariableRef)> = self
+            .input_variables
+            .get(&node_id)
+            .into_iter()
+            .flatten()
+            .map(|(p, v)| (*p, v.clone()))
+            .collect();
+        if !bound_vars.is_empty() {
+            let sheet = self.node_sheets.get(&node_id).copied();
+            let def = self.definition_arc(node_id);
+            for (pin_num, var_ref) in bound_vars {
+                let pin = PinId(pin_num);
+                if inputs.contains_key(&pin) {
+                    continue;
+                }
+                let pin_def = def.as_ref().and_then(|d| {
+                    d.pins
+                        .iter()
+                        .find(|p| p.id == pin && p.direction == PinDirection::Input)
+                });
+                let Some(PinType::Data(pin_type)) = pin_def.map(|p| &p.pin_type) else {
+                    continue;
+                };
+                let var = self
+                    .variables
+                    .resolve(&var_ref.name, var_ref.lookup, sheet)
+                    .and_then(|k| self.variables.get(&k));
+                let mut value = None;
+                if let Some(var) = var {
+                    if self.types.compatible(&var.data_type, pin_type) {
+                        value = Some(var.value.clone());
+                    } else if let Some(conversion) =
+                        self.types.convertible(&var.data_type, pin_type)
+                    {
+                        value = conversion.apply_with_display(
+                            var.value.clone(),
+                            &self.host_state.display,
+                            crate::quantity::labels(&self.host_state.locale),
+                        );
+                    }
+                    if value
+                        .as_ref()
+                        .is_some_and(|v| !self.types.identifier_value_fits(pin_type, v))
+                    {
+                        value = None;
+                    }
+                }
+                if value.is_none()
+                    && let Some(p) = pin_def.filter(|p| p.required)
+                    && self.required_reported.insert(node_id)
+                {
+                    self.host_state.error(
+                        node_id,
+                        UiMessage::new(
+                            "error-node-required-variable",
+                            format!(
+                                r#"Required input "{}" variable "{}" is not available"#,
+                                p.name, var_ref
+                            ),
+                        )
+                        .arg("pin", &p.name)
+                        .arg("variable", var_ref.to_str()),
+                        format!(
+                            r#"[ERROR] Required input "{}" variable "{}" is not available"#,
+                            p.name, var_ref
+                        ),
+                    );
+                }
+                inputs.insert(pin, value);
+            }
+        }
         self.assemble_split_inputs(node_id, &mut inputs);
         inputs
     }

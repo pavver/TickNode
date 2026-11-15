@@ -31,6 +31,7 @@ error-invalid-pin-connection = Некоректне з'єднання пінів
 error-node-not-found = Ноду { $node } не знайдено
 error-unknown-node-type = Невідомий тип ноди: { $type }
 error-invalid-property = Неприпустима властивість: { $property }
+error-invalid-variable-ref = Некоректне посилання на змінну: { $reference }
 error-node-plugin-unavailable = плагін { $plugin } недоступний
 error-node-type-unknown = тип ноди { $type } невідомий: потрібного плагіна немає або його вимкнено
 error-paste-too-many = Забагато нод для вставки: { $count } (максимум { $max })
@@ -401,6 +402,7 @@ error-node-size = Розміри ноди мають бути скінченни
 # Runtime node errors and trace values on the canvas
 error-node-required-missing = Обов'язковий вхід «{ $pin }» не задано
 error-node-required-conversion = Не вдалося перетворити значення для входу «{ $pin }»
+error-node-required-variable = Змінна «{ $variable }» для обов'язкового входу «{ $pin }» недоступна
 error-node-frozen = Нода заморожена: її піни змінились — підтвердіть зміни
 error-plugin-node-crashed = Плагін аварійно завершився: { $reason }
 toolbar-show-values = Показувати значення

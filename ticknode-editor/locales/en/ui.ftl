@@ -29,6 +29,7 @@ error-invalid-pin-connection = Invalid pin connection: one or both pins do not e
 error-node-not-found = Node { $node } not found
 error-unknown-node-type = Unknown node type: { $type }
 error-invalid-property = Invalid property: { $property }
+error-invalid-variable-ref = Invalid variable reference: { $reference }
 error-node-plugin-unavailable = plugin { $plugin } unavailable
 error-node-type-unknown = node type { $type } is unknown: the required plugin is missing or disabled
 error-paste-too-many = Too many nodes to paste: { $count } (maximum { $max })
@@ -395,6 +396,7 @@ error-node-size = Node dimensions must be finite
 # Runtime node errors and trace values on the canvas
 error-node-required-missing = Required input “{ $pin }” is not set
 error-node-required-conversion = Could not convert the value for input “{ $pin }”
+error-node-required-variable = Required input “{ $pin }” variable “{ $variable }” is not available
 error-node-frozen = Node is frozen: its pins changed — confirm the changes
 error-plugin-node-crashed = Plugin crashed: { $reason }
 toolbar-show-values = Show values

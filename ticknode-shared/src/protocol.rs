@@ -113,6 +113,12 @@ pub enum ClientMessage {
     DeleteVariable(VariableKey),
     SetServerSettings(ServerSettings),
     GetUsage,
+    /// Binds an unconnected data input to a variable reference (e.g. `var.<name>`); `None` clears it.
+    SetInputVariable {
+        id: NodeId,
+        pin: PinId,
+        variable: Option<String>,
+    },
 }
 
 /// An existing endpoint from which a connection is dragged.

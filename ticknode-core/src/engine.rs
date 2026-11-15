@@ -59,6 +59,8 @@ pub struct TickEngine {
     pub current_tick_changed_variables: std::collections::HashSet<VariableKey>,
     /// Values of unconnected inputs set in the editor (`in:<pin>` properties).
     pub(crate) input_values: HashMap<NodeId, BTreeMap<u32, DataValue>>,
+    /// Variable bindings for unconnected inputs (`var:<pin>` properties).
+    pub(crate) input_variables: HashMap<NodeId, BTreeMap<u32, VariableRef>>,
     pub(crate) split_pins: HashMap<NodeId, std::collections::BTreeSet<u32>>,
     /// Nodes for which a "missing required input" error has already been logged (to avoid repeating every tick).
     pub(crate) required_reported: std::collections::HashSet<NodeId>,
@@ -111,6 +113,7 @@ impl TickEngine {
             node_sheets: HashMap::new(),
             current_tick_changed_variables: std::collections::HashSet::new(),
             input_values: HashMap::new(),
+            input_variables: HashMap::new(),
             split_pins: HashMap::new(),
             required_reported: Default::default(),
             execution_queue: VecDeque::new(),

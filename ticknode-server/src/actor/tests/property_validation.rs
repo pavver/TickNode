@@ -162,3 +162,23 @@ fn add_with_validates_but_settings_paste_and_history_restore_stored_values() {
     test_apply(&mut actor, ClientMessage::Redo);
     assert_eq!(actor.graph_snapshot(), pasted);
 }
+
+#[test]
+fn add_node_with_rejects_var_properties() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let sheet = actor.sheets[0].id;
+    let (reply, _receive) = mpsc::unbounded_channel();
+    let res = actor.apply(
+        ClientMessage::AddNodeWith {
+            type_name: "math/add".into(),
+            position: Position::default(),
+            properties: vec![("var:0".into(), "var.timeout".into())],
+        },
+        Some(sheet),
+        &reply,
+    );
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(err.key, "error-invalid-property");
+}

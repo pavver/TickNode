@@ -130,3 +130,16 @@ fn inline_values_require_editable_destination_scalar_source_and_compatible_type(
         );
     }
 }
+
+#[test]
+fn input_variable_property_roundtrip_and_parsing() {
+    assert_eq!(input_variable_property(PinId(0)), "var:0");
+    assert_eq!(input_variable_property(PinId(42)), "var:42");
+    assert_eq!(input_variable_pin("var:0"), Some(PinId(0)));
+    assert_eq!(input_variable_pin("var:42"), Some(PinId(42)));
+    assert_eq!(input_variable_pin("in:0"), None);
+    assert_eq!(input_variable_pin("var:"), None);
+    assert_eq!(input_variable_pin("var:abc"), None);
+    assert_eq!(input_variable_pin("split:0"), None);
+    assert_eq!(input_variable_pin("var:12"), Some(PinId(12)));
+}

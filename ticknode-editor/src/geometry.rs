@@ -80,6 +80,7 @@ pub fn pins(def: &NodeDefinition, direction: PinDirection) -> impl Iterator<Item
 pub fn is_inline_property(name: &str, value: &DataValue) -> bool {
     ticknode_shared::text::is_text_type(&value.get_type())
         && parse_input_value_property(name).is_none()
+        && ticknode_shared::input_variable_pin(name).is_none()
         && ticknode_shared::parse_split_pin_property(name).is_none()
 }
 

@@ -162,6 +162,7 @@ impl TickEngine {
             let definition = self.node_definition(*id).expect("node exists");
             self.host_state.cancel_node_tasks(*id);
             self.input_values.remove(id);
+            self.input_variables.remove(id);
             self.split_pins.remove(id);
             self.required_reported.remove(id);
             self.data_cache.remove(id);

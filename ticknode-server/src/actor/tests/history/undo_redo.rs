@@ -195,3 +195,137 @@ fn history_moves_kept_nodes_and_recreates_changed_nodes_in_event_order() {
     assert_eq!(actor.engine.exec_connections(), &[exec]);
     assert_eq!(actor.engine.data_connections(), &[data]);
 }
+
+#[test]
+fn set_input_variable_supports_undo_redo_and_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let events = apply(
+        &mut actor,
+        ClientMessage::SetInputVariable {
+            id: a,
+            pin: PinId(1),
+            variable: Some("var.timeout".into()),
+        },
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, ServerMessage::NodeUpdated(n) if n.model.id == a))
+    );
+    assert!(
+        actor
+            .engine
+            .node_model(a)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|(k, v)| k == "var:1" && *v == DataValue::String("var.timeout".into()))
+    );
+
+    // No-op produces no events
+    let noop = apply(
+        &mut actor,
+        ClientMessage::SetInputVariable {
+            id: a,
+            pin: PinId(1),
+            variable: Some("var.timeout".into()),
+        },
+    );
+    assert!(noop.is_empty());
+
+    // Undo restores unset binding
+    let events = apply(&mut actor, ClientMessage::Undo);
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, ServerMessage::NodeUpdated(n) if n.model.id == a))
+    );
+    assert!(
+        !actor
+            .engine
+            .node_model(a)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|(k, _)| k == "var:1")
+    );
+
+    // Redo restores binding
+    let events = apply(&mut actor, ClientMessage::Redo);
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, ServerMessage::NodeUpdated(n) if n.model.id == a))
+    );
+    assert!(
+        actor
+            .engine
+            .node_model(a)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|(k, v)| k == "var:1" && *v == DataValue::String("var.timeout".into()))
+    );
+
+    // Batch with SetInputVariable
+    apply(
+        &mut actor,
+        ClientMessage::Batch(vec![
+            ClientMessage::SetInputVariable {
+                id: a,
+                pin: PinId(1),
+                variable: Some("var.other".into()),
+            },
+            ClientMessage::MoveNode {
+                id: a,
+                position: actor_position(75.0),
+            },
+        ]),
+    );
+    assert_eq!(actor.positions[&a], actor_position(75.0));
+    assert!(
+        actor
+            .engine
+            .node_model(a)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|(k, v)| k == "var:1" && *v == DataValue::String("var.other".into()))
+    );
+
+    // Undo undoes both in one history entry
+    apply(&mut actor, ClientMessage::Undo);
+    assert_eq!(actor.positions[&a], actor_position(1.0));
+    assert!(
+        actor
+            .engine
+            .node_model(a)
+            .unwrap()
+            .properties
+            .iter()
+            .any(|(k, v)| k == "var:1" && *v == DataValue::String("var.timeout".into()))
+    );
+}
+
+#[test]
+fn set_input_variable_invalid_reference_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut actor = actor(dir.path());
+    let a = add(&mut actor, 1.0);
+    let sheet = actor.sheets[0].id;
+    let (reply, _receive) = mpsc::unbounded_channel();
+    let res = actor.apply(
+        ClientMessage::SetInputVariable {
+            id: a,
+            pin: PinId(1),
+            variable: Some("invalid ref".into()),
+        },
+        Some(sheet),
+        &reply,
+    );
+    assert!(res.is_err());
+    let err = res.unwrap_err();
+    assert_eq!(err.key, "error-invalid-variable-ref");
+}

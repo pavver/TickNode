@@ -71,47 +71,61 @@ fn is_operator_keyword(name: &str) -> bool {
     matches!(name, "and" | "or" | "not")
 }
 
-fn scan_exponent(bytes: &[u8], mut i: usize, len: usize) -> usize {
-    if i < len && (bytes[i] == b'e' || bytes[i] == b'E') {
-        let e_pos = i;
+fn scan_digits(bytes: &[u8], mut i: usize, len: usize) -> usize {
+    while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'_') {
         i += 1;
-        if i < len && (bytes[i] == b'+' || bytes[i] == b'-') {
-            i += 1;
-        }
-        if i < len && bytes[i].is_ascii_digit() {
-            while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'_') {
-                i += 1;
-            }
-            i
-        } else {
-            e_pos
-        }
+    }
+    i
+}
+
+fn scan_exponent(bytes: &[u8], mut i: usize, len: usize) -> usize {
+    if i >= len || (bytes[i] != b'e' && bytes[i] != b'E') {
+        return i;
+    }
+    let e_pos = i;
+    i += 1;
+    if i < len && (bytes[i] == b'+' || bytes[i] == b'-') {
+        i += 1;
+    }
+    if i < len && bytes[i].is_ascii_digit() {
+        scan_digits(bytes, i, len)
     } else {
-        i
+        e_pos
     }
 }
 
 fn scan_number(bytes: &[u8], mut i: usize, len: usize) -> usize {
     if bytes[i].is_ascii_digit() {
-        while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'_') {
-            i += 1;
-        }
+        i = scan_digits(bytes, i, len);
         if i + 1 < len && bytes[i] == b'.' && bytes[i + 1].is_ascii_digit() {
-            i += 2;
-            while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'_') {
-                i += 1;
-            }
+            i = scan_digits(bytes, i + 2, len);
         }
         scan_exponent(bytes, i, len)
     } else if bytes[i] == b'.' && i + 1 < len && bytes[i + 1].is_ascii_digit() {
-        i += 2;
-        while i < len && (bytes[i].is_ascii_digit() || bytes[i] == b'_') {
-            i += 1;
-        }
+        i = scan_digits(bytes, i + 2, len);
         scan_exponent(bytes, i, len)
     } else {
         i
     }
+}
+
+fn classify_identifier(ident: &str, is_call: bool) -> TokenClass {
+    if is_operator_keyword(ident) {
+        TokenClass::Operator
+    } else if is_constant(ident) {
+        TokenClass::Constant
+    } else if find_function(ident).is_some() || is_call {
+        TokenClass::Function
+    } else {
+        TokenClass::Input
+    }
+}
+
+fn skip_whitespace(bytes: &[u8], mut k: usize, len: usize) -> usize {
+    while k < len && bytes[k].is_ascii_whitespace() {
+        k += 1;
+    }
+    k
 }
 
 fn scan_identifier(source: &str, bytes: &[u8], mut i: usize, len: usize) -> (usize, TokenClass) {
@@ -126,23 +140,9 @@ fn scan_identifier(source: &str, bytes: &[u8], mut i: usize, len: usize) -> (usi
         }
     }
     let ident = &source[start..i];
-
-    let mut next_k = i;
-    while next_k < len && bytes[next_k].is_ascii_whitespace() {
-        next_k += 1;
-    }
+    let next_k = skip_whitespace(bytes, i, len);
     let is_call = next_k < len && bytes[next_k] == b'(';
-
-    let class = if is_operator_keyword(ident) {
-        TokenClass::Operator
-    } else if is_constant(ident) {
-        TokenClass::Constant
-    } else if find_function(ident).is_some() || is_call {
-        TokenClass::Function
-    } else {
-        TokenClass::Input
-    };
-    (i, class)
+    (i, classify_identifier(ident, is_call))
 }
 
 fn scan_multi_operator(bytes: &[u8], i: usize) -> Option<usize> {
@@ -179,6 +179,25 @@ fn is_single_operator(b: u8) -> bool {
     )
 }
 
+fn scan_next_token(source: &str, bytes: &[u8], i: usize, len: usize) -> (usize, TokenClass) {
+    if bytes[i].is_ascii_whitespace() {
+        (skip_whitespace(bytes, i, len), TokenClass::Text)
+    } else if bytes[i].is_ascii_digit()
+        || (bytes[i] == b'.' && i + 1 < len && bytes[i + 1].is_ascii_digit())
+    {
+        (scan_number(bytes, i, len), TokenClass::Number)
+    } else if is_ident_start(bytes[i]) {
+        scan_identifier(source, bytes, i, len)
+    } else if let Some(end) = scan_multi_operator(bytes, i) {
+        (end, TokenClass::Operator)
+    } else if is_single_operator(bytes[i]) {
+        (i + 1, TokenClass::Operator)
+    } else {
+        let adv = source[i..].chars().next().map_or(1, |c| c.len_utf8());
+        (i + adv, TokenClass::Error)
+    }
+}
+
 /// Produces contiguous, ordered syntax highlights covering all of `source`.
 pub fn highlight(source: &str, _inputs: &[String]) -> Vec<Highlight> {
     let mut builder = HighlightBuilder::new();
@@ -187,38 +206,9 @@ pub fn highlight(source: &str, _inputs: &[String]) -> Vec<Highlight> {
     let mut i = 0;
 
     while i < len {
-        if bytes[i].is_ascii_whitespace() {
-            let start = i;
-            while i < len && bytes[i].is_ascii_whitespace() {
-                i += 1;
-            }
-            builder.push(start..i, TokenClass::Text);
-        } else if bytes[i].is_ascii_digit()
-            || (bytes[i] == b'.' && i + 1 < len && bytes[i + 1].is_ascii_digit())
-        {
-            let start = i;
-            i = scan_number(bytes, i, len);
-            builder.push(start..i, TokenClass::Number);
-        } else if is_ident_start(bytes[i]) {
-            let start = i;
-            let (end, class) = scan_identifier(source, bytes, i, len);
-            i = end;
-            builder.push(start..i, class);
-        } else if let Some(end) = scan_multi_operator(bytes, i) {
-            builder.push(i..end, TokenClass::Operator);
-            i = end;
-        } else if is_single_operator(bytes[i]) {
-            builder.push(i..i + 1, TokenClass::Operator);
-            i += 1;
-        } else {
-            let start = i;
-            if let Some(ch) = source[i..].chars().next() {
-                i += ch.len_utf8();
-            } else {
-                i += 1;
-            }
-            builder.push(start..i, TokenClass::Error);
-        }
+        let (end, class) = scan_next_token(source, bytes, i, len);
+        builder.push(i..end, class);
+        i = end;
     }
 
     builder.finish()

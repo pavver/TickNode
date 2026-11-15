@@ -3,7 +3,7 @@ use super::error::FormulaError;
 use crate::{DataValue, NumberValue};
 use std::ops::Range;
 
-mod functions;
+pub(crate) mod functions;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormulaValue {
@@ -92,28 +92,55 @@ where
             Ok(eval_unary(*op, val))
         }
         ExprKind::Binary { op, left, right } => {
-            if let Some(res) = eval_binary_logical(*op, left, right, lookup, var_lookup)? {
-                return Ok(res);
-            }
-            let l = eval_expr_with(left, lookup, var_lookup)?;
-            let r = eval_expr_with(right, lookup, var_lookup)?;
-            eval_binary_op(*op, l, r, expr.span.clone())
+            eval_binary_expr(*op, left, right, expr.span.clone(), lookup, var_lookup)
         }
         ExprKind::Ternary {
             cond,
             then_expr,
             else_expr,
-        } => {
-            let c = eval_expr_with(cond, lookup, var_lookup)?;
-            if c.is_truthy() {
-                eval_expr_with(then_expr, lookup, var_lookup)
-            } else {
-                eval_expr_with(else_expr, lookup, var_lookup)
-            }
-        }
+        } => eval_ternary_expr(cond, then_expr, else_expr, lookup, var_lookup),
         ExprKind::Call { name, args } => {
             eval_call_expr(name, args, expr.span.clone(), lookup, var_lookup)
         }
+    }
+}
+
+fn eval_binary_expr<F, V>(
+    op: BinaryOp,
+    left: &Expr,
+    right: &Expr,
+    span: Range<usize>,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    if let Some(res) = eval_binary_logical(op, left, right, lookup, var_lookup)? {
+        return Ok(res);
+    }
+    let l = eval_expr_with(left, lookup, var_lookup)?;
+    let r = eval_expr_with(right, lookup, var_lookup)?;
+    eval_binary_op(op, l, r, span)
+}
+
+fn eval_ternary_expr<F, V>(
+    cond: &Expr,
+    then_expr: &Expr,
+    else_expr: &Expr,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    let c = eval_expr_with(cond, lookup, var_lookup)?;
+    if c.is_truthy() {
+        eval_expr_with(then_expr, lookup, var_lookup)
+    } else {
+        eval_expr_with(else_expr, lookup, var_lookup)
     }
 }
 
@@ -146,26 +173,46 @@ where
     V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
 {
     match op {
-        BinaryOp::And => {
-            let l = eval_expr_with(left, lookup, var_lookup)?;
-            if !l.is_truthy() {
-                Ok(Some(FormulaValue::Bool(false)))
-            } else {
-                let r = eval_expr_with(right, lookup, var_lookup)?;
-                Ok(Some(FormulaValue::Bool(r.is_truthy())))
-            }
-        }
-        BinaryOp::Or => {
-            let l = eval_expr_with(left, lookup, var_lookup)?;
-            if l.is_truthy() {
-                Ok(Some(FormulaValue::Bool(true)))
-            } else {
-                let r = eval_expr_with(right, lookup, var_lookup)?;
-                Ok(Some(FormulaValue::Bool(r.is_truthy())))
-            }
-        }
+        BinaryOp::And => eval_and(left, right, lookup, var_lookup).map(Some),
+        BinaryOp::Or => eval_or(left, right, lookup, var_lookup).map(Some),
         _ => Ok(None),
     }
+}
+
+fn eval_and<F, V>(
+    left: &Expr,
+    right: &Expr,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    let l = eval_expr_with(left, lookup, var_lookup)?;
+    if !l.is_truthy() {
+        return Ok(FormulaValue::Bool(false));
+    }
+    let r = eval_expr_with(right, lookup, var_lookup)?;
+    Ok(FormulaValue::Bool(r.is_truthy()))
+}
+
+fn eval_or<F, V>(
+    left: &Expr,
+    right: &Expr,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
+    let l = eval_expr_with(left, lookup, var_lookup)?;
+    if l.is_truthy() {
+        return Ok(FormulaValue::Bool(true));
+    }
+    let r = eval_expr_with(right, lookup, var_lookup)?;
+    Ok(FormulaValue::Bool(r.is_truthy()))
 }
 
 fn eval_call_expr<F, V>(
@@ -203,20 +250,45 @@ fn eval_binary_op(
     r: FormulaValue,
     span: Range<usize>,
 ) -> Result<FormulaValue, FormulaError> {
+    if let Some(b) = eval_comparison(op, &l, &r) {
+        return Ok(FormulaValue::Bool(b));
+    }
+    eval_arithmetic(op, l.to_number_value(), r.to_number_value(), span)
+}
+
+fn eval_comparison(op: BinaryOp, l: &FormulaValue, r: &FormulaValue) -> Option<bool> {
     match op {
-        BinaryOp::Eq => Ok(FormulaValue::Bool(values_equal(&l, &r))),
-        BinaryOp::Ne => Ok(FormulaValue::Bool(!values_equal(&l, &r))),
-        BinaryOp::Lt => Ok(FormulaValue::Bool(l.to_f64() < r.to_f64())),
-        BinaryOp::Le => Ok(FormulaValue::Bool(l.to_f64() <= r.to_f64())),
-        BinaryOp::Gt => Ok(FormulaValue::Bool(l.to_f64() > r.to_f64())),
-        BinaryOp::Ge => Ok(FormulaValue::Bool(l.to_f64() >= r.to_f64())),
-        BinaryOp::Add => eval_add(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::Sub => eval_sub(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::Mul => eval_mul(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::Div => eval_div(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::Rem => eval_rem(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::Pow => eval_pow(l.to_number_value(), r.to_number_value(), span),
-        BinaryOp::And | BinaryOp::Or => unreachable!(),
+        BinaryOp::Eq => Some(values_equal(l, r)),
+        BinaryOp::Ne => Some(!values_equal(l, r)),
+        BinaryOp::Lt => Some(l.to_f64() < r.to_f64()),
+        BinaryOp::Le => Some(l.to_f64() <= r.to_f64()),
+        BinaryOp::Gt => Some(l.to_f64() > r.to_f64()),
+        BinaryOp::Ge => Some(l.to_f64() >= r.to_f64()),
+        _ => None,
+    }
+}
+
+fn eval_arithmetic(
+    op: BinaryOp,
+    a: NumberValue,
+    b: NumberValue,
+    span: Range<usize>,
+) -> Result<FormulaValue, FormulaError> {
+    match op {
+        BinaryOp::Add => eval_add(a, b, span),
+        BinaryOp::Sub => eval_sub(a, b, span),
+        BinaryOp::Mul => eval_mul(a, b, span),
+        BinaryOp::Div => eval_div(a, b, span),
+        BinaryOp::Rem => eval_rem(a, b, span),
+        BinaryOp::Pow => eval_pow(a, b, span),
+        BinaryOp::And
+        | BinaryOp::Or
+        | BinaryOp::Eq
+        | BinaryOp::Ne
+        | BinaryOp::Lt
+        | BinaryOp::Le
+        | BinaryOp::Gt
+        | BinaryOp::Ge => unreachable!(),
     }
 }
 

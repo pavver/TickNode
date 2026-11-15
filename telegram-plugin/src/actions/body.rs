@@ -134,6 +134,25 @@ fn attach_caption(body: &mut Value, inputs: &Inputs, parse_mode: &str) -> Result
     Ok(())
 }
 
+fn media_kind_and_method(kind: &str) -> (&'static str, &'static str) {
+    match kind {
+        "audio" => ("audio", "sendAudio"),
+        "video" => ("video", "sendVideo"),
+        "document" => ("document", "sendDocument"),
+        _ => ("photo", "sendPhoto"),
+    }
+}
+
+fn attach_thread_and_reply(body: &mut Value, chat: i64, inputs: &Inputs, hub: &Hub) {
+    let reply = id(inputs, 5);
+    if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
+        body["message_thread_id"] = topic.into();
+    }
+    if let Some(reply) = reply {
+        body["reply_parameters"] = json!({"message_id": reply});
+    }
+}
+
 fn build_send_media(
     chat: i64,
     props: &Properties,
@@ -141,12 +160,7 @@ fn build_send_media(
     hub: &Hub,
 ) -> Result<(&'static str, Value), UiError> {
     let prop = |key: &str| props.get(key).map(String::as_str).unwrap_or("");
-    let media_kind = match prop("kind") {
-        "audio" => "audio",
-        "video" => "video",
-        "document" => "document",
-        _ => "photo",
-    };
+    let (media_kind, method) = media_kind_and_method(prop("kind"));
     let media_ref = extract_media_ref(inputs)?;
 
     let mut body = json!({
@@ -156,22 +170,9 @@ fn build_send_media(
     });
 
     attach_caption(&mut body, inputs, prop("parse_mode"))?;
-
-    let reply = id(inputs, 5);
-    if let Some(topic) = id(inputs, 2).or_else(|| hub.reply_topic(chat, reply?)) {
-        body["message_thread_id"] = topic.into();
-    }
-    if let Some(reply) = reply {
-        body["reply_parameters"] = json!({"message_id": reply});
-    }
+    attach_thread_and_reply(&mut body, chat, inputs, hub);
     attach_keyboard(&mut body, props)?;
 
-    let method = match prop("kind") {
-        "audio" => "sendAudio",
-        "video" => "sendVideo",
-        "document" => "sendDocument",
-        _ => "sendPhoto",
-    };
     Ok((method, body))
 }
 

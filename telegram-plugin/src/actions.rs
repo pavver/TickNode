@@ -65,6 +65,17 @@ impl ActionNode {
         }
     }
 
+    fn check_trigger_ready(&self, hub: &Hub) -> Result<(), UiError> {
+        if self.pending.is_some() {
+            return Err(validation::error(
+                "busy",
+                "This Telegram node already has an action in flight",
+            ));
+        }
+        hub.ready()?;
+        validation::stored(&self.kind, &self.props)
+    }
+
     fn handle_trigger_pin(
         &mut self,
         inputs: &Inputs,
@@ -72,16 +83,7 @@ impl ActionNode {
         hub: &mut Hub,
         env: &mut impl Env,
     ) -> Vec<Output> {
-        if self.pending.is_some() {
-            return self.failed(validation::error(
-                "busy",
-                "This Telegram node already has an action in flight",
-            ));
-        }
-        if let Err(error) = hub
-            .ready()
-            .and_then(|_| validation::stored(&self.kind, &self.props))
-        {
+        if let Err(error) = self.check_trigger_ready(hub) {
             return self.failed(error);
         }
         let (method, body) = match body::build(&self.kind, &self.props, inputs, hub) {

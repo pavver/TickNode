@@ -159,6 +159,170 @@ impl TickEngine {
         }
     }
 
+    fn resolve_create_key(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+        scope: VariableScope,
+        sheet: Option<SheetId>,
+    ) -> Option<VariableKey> {
+        if !valid_variable_name(name) {
+            let err = VariableError::InvalidName(name.to_string());
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            return None;
+        }
+        match scope {
+            VariableScope::Sheet => {
+                let Some(s) = sheet else {
+                    let err = VariableError::InvalidName(name.to_string());
+                    self.host_state
+                        .error(node_id, err.ui_message(), err.log_message());
+                    return None;
+                };
+                Some(VariableKey::sheet(s, name))
+            }
+            VariableScope::Global => Some(VariableKey::global(name)),
+            VariableScope::Persistent => Some(VariableKey::persistent(name)),
+        }
+    }
+
+    fn apply_variable_create(
+        &mut self,
+        node_id: NodeId,
+        name: String,
+        scope: VariableScope,
+        data_type: DataType,
+        value: DataValue,
+        sheet: Option<SheetId>,
+        fired: &mut Vec<PinId>,
+        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+    ) -> bool {
+        let Some(key) = self.resolve_create_key(node_id, &name, scope, sheet) else {
+            return false;
+        };
+        if self
+            .variables
+            .exists_in_scope_namespace(&name, scope, sheet)
+        {
+            fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            return false;
+        }
+        if self.variables.len() >= MAX_VARIABLES {
+            let err = VariableError::LimitReached;
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            return false;
+        }
+        let Some(converted) = fit_typed_variable_value(
+            &self.types,
+            value,
+            &self.variable_input_type(node_id),
+            &data_type,
+            &self.host_state.display,
+            crate::quantity::labels(&self.host_state.locale),
+        ) else {
+            let err = VariableError::TypeMismatch(name);
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            return false;
+        };
+        if !valid_variable_value(&converted) {
+            let err = VariableError::LimitReached;
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            return false;
+        }
+        self.variables.create(key.clone(), data_type, converted);
+        self.current_tick_changed_variables.insert(key);
+        fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        true
+    }
+
+    fn apply_variable_set(
+        &mut self,
+        node_id: NodeId,
+        name: String,
+        lookup: VariableLookup,
+        value: DataValue,
+        sheet: Option<SheetId>,
+        fired: &mut Vec<PinId>,
+        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+    ) -> bool {
+        if !valid_variable_name(&name) {
+            let err = VariableError::InvalidName(name);
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            return false;
+        }
+        let Some(key) = self.variables.resolve(&name, lookup, sheet) else {
+            let err = VariableError::Missing(name);
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            return false;
+        };
+        let Some(var) = self.variables.get(&key) else {
+            return false;
+        };
+        let var_type = var.data_type.clone();
+        let Some(converted) = fit_typed_variable_value(
+            &self.types,
+            value,
+            &self.variable_input_type(node_id),
+            &var_type,
+            &self.host_state.display,
+            crate::quantity::labels(&self.host_state.locale),
+        ) else {
+            let err = VariableError::TypeMismatch(name);
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            return false;
+        };
+        if !valid_variable_value(&converted) {
+            let err = VariableError::LimitReached;
+            self.host_state
+                .error(node_id, err.ui_message(), err.log_message());
+            fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            return false;
+        }
+        let changed = self.variables.set(&key, converted);
+        if changed {
+            self.current_tick_changed_variables.insert(key);
+        }
+        fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        true
+    }
+
+    fn apply_variable_delete(
+        &mut self,
+        node_id: NodeId,
+        name: String,
+        lookup: VariableLookup,
+        sheet: Option<SheetId>,
+        fired: &mut Vec<PinId>,
+        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+    ) -> bool {
+        let mut changed = false;
+        if valid_variable_name(&name) {
+            if let Some(key) = self.variables.resolve(&name, lookup, sheet) {
+                changed = self.variables.delete(&key);
+            }
+        }
+        fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        changed
+    }
+
     fn apply_variable_command(
         &mut self,
         node_id: NodeId,
@@ -173,128 +337,25 @@ impl TickEngine {
                 scope,
                 data_type,
                 value,
-            } => {
-                if !valid_variable_name(&name) {
-                    let err = VariableError::InvalidName(name);
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    return false;
-                }
-                let key = match scope {
-                    VariableScope::Sheet => {
-                        let Some(s) = sheet else {
-                            let err = VariableError::InvalidName(name);
-                            self.host_state
-                                .error(node_id, err.ui_message(), err.log_message());
-                            return false;
-                        };
-                        VariableKey::sheet(s, &name)
-                    }
-                    VariableScope::Global => VariableKey::global(&name),
-                    VariableScope::Persistent => VariableKey::persistent(&name),
-                };
-                if self
-                    .variables
-                    .exists_in_scope_namespace(&name, scope, sheet)
-                {
-                    fired.push(PinId(2));
-                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
-                    return false;
-                }
-                if self.variables.len() >= MAX_VARIABLES {
-                    let err = VariableError::LimitReached;
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    return false;
-                }
-                let Some(converted) = fit_typed_variable_value(
-                    &self.types,
-                    value,
-                    &self.variable_input_type(node_id),
-                    &data_type,
-                    &self.host_state.display,
-                    crate::quantity::labels(&self.host_state.locale),
-                ) else {
-                    let err = VariableError::TypeMismatch(name);
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    return false;
-                };
-                if !valid_variable_value(&converted) {
-                    let err = VariableError::LimitReached;
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    return false;
-                }
-                self.variables.create(key.clone(), data_type, converted);
-                self.current_tick_changed_variables.insert(key);
-                fired.push(PinId(1));
-                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
-                true
-            }
+            } => self.apply_variable_create(
+                node_id,
+                name,
+                scope,
+                data_type,
+                value,
+                sheet,
+                fired,
+                next_tick_queue,
+            ),
             VariableCommand::Set {
                 name,
                 lookup,
                 value,
             } => {
-                if !valid_variable_name(&name) {
-                    let err = VariableError::InvalidName(name);
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    fired.push(PinId(2));
-                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
-                    return false;
-                }
-                let Some(key) = self.variables.resolve(&name, lookup, sheet) else {
-                    let err = VariableError::Missing(name);
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    fired.push(PinId(2));
-                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
-                    return false;
-                };
-                let var_type = self.variables.get(&key).unwrap().data_type.clone();
-                let Some(converted) = fit_typed_variable_value(
-                    &self.types,
-                    value,
-                    &self.variable_input_type(node_id),
-                    &var_type,
-                    &self.host_state.display,
-                    crate::quantity::labels(&self.host_state.locale),
-                ) else {
-                    let err = VariableError::TypeMismatch(name);
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    fired.push(PinId(2));
-                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
-                    return false;
-                };
-                if !valid_variable_value(&converted) {
-                    let err = VariableError::LimitReached;
-                    self.host_state
-                        .error(node_id, err.ui_message(), err.log_message());
-                    fired.push(PinId(2));
-                    self.queue_exec_output(node_id, PinId(2), next_tick_queue);
-                    return false;
-                }
-                let changed = self.variables.set(&key, converted);
-                if changed {
-                    self.current_tick_changed_variables.insert(key);
-                }
-                fired.push(PinId(1));
-                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
-                true
+                self.apply_variable_set(node_id, name, lookup, value, sheet, fired, next_tick_queue)
             }
             VariableCommand::Delete { name, lookup } => {
-                let mut changed = false;
-                if valid_variable_name(&name) {
-                    if let Some(key) = self.variables.resolve(&name, lookup, sheet) {
-                        changed = self.variables.delete(&key);
-                    }
-                }
-                fired.push(PinId(1));
-                self.queue_exec_output(node_id, PinId(1), next_tick_queue);
-                changed
+                self.apply_variable_delete(node_id, name, lookup, sheet, fired, next_tick_queue)
             }
         }
     }

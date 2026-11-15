@@ -95,10 +95,20 @@ fn edit_and_delete_bodies_use_chat_message_id_and_optional_parse_mode() {
 #[test]
 fn text_limit_counts_unicode_characters_without_truncation() {
     let (hub, _) = authenticated();
-    let props = schema::defaults("send");
-    for (length, ok) in [(0, false), (4096, true), (4097, false)] {
-        let values = inputs(&[(1, (-100i64).into()), (3, "я".repeat(length).into())]);
-        assert_eq!(body::build("send", &props, &values, &hub).is_ok(), ok);
+    for kind in ["send", "edit"] {
+        let props = schema::defaults(kind);
+        for (length, ok) in [(0, false), (4096, true), (4097, false)] {
+            let values = inputs(&[
+                (1, (-100i64).into()),
+                (2, 51i64.into()),
+                (3, "я".repeat(length).into()),
+            ]);
+            assert_eq!(
+                body::build(kind, &props, &values, &hub).is_ok(),
+                ok,
+                "kind={kind}, len={length}"
+            );
+        }
     }
 }
 #[test]
@@ -240,6 +250,132 @@ fn unauthorized_action_reports_failed_and_settings_error_on_plugin_tick() {
     assert_eq!(env.errors[0].key, "telegram-error-unauthorized");
 }
 #[test]
+fn send_and_send_media_trigger_chat_lookup_but_edit_does_not() {
+    let (mut hub, mut env) = authenticated();
+    let mut send = ActionNode::new("send");
+    send.run(
+        Trigger::Pin(PinId(0)),
+        &inputs(&[(1, 12345i64.into()), (3, "hello".into())]),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+    assert!(hub.has_chat_lookup(12345));
+
+    let mut send_media = ActionNode::new("send_media");
+    let photo = media_tests::media_val("media.photo", Some("file_123"), None);
+    send_media.run(
+        Trigger::Pin(PinId(0)),
+        &inputs(&[(1, 67890i64.into()), (3, photo)]),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+    assert!(hub.has_chat_lookup(67890));
+
+    let mut edit = ActionNode::new("edit");
+    edit.run(
+        Trigger::Pin(PinId(0)),
+        &inputs(&[(1, 99999i64.into()), (2, 1i64.into()), (3, "edited".into())]),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+    assert!(!hub.has_chat_lookup(99999));
+}
+
+#[test]
+fn rate_limit_retries_default_and_stops_after_five() {
+    let (mut hub, mut env) = authenticated();
+    let mut node = ActionNode::new("send");
+    node.run(
+        Trigger::Pin(PinId(0)),
+        &sending(),
+        1_700_000_000,
+        &mut hub,
+        &mut env,
+    );
+
+    // Attempt 1 fails -> retries becomes 1
+    let id = env.requests.last().unwrap().0;
+    node.run(
+        Trigger::Task {
+            id,
+            result: response(429, json!({"ok": false, "error_code": 429})),
+        },
+        &Inputs::default(),
+        1_700_000_001,
+        &mut hub,
+        &mut env,
+    );
+    assert_eq!(
+        env.delays.last().unwrap().1,
+        1,
+        "missing retry_after defaults to 1"
+    );
+
+    // Attempts 2, 3, 4, 5 fail -> retries becomes 2, 3, 4, 5
+    for i in 2..=5 {
+        let delay_id = env.delays.last().unwrap().0;
+        node.run(
+            Trigger::Task {
+                id: delay_id,
+                result: Ok(TaskOutput::Delay),
+            },
+            &Inputs::default(),
+            1_700_000_000 + i * 10,
+            &mut hub,
+            &mut env,
+        );
+        let req_id = env.requests.last().unwrap().0;
+        node.run(
+            Trigger::Task {
+                id: req_id,
+                result: response(
+                    429,
+                    json!({"ok": false, "error_code": 429, "parameters": {"retry_after": 0}}),
+                ),
+            },
+            &Inputs::default(),
+            1_700_000_000 + i * 10 + 1,
+            &mut hub,
+            &mut env,
+        );
+        assert_eq!(
+            env.delays.last().unwrap().1,
+            1,
+            "retry_after of 0 is clamped to 1"
+        );
+    }
+
+    // Now retries is 5. Attempt 6 runs and fails: retries < 5 is false -> FAIL!
+    let delay_id = env.delays.last().unwrap().0;
+    node.run(
+        Trigger::Task {
+            id: delay_id,
+            result: Ok(TaskOutput::Delay),
+        },
+        &Inputs::default(),
+        1_700_000_100,
+        &mut hub,
+        &mut env,
+    );
+    let req_id = env.requests.last().unwrap().0;
+    let out = node.run(
+        Trigger::Task {
+            id: req_id,
+            result: response(429, json!({"ok": false, "error_code": 429})),
+        },
+        &Inputs::default(),
+        1_700_000_101,
+        &mut hub,
+        &mut env,
+    );
+    assert_eq!(out.len(), 4, "must emit Failed and Error after 5 retries");
+    assert_eq!(out[1], Output::Exec(PinId(11)));
+}
+
+#[test]
 fn settings_change_during_retry_never_sends_with_new_credentials() {
     let (mut hub, mut env) = authenticated();
     let mut node = ActionNode::new("send");
@@ -322,6 +458,11 @@ fn photo_largest_selection_by_area() {
     ]);
     let msg: Message = serde_json::from_value(msg_json).unwrap();
     let val = msg.value();
+    let date = field(&val, "date").expect("date present");
+    assert!(
+        matches!(date, DataValue::DateTime(dt) if dt.timestamp_subsec_nanos() == 0),
+        "message date must have 0 subsecond nanos"
+    );
     let photo = field(&val, "photo").expect("photo present");
     assert_eq!(field_string(photo, "file_id"), Some("tall_thin"));
 }

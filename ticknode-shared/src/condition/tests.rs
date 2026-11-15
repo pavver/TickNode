@@ -417,3 +417,53 @@ fn test_condition_variable_operands() {
         Some(Operand::Value(DataValue::String("var.limit".into())))
     );
 }
+
+#[test]
+fn test_condition_mutants_coverage() {
+    let c = MatchCase::parse("1:a=1").unwrap();
+    assert_eq!(c.conditions[0].left, Operand::Input("a".into()));
+
+    assert_eq!(
+        MatchCase::parse("1: a + 1"),
+        Err(ConditionError::UnexpectedChar('+'))
+    );
+    assert!(matches!(
+        MatchCase::parse("1: a - 1"),
+        Err(ConditionError::UnexpectedChar('-'))
+    ));
+
+    let c_suffix = MatchCase::parse("1: a > 20m and b = 1").unwrap();
+    assert_eq!(
+        c_suffix.conditions[0].right,
+        Some(Operand::Value(DataValue::String("20 m".into())))
+    );
+
+    let empty_list = DataValue::List {
+        element_type: DataType::Number,
+        elements: vec![],
+    };
+    let empty_case = MatchCase::parse("1: a is_empty and a not_empty").unwrap();
+    assert!(!empty_case.matches(|_| Some(empty_list.clone())));
+    let is_empty_case = MatchCase::parse("1: a is_empty").unwrap();
+    assert!(is_empty_case.matches(|_| Some(empty_list.clone())));
+
+    let num_val = DataValue::Number(123.into());
+    let starts_case = MatchCase::parse("1: a starts_with \"12\"").unwrap();
+    assert!(!starts_case.matches(|_| Some(num_val.clone())));
+    let ends_case = MatchCase::parse("1: a ends_with \"23\"").unwrap();
+    assert!(!ends_case.matches(|_| Some(num_val.clone())));
+
+    let eq_case_le = MatchCase::parse("1: a <= 5").unwrap();
+    assert!(eq_case_le.matches(|_| num(5)));
+    assert!(!eq_case_le.matches(|_| num(6)));
+    let eq_case_ge = MatchCase::parse("1: a >= 5").unwrap();
+    assert!(eq_case_ge.matches(|_| num(5)));
+    assert!(!eq_case_ge.matches(|_| num(4)));
+
+    assert!(is_input_name("_"));
+    assert!(is_input_name("_sensor_1"));
+    assert!(is_input_name("a_b_c"));
+    assert!(!is_input_name(""));
+    assert!(!is_input_name("1_a"));
+    assert!(!is_input_name("a-b"));
+}

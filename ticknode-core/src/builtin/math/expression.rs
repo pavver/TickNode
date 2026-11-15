@@ -332,18 +332,7 @@ impl Node for MathExpressionNode {
             }
             ("pin_ids", DataValue::List { elements, .. }) => {
                 self.had_pin_ids = true;
-                let mut pins = Vec::new();
-                for val in elements {
-                    let DataValue::String(s) = val else { continue };
-                    if let Some((name, pin, ty)) = parse_pin_id_element(&s)
-                        && !pins
-                            .iter()
-                            .any(|(n, p, _): &(String, PinId, DataType)| *n == name || *p == pin)
-                    {
-                        pins.push((name, pin, ty));
-                    }
-                }
-                self.pins = pins;
+                self.pins = restore_pin_ids(elements);
             }
             ("next_pin", DataValue::Number(NumberValue::Int(n)))
                 if (1..=0x8000_0000).contains(&n) =>
@@ -447,6 +436,21 @@ fn lookup_var_value(
         )
         .with_arg("name", &vref.name)),
     }
+}
+
+fn restore_pin_ids(elements: Vec<DataValue>) -> Vec<(String, PinId, DataType)> {
+    let mut pins = Vec::new();
+    for val in elements {
+        let DataValue::String(s) = val else { continue };
+        if let Some((name, pin, ty)) = parse_pin_id_element(&s)
+            && !pins
+                .iter()
+                .any(|(n, p, _): &(String, PinId, DataType)| *n == name || *p == pin)
+        {
+            pins.push((name, pin, ty));
+        }
+    }
+    pins
 }
 
 fn parse_pin_id_element(s: &str) -> Option<(String, PinId, DataType)> {

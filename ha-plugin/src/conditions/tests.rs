@@ -199,9 +199,30 @@ fn template_truth_values() {
 }
 
 #[test]
+fn condition_definitions_are_non_adaptive_and_have_signed_sun_offsets() {
+    for kind in KINDS {
+        let def = kind.definition();
+        assert!(!def.adaptive, "conditions must not be adaptive");
+        assert_eq!(def.pins[0].id, PinId(0));
+        assert_eq!(def.pins[0].name, "In");
+    }
+    let sun_def = Kind::Sun.definition();
+    let before_offset = sun_def
+        .properties
+        .iter()
+        .find(|p| p.name == "before_offset")
+        .expect("before_offset property");
+    assert!(
+        matches!(before_offset.kind, PropertyKind::Duration { signed: true }),
+        "before_offset must be signed duration"
+    );
+}
+
+#[test]
 fn condition_properties_restore_and_interactive_selects_reject_unknown_options() {
     let node = NodeId(ticknode_shared::Uuid::nil());
     for kind in KINDS {
+        assert!(kind.type_name().starts_with("ha/condition_"));
         let mut original = ConditionNode::new(*kind, node);
         for property in kind.definition().properties {
             let value = if let PropertyKind::Select(options) = property.kind {

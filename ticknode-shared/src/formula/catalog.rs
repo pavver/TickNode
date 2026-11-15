@@ -1,5 +1,13 @@
+use super::error::FormulaError;
+use super::eval::FormulaValue;
+use super::eval::functions::*;
+use crate::NumberValue;
+use std::ops::Range;
+
+pub type EvaluatorFn = fn(&[NumberValue], Range<usize>) -> Result<FormulaValue, FormulaError>;
+
 /// Documentation and signature metadata for a built-in formula function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct FunctionDoc {
     pub name: &'static str,
     pub aliases: &'static [&'static str],
@@ -7,7 +15,16 @@ pub struct FunctionDoc {
     pub description: &'static str,
     pub min_args: usize,
     pub max_args: Option<usize>,
+    pub eval: Option<EvaluatorFn>,
 }
+
+impl PartialEq for FunctionDoc {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for FunctionDoc {}
 
 pub static CATALOG: &[FunctionDoc] = &[
     FunctionDoc {
@@ -17,6 +34,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Absolute value of a number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_abs),
     },
     FunctionDoc {
         name: "sign",
@@ -25,6 +43,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Signum of a number (-1, 0, or 1).",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_sign),
     },
     FunctionDoc {
         name: "min",
@@ -33,6 +52,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Minimum value among arguments.",
         min_args: 1,
         max_args: None,
+        eval: Some(eval_min),
     },
     FunctionDoc {
         name: "max",
@@ -41,6 +61,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Maximum value among arguments.",
         min_args: 1,
         max_args: None,
+        eval: Some(eval_max),
     },
     FunctionDoc {
         name: "clamp",
@@ -49,6 +70,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Constrains a value to the range [lo, hi].",
         min_args: 3,
         max_args: Some(3),
+        eval: Some(eval_clamp),
     },
     FunctionDoc {
         name: "round",
@@ -57,6 +79,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Rounds to the nearest integer or specified decimal places.",
         min_args: 1,
         max_args: Some(2),
+        eval: Some(eval_round),
     },
     FunctionDoc {
         name: "floor",
@@ -65,6 +88,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Largest integer less than or equal to x.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_floor),
     },
     FunctionDoc {
         name: "ceil",
@@ -73,6 +97,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Smallest integer greater than or equal to x.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_ceil),
     },
     FunctionDoc {
         name: "trunc",
@@ -81,6 +106,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Integer part of a number, truncated towards zero.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_trunc),
     },
     FunctionDoc {
         name: "frac",
@@ -89,6 +115,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Fractional part of a number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_frac),
     },
     FunctionDoc {
         name: "sqrt",
@@ -97,6 +124,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Square root of a non-negative number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_sqrt),
     },
     FunctionDoc {
         name: "cbrt",
@@ -105,6 +133,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Cube root of a number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_cbrt),
     },
     FunctionDoc {
         name: "pow",
@@ -113,6 +142,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Raises x to the power of y.",
         min_args: 2,
         max_args: Some(2),
+        eval: Some(eval_pow),
     },
     FunctionDoc {
         name: "exp",
@@ -121,6 +151,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Exponential function e^x.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_exp),
     },
     FunctionDoc {
         name: "ln",
@@ -129,6 +160,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Natural logarithm (base e) of a positive number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_ln),
     },
     FunctionDoc {
         name: "log",
@@ -137,6 +169,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Logarithm with the specified base (defaults to e).",
         min_args: 1,
         max_args: Some(2),
+        eval: Some(eval_log),
     },
     FunctionDoc {
         name: "log10",
@@ -145,6 +178,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Common logarithm (base 10) of a positive number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_log10),
     },
     FunctionDoc {
         name: "log2",
@@ -153,6 +187,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Binary logarithm (base 2) of a positive number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_log2),
     },
     FunctionDoc {
         name: "hypot",
@@ -161,6 +196,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Euclidean distance sqrt(a^2 + b^2 + ...).",
         min_args: 2,
         max_args: None,
+        eval: Some(eval_hypot),
     },
     FunctionDoc {
         name: "sin",
@@ -169,6 +205,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Sine of an angle in radians.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_sin),
     },
     FunctionDoc {
         name: "cos",
@@ -177,6 +214,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Cosine of an angle in radians.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_cos),
     },
     FunctionDoc {
         name: "tan",
@@ -185,6 +223,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Tangent of an angle in radians.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_tan),
     },
     FunctionDoc {
         name: "asin",
@@ -193,6 +232,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Arcsine in radians, domain [-1, 1].",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_asin),
     },
     FunctionDoc {
         name: "acos",
@@ -201,6 +241,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Arccosine in radians, domain [-1, 1].",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_acos),
     },
     FunctionDoc {
         name: "atan",
@@ -209,6 +250,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Arctangent in radians.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_atan),
     },
     FunctionDoc {
         name: "atan2",
@@ -217,6 +259,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Four-quadrant arctangent in radians.",
         min_args: 2,
         max_args: Some(2),
+        eval: Some(eval_atan2),
     },
     FunctionDoc {
         name: "sinh",
@@ -225,6 +268,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Hyperbolic sine.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_sinh),
     },
     FunctionDoc {
         name: "cosh",
@@ -233,6 +277,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Hyperbolic cosine.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_cosh),
     },
     FunctionDoc {
         name: "tanh",
@@ -241,6 +286,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Hyperbolic tangent.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_tanh),
     },
     FunctionDoc {
         name: "deg",
@@ -249,6 +295,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Converts radians to degrees.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_deg),
     },
     FunctionDoc {
         name: "rad",
@@ -257,6 +304,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Converts degrees to radians.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_rad),
     },
     FunctionDoc {
         name: "sum",
@@ -265,6 +313,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Sum of all argument values.",
         min_args: 1,
         max_args: None,
+        eval: Some(eval_sum),
     },
     FunctionDoc {
         name: "avg",
@@ -273,6 +322,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Arithmetic mean of arguments.",
         min_args: 1,
         max_args: None,
+        eval: Some(eval_avg),
     },
     FunctionDoc {
         name: "median",
@@ -281,6 +331,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Median value of arguments.",
         min_args: 1,
         max_args: None,
+        eval: Some(eval_median),
     },
     FunctionDoc {
         name: "lerp",
@@ -289,6 +340,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Linear interpolation between a and b by factor t.",
         min_args: 3,
         max_args: Some(3),
+        eval: Some(eval_lerp),
     },
     FunctionDoc {
         name: "map",
@@ -297,6 +349,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Re-maps a number from [in_lo, in_hi] to [out_lo, out_hi].",
         min_args: 5,
         max_args: Some(5),
+        eval: Some(eval_map),
     },
     FunctionDoc {
         name: "if",
@@ -305,6 +358,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Returns a if condition c is true, otherwise b.",
         min_args: 3,
         max_args: Some(3),
+        eval: None,
     },
     FunctionDoc {
         name: "mod",
@@ -313,6 +367,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Modulo with the sign of divisor b.",
         min_args: 2,
         max_args: Some(2),
+        eval: Some(eval_mod),
     },
     FunctionDoc {
         name: "gcd",
@@ -321,6 +376,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Greatest common divisor of integers.",
         min_args: 2,
         max_args: None,
+        eval: Some(eval_gcd),
     },
     FunctionDoc {
         name: "lcm",
@@ -329,6 +385,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Least common multiple of integers.",
         min_args: 2,
         max_args: None,
+        eval: Some(eval_lcm),
     },
     FunctionDoc {
         name: "between",
@@ -337,6 +394,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Returns true if lo <= x <= hi.",
         min_args: 3,
         max_args: Some(3),
+        eval: Some(eval_between),
     },
     FunctionDoc {
         name: "isnan",
@@ -345,6 +403,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Returns true if x is NaN.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_isnan),
     },
     FunctionDoc {
         name: "isfinite",
@@ -353,6 +412,7 @@ pub static CATALOG: &[FunctionDoc] = &[
         description: "Returns true if x is a finite number.",
         min_args: 1,
         max_args: Some(1),
+        eval: Some(eval_isfinite),
     },
 ];
 

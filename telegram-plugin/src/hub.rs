@@ -237,6 +237,12 @@ impl Hub {
                 .push_back((Request::Chat(chat), json!({"chat_id":chat})));
         }
     }
+    #[cfg(test)]
+    pub(crate) fn has_chat_lookup(&self, chat: i64) -> bool {
+        self.aux
+            .iter()
+            .any(|(r, _)| matches!(r, Request::Chat(id) if *id == chat))
+    }
     pub fn unauthorized(&mut self) {
         self.stopped = true;
         self.username = None;

@@ -22,6 +22,19 @@ fn wire(platform: Platform, values: &[(&str, &str)]) -> Value {
 }
 
 #[test]
+fn trigger_definitions_are_non_adaptive_and_have_standard_pins() {
+    for platform in PLATFORMS {
+        let def = platform.definition();
+        assert!(!def.adaptive, "triggers must not be adaptive");
+        assert_eq!(def.pins[0].id, PinId(0));
+        assert_eq!(def.pins[0].name, "Triggered");
+        assert_eq!(def.pins[1].id, PinId(1));
+        assert_eq!(def.pins[1].name, "Info");
+        assert_eq!(def.pins[1].pin_type, PinType::Data(DataType::Object));
+    }
+}
+
+#[test]
 fn every_platform_builds_the_expected_typed_trigger() {
     let cases: &[(Platform, &[(&str, &str)], Value)] = &[
         (

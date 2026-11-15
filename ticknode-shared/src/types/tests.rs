@@ -26,6 +26,35 @@ fn named(n: &str) -> DataType {
 }
 
 #[test]
+fn test_is_type_name_characters() {
+    assert!(is_type_name("a.b"));
+    assert!(is_type_name("a_1.b_2"));
+    assert!(is_type_name("a-1.b-2"));
+    assert!(is_type_name("foo_bar.baz-qux_123"));
+    assert!(!is_type_name("noboundary"));
+    assert!(!is_type_name("a."));
+    assert!(!is_type_name(".b"));
+    assert!(!is_type_name("a..b"));
+    assert!(!is_type_name("a.B"));
+    assert!(!is_type_name("a.b+c"));
+    assert!(!is_type_name("a.b@c"));
+    assert!(!is_type_name("a.b=c"));
+
+    let f = FieldDefinition::new("x", "X", DataType::Bool);
+    assert!(!f.optional);
+    let f_opt = f.optional();
+    assert!(f_opt.optional);
+
+    let mut r = TypeRegistry::new();
+    let empty_field = TypeDefinition::new_struct(
+        "t.empty_field",
+        "E",
+        vec![FieldDefinition::new("", "Empty", DataType::Bool)],
+    );
+    assert!(r.insert_all(&[empty_field]).is_err());
+}
+
+#[test]
 fn primitive_conversions_and_failures() {
     use DataType::*;
     let r = registry();

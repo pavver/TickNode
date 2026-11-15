@@ -20,10 +20,31 @@ fn variable_keys_and_validity() {
     let sheet_id = SheetId::generate();
     let sk = VariableKey::sheet(sheet_id, "foo");
     assert!(sk.is_valid());
+    assert_eq!(sk.prefix(), "sheet");
     let gk = VariableKey::global("bar");
     assert!(gk.is_valid());
+    assert_eq!(gk.prefix(), "global");
     let pk = VariableKey::persistent("baz");
     assert!(pk.is_valid());
+    assert_eq!(pk.prefix(), "global");
+
+    let vr_auto = VariableRef {
+        lookup: VariableLookup::Auto,
+        name: "foo".into(),
+    };
+    assert_eq!(vr_auto.prefix(), "var");
+    assert_eq!(vr_auto.to_str(), "var.foo");
+    assert_eq!(format!("{vr_auto}"), "var.foo");
+    let vr_sheet = VariableRef {
+        lookup: VariableLookup::Sheet,
+        name: "foo".into(),
+    };
+    assert_eq!(vr_sheet.prefix(), "sheet");
+    let vr_global = VariableRef {
+        lookup: VariableLookup::Global,
+        name: "foo".into(),
+    };
+    assert_eq!(vr_global.prefix(), "global");
 
     let invalid_sheet = VariableKey {
         scope: VariableScope::Sheet,

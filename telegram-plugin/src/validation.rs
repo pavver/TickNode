@@ -18,9 +18,7 @@ pub fn command(text: &str) -> Option<&str> {
 }
 pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Result<(), UiError> {
     match name {
-        "chat" | "user" | "topic" if !text.is_empty() && text.parse::<i64>().is_err() => {
-            return Err(error("id", "Enter a signed decimal Telegram ID"));
-        }
+        "chat" | "user" | "topic" => validate_id_property(text)?,
         "command" if command(text).is_none() => {
             return Err(error(
                 "command",
@@ -44,6 +42,13 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
     }
     if kind == "message" {
         validate_message_regex(name, text, props)?;
+    }
+    Ok(())
+}
+
+fn validate_id_property(text: &str) -> Result<(), UiError> {
+    if !text.is_empty() && text.parse::<i64>().is_err() {
+        return Err(error("id", "Enter a signed decimal Telegram ID"));
     }
     Ok(())
 }
@@ -124,26 +129,7 @@ pub fn buttons(text: &str) -> Result<Value, UiError> {
     for line in text.lines().filter(|line| !line.trim().is_empty()) {
         let mut row = Vec::new();
         for button in line.split('|') {
-            let (label, data) = button.trim().split_once('=').ok_or_else(invalid)?;
-            let (label, data) = (label.trim(), data.trim());
-            if label.is_empty() || data.is_empty() {
-                return Err(invalid());
-            }
-            row.push(if data.starts_with("https://") {
-                if url::Url::parse(data)
-                    .ok()
-                    .is_none_or(|url| url.host_str().is_none())
-                    || data.chars().any(char::is_whitespace)
-                {
-                    return Err(invalid());
-                }
-                json!({"text":label,"url":data})
-            } else {
-                if data.contains("://") || data.len() > 64 {
-                    return Err(invalid());
-                }
-                json!({"text":label,"callback_data":data})
-            });
+            row.push(parse_inline_button(button)?);
         }
         if row.len() > 8 {
             return Err(invalid());
@@ -154,6 +140,35 @@ pub fn buttons(text: &str) -> Result<Value, UiError> {
         return Err(invalid());
     }
     Ok(json!({"inline_keyboard":rows}))
+}
+
+fn parse_inline_button(button: &str) -> Result<Value, UiError> {
+    let invalid = || {
+        error(
+            "buttons",
+            "Buttons need Label=callback_data (1–64 bytes) or Label=https://url, separated by |; one row per line",
+        )
+    };
+    let (label, data) = button.trim().split_once('=').ok_or_else(invalid)?;
+    let (label, data) = (label.trim(), data.trim());
+    if label.is_empty() || data.is_empty() {
+        return Err(invalid());
+    }
+    if data.starts_with("https://") {
+        if url::Url::parse(data)
+            .ok()
+            .is_none_or(|url| url.host_str().is_none())
+            || data.chars().any(char::is_whitespace)
+        {
+            return Err(invalid());
+        }
+        Ok(json!({"text":label,"url":data}))
+    } else {
+        if data.contains("://") || data.len() > 64 {
+            return Err(invalid());
+        }
+        Ok(json!({"text":label,"callback_data":data}))
+    }
 }
 
 pub fn reply_buttons(text: &str) -> Result<Vec<Vec<Value>>, UiError> {
@@ -167,26 +182,7 @@ pub fn reply_buttons(text: &str) -> Result<Vec<Vec<Value>>, UiError> {
     for line in text.lines().filter(|line| !line.trim().is_empty()) {
         let mut row = Vec::new();
         for button in line.split('|') {
-            let button = button.trim();
-            if button.is_empty() {
-                return Err(invalid());
-            }
-            if let Some((label, action)) = button.split_once('=') {
-                let (label, action) = (label.trim(), action.trim());
-                if label.is_empty() || label.chars().count() > 128 {
-                    return Err(invalid());
-                }
-                match action {
-                    "contact" => row.push(json!({"text": label, "request_contact": true})),
-                    "location" => row.push(json!({"text": label, "request_location": true})),
-                    _ => return Err(invalid()),
-                }
-            } else {
-                if button.chars().count() > 128 {
-                    return Err(invalid());
-                }
-                row.push(json!({"text": button}));
-            }
+            row.push(parse_reply_button(button)?);
         }
         if row.len() > 12 {
             return Err(invalid());
@@ -198,6 +194,35 @@ pub fn reply_buttons(text: &str) -> Result<Vec<Vec<Value>>, UiError> {
         return Err(invalid());
     }
     Ok(rows)
+}
+
+fn parse_reply_button(button: &str) -> Result<Value, UiError> {
+    let invalid = || {
+        error(
+            "reply-buttons",
+            "Reply keyboard requires at least one button: Label, Label=contact or Label=location, separated by |; one row per line",
+        )
+    };
+    let button = button.trim();
+    if button.is_empty() {
+        return Err(invalid());
+    }
+    if let Some((label, action)) = button.split_once('=') {
+        let (label, action) = (label.trim(), action.trim());
+        if label.is_empty() || label.chars().count() > 128 {
+            return Err(invalid());
+        }
+        match action {
+            "contact" => Ok(json!({"text": label, "request_contact": true})),
+            "location" => Ok(json!({"text": label, "request_location": true})),
+            _ => Err(invalid()),
+        }
+    } else {
+        if button.chars().count() > 128 {
+            return Err(invalid());
+        }
+        Ok(json!({"text": button}))
+    }
 }
 
 pub fn reply_keyboard(text: &str, props: &Properties) -> Result<Value, UiError> {
@@ -219,46 +244,73 @@ pub fn reply_keyboard(text: &str, props: &Properties) -> Result<Value, UiError> 
     Ok(markup)
 }
 
-/// Shell-like splitting without expansion; quotes group whitespace, backslash escapes a character.
-pub fn args(text: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    let (mut word, mut quote, mut escape, mut started) = (String::new(), None, false, false);
-    for ch in text.chars() {
-        if escape {
-            word.push(ch);
-            escape = false;
-            started = true;
-            continue;
+struct ArgParser {
+    result: Vec<String>,
+    word: String,
+    quote: Option<char>,
+    escape: bool,
+    started: bool,
+}
+
+impl ArgParser {
+    fn new() -> Self {
+        Self {
+            result: Vec::new(),
+            word: String::new(),
+            quote: None,
+            escape: false,
+            started: false,
+        }
+    }
+
+    fn step(&mut self, ch: char) {
+        if self.escape {
+            self.word.push(ch);
+            self.escape = false;
+            self.started = true;
+            return;
         }
         if ch == '\\' {
-            escape = true;
-            started = true;
-            continue;
+            self.escape = true;
+            self.started = true;
+            return;
         }
-        if quote == Some(ch) {
-            quote = None;
-            continue;
+        if self.quote == Some(ch) {
+            self.quote = None;
+            return;
         }
-        if quote.is_none() && matches!(ch, '\'' | '"') {
-            quote = Some(ch);
-            started = true;
-            continue;
+        if self.quote.is_none() && matches!(ch, '\'' | '"') {
+            self.quote = Some(ch);
+            self.started = true;
+            return;
         }
-        if quote.is_none() && ch.is_whitespace() {
-            if started {
-                result.push(std::mem::take(&mut word));
-                started = false;
+        if self.quote.is_none() && ch.is_whitespace() {
+            if self.started {
+                self.result.push(std::mem::take(&mut self.word));
+                self.started = false;
             }
         } else {
-            word.push(ch);
-            started = true;
+            self.word.push(ch);
+            self.started = true;
         }
     }
-    if escape {
-        word.push('\\');
+
+    fn finish(mut self) -> Vec<String> {
+        if self.escape {
+            self.word.push('\\');
+        }
+        if self.started {
+            self.result.push(self.word);
+        }
+        self.result
     }
-    if started {
-        result.push(word);
+}
+
+/// Shell-like splitting without expansion; quotes group whitespace, backslash escapes a character.
+pub fn args(text: &str) -> Vec<String> {
+    let mut parser = ArgParser::new();
+    for ch in text.chars() {
+        parser.step(ch);
     }
-    result
+    parser.finish()
 }

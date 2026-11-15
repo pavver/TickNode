@@ -9,7 +9,7 @@ fn inputs(values: &[(u32, DataValue)]) -> Inputs {
         .collect()
 }
 
-fn media_val(type_name: &str, file_id: Option<&str>, url: Option<&str>) -> DataValue {
+pub(crate) fn media_val(type_name: &str, file_id: Option<&str>, url: Option<&str>) -> DataValue {
     let mut s = StructValue::new(type_name);
     if let Some(fid) = file_id {
         s = s.field("file_id", fid);

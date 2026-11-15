@@ -22,6 +22,17 @@ impl VariableChangedNode {
     }
 }
 
+fn is_global_changed(name: &str, host: &HostState) -> bool {
+    let g = VariableKey::global(name);
+    let p = VariableKey::persistent(name);
+    host.changed_variables.contains(&g) || host.changed_variables.contains(&p)
+}
+
+fn is_sheet_changed(sheet: SheetId, name: &str, host: &HostState) -> bool {
+    let key = VariableKey::sheet(sheet, name);
+    host.changed_variables.contains(&key)
+}
+
 impl Node for VariableChangedNode {
     fn id(&self) -> NodeId {
         self.id
@@ -69,35 +80,20 @@ impl Node for VariableChangedNode {
 
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
         let changed = match self.lookup {
-            VariableLookup::Sheet => {
-                let sheet = self.sheet?;
-                let key = VariableKey::sheet(sheet, &self.name);
-                host.changed_variables.contains(&key)
-            }
-            VariableLookup::Global => {
-                let g = VariableKey::global(&self.name);
-                let p = VariableKey::persistent(&self.name);
-                host.changed_variables.contains(&g) || host.changed_variables.contains(&p)
-            }
-            VariableLookup::Auto => {
-                if let Some(sheet) = self.sheet {
+            VariableLookup::Sheet => self
+                .sheet
+                .is_some_and(|s| is_sheet_changed(s, &self.name, host)),
+            VariableLookup::Global => is_global_changed(&self.name, host),
+            VariableLookup::Auto => match self.sheet {
+                Some(sheet)
                     if host
                         .active_sheet_variables
-                        .contains(&(sheet, self.name.clone()))
-                    {
-                        let key = VariableKey::sheet(sheet, &self.name);
-                        host.changed_variables.contains(&key)
-                    } else {
-                        let g = VariableKey::global(&self.name);
-                        let p = VariableKey::persistent(&self.name);
-                        host.changed_variables.contains(&g) || host.changed_variables.contains(&p)
-                    }
-                } else {
-                    let g = VariableKey::global(&self.name);
-                    let p = VariableKey::persistent(&self.name);
-                    host.changed_variables.contains(&g) || host.changed_variables.contains(&p)
+                        .contains(&(sheet, self.name.clone())) =>
+                {
+                    is_sheet_changed(sheet, &self.name, host)
                 }
-            }
+                _ => is_global_changed(&self.name, host),
+            },
         };
         if changed { Some(PinId(0)) } else { None }
     }

@@ -95,3 +95,14 @@ fn test_hour_rollover_and_load_hour_buckets() {
     let report = tracker.report(1, &[], node_lookup);
     assert_eq!(report.hours.len(), HOUR_BUCKETS_COUNT + 1); // 48 + 1 active
 }
+
+#[test]
+fn test_engine_usage_integration() {
+    let mut engine = crate::TickEngine::new();
+    let report = engine.usage_report(100);
+    assert!(report.minutes.len() >= 1);
+    let step = engine.step_usage(100);
+    assert!(step.is_none());
+    let final_hr = engine.finalize_usage_hour(100);
+    assert_eq!(final_hr.timestamp, 0);
+}

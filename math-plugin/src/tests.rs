@@ -53,3 +53,44 @@ fn invalid_square_root_remains_nan() {
         matches!(output[0], Output::Data(PinId(43), DataValue::Number(NumberValue::Float(n))) if n.is_nan())
     );
 }
+
+#[test]
+fn ukrainian_translations_cover_every_node_and_pin() {
+    let uk = include_str!("../locales/uk.ftl");
+    let keys: std::collections::HashSet<&str> = uk
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.starts_with('#') || line.is_empty() {
+                None
+            } else {
+                line.split('=').next().map(|k| k.trim())
+            }
+        })
+        .collect();
+
+    for type_name in MathPlugin::NODE_TYPES {
+        let node = MathPlugin::create(type_name, NodeId::generate()).unwrap();
+        let def = node.definition();
+        let slug = def.type_name.replace('/', "-");
+        assert!(
+            keys.contains(&format!("node-{slug}-title").as_str()),
+            "missing title for {type_name}"
+        );
+        assert!(
+            keys.contains(&format!("node-{slug}-description").as_str()),
+            "missing description for {type_name}"
+        );
+        assert!(
+            keys.contains(&format!("node-{slug}-help").as_str()),
+            "missing help for {type_name}"
+        );
+        for pin in &def.pins {
+            assert!(
+                keys.contains(&format!("node-{slug}-pin-{}", pin.name).as_str()),
+                "missing pin translation for {type_name} pin {}",
+                pin.name
+            );
+        }
+    }
+}

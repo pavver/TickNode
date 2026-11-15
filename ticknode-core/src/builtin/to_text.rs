@@ -69,7 +69,7 @@ impl Node for ToTextNode {
         .filter(|p| property_visible(&self.value_type, &p.name))
         .collect();
         NodeDefinition {
-            type_name: "text/to_text".into(), title: "To text".into(), category: "String".into(),
+            type_name: "text/to_text".into(), title: "To Text".into(), category: "String".into(),
             description: "Converts any value to readable text".into(),
             help: "Converts Value to text. Connect a wire to select its type. Quantities follow project display rules: 1970 W → 1.97 kW; a fixed unit overrides the rule. Numbers and quantities support significant digits or fixed decimal places. Project rounding with empty digits follows the project rule; a selected mode defaults to 3 significant digits or 2 decimal places. Hide units to output a bare number; durations then use seconds. Booleans use localized words unless custom texts are set. Date/time formats use chrono strftime, e.g. %H:%M or %d.%m.%Y; date-times use the server local time zone. Lists join elements with commas; objects show their fields. Server uses the engine formatting language.".into(),
             adaptive: true, properties,

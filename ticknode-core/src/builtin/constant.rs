@@ -22,10 +22,10 @@ impl Node for ConstNode {
             title: "Constant".to_string(),
             category: "Data".to_string(),
             description: "Returns a constant value".to_string(),
-            help: "Emits the value set directly on the node (\"Value\" row) or in the right panel on output Val. The value type (number, string, boolean, etc.) is chosen on the node, and the pin type follows it.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
+            help: "Emits the value set directly on the node (\"Value\" row) or in the right panel on output Value. The value type (number, string, boolean, etc.) is chosen on the node, and the pin type follows it.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: vec![PinDefinition {
                 id: PinId(0),
-                name: "Val".to_string(),
+                name: "Value".to_string(),
                 pin_type: PinType::Data(self.value_type.clone().unwrap_or_else(|| self.value.get_type())),
                 direction: PinDirection::Output, required: false }],
         }

@@ -55,7 +55,7 @@ impl Node for RsTriggerNode {
         };
         NodeDefinition {
             type_name: "logic/rs_trigger".into(),
-            title: "RS trigger".into(),
+            title: "RS Trigger".into(),
             category: "Logic".into(),
             description: "Bistable flip-flop with pulse and level inputs".into(),
             help: "Bistable trigger (flip-flop) that holds a boolean state.\n\nExec inputs provide pulse-driven control: Set turns the state on, Reset turns it off, and Toggle inverts the current state.\n\nData inputs S (Set) and R (Reset) provide level-driven control: they are evaluated whenever the node runs on any exec input. A pulse at Evaluate re-evaluates S and R without an accompanying Set, Reset, or Toggle pulse. While S is true and R is false, the trigger turns on. While R is true and S is false, it turns off. When neither S nor R is true, the trigger latches and keeps its previous state.\n\nWhen both Set and Reset are active at the same time — whether both level inputs S and R are true, or Set and Reset exec pulses arrive in the same tick — the Priority property determines the winning state (Reset by default, or Set).\n\nThe Initial state property chooses whether the trigger starts in the off (default) or on state after creation or server restart. State lives in memory and is not persisted across restarts.\n\nEvery evaluation emits State first, then Turned on or Turned off only if the state changed, then Out.".into(),

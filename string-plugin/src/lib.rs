@@ -53,7 +53,7 @@ impl PluginNode for StringNode {
                 vec![
                     data_in(b + 2, "A", DataType::String),
                     data_in(b + 3, "B", DataType::String),
-                    data_out(b + 4, "Res", DataType::String),
+                    data_out(b + 4, "Result", DataType::String),
                 ],
             ),
             Op::Length => (
@@ -61,8 +61,8 @@ impl PluginNode for StringNode {
                 "String Length",
                 "Returns the length of a string",
                 vec![
-                    data_in(b + 2, "Val", DataType::String),
-                    data_out(b + 3, "Res", DataType::Number),
+                    data_in(b + 2, "Value", DataType::String),
+                    data_out(b + 3, "Result", DataType::Number),
                 ],
             ),
             Op::Substring => (
@@ -70,10 +70,10 @@ impl PluginNode for StringNode {
                 "Substring",
                 "Extracts a substring from a string",
                 vec![
-                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 2, "Value", DataType::String),
                     data_in(b + 3, "Start", DataType::Number),
                     data_in(b + 4, "Len", DataType::Number),
-                    data_out(b + 5, "Res", DataType::String),
+                    data_out(b + 5, "Result", DataType::String),
                 ],
             ),
             Op::Contains => (
@@ -81,9 +81,9 @@ impl PluginNode for StringNode {
                 "String Contains",
                 "Checks whether a string contains another substring",
                 vec![
-                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 2, "Value", DataType::String),
                     data_in(b + 3, "Sub", DataType::String),
-                    data_out(b + 4, "Res", DataType::Bool),
+                    data_out(b + 4, "Result", DataType::Bool),
                 ],
             ),
             Op::Split => (
@@ -91,9 +91,9 @@ impl PluginNode for StringNode {
                 "Split String",
                 "Splits a string by a separator",
                 vec![
-                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 2, "Value", DataType::String),
                     data_in(b + 3, "Pat", DataType::String),
-                    data_out(b + 4, "Res", string_list()),
+                    data_out(b + 4, "Result", string_list()),
                 ],
             ),
             Op::Regex => (
@@ -101,7 +101,7 @@ impl PluginNode for StringNode {
                 "Regex Match",
                 "Matches a regular expression and returns the match",
                 vec![
-                    data_in(b + 2, "Val", DataType::String),
+                    data_in(b + 2, "Value", DataType::String),
                     data_in(b + 3, "Pat", DataType::String),
                     data_out(b + 4, "Matched", DataType::Bool),
                     data_out(b + 5, "Capture", DataType::String),
@@ -114,7 +114,7 @@ impl PluginNode for StringNode {
                 vec![
                     data_in(b + 2, "List", string_list()),
                     data_in(b + 3, "Sep", DataType::String),
-                    data_out(b + 4, "Res", DataType::String),
+                    data_out(b + 4, "Result", DataType::String),
                 ],
             ),
         };
@@ -254,13 +254,25 @@ fn aggregate(value: Option<&DataValue>, separator: &str) -> String {
 impl Op {
     fn help(self) -> String {
         match self {
-                Op::Concat => "Res is string A immediately followed by B.",
-                Op::Length => "Res is the number of characters (not bytes) in string Val.",
-                Op::Substring => "Res is Len characters of string Val starting at position Start (counting from 0). Anything beyond the end of the string is discarded.",
-                Op::Contains => "Res = true if Val contains the substring Sub. An empty Sub is contained in any string.",
-                Op::Split => "Res is a list of the parts of string Val split by the separator Pat. An empty Pat splits the string into single characters.",
-                Op::Regex => "Searches Val for the regular expression Pat (Rust regex syntax):\n• Matched — whether a match was found;\n• Capture — the first parenthesized group, or the whole match if there are no groups.\n\nAn invalid expression gives Matched = false.",
-                Op::Aggregate => "Res is the elements of List joined into one string with Sep. Non-string elements are skipped.",
-            }.to_string() + "\n\nAn unconnected string input is treated as an empty string.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes."
+            Op::Concat => "Result is string A immediately followed by B.",
+            Op::Length => "Result is the number of characters (not bytes) in string Value.",
+            Op::Substring => {
+                "Result is Len characters of string Value starting at position Start (counting from 0). Anything beyond the end of the string is discarded."
+            }
+            Op::Contains => {
+                "Result = true if Value contains the substring Sub. An empty Sub is contained in any string."
+            }
+            Op::Split => {
+                "Result is a list of the parts of string Value split by the separator Pat. An empty Pat splits the string into single characters."
+            }
+            Op::Regex => {
+                "Searches Value for the regular expression Pat (Rust regex syntax):\n• Matched — whether a match was found;\n• Capture — the first parenthesized group, or the whole match if there are no groups.\n\nAn invalid expression gives Matched = false."
+            }
+            Op::Aggregate => {
+                "Result is the elements of List joined into one string with Sep. Non-string elements are skipped."
+            }
+        }
+        .to_string()
+            + "\n\nAn unconnected string input is treated as an empty string.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes."
     }
 }

@@ -24,7 +24,7 @@ impl Node for BreakDateTimeNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             type_name: "time/break".into(),
-            title: "Break date-time".into(),
+            title: "Break Date-Time".into(),
             category: "Time".into(),
             description: "Extracts date and time components in the local time zone".into(),
             help: "Breaks a date-time into components in the server local time zone: Year, Month (1–12), Day (1–31), Weekday (1 = Monday … 7 = Sunday), Hour (0–23), Minute (0–59), Second (0–59), local Time of day, and Day of year (1–366).\n\nFor example, 2026-03-15 14:30:00 yields Year = 2026, Month = 3, Day = 15, Weekday = 7 (Sunday), Hour = 14, Minute = 30, Second = 0, Time of day = 14:30:00, and Day of year = 74.\n\nPure node: evaluated whenever any of its outputs are pulled by another node.".into(),

@@ -32,7 +32,7 @@ impl Node for LogicalNode {
                 },
                 PinDefinition {
                     id: PinId(2),
-                    name: "Res".to_string(),
+                    name: "Result".to_string(),
                     pin_type: PinType::Data(DataType::Bool),
                     direction: PinDirection::Output,
                     required: false,
@@ -48,7 +48,7 @@ impl Node for LogicalNode {
                 },
                 PinDefinition {
                     id: PinId(2),
-                    name: "Res".to_string(),
+                    name: "Result".to_string(),
                     pin_type: PinType::Data(DataType::Bool),
                     direction: PinDirection::Output,
                     required: false,
@@ -64,9 +64,9 @@ impl Node for LogicalNode {
             category: "Logic".to_string(),
             description: "Logical operation".to_string(),
             help: match self.op {
-                LogOp::And => "Res = true only if both A and B are true.",
-                LogOp::Or => "Res = true if at least one of A or B is true.",
-                LogOp::Not => "Res is the logical negation of A.",
+                LogOp::And => "Result = true only if both A and B are true.",
+                LogOp::Or => "Result = true if at least one of A or B is true.",
+                LogOp::Not => "Result is the logical negation of A.",
             }
             .to_string()
                 + "\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to false.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",

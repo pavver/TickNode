@@ -159,7 +159,7 @@ impl Node for ObjectMakeNode {
             cost: 1,
             properties,
             type_name: "object/make".into(),
-            title: "Make object".into(),
+            title: "Make Object".into(),
             category: "Data".into(),
             description: "Constructs a typed object from individual fields".into(),
             help: "Constructs a typed object from individual fields.\n\nSelect Type on the node to choose the object structure.\n\nRequired fields are required inputs: without them no value is created. An optional field without a value is skipped.\n\nPure node: evaluated whenever its result is needed by another node.".into(),

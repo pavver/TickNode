@@ -189,7 +189,7 @@ impl Node for MathExpressionNode {
         let res_type = self.effective_output_type();
         let mut pins = vec![PinDefinition {
             id: PinId(0),
-            name: "Res".to_string(),
+            name: "Result".to_string(),
             pin_type: PinType::Data(res_type),
             direction: PinDirection::Output,
             required: false,

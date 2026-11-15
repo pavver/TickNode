@@ -342,7 +342,9 @@ pub(crate) fn variable_items(
             "global" if v.key.scope != crate::VariableScope::Sheet => {
                 map.insert(v.key.name.clone(), v.data_type.clone());
             }
-            "var" if v.key.scope == crate::VariableScope::Sheet || !map.contains_key(&v.key.name) => {
+            "var"
+                if v.key.scope == crate::VariableScope::Sheet || !map.contains_key(&v.key.name) =>
+            {
                 map.insert(v.key.name.clone(), v.data_type.clone());
             }
             _ => {}

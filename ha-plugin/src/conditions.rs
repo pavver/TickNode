@@ -52,7 +52,7 @@ impl Kind {
         };
         let (title, description, help, properties) = match self {
             Self::Time => (
-                "Time condition",
+                "Time Condition",
                 "Checks local time and weekdays in Home Assistant",
                 "After is inclusive; Before is exclusive. Equal After/Before times cover the full day. A window crossing midnight uses either side of midnight; weekdays always refer to the current local day. Choose weekdays with the day buttons; stored mon,tue,wed,thu,fri,sat,sun values remain supported. Empty fields impose no restriction. Uses get_config time_zone and a live HA-rendered UTC offset, never the WASI host timezone. HA refreshes the offset every minute: a timezone/DST change can lag by up to one minute plus event delivery. Until timezone data arrives the result is No.",
                 vec![
@@ -77,7 +77,7 @@ impl Kind {
                 ],
             ),
             Self::Sun => (
-                "Sun condition",
+                "Sun Condition",
                 "Checks sunrise and sunset boundaries with offsets",
                 "Uses cached sun.sun next_rising/next_setting. Each next event's HA-local wall time is projected onto today's local date, then the signed offset is added. Before and After are inclusive, independent tests combined with AND, as in HA (After sunset plus Before sunrise does not form an overnight window). Projection is an approximation after an event has passed: tomorrow's solar time may differ by a few minutes. Polar events more than two days away fail to No. Offsets accept -30m or 00:30:00; -30m means thirty minutes earlier. An offset appears only when its boundary is enabled. Uses the same HA UTC offset and minute refresh limitation as Time.",
                 vec![
@@ -90,7 +90,7 @@ impl Kind {
                 ],
             ),
             Self::Zone => (
-                "Zone condition",
+                "Zone Condition",
                 "Checks whether a person or tracker is in a zone",
                 "Compares the cached person/device_tracker state with the zone's friendly_name; zone.home matches home. Pick a person or type a device_tracker entity id. This checks HA's reported zone name, without a separate GPS/radius calculation; overlapping zones follow the entity's reported state.",
                 vec![
@@ -101,7 +101,7 @@ impl Kind {
                 ],
             ),
             Self::Template => (
-                "Template condition",
+                "Template Condition",
                 "Evaluates a Jinja condition asynchronously in Home Assistant",
                 "On In starts a render_template subscription in Home Assistant and uses its first result, then unsubscribes. Result and Yes/No arrive a few ticks later. Only boolean true or text true (case-insensitive) is true, matching HA template conditions; other values are false. A render error, disconnected connection or 30-second timeout yields No and an English warning. Each In has its own request (up to 64 in flight per plugin); changing properties or deleting the node cancels its pending requests.",
                 vec![

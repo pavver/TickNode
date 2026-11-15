@@ -98,13 +98,13 @@ fn test_input_adaptation_and_output_inference() {
 
     // Inferred output type follows quantity
     let def = node.definition();
-    let res_pin = def.pins.iter().find(|p| p.name == "Res").unwrap();
+    let res_pin = def.pins.iter().find(|p| p.name == "Result").unwrap();
     assert_eq!(res_pin.pin_type, PinType::Data(power.clone()));
 
     // When expression is comparison, output type is Bool
     node.set_property("expression", "p > 100".into());
     let def = node.definition();
-    let res_pin = def.pins.iter().find(|p| p.name == "Res").unwrap();
+    let res_pin = def.pins.iter().find(|p| p.name == "Result").unwrap();
     assert_eq!(res_pin.pin_type, PinType::Data(DataType::Bool));
 }
 
@@ -117,7 +117,7 @@ fn test_explicit_value_type_override() {
     node.set_property("value_type", "quantity.power".into());
 
     let def = node.definition();
-    let res_pin = def.pins.iter().find(|p| p.name == "Res").unwrap();
+    let res_pin = def.pins.iter().find(|p| p.name == "Result").unwrap();
     assert_eq!(res_pin.pin_type, PinType::Data(power));
 }
 

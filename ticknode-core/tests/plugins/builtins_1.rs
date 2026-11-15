@@ -8,7 +8,7 @@ fn manifest_and_definitions_are_registered() {
     assert_eq!(manifest.name, "math_plugin");
     let pow = engine.registry.get_definition("math/pow").unwrap();
     let names: Vec<_> = pow.pins.iter().map(|p| p.name.as_str()).collect();
-    assert_eq!(names, ["In", "Base", "Exp", "Out", "Res"]);
+    assert_eq!(names, ["In", "Base", "Exp", "Out", "Result"]);
 
     // Reloading cannot hijack already registered types.
     assert!(engine.load_plugin(&bytes, None, |_| vec![]).is_err());

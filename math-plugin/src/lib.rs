@@ -47,21 +47,21 @@ impl Op {
                 "math/sin",
                 "Sin",
                 "Sine of an angle (in radians)",
-                &["Val"],
+                &["Value"],
                 0,
             ),
             Op::Cos => (
                 "math/cos",
                 "Cos",
                 "Cosine of an angle (in radians)",
-                &["Val"],
+                &["Value"],
                 10,
             ),
             Op::Abs => (
                 "math/abs",
                 "Abs",
                 "Absolute value of a number",
-                &["Val"],
+                &["Value"],
                 20,
             ),
             Op::Pow => (
@@ -71,8 +71,14 @@ impl Op {
                 &["Base", "Exp"],
                 30,
             ),
-            Op::Sqrt => ("math/sqrt", "Sqrt", "Square root of a number", &["Val"], 40),
-            Op::Round => ("math/round", "Round", "Rounds a number", &["Val"], 50),
+            Op::Sqrt => (
+                "math/sqrt",
+                "Sqrt",
+                "Square root of a number",
+                &["Value"],
+                40,
+            ),
+            Op::Round => ("math/round", "Round", "Rounds a number", &["Value"], 50),
             Op::Min => ("math/min", "Min", "Smaller of two numbers", &["A", "B"], 60),
             Op::Max => ("math/max", "Max", "Larger of two numbers", &["A", "B"], 70),
         }
@@ -106,7 +112,7 @@ impl PluginNode for MathNode {
         pins.push(exec_out(base + 1, "Out"));
         pins.push(data_out(
             base + 2 + args.len() as u32,
-            "Res",
+            "Result",
             DataType::Number,
         ));
         NodeDefinition {
@@ -118,18 +124,18 @@ impl PluginNode for MathNode {
             category: "Math".into(),
             description: description.into(),
             help: match self.0 {
-                Op::Sin => "Res = sin(Val), the angle is in radians.",
-                Op::Cos => "Res = cos(Val), the angle is in radians.",
-                Op::Abs => "Res is the absolute value of Val (the number without its sign).",
-                Op::Pow => "Res = Base raised to the power Exp.",
+                Op::Sin => "Result = sin(Value), the angle is in radians.",
+                Op::Cos => "Result = cos(Value), the angle is in radians.",
+                Op::Abs => "Result is the absolute value of Value (the number without its sign).",
+                Op::Pow => "Result = Base raised to the power Exp.",
                 Op::Sqrt => {
-                    "Res is the square root of Val. For a negative number the result is NaN."
+                    "Result is the square root of Value. For a negative number the result is NaN."
                 }
                 Op::Round => {
-                    "Res is Val rounded to the nearest integer (.5 rounds away from zero)."
+                    "Result is Value rounded to the nearest integer (.5 rounds away from zero)."
                 }
-                Op::Min => "Res is the smaller of A and B.",
-                Op::Max => "Res is the larger of A and B.",
+                Op::Min => "Result is the smaller of A and B.",
+                Op::Max => "Result is the larger of A and B.",
             }
             .to_string()
                 + "\n\nAn unconnected input is treated as zero.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes.",

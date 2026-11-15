@@ -68,62 +68,62 @@ impl Platform {
     fn texts(self) -> (&'static str, &'static str, &'static str) {
         match self {
             Self::Time => (
-                "Time trigger",
+                "Time Trigger",
                 "Fires at a time or an entity-provided timestamp",
                 "At accepts HH:MM[:SS], an input_datetime entity or a timestamp sensor entity. Home Assistant schedules the trigger in its own time zone. A fixed time fires daily.",
             ),
             Self::TimePattern => (
-                "Time pattern trigger",
+                "Time Pattern Trigger",
                 "Fires when the clock matches a repeating pattern",
                 "Set Hours (0–23), Minutes and Seconds (0–59). Use /5 for multiples of five or * for any value. Leave unused fields empty; at least one field must be set. Scheduling and defaults of omitted fields are handled by Home Assistant.",
             ),
             Self::Sun => (
-                "Sun trigger",
+                "Sun Trigger",
                 "Fires at sunrise or sunset with an optional offset",
                 "Choose Sunrise or Sunset. Offset accepts durations such as 30m or 00:30:00; a negative offset such as -00:30:00 fires before the event. Home Assistant uses its configured location.",
             ),
             Self::Zone => (
-                "Zone trigger",
+                "Zone Trigger",
                 "Fires when a person or device enters or leaves a zone",
                 "Choose a person or device tracker, a zone, and Enter or Leave. Home Assistant detects the zone crossing. Entity, From and To describe the tracked entity; an absent state clears the corresponding output.",
             ),
             Self::Event => (
-                "Event trigger",
+                "Event Trigger",
                 "Fires when a Home Assistant bus event matches",
                 "Event type is the bus event name. Optional Event data is a JSON object whose fields filter the event. Event data must be a JSON object; invalid settings show a node error and prevent subscribing. Event data and Event type outputs describe the received event.",
             ),
             Self::HomeAssistant => (
-                "Home Assistant start/stop trigger",
+                "Home Assistant Start/Stop Trigger",
                 "Fires when Home Assistant starts or shuts down",
                 "Choose Start or Shutdown. The WebSocket must be connected when Home Assistant fires the event; startup events before the connection exists are not replayed. A shutdown pulse may arrive shortly before the connection closes.",
             ),
             Self::Mqtt => (
-                "MQTT trigger",
+                "MQTT Trigger",
                 "Fires when an MQTT message matches a topic",
                 "Topic accepts MQTT wildcards. Optional Payload filters by exact payload text. Choose QoS 0, 1 or 2. Home Assistant needs the MQTT integration. Topic and Payload outputs contain the received message.",
             ),
             Self::Webhook => (
-                "Webhook trigger",
+                "Webhook Trigger",
                 "Fires when a Home Assistant webhook receives a request",
                 "Set a unique Webhook ID. Send POST or PUT requests to Home Assistant's /api/webhook/<id> endpoint. Local only defaults to Yes. Data contains the JSON body or form data; Query contains URL query parameters. A non-object JSON body is wrapped in a value field. Treat the webhook id as a credential.",
             ),
             Self::Calendar => (
-                "Calendar trigger",
+                "Calendar Trigger",
                 "Fires when a calendar event starts or ends",
                 "Choose a calendar entity and Start or End. Optional Offset accepts signed durations; -15m fires fifteen minutes before the event. Event contains the calendar_event trigger variable, including the event summary and times.",
             ),
             Self::Tag => (
-                "Tag trigger",
+                "Tag Trigger",
                 "Fires when a Home Assistant tag is scanned",
                 "Set the Tag ID from Home Assistant. Tag id and Device id outputs identify the scanned tag and scanning device. No device filter is applied.",
             ),
             Self::Conversation => (
-                "Sentence trigger",
+                "Sentence Trigger",
                 "Fires when Assist matches a sentence",
                 "Enter one or more sentence patterns separated by semicolons or newlines. Home Assistant's sentence syntax supports optional words and slots. Sentence contains the spoken text and Slots the matched values. Requires a conversation integration.",
             ),
             Self::Template => (
-                "Template trigger",
+                "Template Trigger",
                 "Fires when a Home Assistant template becomes true",
                 "Value template is a Home Assistant Jinja template. It fires when the result changes from false to true. Optional For requires it to remain true for a duration. Template evaluation and entity tracking run in Home Assistant.",
             ),

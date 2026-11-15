@@ -47,10 +47,10 @@ impl Node for PureMathNode {
             category: "Math".to_string(),
             description: "Arithmetic operation on two numbers".to_string(),
             help: match self.op {
-                MathOp::Add => "Res = A + B.",
-                MathOp::Sub => "Res = A − B.",
-                MathOp::Mul => "Res = A × B.",
-                MathOp::Div => "Res = A ÷ B. Division by 0 yields infinity.",
+                MathOp::Add => "Result = A + B.",
+                MathOp::Sub => "Result = A − B.",
+                MathOp::Mul => "Result = A × B.",
+                MathOp::Div => "Result = A ÷ B. Division by 0 yields infinity.",
             }
             .to_string()
                 + "\n\nConnecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.\n\nAn unconnected input uses the value set next to the pin on the node, or defaults to 0. An integer stays an integer if the result is whole.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.",
@@ -75,7 +75,7 @@ impl Node for PureMathNode {
                 },
                 PinDefinition {
                     id: PinId(2),
-                    name: "Res".to_string(),
+                    name: "Result".to_string(),
                     pin_type: PinType::Data(self.value_type.clone()),
                     direction: PinDirection::Output,
                     required: false,

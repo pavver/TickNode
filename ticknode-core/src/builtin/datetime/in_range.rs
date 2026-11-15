@@ -23,7 +23,7 @@ impl Node for TimeInRangeNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             type_name: "time/in_range".into(),
-            title: "Time of day in range".into(),
+            title: "Time of Day in Range".into(),
             category: "Time".into(),
             description: "Checks whether a time of day falls between From and To".into(),
             help: "Checks whether the local time of day falls within the range from From to To: From ≤ t < To.\n\nWhen From > To, the range crosses midnight (t ≥ From or t < To), for example 22:00 to 06:00 matches night hours. When From == To, the range is empty and always yields false. If Value is unconnected, the current time from the engine clock is used.\n\nPure node: evaluated whenever its output is pulled by another node.".into(),

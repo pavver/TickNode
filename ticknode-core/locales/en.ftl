@@ -4,16 +4,16 @@
 node-const-title = Constant
 node-const-description = Returns a constant value
 node-const-help =
-    Emits the value set directly on the node ("Value" row) or in the right panel on output Val. The value type (number, string, boolean, etc.) is chosen on the node, and the pin type follows it.
+    Emits the value set directly on the node ("Value" row) or in the right panel on output Value. The value type (number, string, boolean, etc.) is chosen on the node, and the pin type follows it.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
-node-const-pin-Val = Val
+node-const-pin-Value = Value
 
 # math/add
 node-math-add-title = Math Add
 node-math-add-description = Arithmetic operation on two numbers
 node-math-add-help =
-    Res = A + B.
+    Result = A + B.
 
     Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
@@ -22,13 +22,13 @@ node-math-add-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-math-add-pin-A = A
 node-math-add-pin-B = B
-node-math-add-pin-Res = Res
+node-math-add-pin-Result = Result
 
 # math/sub
 node-math-sub-title = Math Subtract
 node-math-sub-description = Arithmetic operation on two numbers
 node-math-sub-help =
-    Res = A − B.
+    Result = A − B.
 
     Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
@@ -37,13 +37,13 @@ node-math-sub-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-math-sub-pin-A = A
 node-math-sub-pin-B = B
-node-math-sub-pin-Res = Res
+node-math-sub-pin-Result = Result
 
 # math/mul
 node-math-mul-title = Math Multiply
 node-math-mul-description = Arithmetic operation on two numbers
 node-math-mul-help =
-    Res = A × B.
+    Result = A × B.
 
     Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
@@ -52,13 +52,13 @@ node-math-mul-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-math-mul-pin-A = A
 node-math-mul-pin-B = B
-node-math-mul-pin-Res = Res
+node-math-mul-pin-Result = Result
 
 # math/div
 node-math-div-title = Math Divide
 node-math-div-description = Arithmetic operation on two numbers
 node-math-div-help =
-    Res = A ÷ B. Division by 0 yields infinity.
+    Result = A ÷ B. Division by 0 yields infinity.
 
     Connecting a physical quantity keeps its type: W + W gives W, and for Multiply/Divide A × number keeps A's quantity (B stays a plain number). Values are canonical numbers, so mixed display units add correctly.
 
@@ -67,7 +67,7 @@ node-math-div-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-math-div-pin-A = A
 node-math-div-pin-B = B
-node-math-div-pin-Res = Res
+node-math-div-pin-Result = Result
 
 # math/expression
 node-math-expression-title = Formula
@@ -91,7 +91,7 @@ node-math-expression-help =
     Inputs and outputs support physical quantities (quantity.*). Operations between the same quantity keep that quantity. Adding or subtracting a plain number treats it as canonical units. Multiplying or dividing a quantity by a number keeps that quantity. Dividing two identical quantities produces a dimensionless Number. Output type defaults to 'auto' (inferred) or can be fixed to a specific quantity or Number.
 
     Pure node: evaluated whenever its output is needed.
-node-math-expression-pin-Res = Res
+node-math-expression-pin-Result = Result
 node-math-expression-prop-expression-title = Formula
 node-math-expression-prop-expression-description = Mathematical formula; variables become input pins.
 node-math-expression-prop-value_type-title = Output type
@@ -101,39 +101,39 @@ node-math-expression-prop-value_type-description = Output data type ('auto' infe
 node-logical-and-title = Logical And
 node-logical-and-description = Logical operation
 node-logical-and-help =
-    Res = true only if both A and B are true.
+    Result = true only if both A and B are true.
 
     An unconnected input uses the value set next to the pin on the node, or defaults to false.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-logical-and-pin-A = A
 node-logical-and-pin-B = B
-node-logical-and-pin-Res = Res
+node-logical-and-pin-Result = Result
 
 # logical/or
 node-logical-or-title = Logical Or
 node-logical-or-description = Logical operation
 node-logical-or-help =
-    Res = true if at least one of A or B is true.
+    Result = true if at least one of A or B is true.
 
     An unconnected input uses the value set next to the pin on the node, or defaults to false.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-logical-or-pin-A = A
 node-logical-or-pin-B = B
-node-logical-or-pin-Res = Res
+node-logical-or-pin-Result = Result
 
 # logical/not
 node-logical-not-title = Logical Not
 node-logical-not-description = Logical operation
 node-logical-not-help =
-    Res is the logical negation of A.
+    Result is the logical negation of A.
 
     An unconnected input uses the value set next to the pin on the node, or defaults to false.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-logical-not-pin-A = A
-node-logical-not-pin-Res = Res
+node-logical-not-pin-Result = Result
 
 # variable/get
 node-variable-get-title = Get Variable
@@ -257,11 +257,11 @@ node-clock-pin-Out = Out
 node-console-title = Console Log
 node-console-description = Prints a value to the console when triggered
 node-console-help =
-    On a signal at In, prints the value of Val to the editor console and server log. Without Val connected, prints "None".
+    On a signal at In, prints the value of Value to the editor console and server log. Without Value connected, prints "None".
 
     Has no output — this is a terminal node in a chain. To log a value in the middle of a chain, use Debug Log.
 node-console-pin-In = In
-node-console-pin-Val = Val
+node-console-pin-Value = Value
 
 # test/click_button
 node-test-click-button-title = Click Button
@@ -276,11 +276,11 @@ node-test-click-button-pin-Out = Out
 node-test-debug-title = Debug Log
 node-test-debug-description = Accepts any data and logs it with a text prefix
 node-test-debug-help =
-    On a signal at In, logs the "Prefix" together with the value of Val to the console and passes execution to Out.
+    On a signal at In, logs the "Prefix" together with the value of Value to the console and passes execution to Out.
 
     Can be inserted in the middle of a chain to inspect the value passing through it.
 node-test-debug-pin-In = In
-node-test-debug-pin-Val = Val
+node-test-debug-pin-Value = Value
 node-test-debug-pin-Out = Out
 
 # compare
@@ -310,8 +310,8 @@ node-for-loop-title = For Loop
 node-for-loop-description = Asynchronous loop from 0 to Count-1 with step 1
 node-for-loop-help =
     Step-by-step loop:
-    1. A signal at In starts the loop with Index = 0 and fires LoopBody.
-    2. When the loop body finishes, send a signal to Next — Index increments by 1 and LoopBody fires again.
+    1. A signal at In starts the loop with Index = 0 and fires Loop body.
+    2. When the loop body finishes, send a signal to Next — Index increments by 1 and Loop body fires again.
     3. After Count iterations or a signal at Break, Completed fires.
 
     If Count ≤ 0, Completed fires immediately. Each step takes at least one tick, so the loop never blocks the engine.
@@ -319,7 +319,7 @@ node-for-loop-pin-In = In
 node-for-loop-pin-Count = Count
 node-for-loop-pin-Break = Break
 node-for-loop-pin-Next = Next
-node-for-loop-pin-LoopBody = LoopBody
+node-for-loop-pin-loop-body = Loop body
 node-for-loop-pin-Index = Index
 node-for-loop-pin-Completed = Completed
 
@@ -407,14 +407,14 @@ node-object-create-pin-Obj = Obj
 node-object-set-field-title = Set Object Field
 node-object-set-field-description = Sets the value of an object field
 node-object-set-field-help =
-    Outputs OutObj — a copy of object Obj where field Name has value Val. If the field did not exist, it is added; otherwise it is replaced.
+    Outputs OutObj — a copy of object Obj where field Name has value Value. If the field did not exist, it is added; otherwise it is replaced.
 
-    The type of Val is selected on the node. Until all inputs are provided, no output is produced.
+    The type of Value is selected on the node. Until all inputs are provided, no output is produced.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-object-set-field-pin-Obj = Obj
 node-object-set-field-pin-Name = Name
-node-object-set-field-pin-Val = Val
+node-object-set-field-pin-Value = Value
 node-object-set-field-pin-OutObj = OutObj
 
 # object/get_field
@@ -422,15 +422,15 @@ node-object-get-field-title = Get Object Field
 node-object-get-field-description = Gets the value of an object field
 node-object-get-field-help =
     Looks up field Name in object Obj:
-    • Val — the field value;
+    • Value — the field value;
     • Found — whether the field exists.
 
-    The type of Val is selected on the node.
+    The type of Value is selected on the node.
 
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-object-get-field-pin-Obj = Obj
 node-object-get-field-pin-Name = Name
-node-object-get-field-pin-Val = Val
+node-object-get-field-pin-Value = Value
 node-object-get-field-pin-Found = Found
 
 # object/unpack
@@ -444,7 +444,7 @@ node-object-unpack-help =
     Pure node: has no exec pins and is evaluated whenever its output is needed by another node.
 node-object-unpack-pin-Obj = Obj
 
-node-object-break-title = Break object
+node-object-break-title = Break Object
 node-object-break-description = Breaks a typed object into individual fields
 node-object-break-help =
     Breaks a typed object into individual fields: each field is an output pin.
@@ -458,7 +458,7 @@ node-object-break-pin-Value = Value
 node-object-break-prop-type-title = Type
 node-object-break-prop-type-description = Object struct type to break into fields
 
-node-object-make-title = Make object
+node-object-make-title = Make Object
 node-object-make-description = Constructs a typed object from individual fields
 node-object-make-help =
     Constructs a typed object from individual fields.
@@ -573,7 +573,7 @@ unit-ppm = ppm
 unit-ppb = ppb
 
 
-node-text-to-text-title = To text
+node-text-to-text-title = To Text
 node-text-to-text-description = Converts any value to readable text
 node-text-to-text-help = Converts Value to text. Connect a wire to select its type. Quantities follow project display rules: 1970 W → 1.97 kW; a fixed unit overrides the rule. Numbers and quantities support significant digits or fixed decimal places. Project rounding with empty digits follows the project rule; a selected mode defaults to 3 significant digits or 2 decimal places. Hide units to output a bare number; durations then use seconds. Booleans use localized words unless custom texts are set. Date/time formats use chrono strftime, e.g. %H:%M or %d.%m.%Y; date-times use the server local time zone. Lists join elements with commas; objects show their fields. Server uses the engine formatting language.
 node-text-to-text-pin-Value = Value
@@ -1032,7 +1032,7 @@ node-logic-hysteresis-prop-mode-option-rising = Rising
 node-logic-hysteresis-prop-mode-option-falling = Falling
 
 # RS trigger
-node-logic-rs-trigger-title = RS trigger
+node-logic-rs-trigger-title = RS Trigger
 node-logic-rs-trigger-description = Bistable flip-flop with pulse and level inputs
 node-logic-rs-trigger-help =
     Bistable trigger (flip-flop) that holds a boolean state.
@@ -1066,7 +1066,7 @@ node-logic-rs-trigger-prop-initial-option-off = Off
 node-logic-rs-trigger-prop-initial-option-on = On
 
 # text/template
-node-text-template-title = Text from template
+node-text-template-title = Text from Template
 node-text-template-description = Builds text from a template, substituting input values
 node-text-template-help =
     Formats a MiniJinja template. Undeclared variables become optional Any inputs in order of first appearance; their pin IDs survive edits, and renaming a single variable in place keeps its pin. A text.name reference also creates the name input. The name text is reserved for the global presentation map and cannot be an input; do not assign to it in templates. Missing inputs and their text entries are undefined: { "{" }{ "{" } name | default('—') { "}" }{ "}" } supplies a fallback.
@@ -1120,7 +1120,7 @@ node-time-now-pin-Now = Now
 node-time-now-pin-time-of-day = Time of day
 
 # time/difference
-node-time-difference-title = Time difference
+node-time-difference-title = Time Difference
 node-time-difference-description = Duration between two date-times or times of day
 node-time-difference-help =
     Computes the difference between two moments: Result = A − B.
@@ -1133,7 +1133,7 @@ node-time-difference-pin-B = B
 node-time-difference-pin-Result = Result
 
 # time/shift
-node-time-shift-title = Shift time
+node-time-shift-title = Shift Time
 node-time-shift-description = Shifts a date-time or time of day by a duration
 node-time-shift-help =
     Shifts Value forward or backward by Duration: Result = Value + Duration (or − Duration).
@@ -1150,7 +1150,7 @@ node-time-shift-prop-operation-option-add = Add
 node-time-shift-prop-operation-option-subtract = Subtract
 
 # time/break
-node-time-break-title = Break date-time
+node-time-break-title = Break Date-Time
 node-time-break-description = Extracts date and time components in the local time zone
 node-time-break-help =
     Breaks a date-time into components in the server local time zone: Year, Month (1–12), Day (1–31), Weekday (1 = Monday … 7 = Sunday), Hour (0–23), Minute (0–59), Second (0–59), local Time of day, and Day of year (1–366).
@@ -1170,7 +1170,7 @@ node-time-break-pin-time-of-day = Time of day
 node-time-break-pin-day-of-year = Day of year
 
 # time/start_of
-node-time-start-of-title = Start of period
+node-time-start-of-title = Start of Period
 node-time-start-of-description = Calculates the start of a period for a date-time
 node-time-start-of-help =
     Calculates the start of the selected time period (minute, hour, day, week, month, or year) in the server local time zone, returning the result in UTC.
@@ -1190,7 +1190,7 @@ node-time-start-of-prop-unit-option-month = Month
 node-time-start-of-prop-unit-option-year = Year
 
 # time/in_range
-node-time-in-range-title = Time of day in range
+node-time-in-range-title = Time of Day in Range
 node-time-in-range-description = Checks whether a time of day falls between From and To
 node-time-in-range-help =
     Checks whether the local time of day falls within the range from From to To: From ≤ t < To.

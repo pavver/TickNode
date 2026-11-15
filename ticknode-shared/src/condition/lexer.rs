@@ -122,8 +122,7 @@ impl Lexer {
                 return Ok(Token::Value(DataValue::String(format!("{text} {unit}"))));
             }
         }
-        let number =
-            crate::text::parse_number(&text).ok_or(ConditionError::NotNumber(text))?;
+        let number = crate::text::parse_number(&text).ok_or(ConditionError::NotNumber(text))?;
         Ok(Token::Value(DataValue::Number(number)))
     }
 

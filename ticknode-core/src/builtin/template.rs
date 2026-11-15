@@ -201,7 +201,7 @@ impl Node for TemplateNode {
         });
         NodeDefinition {
             type_name: "text/template".into(),
-            title: "Text from template".into(),
+            title: "Text from Template".into(),
             category: "String".into(),
             description: "Builds text from a template, substituting input values".into(),
             help: HELP.into(),

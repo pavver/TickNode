@@ -27,7 +27,7 @@ impl Node for TimeDifferenceNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             type_name: "time/difference".into(),
-            title: "Time difference".into(),
+            title: "Time Difference".into(),
             category: "Time".into(),
             description: "Duration between two date-times or times of day".into(),
             help: "Computes the difference between two moments: Result = A − B.\n\nWorks with both date-times and times of day. Connecting a wire to A or B adapts the inputs to that type. When comparing times of day, the calculation is a plain difference without wrapping around midnight, so 10:00 − 14:00 yields −4 hours.\n\nPure node: evaluated whenever its output is pulled by another node.".into(),

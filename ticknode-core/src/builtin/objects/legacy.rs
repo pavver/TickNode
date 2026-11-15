@@ -76,11 +76,11 @@ impl Node for ObjectSetFieldNode {
             title: "Set Object Field".to_string(),
             category: "Objects".to_string(),
             description: "Sets the value of an object field".to_string(),
-            help: "Outputs OutObj — a copy of object Obj where field Name has value Val. If the field did not exist, it is added; otherwise it is replaced.\n\nThe type of Val is selected on the node. Until all inputs are provided, no output is produced.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
+            help: "Outputs OutObj — a copy of object Obj where field Name has value Value. If the field did not exist, it is added; otherwise it is replaced.\n\nThe type of Value is selected on the node. Until all inputs are provided, no output is produced.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: {
                 let mut pins = field_inputs();
                 pins.extend([
-                PinDefinition { id: PinId(2), name: "Val".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Input, required: false },
+                PinDefinition { id: PinId(2), name: "Value".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(3), name: "OutObj".to_string(), pin_type: PinType::Data(DataType::Object), direction: PinDirection::Output, required: false },
                 ]);
                 pins
@@ -152,11 +152,11 @@ impl Node for ObjectGetFieldNode {
             title: "Get Object Field".to_string(),
             category: "Objects".to_string(),
             description: "Gets the value of an object field".to_string(),
-            help: "Looks up field Name in object Obj:\n• Val — the field value;\n• Found — whether the field exists.\n\nThe type of Val is selected on the node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
+            help: "Looks up field Name in object Obj:\n• Value — the field value;\n• Found — whether the field exists.\n\nThe type of Value is selected on the node.\n\nPure node: has no exec pins and is evaluated whenever its output is needed by another node.".to_string(),
             pins: {
                 let mut pins = field_inputs();
                 pins.extend([
-                PinDefinition { id: PinId(2), name: "Val".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Output, required: false },
+                PinDefinition { id: PinId(2), name: "Value".to_string(), pin_type: PinType::Data(self.field_type.clone()), direction: PinDirection::Output, required: false },
                 PinDefinition { id: PinId(3), name: "Found".to_string(), pin_type: PinType::Data(DataType::Bool), direction: PinDirection::Output, required: false },
                 ]);
                 pins

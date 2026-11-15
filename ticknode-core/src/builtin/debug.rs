@@ -18,10 +18,10 @@ impl Node for ConsoleNode {
             title: "Console Log".to_string(),
             category: "Debug".to_string(),
             description: "Prints a value to the console when triggered".to_string(),
-            help: "On a signal at In, prints the value of Val to the editor console and server log. Without Val connected, prints \"None\".\n\nHas no output — this is a terminal node in a chain. To log a value in the middle of a chain, use Debug Log.".to_string(),
+            help: "On a signal at In, prints the value of Value to the editor console and server log. Without Value connected, prints \"None\".\n\nHas no output — this is a terminal node in a chain. To log a value in the middle of a chain, use Debug Log.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "Val".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
+                PinDefinition { id: PinId(1), name: "Value".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
             ],
         }
     }
@@ -87,10 +87,10 @@ impl Node for DebugNode {
             title: "Debug Log".to_string(),
             category: "Debug".to_string(),
             description: "Accepts any data and logs it with a text prefix".to_string(),
-            help: "On a signal at In, logs the \"Prefix\" together with the value of Val to the console and passes execution to Out.\n\nCan be inserted in the middle of a chain to inspect the value passing through it.".to_string(),
+            help: "On a signal at In, logs the \"Prefix\" together with the value of Value to the console and passes execution to Out.\n\nCan be inserted in the middle of a chain to inspect the value passing through it.".to_string(),
             pins: vec![
                 PinDefinition { id: PinId(0), name: "In".to_string(), pin_type: PinType::Exec, direction: PinDirection::Input, required: false },
-                PinDefinition { id: PinId(1), name: "Val".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
+                PinDefinition { id: PinId(1), name: "Value".to_string(), pin_type: PinType::Data(DataType::Any), direction: PinDirection::Input, required: false },
                 PinDefinition { id: PinId(2), name: "Out".to_string(), pin_type: PinType::Exec, direction: PinDirection::Output, required: false },
             ],
         }

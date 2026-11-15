@@ -81,7 +81,7 @@ pub fn action_definition(
     let trigger = matches!(kind, "message" | "command" | "callback");
     let (title, description, help) = match kind {
         "message" => (
-            "New message",
+            "New Message",
             "Receive Telegram messages",
             "Emits one message per tick. Optional chat, topic and user filters combine. Choose a text mode and pattern (pressing a reply-keyboard button sends an ordinary message matching Equals mode); enable edited messages to receive edits. Connect Chat and Text to Send message to echo a message.",
         ),
@@ -91,27 +91,27 @@ pub fn action_definition(
             "Enter status or /status. Accepts /status@YourBot with the verified bot username. Arguments is the remaining text; Args splits whitespace and respects quotes. To reply to /status, connect Received to Send message, Chat to Chat and a Text from template output to Text; connect Message through Break Telegram message to Reply to.",
         ),
         "callback" => (
-            "Button pressed",
+            "Button Pressed",
             "Receive inline keyboard callbacks",
             "Filter callback data by equality or prefix. Every callback is answered automatically, even without a matching node. Toast text is optional. For a button Refresh=status, filter status and connect Pressed to your action. Message can be absent for inline callbacks.",
         ),
         "send" => (
-            "Send message",
+            "Send Message",
             "Send text and inline buttons to Telegram",
             "Connect In, Chat and Text. Leave the Chat property empty to use its input. For /status replies, wire Command Chat to Chat and Text from template to Text. Reply to keeps the original topic when known; Topic overrides it. Choose keyboard mode: inline, reply, remove or none. Inline buttons: Refresh=status | Open=https://example.org. Reply buttons: plain text, Text=contact or Text=location. Text is limited to 4096 characters. Done and Message are emitted on success; Failed and Error on failure.",
         ),
         "send_media" => (
-            "Send media",
+            "Send Media",
             "Send photo, audio, video or document to Telegram",
             "Connect In, Chat and Media. Select kind (photo, audio, video or document): the Media pin type follows the kind. Optional Caption allows up to 1024 characters. Send file_id when present, else url. Reply to keeps the original topic when known; Topic overrides it. Choose keyboard mode: inline, reply, remove or none. Done and Message are emitted on success; Failed and Error on failure.",
         ),
         "edit" => (
-            "Edit message",
+            "Edit Message",
             "Replace a Telegram message's text",
             "Connect In, Chat, Message id and Text. Use Message id from Send message or Break Telegram message. Select none, HTML or MarkdownV2. Optional inline buttons replace the keyboard; Keep buttons controls whether editing text keeps existing buttons when none are specified. Done means the edit succeeded; Failed and Error describe a failure. Text is limited to 4096 characters.",
         ),
         _ => (
-            "Delete message",
+            "Delete Message",
             "Delete a Telegram message",
             "Connect In, Chat and Message id, for example from Send message. Telegram permissions and deletion time limits apply. Done means deletion succeeded; Failed and Error describe a failure.",
         ),

@@ -186,7 +186,7 @@ impl Node for ObjectBreakNode {
             cost: 1,
             properties,
             type_name: "object/break".into(),
-            title: "Break object".into(),
+            title: "Break Object".into(),
             category: "Data".into(),
             description: "Breaks a typed object into individual fields".into(),
             help: "Breaks a typed object into individual fields: each field is an output pin.\n\nSelect Type on the node or connect a typed object to Value to adapt it.\n\nAn optional field that is absent from the value has no value (the pin is empty).\n\nPure node: evaluated whenever its result is needed by another node.".into(),

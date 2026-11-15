@@ -397,7 +397,10 @@ fn test_condition_variable_operands() {
     let types = crate::TypeRegistry::new();
     let case = MatchCase::parse("1: a > var.limit").unwrap();
     assert_eq!(case.inputs().collect::<Vec<_>>(), vec!["a"]);
-    assert_eq!(case.conditions[0].right.as_ref().unwrap().to_text(), "var.limit");
+    assert_eq!(
+        case.conditions[0].right.as_ref().unwrap().to_text(),
+        "var.limit"
+    );
     assert_eq!(case.to_text(), "1: a > var.limit");
 
     let val_of = |name: &str| match name {

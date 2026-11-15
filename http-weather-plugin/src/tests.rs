@@ -180,3 +180,44 @@ fn network_and_http_errors_log_the_reason_and_emit_failure() {
         assert_eq!(node.pending, None);
     }
 }
+
+#[test]
+fn ukrainian_translations_cover_every_node_and_pin() {
+    let uk = include_str!("../locales/uk.ftl");
+    let keys: std::collections::HashSet<&str> = uk
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.starts_with('#') || line.is_empty() {
+                None
+            } else {
+                line.split('=').next().map(|k| k.trim())
+            }
+        })
+        .collect();
+
+    for type_name in WeatherPlugin::NODE_TYPES {
+        let node = WeatherPlugin::create(type_name, NodeId::generate()).unwrap();
+        let def = node.definition();
+        let slug = def.type_name.replace('/', "-");
+        assert!(
+            keys.contains(&format!("node-{slug}-title").as_str()),
+            "missing title for {type_name}"
+        );
+        assert!(
+            keys.contains(&format!("node-{slug}-description").as_str()),
+            "missing description for {type_name}"
+        );
+        assert!(
+            keys.contains(&format!("node-{slug}-help").as_str()),
+            "missing help for {type_name}"
+        );
+        for pin in &def.pins {
+            assert!(
+                keys.contains(&format!("node-{slug}-pin-{}", pin.name).as_str()),
+                "missing pin translation for {type_name} pin {}",
+                pin.name
+            );
+        }
+    }
+}

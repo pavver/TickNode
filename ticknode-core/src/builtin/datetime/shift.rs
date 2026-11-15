@@ -55,7 +55,7 @@ impl Node for ShiftTimeNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             type_name: "time/shift".into(),
-            title: "Shift time".into(),
+            title: "Shift Time".into(),
             category: "Time".into(),
             description: "Shifts a date-time or time of day by a duration".into(),
             help: "Shifts Value forward or backward by Duration: Result = Value + Duration (or − Duration).\n\nWorks with both date-times and times of day. Connecting a wire to Value adapts the input and output to that type. Shifting a time of day wraps around midnight, so 23:00 + 2 hours yields 01:00. Date-time arithmetic checks for overflow and reports an error if the result exceeds valid date boundaries.\n\nPure node: evaluated whenever its output is pulled by another node.".into(),

@@ -64,7 +64,7 @@ impl Node for StartOfPeriodNode {
     fn definition(&self) -> NodeDefinition {
         NodeDefinition {
             type_name: "time/start_of".into(),
-            title: "Start of period".into(),
+            title: "Start of Period".into(),
             category: "Time".into(),
             description: "Calculates the start of a period for a date-time".into(),
             help: "Calculates the start of the selected time period (minute, hour, day, week, month, or year) in the server local time zone, returning the result in UTC.\n\nWeek starts on Monday at 00:00:00 local time. Day starts at 00:00:00, Month on the 1st day at 00:00:00, and Year on January 1st at 00:00:00. For ambiguous or nonexistent local times due to daylight saving time transitions, the earliest valid instant is chosen, stepping forward minute by minute if needed.\n\nPure node: evaluated whenever its output is pulled by another node.".into(),

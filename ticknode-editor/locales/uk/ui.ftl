@@ -401,7 +401,7 @@ error-plugin-api-unknown = Плагін зібрано з SDK, який ще н�
 # Unconfirmed pin contracts and detached wires
 node-frozen-title = Піни змінились
 node-frozen-confirm = Все правильно
-node-frozen-help = Вузол не працюватиме, доки ви не підтвердите зміни. Від’єднані дроти залишаться, доки ви не видалите або не під’єднаєте їх знову.
+node-frozen-help = Нода не працюватиме, доки ви не підтвердите зміни. Від’єднані дроти залишаться, доки ви не видалите або не під’єднаєте їх знову.
 pin-change-removed = Видалено { $direction } пін «{ $name }» ({ $kind })
 pin-change-changed = Пін «{ $name }»: { $old } → { $new }
 pin-change-required = Новий обов’язковий вхід «{ $name }» ({ $kind })
@@ -411,15 +411,15 @@ wire-detached-title = Дріт від'єднано: пін змінився
 wire-detached-remove = Видалити дріт
 
 node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
-overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір вузла; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
+overview-hint-resize = Тягніть нижній правий кут, щоб змінити розмір ноди; подвійний клік скидає розмір. Esc скасовує. У багаторядковому полі Ctrl/Cmd+Enter зберігає.
 overview-hint-frame = C — додати рамку навколо виділених нод; перетягніть заголовок рамки, щоб посунути її разом із нодами всередині; кут — змінити розмір; подвійний клік по заголовку — перейменувати
 overview-hint-nudge = Стрілки — посунути виділені ноди або рамку на клітинку сітки, з Alt — на дрібний крок, з Shift — на п'ять клітинок
-error-node-size = Розміри вузла мають бути скінченними числами
+error-node-size = Розміри ноди мають бути скінченними числами
 
 # Runtime node errors and trace values on the canvas
 error-node-required-missing = Обов'язковий вхід «{ $pin }» не задано
 error-node-required-conversion = Не вдалося перетворити значення для входу «{ $pin }»
-error-node-frozen = Вузол заморожено: його піни змінились — підтвердіть зміни
+error-node-frozen = Нода заморожена: її піни змінились — підтвердіть зміни
 error-plugin-node-crashed = Плагін аварійно завершився: { $reason }
 toolbar-show-values = Показувати значення
 pin-no-value = Значення ще немає

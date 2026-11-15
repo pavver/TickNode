@@ -4,17 +4,28 @@
 
 # TickNode
 
-**Visual, node-based automation that runs on a server and is edited in the browser.**
+**Visual, node-based automation for Home Assistant and beyond: wire nodes in the browser, run them on a server.**
+
+[![Add the repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fpavver%2FTickNode)
 
 [![CI](https://github.com/pavver/TickNode/actions/workflows/ci.yml/badge.svg)](https://github.com/pavver/TickNode/actions/workflows/ci.yml)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 ![Rust 2024](https://img.shields.io/badge/rust-2024-orange.svg)
+![Home Assistant add-on](https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5.svg?logo=homeassistant&logoColor=white)
+![Architectures](https://img.shields.io/badge/arch-amd64%20%7C%20aarch64-informational.svg)
 
 </div>
 
-TickNode lets you build automations by wiring nodes together instead of writing YAML or scripts. The engine runs continuously on a server, the editor is a web page, and new kinds of nodes come as sandboxed WebAssembly plugins.
+TickNode is an open-source **visual programming and automation engine**: you build automations by wiring nodes together instead of writing YAML or scripts.
+The engine runs continuously on a server, the editor is a web page, and new kinds of nodes come as sandboxed WebAssembly plugins.
 
-Its first target is **Home Assistant**: TickNode is being developed into an add-on that can replace HA's built-in automations. Home Assistant support is a plugin, so TickNode works just as well on its own.
+Its first target is **Home Assistant**: TickNode is a Home Assistant add-on that opens in the sidebar and is designed to replace HA's built-in YAML automations for smart home scenarios.
+Home Assistant support is a plugin, so TickNode also runs on its own as a standalone automation server, for example for a **Telegram bot**, HTTP integrations or scheduled jobs.
+
+**Why TickNode?**
+
+- **Compared with Home Assistant automations:** complex logic (loops, variables, timers, branching, data transformation) is drawn as a graph instead of nested YAML, and you see live values on every wire.
+- **Compared with Node-RED:** strict types checked while you connect wires, predictable tick-based execution, and plugins written in Rust that run sandboxed as WebAssembly components instead of JavaScript packages with full system access.
 
 > [!WARNING]
 > TickNode is in early development. The graph format, the plugin interface and the protocol still change without notice.
@@ -35,6 +46,9 @@ Its first target is **Home Assistant**: TickNode is being developed into an add-
 - **Centralized settings.** Configure language, theme, live wire values, tick duration and per-tick work budget in the dedicated Settings section on the home page.
 - **Git-friendly storage.** Graphs are stored as pretty-printed JSON in `data/sheets/<id>.json` with metadata in `data/sheets.json`.
 - **English and Ukrainian UI**, localized with Mozilla Fluent.
+- **Integrations as plugins.** Home Assistant (states, services, triggers, conditions, typed entity events) and a Telegram bot (messages, inline and reply keyboards, media upload and download) ship as bundled plugins.
+- **Text templates and formulas.** Jinja-style message templates with autocompletion and a formula editor; physical quantities with units (°C, kWh, W, …), date and time nodes.
+- **Media files.** Download camera snapshots or any file over HTTP into a local blob store and forward it, for example to Telegram.
 - **Rust end to end.** Engine, server, editor (Leptos → WebAssembly) and plugins share one set of types.
 
 ## Quick start
@@ -50,7 +64,7 @@ Build the plugins, the editor and run the server:
 
 ```bash
 # Plugins (WebAssembly components) go to data/plugins/
-cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p ha-plugin
+cargo build --release --target wasm32-wasip2 -p delay-plugin -p string-plugin -p math-plugin -p http-weather-plugin -p ha-plugin -p telegram-plugin
 mkdir -p data/plugins && cp target/wasm32-wasip2/release/*_plugin.wasm data/plugins/
 
 # Editor
@@ -81,11 +95,13 @@ The server is configured with environment variables:
 
 ## Home Assistant add-on
 
-TickNode can run as a Home Assistant add-on with the editor in the sidebar (ingress) and an automatic
-connection to Home Assistant. In Home Assistant open **Settings > Add-ons > Add-on store**, menu
-(three dots) **> Repositories**, add `https://github.com/pavver/TickNode`, then install **TickNode**.
-Prebuilt images are not published yet, so Home Assistant builds the add-on locally on install
-(several minutes, network required). See [`ha-addon/ticknode/DOCS.md`](ha-addon/ticknode/DOCS.md).
+TickNode runs as a Home Assistant add-on with the editor in the sidebar (ingress) and an automatic connection to Home Assistant: no token or URL setup.
+
+1. Click the **Add repository** button at the top of this page, or in Home Assistant open **Settings > Add-ons > Add-on store**, menu (three dots) **> Repositories**, and add `https://github.com/pavver/TickNode`.
+2. Install **TickNode** and start it; the editor appears in the sidebar.
+
+Prebuilt images are published for `amd64` and `aarch64` (for example a Raspberry Pi 4 or 5 with a 64-bit system), and Home Assistant offers updates as new versions are released.
+See [`ha-addon/ticknode/DOCS.md`](ha-addon/ticknode/DOCS.md).
 
 ## Writing a plugin
 
@@ -157,7 +173,7 @@ Write definitions (titles, descriptions, help, pin names) in English: they are t
 | [`ticknode-server`](ticknode-server) | runs the engine, stores the graph and serves the editor over WebSocket |
 | [`ticknode-editor`](ticknode-editor) | the web editor (Leptos) |
 | [`ticknode-plugin-sdk`](ticknode-plugin-sdk) | SDK for writing plugins |
-| `*-plugin` | plugins: examples, `ha-plugin` (Home Assistant integration), `test-plugin` (used by the host tests) |
+| `*-plugin` | plugins: examples, `ha-plugin` (Home Assistant integration), `telegram-plugin` (Telegram bot), `test-plugin` (used by the host tests) |
 | [`wit/plugin.wit`](wit/plugin.wit) | the contract between the host and plugins |
 
 How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -171,10 +187,12 @@ How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md).
 - [x] Translations shipped by plugins; translatable UI errors
 - [x] WebSocket capability for plugins
 - [x] Home Assistant plugin (on [ha-core-client](https://github.com/pavver/ha-core-client)): triggers, conditions, actions and typed entity change events
-- [x] Home Assistant add-on: install by adding this repository to the add-on store (built locally on install)
+- [x] Home Assistant add-on: install by adding this repository to the add-on store 
 - [x] Undo/redo, settings copy, wire suggestions and route points
 - [x] Plugin API fingerprint; frozen nodes and detached wires after pin changes
-- [ ] Prebuilt add-on images
+- [x] Telegram bot plugin: messages, keyboards, media
+- [x] Text templates, formulas, physical quantities, date and time nodes
+- [x] Prebuilt add-on images (amd64, aarch64)
 - [ ] Editor redesign
 
 ## Contributing

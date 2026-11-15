@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- GitHub social preview (Settings > General > Social preview). Render: rsvg-convert -w 1280 -h 640 ticknode-social.svg -o ticknode-social.png -->
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1B222B" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="640" fill="#151A21"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <g transform="translate(96 176) scale(4.5)">
+    <path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z" fill="#1E7F88"/>
+    <rect x="4" y="32" width="8" height="16" fill="#3B4859"/>
+    <path d="M0 28h16v24H0Z M4 32v16h8V32Z" fill="#FFB020"/>
+    <rect x="52" y="44" width="8" height="16" fill="#2C3746"/>
+    <path d="M48 40h16v24H48Z M52 44v16h8V44Z" fill="#E6EDF3"/>
+  </g>
+  <g font-family="Noto Sans, sans-serif" fill="#E6EDF3">
+    <text x="480" y="300" font-size="112" font-weight="700">TickNode</text>
+    <text x="484" y="372" font-size="38" fill="#9AA7B4">Visual node-based automation</text>
+    <text x="484" y="420" font-size="38" fill="#9AA7B4">for Home Assistant and beyond</text>
+    <text x="484" y="500" font-size="28" font-family="Cascadia Code, monospace" fill="#00B7C2">Rust · WebAssembly plugins · Telegram</text>
+  </g>
+</svg>

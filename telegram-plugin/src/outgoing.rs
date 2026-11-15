@@ -54,9 +54,27 @@ pub struct Keyboard {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaSource {
+    FileId(String),
+    Blob(String),
+    Url(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutgoingMedia {
     pub kind: String,
-    pub reference: String,
+    pub source: MediaSource,
+    pub file_name: Option<String>,
+    pub mime_type: Option<String>,
+}
+
+impl OutgoingMedia {
+    pub fn reference(&self) -> Option<&str> {
+        match &self.source {
+            MediaSource::FileId(s) | MediaSource::Url(s) => Some(s.as_str()),
+            MediaSource::Blob(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,23 +245,10 @@ pub fn parse_outgoing(value: &DataValue) -> Result<Outgoing, UiError> {
             })
         }
         DataValue::Object { type_name, .. } if is_media_type(type_name.as_deref()) => {
-            let kind = type_name
-                .as_deref()
-                .and_then(|n| n.strip_prefix("media."))
-                .unwrap_or("photo")
-                .to_string();
-            let file_id = field_string(value, "file_id").filter(|s| !s.trim().is_empty());
-            let url = field_string(value, "url").filter(|s| !s.trim().is_empty());
-            let reference = file_id.or(url).ok_or_else(|| {
-                validation::error("media", "A media value must have either url or file_id set")
-            })?;
             Ok(Outgoing {
                 text: None,
                 parse_mode: ParseMode::Plain,
-                media: Some(OutgoingMedia {
-                    kind,
-                    reference: reference.to_string(),
-                }),
+                media: Some(parse_media(value)?),
                 keyboard: None,
                 silent: false,
             })
@@ -264,28 +269,7 @@ pub fn parse_outgoing(value: &DataValue) -> Result<Outgoing, UiError> {
                 ));
             }
 
-            let media = if let Some(m) = media_val {
-                let kind = match m {
-                    DataValue::Object {
-                        type_name: Some(name),
-                        ..
-                    } if name.starts_with("media.") => {
-                        name.strip_prefix("media.").unwrap_or("photo").to_string()
-                    }
-                    _ => "photo".to_string(),
-                };
-                let file_id = field_string(m, "file_id").filter(|s| !s.trim().is_empty());
-                let url = field_string(m, "url").filter(|s| !s.trim().is_empty());
-                let reference = file_id.or(url).ok_or_else(|| {
-                    validation::error("media", "A media value must have either url or file_id set")
-                })?;
-                Some(OutgoingMedia {
-                    kind,
-                    reference: reference.to_string(),
-                })
-            } else {
-                None
-            };
+            let media = media_val.map(parse_media).transpose()?;
 
             if media.is_some() {
                 if let Some(t) = &text
@@ -334,6 +318,43 @@ pub fn parse_outgoing(value: &DataValue) -> Result<Outgoing, UiError> {
             "Expected message text, an outgoing message object, or a media object",
         )),
     }
+}
+
+fn parse_media(value: &DataValue) -> Result<OutgoingMedia, UiError> {
+    let DataValue::Object {
+        type_name: Some(name),
+        ..
+    } = value
+    else {
+        return Err(validation::error(
+            "media",
+            "A media value must have url, file_id, or blob set",
+        ));
+    };
+    if !is_media_type(Some(name)) {
+        return Err(validation::error(
+            "media",
+            "A media value must have url, file_id, or blob set",
+        ));
+    }
+    let text = |key| {
+        field_string(value, key)
+            .filter(|s| !s.trim().is_empty())
+            .map(String::from)
+    };
+    let source = text("file_id")
+        .map(MediaSource::FileId)
+        .or_else(|| text("blob").map(MediaSource::Blob))
+        .or_else(|| text("url").map(MediaSource::Url))
+        .ok_or_else(|| {
+            validation::error("media", "A media value must have url, file_id, or blob set")
+        })?;
+    Ok(OutgoingMedia {
+        kind: name.strip_prefix("media.").unwrap_or("photo").into(),
+        source,
+        file_name: text("file_name"),
+        mime_type: text("mime_type"),
+    })
 }
 
 fn is_media_type(name: Option<&str>) -> bool {

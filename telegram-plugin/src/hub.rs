@@ -19,6 +19,7 @@ pub trait Env {
     fn read(&mut self, name: &str) -> Result<Option<Vec<u8>>, String>;
     /// Atomic replacement (temporary file + rename).
     fn write(&mut self, name: &str, data: &[u8]) -> Result<(), String>;
+    fn blob_info(&self, id: &str) -> Option<BlobInfo>;
 }
 pub struct Watch {
     pub serial: u64,
@@ -198,17 +199,17 @@ impl Hub {
                 self.messages.remove(&old);
             }
         }
-        if let Some(reply) = &message.reply_to_message {
-            if let Some(topic) = reply.message_thread_id.or(message.message_thread_id) {
-                let key = (message.chat.id, reply.message_id);
-                if self.messages.insert(key, topic).is_none() {
-                    self.message_order.push_back(key);
-                }
-                if self.message_order.len() > 10_000
-                    && let Some(old) = self.message_order.pop_front()
-                {
-                    self.messages.remove(&old);
-                }
+        if let Some(reply) = &message.reply_to_message
+            && let Some(topic) = reply.message_thread_id.or(message.message_thread_id)
+        {
+            let key = (message.chat.id, reply.message_id);
+            if self.messages.insert(key, topic).is_none() {
+                self.message_order.push_back(key);
+            }
+            if self.message_order.len() > 10_000
+                && let Some(old) = self.message_order.pop_front()
+            {
+                self.messages.remove(&old);
             }
         }
     }

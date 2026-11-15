@@ -4,9 +4,74 @@ use ticknode_plugin_sdk::*;
 
 pub const BASE: &str = "https://api.telegram.org";
 
-pub fn request(base: &str, token: &str, method: &str, body: Value) -> HttpRequest {
-    let mut request = HttpRequest::post(format!("{base}/bot{token}/{method}"), body.to_string())
-        .header("Content-Type", "application/json");
+#[derive(Debug, Clone, PartialEq)]
+pub enum RequestBody {
+    Json(Value),
+    Multipart(Vec<MultipartPart>),
+}
+
+impl From<Value> for RequestBody {
+    fn from(val: Value) -> Self {
+        RequestBody::Json(val)
+    }
+}
+
+impl RequestBody {
+    #[cfg(test)]
+    pub fn as_multipart(&self) -> Option<&[MultipartPart]> {
+        match self {
+            RequestBody::Multipart(p) => Some(p),
+            RequestBody::Json(_) => None,
+        }
+    }
+
+    pub fn chat_id(&self) -> Option<i64> {
+        match self {
+            RequestBody::Json(v) => v["chat_id"].as_i64(),
+            RequestBody::Multipart(parts) => {
+                parts.iter().find(|p| p.name == "chat_id").and_then(|p| {
+                    if let PartData::Text(ref t) = p.data {
+                        t.parse::<i64>().ok()
+                    } else {
+                        None
+                    }
+                })
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        match self {
+            RequestBody::Json(Value::Object(map)) => map.get(key),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+impl std::ops::Index<&str> for RequestBody {
+    type Output = Value;
+    fn index(&self, key: &str) -> &Self::Output {
+        match self {
+            RequestBody::Json(v) => &v[key],
+            RequestBody::Multipart(_) => panic!("cannot index multipart RequestBody: {key}"),
+        }
+    }
+}
+
+pub fn request(base: &str, token: &str, method: &str, body: RequestBody) -> HttpRequest {
+    let mut request = match body {
+        RequestBody::Json(json) => {
+            HttpRequest::post(format!("{base}/bot{token}/{method}"), json.to_string())
+                .header("Content-Type", "application/json")
+        }
+        RequestBody::Multipart(parts) => {
+            let mut req = HttpRequest::post(format!("{base}/bot{token}/{method}"), Vec::new());
+            req.multipart = parts;
+            req
+        }
+    };
     request.timeout_ms = if method == "getUpdates" {
         60_000
     } else {

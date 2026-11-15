@@ -56,12 +56,12 @@ fn inline_keyboard_val() -> DataValue {
 
 #[test]
 fn send_with_string_and_disable_preview_option() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let mut props = schema::defaults("send");
     let values = inputs(&[(1, (-100i64).into()), (3, "Hello plain text".into())]);
 
     // Default preview enabled
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendMessage");
     assert_eq!(body["chat_id"], -100);
     assert_eq!(body["text"], "Hello plain text");
@@ -72,13 +72,13 @@ fn send_with_string_and_disable_preview_option() {
 
     // Disable preview property
     props.insert("disable_preview".into(), "yes".into());
-    let (_, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (_, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(body["link_preview_options"]["is_disabled"], true);
 }
 
 #[test]
 fn send_with_outgoing_parse_mode_silent_and_inferred_topic() {
-    let (mut hub, _) = authenticated();
+    let (mut hub, env) = authenticated();
     let mut original = message(-100, 50, "/status");
     original["message_thread_id"] = 7.into();
     hub.remember(&serde_json::from_value(original).unwrap());
@@ -93,7 +93,7 @@ fn send_with_outgoing_parse_mode_silent_and_inferred_topic() {
     );
 
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing), (4, 50i64.into())]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendMessage");
     assert_eq!(body["chat_id"], -100);
     assert_eq!(body["message_thread_id"], 7);
@@ -112,7 +112,7 @@ fn send_with_outgoing_parse_mode_silent_and_inferred_topic() {
 
 #[test]
 fn send_with_outgoing_reply_keyboard_and_remove_keyboard() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("send");
 
     // Reply keyboard with options
@@ -145,7 +145,7 @@ fn send_with_outgoing_reply_keyboard_and_remove_keyboard() {
 
     let outgoing = make_outgoing(Some("Options:"), None, Some(reply_kb), None, false);
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing)]);
-    let (_, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (_, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(
         body["reply_markup"],
         json!({
@@ -166,13 +166,13 @@ fn send_with_outgoing_reply_keyboard_and_remove_keyboard() {
         .build();
     let outgoing_remove = make_outgoing(Some("Done"), None, Some(remove_kb), None, false);
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing_remove)]);
-    let (_, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (_, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(body["reply_markup"], json!({"remove_keyboard": true}));
 }
 
 #[test]
 fn send_with_bare_media_each_kind_and_file_id_vs_url() {
-    let (mut hub, _) = authenticated();
+    let (mut hub, env) = authenticated();
     let mut original = message(-100, 50, "hello");
     original["message_thread_id"] = 7.into();
     hub.remember(&serde_json::from_value(original).unwrap());
@@ -185,7 +185,7 @@ fn send_with_bare_media_each_kind_and_file_id_vs_url() {
         Some("https://example.com/ignored.jpg"),
     );
     let values = inputs(&[(1, (-100i64).into()), (3, photo), (4, 50i64.into())]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendPhoto");
     assert_eq!(body["chat_id"], -100);
     assert_eq!(body["photo"], "tg_photo_123");
@@ -195,14 +195,14 @@ fn send_with_bare_media_each_kind_and_file_id_vs_url() {
     // 2. Audio: file_id
     let audio = media_val("media.audio", Some("tg_audio_456"), None);
     let values = inputs(&[(1, (-100i64).into()), (3, audio)]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendAudio");
     assert_eq!(body["audio"], "tg_audio_456");
 
     // 3. Video: file_id
     let video = media_val("media.video", Some("tg_vid_789"), None);
     let values = inputs(&[(1, (-100i64).into()), (3, video)]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendVideo");
     assert_eq!(body["video"], "tg_vid_789");
 
@@ -213,14 +213,14 @@ fn send_with_bare_media_each_kind_and_file_id_vs_url() {
         Some("https://example.com/report.pdf"),
     );
     let values = inputs(&[(1, (-100i64).into()), (3, doc)]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendDocument");
     assert_eq!(body["document"], "https://example.com/report.pdf");
 }
 
 #[test]
 fn send_with_outgoing_media_caption_and_keyboard() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("send");
 
     let photo = media_val("media.photo", Some("tg_photo_123"), None);
@@ -233,7 +233,7 @@ fn send_with_outgoing_media_caption_and_keyboard() {
     );
 
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing)]);
-    let (method, body) = body::build("send", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("send", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "sendPhoto");
     assert_eq!(body["chat_id"], -100);
     assert_eq!(body["photo"], "tg_photo_123");
@@ -248,14 +248,14 @@ fn send_with_outgoing_media_caption_and_keyboard() {
 
 #[test]
 fn send_text_and_caption_length_validation() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("send");
 
     // Plain text limits
     for (length, ok) in [(0, false), (4096, true), (4097, false)] {
         let values = inputs(&[(1, (-100i64).into()), (3, "a".repeat(length).into())]);
         assert_eq!(
-            body::build("send", &props, &values, &hub).is_ok(),
+            body::build("send", &props, &values, &hub, &env).is_ok(),
             ok,
             "plain len={length}"
         );
@@ -265,7 +265,9 @@ fn send_text_and_caption_length_validation() {
     let outgoing_oversized = make_outgoing(Some(&"a".repeat(4097)), None, None, None, false);
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing_oversized)]);
     assert_eq!(
-        body::build("send", &props, &values, &hub).unwrap_err().key,
+        body::build("send", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-length"
     );
 
@@ -279,26 +281,30 @@ fn send_text_and_caption_length_validation() {
         false,
     );
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing_caption_ok)]);
-    assert!(body::build("send", &props, &values, &hub).is_ok());
+    assert!(body::build("send", &props, &values, &hub, &env).is_ok());
 
     let outgoing_caption_over =
         make_outgoing(Some(&"c".repeat(1025)), Some(photo), None, None, false);
     let values = inputs(&[(1, (-100i64).into()), (3, outgoing_caption_over)]);
     assert_eq!(
-        body::build("send", &props, &values, &hub).unwrap_err().key,
+        body::build("send", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-caption"
     );
 }
 
 #[test]
 fn send_invalid_message_type_errors() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("send");
 
     // Number value
     let values = inputs(&[(1, (-100i64).into()), (3, 12345i64.into())]);
     assert_eq!(
-        body::build("send", &props, &values, &hub).unwrap_err().key,
+        body::build("send", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-outgoing-value"
     );
 
@@ -306,7 +312,9 @@ fn send_invalid_message_type_errors() {
     let invalid_media = media_val("media.photo", None, None);
     let values = inputs(&[(1, (-100i64).into()), (3, invalid_media)]);
     assert_eq!(
-        body::build("send", &props, &values, &hub).unwrap_err().key,
+        body::build("send", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-media"
     );
 
@@ -314,7 +322,9 @@ fn send_invalid_message_type_errors() {
     let empty_outgoing = make_outgoing(None, None, None, None, false);
     let values = inputs(&[(1, (-100i64).into()), (3, empty_outgoing)]);
     assert_eq!(
-        body::build("send", &props, &values, &hub).unwrap_err().key,
+        body::build("send", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-compose-empty"
     );
 }

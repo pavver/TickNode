@@ -76,6 +76,9 @@ pub fn action_definition(
     if matches!(kind, "button" | "keyboard" | "compose") {
         return outgoing::definition(kind, props);
     }
+    if kind == "download" {
+        return download_definition(props);
+    }
     let trigger = matches!(kind, "message" | "command" | "callback");
     let (title, description, help) = match kind {
         "message" => (
@@ -96,7 +99,7 @@ pub fn action_definition(
         "send" => (
             "Send Message",
             "Send text, media or composed message to Telegram",
-            "Connect In and Chat. Message takes plain text (type it right on the node or connect Text from template), a message from Compose message (text + media + keyboard), or media directly. Leave the Chat property empty to use its input. Reply to keeps the original topic when known; Topic overrides it. Done and Message are emitted on success; Failed and Error on failure.",
+            "Connect In and Chat. Message takes plain text (type it right on the node or connect Text from template), a message from Compose message (text + media + keyboard), or media directly. Leave the Chat property empty to use its input. Reply to keeps the original topic when known; Topic overrides it. Done and Message are emitted on success; Failed and Error on failure. Media sources prefer file_id, then a local blob, then URL. Connect Download media (media/fetch) to upload a camera photo from a URL. Blob uploads are limited to 10 MB for photos and 50 MB for audio, video and files; missing or evicted blobs fail before sending.",
         ),
         "edit" => (
             "Edit Message",
@@ -222,6 +225,43 @@ pub fn action_definition(
         ..Default::default()
     }
 }
+fn download_definition(props: &std::collections::BTreeMap<String, String>) -> NodeDefinition {
+    let kind = props.get("kind").map(String::as_str).unwrap_or("auto");
+    let media_pin_type = if kind == "auto" {
+        DataType::Any
+    } else {
+        DataType::Named(format!("media.{kind}"))
+    };
+    NodeDefinition {
+        type_name: "telegram/download".into(),
+        title: "Download media".into(),
+        category: "Telegram".into(),
+        description: "Download Telegram media into blob storage".into(),
+        help: "Downloads Telegram files into local blob storage (up to 20 MB). Connect New message Message to Break object (telegram.message), then its Photo, Audio, Video or File field to Media; connect New message Received to In. Connect Done and Media to the next action to send the downloaded file elsewhere. All input fields and the media type are kept; blob is added, and missing size and MIME type come from the response. A blob without file_id passes through unchanged. URL-only media requires the Network Download media node (media/fetch). Kind sets the expected output type; Auto leaves Any and a mismatched explicit kind fails. Done indicates success; Failed and Error describe a failure.".into(),
+        pins: vec![
+            exec_in(0, "In"),
+            data_in(1, "Media", DataType::Any).required(),
+            exec_out(10, "Done"),
+            exec_out(11, "Failed"),
+            data_out(12, "Error", DataType::String),
+            data_out(13, "Media", media_pin_type),
+        ],
+        properties: vec![PropertyDefinition::select(
+            "kind",
+            "Kind",
+            &[
+                ("auto", "Auto"),
+                ("photo", "Photo"),
+                ("audio", "Audio"),
+                ("video", "Video"),
+                ("document", "File"),
+            ],
+        ).described("Expected media type for the output pin")],
+        cost: 50,
+        ..Default::default()
+    }
+}
+
 fn yes_no(name: &str, title: &str) -> PropertyDefinition {
     PropertyDefinition::select(name, title, &[("no", "No"), ("yes", "Yes")])
 }

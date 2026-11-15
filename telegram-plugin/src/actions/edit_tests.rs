@@ -49,7 +49,7 @@ fn inline_keyboard_val() -> DataValue {
 
 #[test]
 fn edit_plain_text_and_defaults() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
     let values = inputs(&[
         (1, (-100i64).into()),
@@ -57,7 +57,7 @@ fn edit_plain_text_and_defaults() {
         (3, "Edited content".into()),
     ]);
 
-    let (method, body) = body::build("edit", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("edit", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "editMessageText");
     assert_eq!(body["chat_id"], -100);
     assert_eq!(body["message_id"], 42);
@@ -69,12 +69,12 @@ fn edit_plain_text_and_defaults() {
 
 #[test]
 fn edit_with_outgoing_text_and_parse_mode() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
     let outgoing = make_outgoing(Some("*Bold text*"), None, None, Some("markdown_v2"));
     let values = inputs(&[(1, (-100i64).into()), (2, 42i64.into()), (3, outgoing)]);
 
-    let (method, body) = body::build("edit", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("edit", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "editMessageText");
     assert_eq!(body["text"], "*Bold text*");
     assert_eq!(body["parse_mode"], "MarkdownV2");
@@ -82,7 +82,7 @@ fn edit_with_outgoing_text_and_parse_mode() {
 
 #[test]
 fn edit_with_inline_keyboard() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
     let outgoing = make_outgoing(
         Some("Updated text"),
@@ -92,7 +92,7 @@ fn edit_with_inline_keyboard() {
     );
     let values = inputs(&[(1, (-100i64).into()), (2, 42i64.into()), (3, outgoing)]);
 
-    let (method, body) = body::build("edit", &props, &values, &hub).unwrap();
+    let (method, body) = body::build("edit", &props, &values, &hub, &env).unwrap();
     assert_eq!(method, "editMessageText");
     assert_eq!(
         body["reply_markup"]["inline_keyboard"][0][0]["callback_data"],
@@ -102,7 +102,7 @@ fn edit_with_inline_keyboard() {
 
 #[test]
 fn edit_keep_buttons_yes_and_no() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let values = inputs(&[
         (1, (-100i64).into()),
         (2, 42i64.into()),
@@ -112,38 +112,38 @@ fn edit_keep_buttons_yes_and_no() {
     // keep_buttons = yes (default) -> no reply_markup
     let mut props_yes = schema::defaults("edit");
     props_yes.insert("keep_buttons".into(), "yes".into());
-    let (_, body_yes) = body::build("edit", &props_yes, &values, &hub).unwrap();
+    let (_, body_yes) = body::build("edit", &props_yes, &values, &hub, &env).unwrap();
     assert!(body_yes.get("reply_markup").is_none());
 
     // keep_buttons = no -> empty inline_keyboard to remove buttons
     let mut props_no = schema::defaults("edit");
     props_no.insert("keep_buttons".into(), "no".into());
-    let (_, body_no) = body::build("edit", &props_no, &values, &hub).unwrap();
+    let (_, body_no) = body::build("edit", &props_no, &values, &hub, &env).unwrap();
     assert_eq!(body_no["reply_markup"], json!({"inline_keyboard": []}));
 }
 
 #[test]
 fn edit_with_media_returns_translated_error() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
 
     // Bare media
     let photo = media_val("media.photo", Some("file_123"), None);
     let values_bare = inputs(&[(1, (-100i64).into()), (2, 42i64.into()), (3, photo.clone())]);
-    let err = body::build("edit", &props, &values_bare, &hub).unwrap_err();
+    let err = body::build("edit", &props, &values_bare, &hub, &env).unwrap_err();
     assert_eq!(err.key, "telegram-error-edit-media");
     assert_eq!(err.fallback, "Editing message media is not supported");
 
     // Outgoing with media
     let outgoing = make_outgoing(Some("caption"), Some(photo), None, None);
     let values_outgoing = inputs(&[(1, (-100i64).into()), (2, 42i64.into()), (3, outgoing)]);
-    let err = body::build("edit", &props, &values_outgoing, &hub).unwrap_err();
+    let err = body::build("edit", &props, &values_outgoing, &hub, &env).unwrap_err();
     assert_eq!(err.key, "telegram-error-edit-media");
 }
 
 #[test]
 fn edit_with_reply_or_remove_keyboard_returns_translated_error() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
 
     // Reply keyboard
@@ -171,7 +171,7 @@ fn edit_with_reply_or_remove_keyboard_returns_translated_error() {
         (2, 42i64.into()),
         (3, outgoing_reply),
     ]);
-    let err = body::build("edit", &props, &values, &hub).unwrap_err();
+    let err = body::build("edit", &props, &values, &hub, &env).unwrap_err();
     assert_eq!(err.key, "telegram-error-edit-keyboard");
     assert_eq!(
         err.fallback,
@@ -188,26 +188,30 @@ fn edit_with_reply_or_remove_keyboard_returns_translated_error() {
         (2, 42i64.into()),
         (3, outgoing_remove),
     ]);
-    let err = body::build("edit", &props, &values, &hub).unwrap_err();
+    let err = body::build("edit", &props, &values, &hub, &env).unwrap_err();
     assert_eq!(err.key, "telegram-error-edit-keyboard");
 }
 
 #[test]
 fn edit_validation_errors() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
 
     // Missing message id
     let values = inputs(&[(1, (-100i64).into()), (3, "text".into())]);
     assert_eq!(
-        body::build("edit", &props, &values, &hub).unwrap_err().key,
+        body::build("edit", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-message"
     );
 
     // Empty text
     let values = inputs(&[(1, (-100i64).into()), (2, 42i64.into()), (3, "".into())]);
     assert_eq!(
-        body::build("edit", &props, &values, &hub).unwrap_err().key,
+        body::build("edit", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-text"
     );
 
@@ -218,7 +222,9 @@ fn edit_validation_errors() {
         (3, "x".repeat(4097).into()),
     ]);
     assert_eq!(
-        body::build("edit", &props, &values, &hub).unwrap_err().key,
+        body::build("edit", &props, &values, &hub, &env)
+            .unwrap_err()
+            .key,
         "telegram-error-length"
     );
 }

@@ -67,7 +67,11 @@ impl TelegramFake {
                         .unwrap();
                     let mut body = vec![0; length];
                     socket.read_exact(&mut body).unwrap();
-                    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+                    let body: serde_json::Value = if method == "sendPhoto" {
+                        serde_json::json!({"headers": header, "multipart": String::from_utf8(body).unwrap()})
+                    } else {
+                        serde_json::from_slice(&body).unwrap()
+                    };
                     let _ = send.send((method.clone(), body));
                     let message = serde_json::json!({"message_id":8,"date":1700000000,"chat":{"id":42,"type":"private","first_name":"Ada"},"text":"/status","from":{"id":42,"first_name":"Ada","is_bot":false}});
                     let result = match method.as_str() {
@@ -84,6 +88,11 @@ impl TelegramFake {
                             result["text"] = "Status: OK".into();
                             result
                         }
+                        "sendPhoto" => serde_json::json!({
+                            "message_id":10,"date":1700000000,
+                            "chat":{"id":42,"type":"private","first_name":"Ada"},
+                            "photo":[{"file_id":"uploaded","width":1,"height":1}]
+                        }),
                         "getChat" => {
                             serde_json::json!({"id":42,"type":"private","first_name":"Ada"})
                         }
@@ -249,9 +258,12 @@ fn telegram_plugin_catalog_registers_translations_identifiers_and_property_input
             .find(|(code, _)| code == locale)
             .unwrap()
             .1;
-        for kind in ["message", "command", "callback", "send", "edit", "delete"] {
+        for kind in [
+            "message", "command", "callback", "send", "edit", "delete", "download",
+        ] {
             assert!(translations.contains(&format!("node-telegram-{kind}-help =")));
         }
+        assert!(translations.contains("telegram-error-download-response ="));
     }
     let send = NodeId::generate();
     engine
@@ -265,12 +277,9 @@ fn telegram_plugin_catalog_registers_translations_identifiers_and_property_input
             .iter()
             .any(|pin| pin.direction == PinDirection::Input && pin.id == PinId(1))
     );
-    assert!(
-        definition
-            .pins
-            .iter()
-            .any(|pin| pin.id == PinId(3) && pin.required && pin.pin_type == PinType::Data(DataType::Any))
-    );
+    assert!(definition.pins.iter().any(|pin| pin.id == PinId(3)
+        && pin.required
+        && pin.pin_type == PinType::Data(DataType::Any)));
     engine.set_node_property(send, "chat", "".into()).unwrap();
     assert!(
         engine
@@ -298,4 +307,130 @@ fn telegram_plugin_catalog_registers_translations_identifiers_and_property_input
         .create_node(receive, "telegram/message", &[])
         .unwrap();
     assert_eq!(engine.node_definition(receive).unwrap().cost, 2);
+    let download = NodeId::generate();
+    engine
+        .create_node(download, "telegram/download", &[])
+        .unwrap();
+    let original = engine.node_definition(download).unwrap();
+    assert_eq!(original.cost, 50);
+    assert_eq!(original.category, "Telegram");
+    assert!(
+        original
+            .pins
+            .iter()
+            .any(|p| p.id == PinId(1) && p.required && p.pin_type == PinType::Data(DataType::Any))
+    );
+    assert!(
+        original
+            .pins
+            .iter()
+            .any(|p| p.id == PinId(13) && p.pin_type == PinType::Data(DataType::Any))
+    );
+    for kind in ["photo", "audio", "video", "document"] {
+        engine
+            .set_node_property(download, "kind", kind.into())
+            .unwrap();
+        let definition = engine.node_definition(download).unwrap();
+        assert_eq!(
+            definition.pins.iter().map(|p| p.id).collect::<Vec<_>>(),
+            original.pins.iter().map(|p| p.id).collect::<Vec<_>>()
+        );
+        assert!(definition.pins.iter().any(|p| p.id == PinId(13)
+            && p.pin_type == PinType::Data(DataType::Named(format!("media.{kind}")))));
+    }
+    assert!(
+        engine
+            .set_node_property(download, "kind", "other".into())
+            .is_err()
+    );
+}
+
+#[test]
+fn telegram_plugin_send_blob_multipart_reaches_fake_server() {
+    let Some(bytes) = plugin_bytes("telegram_plugin_test") else {
+        return;
+    };
+    let fake = TelegramFake::start();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let mut engine = TickEngine::new();
+    engine.host_state.runtime = Some(runtime.handle().clone());
+    let blob = engine
+        .host_state
+        .blob_store
+        .put(
+            b"camera-frame-bytes".to_vec(),
+            Some("image/jpeg".into()),
+            Some("camera.jpg".into()),
+        )
+        .unwrap();
+    engine
+        .add_plugin(&bytes, Some(storage.path()), |_| {
+            vec![
+                Capability::Http {
+                    allowed_domains: vec!["127.0.0.1".into()],
+                },
+                Capability::Storage,
+            ]
+        })
+        .unwrap();
+    engine
+        .enable_plugin(
+            "telegram",
+            &[
+                ("token".into(), "fake-token".into()),
+                ("test_api_url".into(), fake.url.clone().into()),
+            ],
+        )
+        .unwrap();
+    let receive = NodeId::generate();
+    let send = NodeId::generate();
+    engine
+        .create_node(receive, "telegram/message", &[])
+        .unwrap();
+    engine
+        .create_node(send, "telegram/send", &[("chat".into(), "42".into())])
+        .unwrap();
+    engine
+        .connect_exec(receive, PinId(0), send, PinId(0))
+        .unwrap();
+    let media = DataValue::Object {
+        type_name: Some("media.photo".into()),
+        fields: [(
+            "blob".into(),
+            ObjectField {
+                name: "blob".into(),
+                description: String::new(),
+                value: blob.id.into(),
+            },
+        )]
+        .into_iter()
+        .collect(),
+    };
+    constant(&mut engine, media, send, 3);
+    run_until(&mut engine, |e| output(e, send, 14) == Some(10i64.into()));
+    assert!(
+        engine.node_errors().is_empty(),
+        "{:?}",
+        engine.node_errors()
+    );
+    let sent = fake
+        .received
+        .try_iter()
+        .find(|(method, _)| method == "sendPhoto")
+        .unwrap()
+        .1;
+    assert!(
+        sent["headers"]
+            .as_str()
+            .unwrap()
+            .to_ascii_lowercase()
+            .contains("content-type: multipart/form-data; boundary=")
+    );
+    let multipart = sent["multipart"].as_str().unwrap();
+    assert!(multipart.contains("name=\"chat_id\"\r\n\r\n42\r\n"));
+    assert!(multipart.contains("name=\"photo\"; filename=\"camera.jpg\""));
+    assert!(multipart.contains("Content-Type: image/jpeg\r\n"));
+    assert!(multipart.contains("\r\n\r\ncamera-frame-bytes\r\n"));
+    assert!(multipart.contains("name=\"disable_notification\"\r\n\r\nfalse\r\n"));
 }

@@ -25,7 +25,7 @@ pub(crate) fn media_val(type_name: &str, file_id: Option<&str>, url: Option<&str
 
 #[test]
 fn explicit_topic_overrides_reply_and_chat_property_replaces_input() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let mut props = schema::defaults("send");
     props.insert("chat".into(), "42".into());
     let (_, body) = body::build(
@@ -38,6 +38,7 @@ fn explicit_topic_overrides_reply_and_chat_property_replaces_input() {
             (4, 50i64.into()),
         ]),
         &hub,
+        &env,
     )
     .unwrap();
     assert_eq!(body["chat_id"], 42);
@@ -45,7 +46,7 @@ fn explicit_topic_overrides_reply_and_chat_property_replaces_input() {
 }
 #[test]
 fn edit_and_delete_bodies_use_chat_message_id_and_optional_parse_mode() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     let props = schema::defaults("edit");
     let outgoing = StructValue::new("telegram.outgoing")
         .field("text", "Updated")
@@ -53,20 +54,24 @@ fn edit_and_delete_bodies_use_chat_message_id_and_optional_parse_mode() {
         .build();
     let values = inputs(&[(1, (-100i64).into()), (2, 51i64.into()), (3, outgoing)]);
     assert_eq!(
-        body::build("edit", &props, &values, &hub).unwrap(),
+        body::build("edit", &props, &values, &hub, &env).unwrap(),
         (
             "editMessageText",
             json!({"chat_id":-100,"message_id":51,"text":"Updated","parse_mode":"MarkdownV2"})
+                .into()
         )
     );
     assert_eq!(
-        body::build("delete", &schema::defaults("delete"), &values, &hub).unwrap(),
-        ("deleteMessage", json!({"chat_id":-100,"message_id":51}))
+        body::build("delete", &schema::defaults("delete"), &values, &hub, &env).unwrap(),
+        (
+            "deleteMessage",
+            json!({"chat_id":-100,"message_id":51}).into()
+        )
     );
 }
 #[test]
 fn text_limit_counts_unicode_characters_without_truncation() {
-    let (hub, _) = authenticated();
+    let (hub, env) = authenticated();
     for kind in ["send", "edit"] {
         let props = schema::defaults(kind);
         for (length, ok) in [(0, false), (4096, true), (4097, false)] {
@@ -76,7 +81,7 @@ fn text_limit_counts_unicode_characters_without_truncation() {
                 (3, "я".repeat(length).into()),
             ]);
             assert_eq!(
-                body::build(kind, &props, &values, &hub).is_ok(),
+                body::build(kind, &props, &values, &hub, &env).is_ok(),
                 ok,
                 "kind={kind}, len={length}"
             );
@@ -361,7 +366,7 @@ fn settings_change_during_retry_never_sends_with_new_credentials() {
 
 #[test]
 fn reply_to_a_known_topic_root_uses_the_persisted_directory_without_a_message_cache() {
-    let (mut hub, _) = authenticated();
+    let (mut hub, env) = authenticated();
     let mut raw = message(-100, 7, "");
     raw["forum_topic_created"] = json!({"name":"Kitchen"});
     hub.directory
@@ -371,6 +376,7 @@ fn reply_to_a_known_topic_root_uses_the_persisted_directory_without_a_message_ca
         &schema::defaults("send"),
         &inputs(&[(1, (-100i64).into()), (3, "Reply".into()), (4, 7i64.into())]),
         &hub,
+        &env,
     )
     .unwrap();
     assert_eq!(body["message_thread_id"], 7);

@@ -1,4 +1,6 @@
 //! Node-owned HTTP actions. Telegram rate limits wait through a node-owned delay task.
+#[cfg(test)]
+mod blob_tests;
 mod body;
 #[cfg(test)]
 mod edit_tests;
@@ -6,6 +8,8 @@ mod edit_tests;
 mod send_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod upload_tests;
 use crate::{
     api,
     hub::{Env, Hub},
@@ -13,14 +17,14 @@ use crate::{
     runtime, schema,
     validation::{self, Properties},
 };
-use serde_json::Value;
+use api::RequestBody;
 use ticknode_plugin_sdk::*;
 
 struct Pending {
     task: TaskId,
     waiting: bool,
     method: &'static str,
-    body: Value,
+    body: RequestBody,
     generation: u64,
     retries: u8,
 }
@@ -86,11 +90,11 @@ impl ActionNode {
         if let Err(error) = self.check_trigger_ready(hub) {
             return self.failed(error);
         }
-        let (method, body) = match body::build(&self.kind, &self.props, inputs, hub) {
+        let (method, body) = match body::build(&self.kind, &self.props, inputs, hub, env) {
             Ok(request) => request,
             Err(error) => return self.failed(error),
         };
-        let Some(chat) = body["chat_id"].as_i64() else {
+        let Some(chat) = body.chat_id() else {
             return self.failed(validation::error("chat", "A Telegram chat ID is required"));
         };
         let task = match env.http(api::request(&hub.base, &hub.token, method, body.clone())) {

@@ -60,7 +60,7 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
                 ));
             }
         }
-        _ => validate_choice_property(name, text)?,
+        _ => validate_choice_property(kind, name, text)?,
     }
     if kind == "message" {
         validate_message_regex(name, text, props)?;
@@ -75,11 +75,14 @@ fn validate_id_property(text: &str) -> Result<(), UiError> {
     Ok(())
 }
 
-fn validate_choice_property(name: &str, text: &str) -> Result<(), UiError> {
+fn validate_choice_property(kind: &str, name: &str, text: &str) -> Result<(), UiError> {
     let valid = match name {
         "keep_buttons" | "resize" | "one_time" | "persistent" | "include_edited" | "silent"
         | "disable_preview" => ["yes", "no"].contains(&text),
         "action" => ["callback", "url", "text", "contact", "location"].contains(&text),
+        "kind" if kind == "download" => {
+            ["auto", "photo", "audio", "video", "document"].contains(&text)
+        }
         "kind" => ["inline", "reply", "remove"].contains(&text),
         "parse_mode" => {
             ["none", "HTML", "MarkdownV2", "plain", "html", "markdown_v2"].contains(&text)

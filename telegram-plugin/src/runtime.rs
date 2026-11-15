@@ -65,4 +65,7 @@ impl Env for HostEnv {
         };
         save().map_err(|_| format!("Could not persist Telegram {name}"))
     }
+    fn blob_info(&self, id: &str) -> Option<BlobInfo> {
+        host::blob_info(id)
+    }
 }

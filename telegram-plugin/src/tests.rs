@@ -17,6 +17,7 @@ pub(crate) struct Fake {
     pub sources: BTreeMap<String, Vec<PropertyOption>>,
     pub cancelled: Vec<TaskId>,
     pub delays: Vec<(TaskId, u64)>,
+    pub blobs: BTreeMap<String, BlobInfo>,
     pub fail_storage: bool,
     pub fail_http: bool,
     next: u64,
@@ -57,6 +58,9 @@ impl Env for Fake {
         self.files.insert(name.into(), bytes.into());
         self.writes.push(name.into());
         Ok(())
+    }
+    fn blob_info(&self, id: &str) -> Option<BlobInfo> {
+        self.blobs.get(id).cloned()
     }
 }
 pub(crate) fn response(status: u16, value: Value) -> Result<TaskOutput, String> {
@@ -235,6 +239,12 @@ fn translations_cover_every_definition_and_error() {
         "forbidden",
         "api",
         "caption",
+        "upload-size",
+        "blob-evicted",
+        "download-size",
+        "download-url",
+        "download-kind",
+        "download-response",
         "media",
         "button-url",
         "inline-action",

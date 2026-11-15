@@ -3,6 +3,7 @@ mod actions;
 mod api;
 mod compose;
 mod directory;
+mod download;
 mod hub;
 mod model;
 pub mod outgoing;
@@ -25,6 +26,7 @@ impl Plugin for Telegram {
         "telegram/button",
         "telegram/keyboard",
         "telegram/compose",
+        "telegram/download",
     ];
     const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[
         ("en", include_str!("../locales/en.ftl")),
@@ -50,6 +52,7 @@ impl Plugin for Telegram {
         Some(match kind {
             "message" | "command" | "callback" => Box::new(triggers::TriggerNode::new(kind, node)),
             "send" | "edit" | "delete" => Box::new(actions::ActionNode::new(kind)),
+            "download" => Box::new(download::DownloadNode::new()),
             "button" | "keyboard" | "compose" => compose::create(kind),
             _ => return None,
         })

@@ -75,10 +75,11 @@ impl PluginNode for ComposeNode {
                 _ => false,
             };
             let file_id = field_string(media_val, "file_id").filter(|s| !s.trim().is_empty());
+            let blob = field_string(media_val, "blob").filter(|s| !s.trim().is_empty());
             let url = field_string(media_val, "url").filter(|s| !s.trim().is_empty());
-            if !is_media || (file_id.is_none() && url.is_none()) {
+            if !is_media || (file_id.is_none() && blob.is_none() && url.is_none()) {
                 let err =
-                    validation::error("media", "A media value must have either url or file_id set");
+                    validation::error("media", "A media value must have url, file_id, or blob set");
                 self.error = Some(err.clone());
                 runtime::report_error(&err, true);
                 return vec![];

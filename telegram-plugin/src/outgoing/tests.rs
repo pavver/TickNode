@@ -31,7 +31,8 @@ fn parse_outgoing_bare_media() {
     assert_eq!(out.parse_mode, ParseMode::Plain);
     let media = out.media.expect("media present");
     assert_eq!(media.kind, "photo");
-    assert_eq!(media.reference, "file_123");
+    assert_eq!(media.source, MediaSource::FileId("file_123".into()));
+    assert_eq!(media.reference(), Some("file_123"));
     assert!(out.keyboard.is_none());
     assert!(!out.silent);
 
@@ -39,7 +40,11 @@ fn parse_outgoing_bare_media() {
     let out_doc = parse_outgoing(&doc).expect("valid media outgoing");
     let media_doc = out_doc.media.expect("media present");
     assert_eq!(media_doc.kind, "document");
-    assert_eq!(media_doc.reference, "https://example.com/file.pdf");
+    assert_eq!(
+        media_doc.source,
+        MediaSource::Url("https://example.com/file.pdf".into())
+    );
+    assert_eq!(media_doc.reference(), Some("https://example.com/file.pdf"));
 }
 
 #[test]
@@ -91,7 +96,8 @@ fn parse_outgoing_object_complete() {
     assert_eq!(out.parse_mode.api_str(), Some("HTML"));
     let media = out.media.expect("media present");
     assert_eq!(media.kind, "photo");
-    assert_eq!(media.reference, "photo_456");
+    assert_eq!(media.source, MediaSource::FileId("photo_456".into()));
+    assert_eq!(media.reference(), Some("photo_456"));
     assert_eq!(out.keyboard, Some(kb));
     assert!(out.silent);
 }

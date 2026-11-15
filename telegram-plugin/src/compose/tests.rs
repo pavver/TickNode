@@ -252,3 +252,20 @@ fn compose_absent_fields_text_caption_limits_and_media_validation() {
     let outputs_bad = compose.execute(Trigger::Pin(PinId(0)), &bad_media_inputs);
     assert!(outputs_bad.is_empty());
 }
+
+#[test]
+fn compose_accepts_blob_media_for_send() {
+    let mut node = ComposeNode::new();
+    let media = StructValue::new("media.photo")
+        .field("blob", "camera-blob")
+        .build();
+    let values = inputs_from(&[(1, "Camera".into()), (2, media.clone())]);
+    let outputs = node.execute(Trigger::Pin(PinId(0)), &values);
+    let Output::Data(_, outgoing) = &outputs[0] else {
+        panic!("Expected composed message");
+    };
+    assert_eq!(field(outgoing, "media"), Some(&media));
+    assert!(
+        matches!(crate::outgoing::parse_outgoing(outgoing).unwrap().media.unwrap().source, crate::outgoing::MediaSource::Blob(id) if id == "camera-blob")
+    );
+}

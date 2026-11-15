@@ -81,9 +81,7 @@ impl Filter {
                 vec![opt(1, message?.text.clone().map(DataValue::from))]
             }
             "command" => {
-                if update.message.is_none() {
-                    return None;
-                }
+                update.message.as_ref()?;
                 let arguments = command_args(message?, self.prop("command"), bot)?;
                 vec![
                     Output::Data(PinId(1), arguments.into()),

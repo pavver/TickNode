@@ -9,7 +9,7 @@ impl Hub {
             Request::Chat(_) => "getChat",
             Request::Answer => "answerCallbackQuery",
         };
-        match env.http(api::request(&self.base, &self.token, method, body)) {
+        match env.http(api::request(&self.base, &self.token, method, body.into())) {
             Ok(id) => {
                 self.pending.insert(id, request);
             }

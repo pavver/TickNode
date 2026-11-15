@@ -37,6 +37,7 @@ impl TickEngine {
         self.frozen.remove(&id);
         self.frozen_reported.remove(&id);
         self.required_reported.remove(&id);
+        self.pure_exec_reported.remove(&id);
         self.pure_cache.clear();
     }
 

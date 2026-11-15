@@ -12,7 +12,9 @@ mod settings;
 mod typed;
 mod websocket;
 
-use execution::{ClearProbe, Counter, Crash, Storage, Ticker};
+use execution::{
+    ClearProbe, Counter, Crash, PureDouble, PureExecPulse, PureInvalid, Storage, Ticker,
+};
 use settings::{CONFIG, Greeter, Picker, publish_options};
 use typed::{BadSource, MODE, POINT, PointSink, PointSource};
 use websocket::{WS, WsProbe, ws_emit};
@@ -34,6 +36,9 @@ impl Plugin for TestPlugin {
         "test/picker",
         "test/point_sink",
         "test/point_source",
+        "test/pure_double",
+        "test/pure_invalid",
+        "test/pure_exec_pulse",
         "test/storage",
         "test/ticker",
         "test/ws_probe",
@@ -210,6 +215,9 @@ impl Plugin for TestPlugin {
             "test/bad_source" => Box::new(BadSource),
             "test/point_source" => Box::new(PointSource { x: 0.0, y: 0.0 }),
             "test/point_sink" => Box::new(PointSink),
+            "test/pure_double" => Box::new(PureDouble::default()),
+            "test/pure_invalid" => Box::new(PureInvalid),
+            "test/pure_exec_pulse" => Box::new(PureExecPulse),
             "test/storage" => Box::new(Storage),
             "test/ticker" => Box::new(Ticker { polls: 0 }),
             "test/ws_probe" => Box::new(WsProbe::new(node)),

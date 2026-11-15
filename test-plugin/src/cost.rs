@@ -16,6 +16,7 @@ impl PluginNode for CostProbe {
             description: "Exercises property-dependent work costs".into(),
             help: "Cost is relative work per call; native logic costs one unit. The cost property sets an arbitrary work cost.".into(),
             pins: vec![exec_in(0, "In")], properties: Vec::new(), cost: 1,
+            ..Default::default()
         }.cost(self.cost)
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

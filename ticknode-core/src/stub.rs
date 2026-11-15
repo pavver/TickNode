@@ -165,6 +165,7 @@ impl TickEngine {
             self.input_variables.remove(id);
             self.split_pins.remove(id);
             self.required_reported.remove(id);
+            self.pure_exec_reported.remove(id);
             self.data_cache.remove(id);
             self.pure_cache.remove(id);
             // Old node (WasmNode) drops its plugin resource when replaced

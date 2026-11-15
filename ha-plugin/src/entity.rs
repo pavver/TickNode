@@ -123,6 +123,7 @@ impl PluginNode for Entity {
                 data_out(2, "Previous", self.value_type.data_type()), data_out(3, "Unit", DataType::String),
                 data_out(4, "Attributes", DataType::Object), data_out(5, "Entity state", DataType::Named(STATE_TYPE.into())),
             ],
+            ..Default::default()
         }
     }
 

@@ -86,6 +86,7 @@ impl PluginNode for ActionNode {
                     .described("Complete successfully without calling HA when every target already has the desired state"),
                 PropertyDefinition::hidden("supports_response"),
             ], pins,
+            ..Default::default()
         }
     }
 

@@ -130,6 +130,7 @@ impl PluginNode for StringNode {
             description: description.into(),
             help: self.0.help(),
             pins,
+            ..Default::default()
         }
     }
 

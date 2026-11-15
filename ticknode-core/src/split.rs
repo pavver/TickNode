@@ -105,6 +105,7 @@ impl TickEngine {
         self.pins_edited(node);
         self.pure_cache.clear();
         self.required_reported.remove(&node);
+        self.pure_exec_reported.remove(&node);
         let effective = self.node_definition(node).expect("node exists");
         if let Some(values) = self.input_values.get_mut(&node) {
             values.retain(|id, value| {

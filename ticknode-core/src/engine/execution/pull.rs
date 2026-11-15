@@ -243,6 +243,7 @@ impl TickEngine {
         stack.pop();
 
         let mut node_outputs = HashMap::new();
+        let mut had_exec_output = false;
         for out in outputs {
             match out {
                 NodeOutput::Data(p, v) => {
@@ -251,8 +252,28 @@ impl TickEngine {
                 NodeOutput::Clear(p) => {
                     node_outputs.remove(&p);
                 }
+                NodeOutput::Execution(pin) => {
+                    had_exec_output = true;
+                    if self.pure_exec_reported.insert(node_id) {
+                        tracing::warn!(
+                            node = ?node_id,
+                            pin = pin.0,
+                            "Pure node execution output is ignored"
+                        );
+                        self.host_state.log(
+                            node_id,
+                            format!(
+                                "[WARN] Pure node emitted execution output on pin {}: ignored",
+                                pin.0
+                            ),
+                        );
+                    }
+                }
                 _ => {}
             }
+        }
+        if !had_exec_output {
+            self.pure_exec_reported.remove(&node_id);
         }
         let target_val = node_outputs.get(&pin_id).cloned();
         self.pure_cache.insert(node_id, node_outputs);

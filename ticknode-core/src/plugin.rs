@@ -39,7 +39,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Loaded plugin: known to the engine, but its types are registered only while enabled.
 pub(crate) struct PluginSlot {
     manifest: PluginManifest,
-    definitions: Vec<(NodeDefinition, bool)>,
+    definitions: Vec<(NodeDefinition, bool, bool)>,
     types: Vec<TypeDefinition>,
     runtime: Arc<Mutex<Runtime>>,
     active: bool,

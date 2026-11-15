@@ -64,6 +64,8 @@ pub struct TickEngine {
     pub(crate) split_pins: HashMap<NodeId, std::collections::BTreeSet<u32>>,
     /// Nodes for which a "missing required input" error has already been logged (to avoid repeating every tick).
     pub(crate) required_reported: std::collections::HashSet<NodeId>,
+    /// Nodes for which an ignored execution pulse from a pure node has already been warned.
+    pub(crate) pure_exec_reported: std::collections::HashSet<NodeId>,
     pub execution_queue: VecDeque<(NodeId, PinId)>,
     // Shared state for async tasks and handles
     pub host_state: HostState,
@@ -116,6 +118,7 @@ impl TickEngine {
             input_variables: HashMap::new(),
             split_pins: HashMap::new(),
             required_reported: Default::default(),
+            pure_exec_reported: Default::default(),
             execution_queue: VecDeque::new(),
             host_state: HostState::default(),
             usage: crate::usage::UsageTracker::default(),

@@ -68,7 +68,7 @@ impl TickEngine {
 
         let mut manifest = from_wit_manifest(manifest);
         self.validate_plugin_name(&manifest)?;
-        let definitions: Vec<(NodeDefinition, bool)> = definitions
+        let definitions: Vec<(NodeDefinition, bool, bool)> = definitions
             .into_iter()
             .map(|d| from_wit_definition(d, &manifest.name))
             .collect();
@@ -83,7 +83,7 @@ impl TickEngine {
 
         let node_types: Vec<String> = definitions
             .iter()
-            .map(|(d, _)| d.type_name.clone())
+            .map(|(d, _, _)| d.type_name.clone())
             .collect();
         manifest.resources = validate_resources(&manifest.name, manifest.resources, &node_types);
         let type_names: Vec<String> = types.iter().map(|t| t.name.clone()).collect();
@@ -129,9 +129,9 @@ impl TickEngine {
 
     fn check_plugin_definitions(
         &self,
-        definitions: &[(NodeDefinition, bool)],
+        definitions: &[(NodeDefinition, bool, bool)],
     ) -> Result<(), UiMessage> {
-        for (def, _) in definitions {
+        for (def, _, _) in definitions {
             if self.registry.get_definition(&def.type_name).is_some() {
                 return Err(UiMessage::plain(format!(
                     "Node type {} is already registered",

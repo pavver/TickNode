@@ -20,6 +20,7 @@ impl PluginNode for Clock {
                 data_out(2, "Duration", DataType::Number),
                 data_out(0x8000_0000, "Reserved", DataType::Number),
             ],
+            ..Default::default()
         }
     }
 

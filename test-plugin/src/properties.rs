@@ -37,6 +37,7 @@ impl PluginNode for Properties {
                 PropertyDefinition::hidden("secret"),
                 PropertyDefinition::text("custom", "Custom"),
             ],
+            ..Default::default()
         }
     }
     fn properties(&self) -> Vec<(String, DataValue)> {

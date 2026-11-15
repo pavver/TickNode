@@ -302,6 +302,7 @@ impl Platform {
             ),
             pins,
             properties: self.properties(),
+            ..Default::default()
         }
     }
 }

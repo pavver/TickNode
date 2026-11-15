@@ -47,7 +47,7 @@ fn consumer_slot(
     };
     PluginSlot {
         manifest: PluginManifest::new("consumer", "0.1.0", "test"),
-        definitions: vec![(definition, false)],
+        definitions: vec![(definition, false, false)],
         types,
         runtime,
         active: true,

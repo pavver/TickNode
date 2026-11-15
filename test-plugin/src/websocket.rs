@@ -53,6 +53,7 @@ impl PluginNode for WsProbe {
                 data_out(3, "Last", DataType::String),
                 data_out(4, "Status", DataType::String),
             ],
+            ..Default::default()
         }
     }
 

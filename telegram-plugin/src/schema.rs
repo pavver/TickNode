@@ -266,6 +266,7 @@ pub fn action_definition(
         properties,
         adaptive: false,
         cost: if trigger { 2 } else { 50 },
+        ..Default::default()
     }
 }
 fn keyboard_properties(

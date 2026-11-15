@@ -67,6 +67,7 @@ impl PluginNode for DelayNode {
                 data_in(base + 2, "Delay", DataType::Duration),
                 exec_out(base + 1, "Out"),
             ],
+            ..Default::default()
         }
     }
 

@@ -140,6 +140,7 @@ impl PluginNode for MathNode {
             .to_string()
                 + "\n\nAn unconnected input is treated as zero.\n\nRuns on a signal at In, then passes execution to Out — the result is available to the following nodes.",
             pins,
+            ..Default::default()
         }
     }
 

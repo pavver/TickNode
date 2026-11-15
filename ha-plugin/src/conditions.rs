@@ -127,6 +127,7 @@ impl Kind {
                 exec_out(NO.0, "No"),
                 data_out(RESULT.0, "Result", DataType::Bool),
             ],
+            ..Default::default()
         }
     }
 }

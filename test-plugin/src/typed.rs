@@ -21,6 +21,7 @@ impl PluginNode for PointSource {
             description: "Emits a test.point".into(),
             help: "On a signal at In emits a value of the custom type test.point on Point with coordinates X and Y (properties). The label field is not filled.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Point", DataType::Named(POINT.into()))],
+            ..Default::default()
         }
     }
 
@@ -64,6 +65,7 @@ impl PluginNode for BadSource {
             description: "Emits a value of a foreign type".into(),
             help: "Host check: the output is declared as test.point, but the node emits an object of type other.type. The host must drop the value and log an error.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Point", DataType::Named(POINT.into()))],
+            ..Default::default()
         }
     }
 
@@ -96,6 +98,7 @@ impl PluginNode for PointSink {
                 data_out(3, "Text", DataType::String),
                 data_out(4, "Sum", DataType::Number),
             ],
+            ..Default::default()
         }
     }
 

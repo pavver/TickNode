@@ -29,6 +29,7 @@ impl PluginNode for Greeter {
             description: "Emits the greeting from settings".into(),
             help: "On a signal at In emits the current greeting from the plugin settings on Text as \"<greeting>|<mode>|<token set>\". Checks that the host applied the settings.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Text", DataType::String)],
+            ..Default::default()
         }
     }
 
@@ -72,6 +73,7 @@ impl PluginNode for Picker {
             description: "Has described properties".into(),
             help: "Checks property schemas and dynamic property options. Emits \"<mode>:<choice>\" on Text.".into(),
             pins: vec![exec_in(0, "In"), data_out(1, "Text", DataType::String)],
+            ..Default::default()
         }
     }
 

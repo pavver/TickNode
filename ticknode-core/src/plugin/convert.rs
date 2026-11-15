@@ -65,8 +65,11 @@ pub(super) fn from_wit_type_definition(t: wit::TypeDefinition) -> TypeDefinition
     }
 }
 
-/// Definition and `polls` flag (not part of `NodeDefinition`: it concerns the host, not the editor).
-pub(super) fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (NodeDefinition, bool) {
+/// Definition and `polls`/`pure` flags (not part of `NodeDefinition`: they concern the host, not the editor).
+pub(super) fn from_wit_definition(
+    d: wit::NodeDefinition,
+    plugin: &str,
+) -> (NodeDefinition, bool, bool) {
     let definition = NodeDefinition {
         adaptive: false,
         cost: d.cost,
@@ -128,7 +131,17 @@ pub(super) fn from_wit_definition(d: wit::NodeDefinition, plugin: &str) -> (Node
             })
             .collect(),
     };
-    (definition, d.polls)
+    let has_exec_pins = definition.pins.iter().any(|p| p.pin_type == PinType::Exec);
+    let mut pure = d.pure;
+    if pure && (d.polls || has_exec_pins) {
+        tracing::warn!(
+            plugin,
+            node = %definition.type_name,
+            "Node definition with pure=true has exec pins or polls=true: treating as non-pure"
+        );
+        pure = false;
+    }
+    (definition, d.polls, pure)
 }
 
 pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {

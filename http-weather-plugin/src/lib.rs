@@ -45,6 +45,7 @@ impl PluginNode for WeatherNode {
                 data_out(TEMP.0, "Temp", DataType::Named("quantity.temperature".into())),
                 data_out(DESCRIPTION.0, "Description", DataType::String),
             ],
+            ..Default::default()
         }
     }
 

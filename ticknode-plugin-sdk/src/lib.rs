@@ -66,12 +66,14 @@
 //! explicit cancellation and engine drop abort requests. Time uses `std::time::Instant` (WASI clocks).
 
 pub use ticknode_shared::{
-    Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeDefinition, NodeId,
-    NumberValue, ObjectField, PinDefinition, PinDirection, PinId, PinType, PluginManifest,
-    PropertyDefinition, PropertyKind, PropertyOption, ResourceAction, ResourceCollection,
-    SettingDefinition, SettingKind, TimeDelta, TypeDefinition, TypeKind, UiMessage,
-    fluent_slug as slug, quantity,
+    Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeId, NumberValue, ObjectField,
+    PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind,
+    PropertyOption, ResourceAction, ResourceCollection, SettingDefinition, SettingKind, TimeDelta,
+    TypeDefinition, TypeKind, UiMessage, fluent_slug as slug, quantity,
 };
+
+mod definition;
+pub use definition::NodeDefinition;
 
 /// A translatable error for the user: `UiError::new("my-plugin-error-no-token", "Token is not set")`
 /// (key in the plugin's translations, English fallback), optionally with `.arg("name", value)`.

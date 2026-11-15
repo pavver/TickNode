@@ -1,6 +1,6 @@
 use super::convert::{decode_value, encode_value, from_wit_definition};
 use super::host::{CallCtx, PluginState};
-use super::outputs::validate_emission_outputs;
+use super::outputs::validate_execution_outputs;
 use super::runtime::{Runtime, short_error};
 use super::{NodesApi, lock, wit};
 use crate::host::{HostState, TaskId, TaskOutput, TaskResult};
@@ -21,6 +21,7 @@ pub struct WasmNode {
     definition_revision: u64,
     /// Event source node (`poll` on every tick). Other nodes avoid paying WASM call overhead each tick.
     polls: bool,
+    pure: bool,
     properties: Vec<(String, DataValue)>,
     failed: bool,
     /// Owning plugin (fills `PropertyKind::Dynamic::plugin` in refreshed definitions).
@@ -65,6 +66,7 @@ impl WasmNode {
         id: NodeId,
         definition: NodeDefinition,
         polls: bool,
+        pure: bool,
         runtime: Arc<Mutex<Runtime>>,
     ) -> Self {
         let plugin = lock(&runtime).grants.name.clone();
@@ -76,6 +78,7 @@ impl WasmNode {
             definition,
             definition_revision: 0,
             polls,
+            pure,
             properties: Vec::new(),
             failed: false,
             plugin,
@@ -131,7 +134,7 @@ impl WasmNode {
                 api.node().call_properties(&mut *store, node)?,
             ))
         })?;
-        (self.definition, self.polls) = from_wit_definition(definition, &self.plugin);
+        (self.definition, self.polls, self.pure) = from_wit_definition(definition, &self.plugin);
         self.definition_revision = self.definition_revision.wrapping_add(1);
         self.properties = properties
             .into_iter()
@@ -152,7 +155,7 @@ impl WasmNode {
         match result {
             Ok(outputs) => {
                 let (valid, errors) =
-                    validate_emission_outputs(ctx.types, &self.definition, outputs);
+                    validate_execution_outputs(ctx.types, &self.definition, self.pure, outputs);
                 for error in errors {
                     ctx.host_state.error(
                         self.id,
@@ -226,10 +229,14 @@ impl Node for WasmNode {
     fn definition_revision(&self) -> u64 {
         self.definition_revision
     }
+    fn is_pure(&self) -> bool {
+        self.pure
+    }
 
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         match trigger_pin {
             Some(pin) => self.run(wit::Trigger::Pin(pin.0), ctx),
+            None if self.is_pure() => self.run(wit::Trigger::Pin(0), ctx),
             None => Vec::new(),
         }
     }

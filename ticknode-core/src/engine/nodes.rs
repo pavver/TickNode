@@ -171,6 +171,10 @@ impl TickEngine {
             .map(|n| self.effective_definition(node_id, n.definition()))
     }
 
+    pub fn is_node_pure(&self, node_id: NodeId) -> Option<bool> {
+        self.nodes.get(&node_id).map(|n| n.is_pure())
+    }
+
     pub(crate) fn definition_arc(&mut self, id: NodeId) -> Option<Arc<NodeDefinition>> {
         let node = self.nodes.get(&id)?;
         let revision = node.definition_revision();
@@ -269,6 +273,7 @@ impl TickEngine {
         self.input_variables.remove(&node_id);
         self.split_pins.remove(&node_id);
         self.required_reported.remove(&node_id);
+        self.pure_exec_reported.remove(&node_id);
         self.data_cache.remove(&node_id);
         self.pure_cache.remove(&node_id);
         self.execution_queue.retain(|(n, _)| *n != node_id);

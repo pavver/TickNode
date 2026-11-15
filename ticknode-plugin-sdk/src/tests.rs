@@ -133,11 +133,20 @@ fn node_definitions_keep_pin_types_directions_and_property_metadata() {
                 PropertyDefinition::select("select", "Select", &[("v", "Label")]),
                 PropertyDefinition::dynamic("dynamic", "Dynamic", "source"),
             ],
+            pure: false,
         };
-        let wire = to_wit_definition(d.cost(17), true);
+        let wire = to_wit_definition(d.clone().cost(17), true);
         assert_eq!(wire.cost, 17);
         assert_eq!(wire.type_name, "demo/node");
         assert!(wire.polls);
+        assert!(!wire.pure);
+        let shared: ticknode_shared::NodeDefinition = d.clone().into();
+        assert!(!NodeDefinition::from(shared).pure);
+        let pure_wire = to_wit_definition(
+            NodeDefinition::new("demo/pure", "Pure", "Data").pure(),
+            false,
+        );
+        assert!(pure_wire.pure);
         assert!(matches!(wire.pins[0].pin_type, wit::PinType::Exec));
         assert!(matches!(wire.pins[2].direction, wit::PinDirection::Output));
         assert!(wire.pins[1].required);

@@ -99,7 +99,7 @@ impl TickEngine {
             slot.types.clone(),
             slot.runtime.clone(),
         );
-        for (def, _) in &definitions {
+        for (def, _, _) in &definitions {
             if self.registry.get_definition(&def.type_name).is_some() {
                 return Err(UiMessage::plain(format!(
                     "Node type {} is already registered",
@@ -109,16 +109,16 @@ impl TickEngine {
         }
         check_reserved_types(name, &types)?;
         let node_definitions: Vec<NodeDefinition> =
-            definitions.iter().map(|(d, _)| d.clone()).collect();
+            definitions.iter().map(|(d, _, _)| d.clone()).collect();
         self.register_types_owned(Some(name), &types, &node_definitions)
             .map_err(|e| UiMessage::plain(format!("Plugin {name}: {e}")))?;
         self.clear_definitions();
-        for (def, polls) in definitions {
+        for (def, polls, pure) in definitions {
             let runtime = runtime.clone();
             self.registry.register_owned(
                 name,
                 Box::new(move |id| {
-                    Box::new(WasmNode::new(id, def.clone(), polls, runtime.clone()))
+                    Box::new(WasmNode::new(id, def.clone(), polls, pure, runtime.clone()))
                 }),
             );
         }
@@ -259,7 +259,7 @@ impl TickEngine {
 
 fn uses_owned_types(plugin: &super::PluginSlot, owned: &[&String]) -> bool {
     let mut used = Vec::new();
-    for (def, _) in &plugin.definitions {
+    for (def, _, _) in &plugin.definitions {
         for pin in &def.pins {
             if let PinType::Data(t) = &pin.pin_type {
                 named_types(t, &mut used);
@@ -314,7 +314,8 @@ mod reserved_type_tests {
             TypeDefinition::new_enum("quantity.fake", "Fake", &[("x", "X")]),
             quantity::builtin_quantities().remove(0),
         ] {
-            let error = check_reserved_types("example", &[definition.clone()]).unwrap_err();
+            let error =
+                check_reserved_types("example", std::slice::from_ref(&definition)).unwrap_err();
             assert_eq!(error.key, "error-plugin-quantity-type");
             assert!(error.args.contains(&("type".into(), definition.name)));
         }
@@ -334,7 +335,7 @@ mod reserved_type_tests {
     #[test]
     fn reserved_media_registration_returns_a_translatable_plugin_error() {
         let definition = TypeDefinition::new_enum("media.fake", "Fake", &[("x", "X")]);
-        let error = check_reserved_types("example", &[definition.clone()]).unwrap_err();
+        let error = check_reserved_types("example", std::slice::from_ref(&definition)).unwrap_err();
         assert_eq!(error.key, "error-plugin-media-type");
         assert!(error.args.contains(&("type".into(), definition.name)));
     }

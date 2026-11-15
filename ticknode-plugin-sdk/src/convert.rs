@@ -129,6 +129,7 @@ pub(crate) fn to_wit_definition(d: NodeDefinition, polls: bool) -> wit::NodeDefi
                 },
             })
             .collect(),
+        pure: d.pure,
     }
 }
 

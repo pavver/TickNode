@@ -61,9 +61,29 @@ pub(super) fn validate_emission_outputs(
     definition: &NodeDefinition,
     outputs: Vec<wit::Output>,
 ) -> (Vec<NodeOutput>, Vec<String>) {
+    validate_outputs_internal(types, definition, false, outputs)
+}
+
+/// Checks the outputs a plugin returned from `execute`. If the node is pure, execution outputs are allowed
+/// through so that the caller can ignore them and warn.
+pub(super) fn validate_execution_outputs(
+    types: &TypeRegistry,
+    definition: &NodeDefinition,
+    is_pure: bool,
+    outputs: Vec<wit::Output>,
+) -> (Vec<NodeOutput>, Vec<String>) {
+    validate_outputs_internal(types, definition, is_pure, outputs)
+}
+
+fn validate_outputs_internal(
+    types: &TypeRegistry,
+    definition: &NodeDefinition,
+    is_pure: bool,
+    outputs: Vec<wit::Output>,
+) -> (Vec<NodeOutput>, Vec<String>) {
     let (mut valid, mut errors) = (Vec::new(), Vec::new());
     for output in outputs {
-        match validate_output(types, definition, output) {
+        match validate_output(types, definition, is_pure, output) {
             Ok(Some(output)) => valid.push(output),
             Ok(None) => {}
             Err(error) => errors.push(error),
@@ -75,12 +95,17 @@ pub(super) fn validate_emission_outputs(
 fn validate_output(
     types: &TypeRegistry,
     definition: &NodeDefinition,
+    is_pure: bool,
     output: wit::Output,
 ) -> Result<Option<NodeOutput>, String> {
     match output {
         wit::Output::Exec(pin) => {
-            require_output_pin(definition, pin, true, "emitted an exec pulse on", "an exec")?;
-            Ok(Some(NodeOutput::Execution(PinId(pin))))
+            if is_pure {
+                Ok(Some(NodeOutput::Execution(PinId(pin))))
+            } else {
+                require_output_pin(definition, pin, true, "emitted an exec pulse on", "an exec")?;
+                Ok(Some(NodeOutput::Execution(PinId(pin))))
+            }
         }
         wit::Output::Clear(pin) => {
             require_output_pin(definition, pin, false, "cleared", "a data")?;

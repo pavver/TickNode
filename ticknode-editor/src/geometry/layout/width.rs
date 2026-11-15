@@ -5,9 +5,14 @@ use crate::{i18n, panels::property_label};
 pub(super) const CHAR_WIDTH: f64 = 12.0 * 1200.0 / 2048.0;
 pub(super) const FIELD_MIN: f64 = 18.0 * DU;
 const SELECT_CHROME: f64 = 24.0;
+pub(crate) const CHIP_CHROME: f64 = 24.0;
 
 pub(super) fn text_width(text: &str) -> f64 {
     text.chars().count() as f64 * CHAR_WIDTH
+}
+
+pub(crate) fn chip_width(ref_text: &str) -> f64 {
+    (text_width(ref_text) + CHIP_CHROME).max(FIELD_MIN)
 }
 
 fn duration_width(signed: bool, wall_only: bool) -> f64 {
@@ -44,44 +49,51 @@ fn pin_width(
         && !connected.contains(&pin.id)
         && !def.properties.iter().any(|p| p.input == Some(pin.id))
     {
-        match &pin.pin_type {
-            PinType::Data(DataType::Duration) => duration_width(false, false),
-            PinType::Data(DataType::Bool) => 48.0,
-            PinType::Data(DataType::Named(name)) => ticknode_shared::quantity::kind(name)
-                .map_or_else(
-                    || {
-                        let key = ticknode_shared::input_value_property(pin.id);
-                        let selected = properties
-                            .iter()
-                            .find(|(n, _)| *n == key)
-                            .and_then(|(_, v)| {
-                                if let DataValue::String(s) = v {
-                                    Some(s.as_str())
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or("");
-                        i18n::enum_selected_label(name, selected)
-                            .map_or(0.0, |label| compact_select_width(&label))
-                    },
-                    |q| {
-                        FIELD_MIN
-                            + q.units
+        let var_key = ticknode_shared::input_variable_property(pin.id);
+        if let Some((_, DataValue::String(ref_text))) =
+            properties.iter().find(|(n, _)| *n == var_key)
+        {
+            chip_width(ref_text)
+        } else {
+            match &pin.pin_type {
+                PinType::Data(DataType::Duration) => duration_width(false, false),
+                PinType::Data(DataType::Bool) => 48.0,
+                PinType::Data(DataType::Named(name)) => ticknode_shared::quantity::kind(name)
+                    .map_or_else(
+                        || {
+                            let key = ticknode_shared::input_value_property(pin.id);
+                            let selected = properties
                                 .iter()
-                                .map(|u| {
-                                    text_width(
-                                        &i18n::unit_symbol(&u.id)
-                                            .unwrap_or_else(|| u.symbol.clone()),
-                                    )
+                                .find(|(n, _)| *n == key)
+                                .and_then(|(_, v)| {
+                                    if let DataValue::String(s) = v {
+                                        Some(s.as_str())
+                                    } else {
+                                        None
+                                    }
                                 })
-                                .fold(0.0, f64::max)
-                            + SELECT_CHROME
-                            + 2.0
-                    },
-                ),
-            PinType::Data(t) if ticknode_shared::text::is_text_type(t) => FIELD_MIN,
-            _ => 0.0,
+                                .unwrap_or("");
+                            i18n::enum_selected_label(name, selected)
+                                .map_or(0.0, |label| compact_select_width(&label))
+                        },
+                        |q| {
+                            FIELD_MIN
+                                + q.units
+                                    .iter()
+                                    .map(|u| {
+                                        text_width(
+                                            &i18n::unit_symbol(&u.id)
+                                                .unwrap_or_else(|| u.symbol.clone()),
+                                        )
+                                    })
+                                    .fold(0.0, f64::max)
+                                + SELECT_CHROME
+                                + 2.0
+                        },
+                    ),
+                PinType::Data(t) if ticknode_shared::text::is_text_type(t) => FIELD_MIN,
+                _ => 0.0,
+            }
         }
     } else {
         0.0

@@ -13,6 +13,7 @@ pub(super) fn QuantityValue(
     /// Commit `<number> <symbol>` text instead of a canonical number, so the written unit persists.
     #[prop(optional)]
     literal: bool,
+    #[prop(optional)] on_commit_variable: Option<Callback<Option<String>>>,
 ) -> impl IntoView {
     let ed = use_editor();
     let kind = StoredValue::new(kind);
@@ -69,6 +70,13 @@ pub(super) fn QuantityValue(
         ) else {
             return;
         };
+        let trimmed = text.trim();
+        if let Some(cb) = on_commit_variable
+            && VariableRef::parse(trimmed).is_some()
+        {
+            cb.run(Some(trimmed.to_string()));
+            return;
+        }
         if last_shown.try_get_untracked().as_ref() == Some(&(text.clone(), selected.clone())) {
             return;
         }

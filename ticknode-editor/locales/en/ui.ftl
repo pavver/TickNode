@@ -133,6 +133,11 @@ parse-error-not-text = value of type { $type } cannot be entered as text
 ui-save = SAVE
 inline-value-type-title = Value type
 inline-pin-value-title = Value used while the input is unconnected. Empty — node uses its default
+inline-pin-string-title = Value used while the input is unconnected. Quoted "var.x" enters a literal text. Empty — node uses its default
+inline-variable-tooltip = Variable «{ $name }» ({ $type }): { $value }
+inline-variable-not-found = Variable «{ $name }» not found
+inline-variable-clear = Remove variable binding
+inline-variable-edit-title = Variable reference (var.x, sheet.x, global.x) or literal value
 
 # Canvas and nodes
 canvas-empty-title = Empty graph

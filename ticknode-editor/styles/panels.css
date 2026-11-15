@@ -376,7 +376,7 @@ body:has(.palette-ghost) { cursor: copy; }
 .node.unavailable { cursor: grab; }
 .node.unavailable .node-header { background: repeating-linear-gradient(135deg, var(--surface-alt) 0 calc(var(--du) * 2), var(--surface) calc(var(--du) * 2) calc(var(--du) * 4)); }
 .node.unavailable .node-title, .node.unavailable .pin, .node.unavailable .prop-row { color: var(--text-disabled); }
-.node.unavailable .node-props, .node.unavailable .pins .inline-value { pointer-events: none; opacity: .55; }
+.node.unavailable .node-props, .node.unavailable .pins .inline-value, .node.unavailable .pins .inline-chip { pointer-events: none; opacity: .55; }
 .node.unavailable .socket { opacity: .55; }
 .node-cat.node-unavailable { color: var(--warning); }
 

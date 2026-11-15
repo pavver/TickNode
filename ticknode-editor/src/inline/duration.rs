@@ -13,6 +13,7 @@ pub(super) fn DurationValue(
     title: Signal<String>,
     #[prop(optional)] wall_only: bool,
     #[prop(optional)] default_minutes: bool,
+    #[prop(optional)] on_commit_variable: Option<Callback<Option<String>>>,
 ) -> impl IntoView {
     let ed = use_editor();
     let initial = value.get_untracked();
@@ -50,6 +51,13 @@ pub(super) fn DurationValue(
         ) else {
             return;
         };
+        let trimmed = text.trim();
+        if let Some(cb) = on_commit_variable
+            && VariableRef::parse(trimmed).is_some()
+        {
+            cb.run(Some(trimmed.to_string()));
+            return;
+        }
         let parsed = if wall_only {
             units::parse_property(&text, selected)
         } else {

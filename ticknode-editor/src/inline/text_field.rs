@@ -33,6 +33,7 @@ pub(super) fn TextField(
     title: Signal<String>,
     multiline: Signal<bool>,
     on_commit: Callback<Option<DataValue>>,
+    #[prop(optional)] on_commit_variable: Option<Callback<Option<String>>>,
 ) -> impl IntoView {
     let (shown, draft) = text_draft(value);
     let commit = move || {
@@ -41,7 +42,21 @@ pub(super) fn TextField(
             return;
         };
         if text != saved {
-            on_commit.run(Some(DataValue::String(text)));
+            if let Some(cb) = on_commit_variable {
+                match decide_input_commit(&text, &DataType::String, true, true) {
+                    Ok(InputCommit::Variable(v)) => {
+                        cb.run(Some(v));
+                    }
+                    Ok(InputCommit::Value(v)) => {
+                        on_commit.run(v);
+                    }
+                    Err(_) => {
+                        on_commit.run(Some(DataValue::String(text)));
+                    }
+                }
+            } else {
+                on_commit.run(Some(DataValue::String(text)));
+            }
         }
     };
     let keydown = move |ev: web_sys::KeyboardEvent| {

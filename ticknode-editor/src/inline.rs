@@ -17,11 +17,15 @@ pub(crate) mod template_field;
 mod text_field;
 mod typed_properties;
 pub(crate) mod undoable;
+pub(crate) mod variable;
 
 pub use formula_field::{FormulaDraft, FormulaField, FormulaStatusRow};
 pub use properties::*;
 pub use template_field::{
     TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateSamplesLayer, TemplateStatusRow,
+};
+pub use variable::{
+    BoundInputEditor, InputCommit, decide_input_commit, resolve_variable, variable_tooltip,
 };
 
 /// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.
@@ -59,6 +63,7 @@ pub fn InlineValue(
     /// Quantities commit `68 °F` text literals that keep the chosen unit (Match constants).
     #[prop(optional)]
     unit_literal: bool,
+    #[prop(optional)] on_commit_variable: Option<Callback<Option<String>>>,
 ) -> impl IntoView {
     let ed = use_editor();
     let state = RwSignal::new(ControlState::Idle);
@@ -71,7 +76,11 @@ pub fn InlineValue(
             .and_then(|d| d.quantity())
             .cloned()
     }) {
-        return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal /> }.into_any();
+        if let Some(cb) = on_commit_variable {
+            return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal on_commit_variable=cb /> }.into_any();
+        } else {
+            return view! { <quantity::QuantityValue value=value kind=kind on_commit=on_commit optional=optional title=title literal=unit_literal /> }.into_any();
+        }
     }
 
     if let Some((plugin, source)) = i18n::identifier_source(&value_type) {
@@ -80,7 +89,11 @@ pub fn InlineValue(
     }
 
     if value_type == DataType::Duration {
-        return view! { <duration::DurationValue value=value on_commit=on_commit optional=optional title=title /> }.into_any();
+        if let Some(cb) = on_commit_variable {
+            return view! { <duration::DurationValue value=value on_commit=on_commit optional=optional title=title on_commit_variable=cb /> }.into_any();
+        } else {
+            return view! { <duration::DurationValue value=value on_commit=on_commit optional=optional title=title /> }.into_any();
+        }
     }
 
     if value_type == DataType::Bool {
@@ -153,7 +166,11 @@ pub fn InlineValue(
     }
 
     if value_type == DataType::String {
-        return view! { <text_field::TextField value=value on_commit=on_commit title=title multiline=multiline /> }.into_any();
+        if let Some(cb) = on_commit_variable {
+            return view! { <text_field::TextField value=value on_commit=on_commit title=title multiline=multiline on_commit_variable=cb /> }.into_any();
+        } else {
+            return view! { <text_field::TextField value=value on_commit=on_commit title=title multiline=multiline /> }.into_any();
+        }
     }
 
     let hint_type = value_type.clone();
@@ -176,9 +193,15 @@ pub fn InlineValue(
         if text == saved {
             return;
         }
-        match parse_text(&text, &value_type) {
-            Ok(None) if !optional => draft.set(saved),
-            Ok(v) => on_commit.run(v),
+        let allow_variable = on_commit_variable.is_some();
+        match decide_input_commit(&text, &value_type, optional, allow_variable) {
+            Ok(InputCommit::Variable(v)) => {
+                if let Some(cb) = on_commit_variable {
+                    cb.run(Some(v));
+                }
+            }
+            Ok(InputCommit::Value(None)) if !optional => draft.set(saved),
+            Ok(InputCommit::Value(v)) => on_commit.run(v),
             Err(_) => {
                 draft.set(saved);
                 flash(state, ControlState::Error);
@@ -248,16 +271,122 @@ pub fn PinValue(
     let Some(client) = ed.node(node) else {
         return ().into_any();
     };
-    let name = input_value_property(pin);
+    let val_prop = input_value_property(pin);
+    let var_prop = input_variable_property(pin);
+
+    let bound_var = Signal::derive(move || {
+        property_value(client, &var_prop).and_then(|v| match v {
+            DataValue::String(s) => Some(s),
+            _ => None,
+        })
+    });
+
+    let is_editing = RwSignal::new(false);
+    let is_unavailable = client.instance.with(|i| i.unavailable.is_some());
+    let is_required = client.instance.with(|i| {
+        i.definition
+            .pins
+            .iter()
+            .any(|p| p.id == pin && p.direction == PinDirection::Input && p.required)
+    });
+
     view! {
-        <InlineValue
-            value=Signal::derive(move || property_value(client, &name))
-            value_type=value_type
-            multiline=multiline
-            optional=true
-            title=Signal::derive(move || t!("inline-pin-value-title"))
-            on_commit=Callback::new(move |value| ed.send(ClientMessage::SetInputValue { id: node, pin, value }))
-        />
+        {move || {
+            if let Some(ref_text) = bound_var.get() {
+                if !is_editing.get() {
+                    let vref = VariableRef::parse(&ref_text);
+                    let resolved = {
+                        let ed_vars = ed.variables.get();
+                        let sheet = ed.open_sheet.get();
+                        vref.as_ref().and_then(|vr| resolve_variable(vr, sheet, &ed_vars).cloned())
+                    };
+                    let missing_required = is_required && resolved.is_none();
+                    let state = if missing_required {
+                        ControlState::Error
+                    } else {
+                        ControlState::Idle
+                    };
+                    let tooltip = vref.as_ref().map_or_else(
+                        || t!("inline-variable-not-found", name = ref_text.clone()),
+                        |vr| variable_tooltip(vr, resolved.as_ref(), &ed.types.get()),
+                    );
+
+                    view! {
+                        <div
+                            class=move || format!("inline-chip {}", state.class())
+                            title=tooltip
+                            on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
+                        >
+                            <button
+                                type="button"
+                                class="inline-chip-label"
+                                disabled=is_unavailable
+                                on:click=move |_| {
+                                    if !is_unavailable {
+                                        is_editing.set(true);
+                                    }
+                                }
+                            >
+                                <span class="mdi mdi-variable" aria-hidden="true"></span>
+                                <span class="inline-chip-text">{ref_text.clone()}</span>
+                            </button>
+                            {(!is_unavailable).then(|| {
+                                view! {
+                                    <button
+                                        type="button"
+                                        class="inline-chip-clear btn-icon"
+                                        title=move || t!("inline-variable-clear")
+                                        on:click=move |_| {
+                                            ed.send(ClientMessage::SetInputVariable {
+                                                id: node,
+                                                pin,
+                                                variable: None,
+                                            });
+                                        }
+                                    >
+                                        <span class="mdi mdi-close" aria-hidden="true"></span>
+                                    </button>
+                                }
+                            })}
+                        </div>
+                    }.into_any()
+                } else {
+                    view! {
+                        <BoundInputEditor
+                            ed=ed
+                            node=node
+                            pin=pin
+                            value_type=value_type.clone()
+                            initial=ref_text
+                            on_finish=Callback::new(move |_| is_editing.set(false))
+                        />
+                    }.into_any()
+                }
+            } else {
+                let title = if value_type == DataType::String {
+                    Signal::derive(move || t!("inline-pin-string-title"))
+                } else {
+                    Signal::derive(move || t!("inline-pin-value-title"))
+                };
+                let val_name = val_prop.clone();
+                let ty = value_type.clone();
+                view! {
+                    <InlineValue
+                        value=Signal::derive(move || property_value(client, &val_name))
+                        value_type=ty
+                        multiline=multiline
+                        optional=true
+                        title=title
+                        on_commit=Callback::new(move |value| {
+                            ed.send(ClientMessage::SetInputValue { id: node, pin, value })
+                        })
+                        on_commit_variable=Callback::new(move |variable| {
+                            ed.send(ClientMessage::SetInputVariable { id: node, pin, variable })
+                        })
+                    />
+                }.into_any()
+            }
+        }}
     }
     .into_any()
 }

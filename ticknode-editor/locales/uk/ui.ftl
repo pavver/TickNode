@@ -138,6 +138,11 @@ parse-error-not-text = значення типу { $type } не набираєт
 ui-save = SAVE
 inline-value-type-title = Тип значення
 inline-pin-value-title = Значення, поки до входу нічого не під'єднано. Порожнє — нода бере своє за замовчуванням
+inline-pin-string-title = Значення, поки до входу нічого не під'єднано. "var.x" у лапках задає буквальний текст. Порожнє — нода бере своє за замовчуванням
+inline-variable-tooltip = Змінна «{ $name }» ({ $type }): { $value }
+inline-variable-not-found = Змінну «{ $name }» не знайдено
+inline-variable-clear = Видалити прив'язку до змінної
+inline-variable-edit-title = Посилання на змінну (var.x, sheet.x, global.x) або значення
 
 # Canvas and nodes
 canvas-empty-title = Порожній граф

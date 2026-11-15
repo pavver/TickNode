@@ -49,6 +49,7 @@
 .node > .pins.in > .pin { width: 100%; max-width: none; min-width: 0; }
 .node > .pins.out > .pin { max-width: 100%; }
 .node > .pins.in > .pin > .inline-value { flex: 1 0 72px; min-width: 72px; max-width: none; }
+.node > .pins.in > .pin > .inline-chip { flex: 1 0 calc(var(--du) * 18); min-width: calc(var(--du) * 18); max-width: none; }
 .node > .pins.in > .pin > .duration-value { flex: 1 0 auto; min-width: min-content; }
 .node > .pins.in > .pin > .inline-value.select { flex: none; width: var(--selected-width, auto); min-width: 0; max-width: calc(var(--du) * 40); margin-left: auto; }
 .node > .pins.in > .pin > .inline-value.bool { flex: none; width: auto; min-width: 0; margin-left: auto; }

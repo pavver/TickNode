@@ -172,6 +172,61 @@
 .duration-value > .inline-value.duration-number { flex: 1 0 72px; min-width: 72px; width: 0; max-width: none; margin-left: 0; padding: 0 2px; }
 .duration-value > .inline-value.duration-unit { flex: none; min-width: 0; width: var(--selected-width, auto); max-width: calc(var(--du) * 40); margin-left: 0; padding: 0; }
 
+/* Variable chip on an unconnected pin */
+.inline-chip {
+    display: inline-flex;
+    align-items: center;
+    height: calc(var(--du) * 4.5);
+    background: var(--surface-alt);
+    border: calc(var(--du) * 0.25) solid var(--divider);
+    border-radius: 0;
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font-size: calc(var(--tu) * 12);
+    line-height: calc(var(--du) * 4.5);
+    padding: 0 calc(var(--du) * 1);
+    gap: calc(var(--du) * 1);
+    max-width: 100%;
+    margin-left: auto;
+}
+.inline-chip:hover { border-color: var(--border-strong); }
+.inline-chip.st-error { border-color: var(--error); color: var(--error); }
+.inline-chip-label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--du) * 1);
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.inline-chip-label:disabled { cursor: default; }
+.inline-chip-label .mdi { font-size: calc(var(--tu) * 14); color: var(--text-secondary); }
+.inline-chip.st-error .inline-chip-label .mdi { color: var(--error); }
+.inline-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inline-chip-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--du) * 3.5);
+    height: calc(var(--du) * 3.5);
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: calc(var(--tu) * 14);
+}
+.inline-chip-clear:hover { color: var(--text-primary); }
+.inline-chip.st-error .inline-chip-clear { color: var(--error); }
+.input-row .inline-chip { flex: 1 1 0; width: 0; max-width: none; margin-left: 0; }
+
 /* --- Match cases on a node (like a decider combinator window); row height = ROW_H --- */
 .match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
 .case-row {

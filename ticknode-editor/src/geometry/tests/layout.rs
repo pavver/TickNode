@@ -323,3 +323,33 @@ fn template_node_includes_fixed_status_row_in_geometry() {
     assert_eq!(sized_template.pins_top, template_layout.pins_top);
     assert_eq!(sized_template.height, template_layout.height);
 }
+
+#[test]
+fn node_layout_width_accounts_for_input_variable_chip() {
+    let def = NodeDefinition {
+        adaptive: false,
+        cost: 1,
+        type_name: "test_var_chip".into(),
+        title: "Test".into(),
+        category: "Math".into(),
+        description: String::new(),
+        help: String::new(),
+        properties: vec![],
+        pins: vec![PinDefinition {
+            id: PinId(1),
+            name: "Input".into(),
+            direction: PinDirection::Input,
+            pin_type: PinType::Data(DataType::Number),
+            required: false,
+        }],
+    };
+
+    let default_layout = NodeLayout::new(&def, &[]);
+    let bound_props = [(
+        ticknode_shared::input_variable_property(def.pins[0].id),
+        DataValue::String("var.extremely_long_variable_name_to_expand_node".into()),
+    )];
+    let bound_layout = NodeLayout::new(&def, &bound_props);
+
+    assert!(bound_layout.width > default_layout.width);
+}

@@ -12,6 +12,8 @@ use crate::i18n::{self, Locale};
 
 pub mod errors;
 mod graph;
+#[cfg(test)]
+pub use graph::is_required_missing;
 mod messages;
 pub mod timers;
 mod wires;

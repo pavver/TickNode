@@ -2,6 +2,23 @@
 
 use super::*;
 
+/// Pure check whether a required data input pin lacks both a connection and an inline value or variable binding.
+pub fn is_required_missing(
+    pin: &PinDefinition,
+    is_connected: bool,
+    properties: &[(String, DataValue)],
+) -> bool {
+    if !pin.required || pin.direction != PinDirection::Input || pin.pin_type == PinType::Exec {
+        return false;
+    }
+    let val_prop = input_value_property(pin.id);
+    let var_prop = input_variable_property(pin.id);
+    !is_connected
+        && !properties
+            .iter()
+            .any(|(p, _)| *p == val_prop || *p == var_prop)
+}
+
 impl Editor {
     /// Whether the node is selected (tracked).
     pub fn is_selected(&self, id: NodeId) -> bool {
@@ -94,17 +111,19 @@ impl Editor {
         })
     }
 
-    /// Required data input that is neither connected nor has an inline value on the node (tracked).
+    /// Required data input that is neither connected nor has an inline value or variable binding on the node (tracked).
     pub fn required_missing(&self, node: NodeId, pin: &PinDefinition) -> bool {
         if !pin.required || pin.direction != PinDirection::Input || pin.pin_type == PinType::Exec {
             return false;
         }
-        let name = input_value_property(pin.id);
-        !self.is_input_connected(node, pin.id)
-            && !self.node_tracked(node).is_some_and(|n| {
-                n.instance
-                    .with(|i| i.model.properties.iter().any(|(p, _)| *p == name))
-            })
+        let is_connected = self.is_input_connected(node, pin.id);
+        if is_connected {
+            return false;
+        }
+        !self.node_tracked(node).is_some_and(|n| {
+            n.instance
+                .with(|i| !is_required_missing(pin, is_connected, &i.model.properties))
+        })
     }
 
     /// Human-readable type name (`title` for custom types), tracked against the type registry.

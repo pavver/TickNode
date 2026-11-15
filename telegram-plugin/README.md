@@ -19,6 +19,9 @@ Only one `getUpdates` request is pending, with a 50-second Telegram timeout and 
 | Send media | Chat picker or typed input, kind selector (photo/audio/video/document), required Media, optional Caption (1024 characters), Topic, Reply to, parse mode, silent sends, keyboard mode with buttons and reply options |
 | Edit message | Chat, Message id and Text, with optional parse mode, optional inline buttons and `keep_buttons` choice |
 | Delete message | Chat and Message id |
+| Button | Builds a `telegram.button` value from Text and action (`callback`, `url`, `text`, `contact`, `location`) |
+| Keyboard | Combines button or String inputs into `telegram.keyboard` rows by columns for inline, reply, or remove layouts |
+| Compose message | Combines Text, Media, and Keyboard into an outgoing `telegram.outgoing` message value |
 
 Triggers cost 2. Each node has a 128-event FIFO queue, emits at most one pulse per tick and logs overflow when dropping the oldest event. Missing optional values clear their output pins. Callbacks are acknowledged even if no trigger matches; when multiple triggers match, the first registered node in node-ID order supplies the toast text. Auxiliary requests have a bounded queue and leave HTTP slots available for polling.
 
@@ -70,6 +73,36 @@ Setting `keep_buttons` to `no` with empty buttons sends `{"inline_keyboard": []}
 Providing new `buttons` replaces the message's inline keyboard.
 
 For a `/status` reply, connect Command Received to Send message In and Command Chat to Send message Chat. Leave the send Chat property empty. Feed data into a **Text from template** node and connect its Text to Send message Text. Break the command's Message struct and connect its ID to Reply to. A known reply topic is inherited when Topic is empty; an explicit Topic takes precedence. The bounded live message-to-topic cache is populated from incoming and sent messages and quoted replies; it is not persisted. A reply to a known topic creation message can also infer the topic from the persisted directory.
+
+## Outgoing messages and builders
+
+`telegram/button`, `telegram/keyboard`, and `telegram/compose` are pure builder nodes (`pure: true`, cost 1) that construct structured message values without side effects.
+They prepare values that can be fed into future outgoing message consumers.
+
+`telegram/button` outputs a `telegram.button` struct with `text`, `action`, and optional `data`.
+Action supports `callback`, `url`, `text`, `contact`, and `location`.
+If data is omitted for callback buttons, the button text is used as callback data.
+If the URL action is selected without a valid URL, the node returns no output and reports a translated error.
+
+`telegram/keyboard` outputs a `telegram.keyboard` struct with `kind` (`inline`, `reply`, `remove`) and nested button `rows`.
+The node provides `count` (1–24) button inputs and arranges non-empty inputs into rows according to `columns` (1–8).
+Each input accepts either a `telegram.button` struct or a plain String.
+String inputs automatically convert to callback buttons for inline keyboards and text buttons for reply keyboards.
+Unconnected and empty inputs are skipped.
+Inline keyboards reject text, contact, and location buttons, while reply keyboards reject callback and URL buttons.
+When set to `remove`, all button inputs are ignored and a remove keyboard object is emitted.
+When set to `reply`, the node exposes `resize` (default yes), `one_time` (default no), `placeholder`, and `persistent` (default no) properties.
+
+`telegram/compose` outputs a `telegram.outgoing` struct combining optional Text, optional Media, and an optional `telegram.keyboard`.
+The node validates text length: 1–4096 characters without media, or a caption up to 1024 characters with media.
+A message requires either text or media; an empty message emits no output and reports a translated error.
+Media must be a valid `media.*` object with either `file_id` or `url`.
+`parse_mode` selects Plain text (omitted), HTML, or MarkdownV2 formatting.
+`silent` allows muting notifications.
+Fields that are not provided remain absent in the emitted struct.
+
+The pure model `outgoing::parse_outgoing` converts a plain String, bare `media.*` object, or `telegram.outgoing` struct into an internal `Outgoing` representation.
+`outgoing::keyboard_markup` transforms a `Keyboard` struct into standard Telegram `InlineKeyboardMarkup`, `ReplyKeyboardMarkup`, or `ReplyKeyboardRemove` JSON.
 
 ## Directory and identifiers
 

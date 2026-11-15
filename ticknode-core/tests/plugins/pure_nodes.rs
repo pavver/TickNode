@@ -156,3 +156,75 @@ fn pure_node_execution_output_is_ignored_with_warning() {
         .count();
     assert_eq!(warning_count2, 1, "warning was throttled (not repeated)");
 }
+
+#[test]
+fn telegram_pure_compose_keyboard_pipeline() {
+    let capabilities = vec![
+        Capability::Http {
+            allowed_domains: vec!["api.telegram.org".into()],
+        },
+        Capability::Storage,
+    ];
+    let Some(mut engine) = engine_with("telegram_plugin", capabilities) else {
+        return;
+    };
+
+    let kb_id = NodeId::generate();
+    engine
+        .create_node(
+            kb_id,
+            "telegram/keyboard",
+            &[
+                ("kind".into(), "inline".into()),
+                ("count".into(), "2".into()),
+                ("columns".into(), "2".into()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(engine.is_node_pure(kb_id), Some(true));
+
+    engine
+        .set_input_value(kb_id, PinId(1), Some("Button A".into()))
+        .unwrap();
+    engine
+        .set_input_value(kb_id, PinId(2), Some("Button B".into()))
+        .unwrap();
+
+    let compose_id = NodeId::generate();
+    engine
+        .create_node(
+            compose_id,
+            "telegram/compose",
+            &[
+                ("parse_mode".into(), "plain".into()),
+                ("silent".into(), "no".into()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(engine.is_node_pure(compose_id), Some(true));
+
+    engine
+        .set_input_value(compose_id, PinId(1), Some("Hello!".into()))
+        .unwrap();
+    engine
+        .connect_data(kb_id, PinId(0), compose_id, PinId(3))
+        .unwrap();
+
+    let debug = NodeId::generate();
+    engine.create_node(debug, "test/debug", &[]).unwrap();
+    engine
+        .connect_data(compose_id, PinId(0), debug, PinId(1))
+        .unwrap();
+
+    engine.trigger_node(debug, PinId(0));
+    engine.tick();
+
+    let cached = engine
+        .pure_cache
+        .get(&compose_id)
+        .expect("compose pure output cached");
+    let msg_val = cached.get(&PinId(0)).expect("Message output present");
+    assert!(
+        matches!(msg_val, DataValue::Object { type_name: Some(name), .. } if name == "telegram.outgoing")
+    );
+}

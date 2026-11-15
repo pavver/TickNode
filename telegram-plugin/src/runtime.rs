@@ -19,6 +19,14 @@ pub fn now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+pub fn report_error(error: &UiError, log: bool) {
+    #[cfg(target_arch = "wasm32")]
+    host::node_error(error, log);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (error, log);
+    }
+}
 pub struct HostEnv;
 impl Env for HostEnv {
     fn http(&mut self, request: HttpRequest) -> Result<TaskId, String> {

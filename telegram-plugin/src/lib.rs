@@ -1,9 +1,11 @@
 //! Telegram integration. Transport, storage and time are injected into the sans-IO hub.
 mod actions;
 mod api;
+mod compose;
 mod directory;
 mod hub;
 mod model;
+pub mod outgoing;
 mod runtime;
 mod schema;
 mod triggers;
@@ -21,6 +23,9 @@ impl Plugin for Telegram {
         "telegram/send_media",
         "telegram/edit",
         "telegram/delete",
+        "telegram/button",
+        "telegram/keyboard",
+        "telegram/compose",
     ];
     const TRANSLATIONS: &'static [(&'static str, &'static str)] = &[
         ("en", include_str!("../locales/en.ftl")),
@@ -46,6 +51,7 @@ impl Plugin for Telegram {
         Some(match kind {
             "message" | "command" | "callback" => Box::new(triggers::TriggerNode::new(kind, node)),
             "send" | "send_media" | "edit" | "delete" => Box::new(actions::ActionNode::new(kind)),
+            "button" | "keyboard" | "compose" => compose::create(kind),
             _ => return None,
         })
     }

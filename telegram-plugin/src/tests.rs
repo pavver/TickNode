@@ -191,6 +191,18 @@ fn translations_cover_every_definition_and_error() {
                 }
             }
         }
+        if *name == "keyboard" {
+            let mut reply_node = Telegram::create(name, NodeId::generate()).unwrap();
+            reply_node.set_property("kind", "reply".into());
+            for prop in reply_node.definition().properties {
+                has(format!("{base}-prop-{}-title", prop.name));
+                if let PropertyKind::Select(options) = prop.kind {
+                    for (value, _) in options {
+                        has(format!("{base}-prop-{}-option-{}", prop.name, slug(&value)));
+                    }
+                }
+            }
+        }
     }
     for ty in Telegram::types() {
         let base = format!("type-{}", slug(&ty.name));
@@ -198,6 +210,9 @@ fn translations_cover_every_definition_and_error() {
         has(format!("{base}-description"));
         for field in ty.fields() {
             has(format!("{base}-field-{}", field.name));
+        }
+        for val in ty.values() {
+            has(format!("{base}-value-{}", slug(&val.value)));
         }
     }
     for setting in Telegram::manifest().settings {
@@ -233,6 +248,13 @@ fn translations_cover_every_definition_and_error() {
         "api",
         "caption",
         "media",
+        "button-url",
+        "inline-action",
+        "reply-action",
+        "compose-empty",
+        "outgoing-value",
+        "keyboard-count",
+        "keyboard-columns",
     ] {
         has(format!("telegram-error-{suffix}"));
     }

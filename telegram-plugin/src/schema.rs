@@ -1,11 +1,13 @@
 //! Stable positional contracts and English definition fallbacks.
+pub mod outgoing;
+
 use ticknode_plugin_sdk::*;
 
 pub fn named(name: &str) -> DataType {
     DataType::Named(format!("telegram.{name}"))
 }
 pub fn types() -> Vec<TypeDefinition> {
-    vec![
+    let mut list = vec![
         TypeDefinition::identifier("telegram.chat_id", "Telegram chat ID", "A Telegram chat")
             .labels("chats"),
         TypeDefinition::identifier("telegram.user_id", "Telegram user ID", "A Telegram user")
@@ -58,7 +60,9 @@ pub fn types() -> Vec<TypeDefinition> {
             ],
         )
         .described("A Telegram message with chat, topic, sender, text and media"),
-    ]
+    ];
+    list.extend(outgoing::types());
+    list
 }
 
 fn media_type_for_kind(kind: Option<&str>) -> &'static str {
@@ -78,6 +82,9 @@ pub fn action_definition(
     kind: &str,
     props: &std::collections::BTreeMap<String, String>,
 ) -> NodeDefinition {
+    if matches!(kind, "button" | "keyboard" | "compose") {
+        return outgoing::definition(kind, props);
+    }
     let trigger = matches!(kind, "message" | "command" | "callback");
     let (title, description, help) = match kind {
         "message" => (
@@ -311,6 +318,9 @@ fn yes_no(name: &str, title: &str) -> PropertyDefinition {
     PropertyDefinition::select(name, title, &[("no", "No"), ("yes", "Yes")])
 }
 pub fn defaults(kind: &str) -> std::collections::BTreeMap<String, String> {
+    if matches!(kind, "button" | "keyboard" | "compose") {
+        return outgoing::defaults(kind);
+    }
     let mut map = definition(kind)
         .properties
         .into_iter()

@@ -38,6 +38,30 @@ pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Resul
                 "Callback toast text cannot exceed 200 characters",
             ));
         }
+        "count" if kind == "keyboard" => {
+            let valid = text
+                .parse::<u32>()
+                .ok()
+                .is_some_and(|n| (1..=24).contains(&n));
+            if !valid {
+                return Err(error(
+                    "keyboard-count",
+                    "Button count must be between 1 and 24",
+                ));
+            }
+        }
+        "columns" if kind == "keyboard" => {
+            let valid = text
+                .parse::<u32>()
+                .ok()
+                .is_some_and(|n| (1..=8).contains(&n));
+            if !valid {
+                return Err(error(
+                    "keyboard-columns",
+                    "Columns count must be between 1 and 8",
+                ));
+            }
+        }
         _ => validate_choice_property(name, text)?,
     }
     if kind == "message" {
@@ -75,8 +99,14 @@ fn validate_choice_property(name: &str, text: &str) -> Result<(), UiError> {
         "keyboard" => ["inline", "reply", "remove", "none"].contains(&text),
         "keep_buttons" | "resize" | "one_time" | "persistent" | "include_edited" | "silent"
         | "disable_preview" => ["yes", "no"].contains(&text),
-        "kind" => ["photo", "audio", "video", "document"].contains(&text),
-        "parse_mode" => ["none", "HTML", "MarkdownV2"].contains(&text),
+        "action" => ["callback", "url", "text", "contact", "location"].contains(&text),
+        "kind" => [
+            "photo", "audio", "video", "document", "inline", "reply", "remove",
+        ]
+        .contains(&text),
+        "parse_mode" => {
+            ["none", "HTML", "MarkdownV2", "plain", "html", "markdown_v2"].contains(&text)
+        }
         "text_mode" => ["any", "equals", "contains", "starts_with", "regex"].contains(&text),
         "data_mode" => ["equals", "prefix"].contains(&text),
         _ => true,

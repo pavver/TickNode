@@ -66,6 +66,16 @@ impl FormulaError {
         .with_arg("name", name)
     }
 
+    pub fn unknown_function_suggest(range: Range<usize>, name: &str, suggestion: &str) -> Self {
+        Self::new(
+            range,
+            "error-formula-unknown-function-suggest",
+            format!("Unknown function '{name}'. Did you mean '{suggestion}'?"),
+        )
+        .with_arg("name", name)
+        .with_arg("suggestion", suggestion)
+    }
+
     pub fn wrong_arity(range: Range<usize>, name: &str, expected: &str, got: usize) -> Self {
         Self::new(
             range,

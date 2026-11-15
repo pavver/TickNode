@@ -2,19 +2,27 @@
 
 mod ast;
 mod catalog;
+pub mod complete;
 mod error;
 mod eval;
+pub mod highlight;
 mod inference;
 mod lexer;
+pub mod lint;
 mod parser;
+pub mod signature;
 #[cfg(test)]
 mod tests;
 
 pub use ast::{BinaryOp, Expr, ExprKind, UnaryOp};
 pub use catalog::{CATALOG, FunctionDoc, catalog, find_function};
+pub use complete::{Completion, complete};
 pub use error::FormulaError;
 pub use eval::{FormulaValue, eval_expr};
+pub use highlight::{Highlight, TokenClass, highlight};
 pub use inference::infer_type;
+pub use lint::{Lint, LintSeverity, lint};
+pub use signature::signature_at;
 
 use crate::DataType;
 use std::collections::HashMap;

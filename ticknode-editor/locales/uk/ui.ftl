@@ -845,6 +845,7 @@ error-formula-depth-exceeded = Рівень вкладеності формул�
 error-formula-unexpected-token = Неочікуваний токен «{ $token }»
 error-formula-unclosed-paren = Незакрита дужка у формулі
 error-formula-unknown-function = Невідома функція «{ $name }»
+error-formula-unknown-function-suggest = Невідома функція «{ $name }». Можливо, ви мали на увазі «{ $suggestion }»?
 error-formula-wrong-arity = Функція «{ $name }» очікує { $expected } аргументів, отримано { $got }
 error-formula-reserved-name = Назва змінної «{ $name }» зарезервована
 error-formula-division-by-zero = Ділення на нуль у формулі
@@ -898,3 +899,25 @@ formula-fn-lcm = Найменше спільне кратне цілих чис�
 formula-fn-between = Повертає true, якщо lo <= x <= hi.
 formula-fn-isnan = Повертає true, якщо x є NaN.
 formula-fn-isfinite = Повертає true, якщо x є скінченним числом.
+
+formula-const-pi = Число пі (3.14159...)
+formula-const-e = Число Ейлера e (2.71828...)
+formula-const-tau = Число тау, 2*pi (6.28318...)
+formula-const-inf = Позитивна нескінченність
+formula-const-nan = Не число (NaN)
+formula-const-true = Булеве значення «істина»
+formula-const-false = Булеве значення «хибність»
+
+formula-error = Рядок { $line }, поз. { $column }: { $message }
+formula-render-error = Помилка обчислення: { $message }
+formula-preview-empty = (порожня формула)
+formula-preview-waiting = Попередній перегляд з'явиться після отримання значень на входах
+formula-preview-samples = Випробувати
+formula-preview-sample-badge = приклад
+formula-preview-samples-title = Зразкові значення
+formula-preview-samples-clear = Очистити
+formula-preview-no-waiting-inputs = Усі входи мають значення
+formula-lint-unknown-function = Невідома функція «{ $name }»
+formula-lint-unknown-function-suggest = Невідома функція «{ $name }». Можливо, ви мали на увазі «{ $suggestion }»?
+formula-lint-wrong-arity = Функція «{ $name }» очікує { $expected } аргументів, отримано { $got }
+

@@ -830,6 +830,7 @@ error-formula-depth-exceeded = Formula nesting depth exceeds limit of { $max }
 error-formula-unexpected-token = Unexpected token '{ $token }'
 error-formula-unclosed-paren = Unclosed parenthesis in formula
 error-formula-unknown-function = Unknown function '{ $name }'
+error-formula-unknown-function-suggest = Unknown function '{ $name }'. Did you mean '{ $suggestion }'?
 error-formula-wrong-arity = Function '{ $name }' expects { $expected } arguments, got { $got }
 error-formula-reserved-name = Variable name '{ $name }' is reserved
 error-formula-division-by-zero = Division by zero in formula
@@ -883,3 +884,25 @@ formula-fn-lcm = Least common multiple of integers.
 formula-fn-between = Returns true if lo <= x <= hi.
 formula-fn-isnan = Returns true if x is NaN.
 formula-fn-isfinite = Returns true if x is a finite number.
+
+formula-const-pi = Archimedes' constant pi (3.14159...)
+formula-const-e = Euler's number e (2.71828...)
+formula-const-tau = Circle constant tau, 2*pi (6.28318...)
+formula-const-inf = Positive infinity
+formula-const-nan = Not a number (NaN)
+formula-const-true = Boolean true
+formula-const-false = Boolean false
+
+formula-error = Line { $line }, col { $column }: { $message }
+formula-render-error = Evaluation error: { $message }
+formula-preview-empty = (empty)
+formula-preview-waiting = Preview appears after the inputs get values
+formula-preview-samples = Try values
+formula-preview-sample-badge = sample
+formula-preview-samples-title = Sample values
+formula-preview-samples-clear = Clear
+formula-preview-no-waiting-inputs = All inputs have values
+formula-lint-unknown-function = Unknown function '{ $name }'
+formula-lint-unknown-function-suggest = Unknown function '{ $name }'. Did you mean '{ $suggestion }'?
+formula-lint-wrong-arity = Function '{ $name }' expects { $expected } arguments, got { $got }
+

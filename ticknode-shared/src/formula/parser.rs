@@ -232,8 +232,16 @@ impl Parser {
         depth: usize,
     ) -> Result<Expr, FormulaError> {
         let lparen = self.next(); // consume '('
-        let doc = find_function(name)
-            .ok_or_else(|| FormulaError::unknown_function(span.start..lparen.span.end, name))?;
+        let doc = find_function(name).ok_or_else(|| {
+            if let Some(sugg) = crate::template::lint::find_suggestion(
+                name,
+                super::catalog::CATALOG.iter().map(|d| d.name),
+            ) {
+                FormulaError::unknown_function_suggest(span.start..lparen.span.end, name, &sugg)
+            } else {
+                FormulaError::unknown_function(span.start..lparen.span.end, name)
+            }
+        })?;
 
         let mut args = Vec::new();
         if self.peek().kind != TokenKind::RParen {

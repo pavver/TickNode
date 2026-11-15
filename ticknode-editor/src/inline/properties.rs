@@ -185,6 +185,12 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         let draft = RwSignal::new(initial);
                         provide_context(TemplateDraft(draft));
                     }
+                    let is_formula_prop = type_name() == "math/expression" && name == "expression";
+                    if is_formula_prop {
+                        let initial = text_of();
+                        let draft = RwSignal::new(initial);
+                        provide_context(super::FormulaDraft(draft));
+                    }
                     let control = if let Some(PropertyKind::Select(options)) = described.as_ref().map(|d| d.kind.clone()) {
                         let owner = type_name();
                         view! {
@@ -224,6 +230,17 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                     } else if is_template_prop {
                         view! {
                             <TemplateField
+                                id=id
+                                value=value
+                                title=label
+                                row_height=row_height
+                                on_commit=Callback::new(move |v| send.run(v))
+                            />
+                        }
+                        .into_any()
+                    } else if is_formula_prop {
+                        view! {
+                            <super::FormulaField
                                 id=id
                                 value=value
                                 title=label
@@ -272,11 +289,17 @@ pub fn NodeProps(id: NodeId) -> impl IntoView {
                         }
                         .into_any()
                     };
-                    let status_row = is_template_prop.then(|| {
-                        view! {
+                    let status_row = if is_template_prop {
+                        Some(view! {
                             <TemplateStatusRow node=id />
-                        }
-                    });
+                        }.into_any())
+                    } else if is_formula_prop {
+                        Some(view! {
+                            <super::FormulaStatusRow node=id />
+                        }.into_any())
+                    } else {
+                        None
+                    };
                     view! {
                         <div class="prop-row" class:grown={move || row_height.get() > crate::geometry::ROW_H} style=move || format!("height:{}px", row_height.get())>
                             <span class="ellipsis prop-label" title=move || label.get()>{move || label.get()}</span>

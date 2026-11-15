@@ -65,6 +65,7 @@ pub fn completion_kind_icon(kind: &CompletionKind) -> &'static str {
         CompletionKind::Keyword => "mdi-key-variant",
         CompletionKind::Attribute => "mdi-tag-outline",
         CompletionKind::Format => "mdi-calendar-clock-outline",
+        CompletionKind::Constant => "mdi-pi",
     }
 }
 
@@ -84,11 +85,11 @@ pub fn accept_completion_item(
         use wasm_bindgen::JsCast;
 
         if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-            let id_str = format!("template-textarea-{}", node.0);
-            if let Some(textarea) = doc
-                .get_element_by_id(&id_str)
-                .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
-            {
+            let textarea = doc
+                .get_element_by_id(&format!("template-textarea-{}", node.0))
+                .or_else(|| doc.get_element_by_id(&format!("formula-textarea-{}", node.0)))
+                .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok());
+            if let Some(textarea) = textarea {
                 let current = textarea.value();
                 let (new_text, new_caret_byte) =
                     apply_completion(&current, range, &item.insert, item.caret);
@@ -97,7 +98,9 @@ pub fn accept_completion_item(
                 let _ = textarea.set_selection_range(u16_caret, u16_caret);
                 let _ = textarea.focus();
 
-                if let Some(pre) = doc.get_element_by_id(&format!("template-highlight-{}", node.0))
+                if let Some(pre) = doc
+                    .get_element_by_id(&format!("template-highlight-{}", node.0))
+                    .or_else(|| doc.get_element_by_id(&format!("formula-highlight-{}", node.0)))
                 {
                     pre.set_scroll_top(textarea.scroll_top());
                     pre.set_scroll_left(textarea.scroll_left());

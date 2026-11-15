@@ -59,7 +59,8 @@
 .pin.grown > .socket { margin-top: calc(var(--du) * 1.75); }
 .pin.grown > .pin-split { margin-top: calc(var(--du) * .75); }
 .inline-value.multiline { height: calc(100% - var(--du) * 1.5); margin-top: calc(var(--du) * .75); resize: none; overflow: auto; line-height: 16px; white-space: pre-wrap; text-overflow: clip; }
-.prop-row .template-editor {
+.prop-row .template-editor,
+.prop-row .formula-editor {
     position: relative;
     flex: 1 0 calc(var(--du) * 18);
     min-width: calc(var(--du) * 18);
@@ -69,7 +70,8 @@
     margin-top: calc(var(--du) * .75);
     background: var(--surface-alt);
 }
-.template-highlight {
+.template-highlight,
+.formula-highlight {
     position: absolute;
     top: 0;
     left: 0;
@@ -89,7 +91,8 @@
     pointer-events: none;
     color: var(--text-primary);
 }
-.inline-value.multiline.template-source {
+.inline-value.multiline.template-source,
+.inline-value.multiline.formula-source {
     position: absolute;
     top: 0;
     left: 0;
@@ -107,8 +110,10 @@
     /* A scrollbar would narrow the wrap width compared with the highlight layer. */
     scrollbar-width: none;
 }
-.inline-value.multiline.template-source::-webkit-scrollbar { display: none; }
-.inline-value.multiline.template-source::selection {
+.inline-value.multiline.template-source::-webkit-scrollbar,
+.inline-value.multiline.formula-source::-webkit-scrollbar { display: none; }
+.inline-value.multiline.template-source::selection,
+.inline-value.multiline.formula-source::selection {
     /* The textarea lies above the highlight layer: a translucent selection keeps the coloured text visible. */
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: transparent;
@@ -128,6 +133,14 @@
 .template-highlight .tk-text { color: var(--text-primary); }
 .template-highlight .tk-error { text-decoration: underline wavy var(--error); }
 .template-highlight .st-lint { text-decoration: underline wavy var(--warning); }
+.formula-highlight .tk-constant { color: var(--magenta); }
+.formula-highlight .tk-function { color: var(--tk-function); }
+.formula-highlight .tk-input { color: var(--tk-input); }
+.formula-highlight .tk-number { color: var(--tk-number); }
+.formula-highlight .tk-operator { color: var(--tk-operator); }
+.formula-highlight .tk-text { color: var(--text-primary); }
+.formula-highlight .tk-error { text-decoration: underline wavy var(--error); }
+.formula-highlight .st-lint { text-decoration: underline wavy var(--warning); }
 .template-status { height: calc(var(--du) * 6); display: flex; align-items: center; gap: calc(var(--du) * 1.5); padding: 0 calc(var(--du) * 2.5); font-size: calc(var(--tu) * 11); line-height: calc(var(--du) * 6); min-width: 0; overflow: hidden; }
 .template-status.error { color: var(--error); }
 .template-status.warning { color: var(--warning); }

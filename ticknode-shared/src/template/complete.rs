@@ -43,6 +43,7 @@ pub enum CompletionKind {
     Keyword,
     Attribute,
     Format,
+    Constant,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

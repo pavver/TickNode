@@ -9,6 +9,7 @@ use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, flash};
 
 pub(crate) mod duration;
+pub(crate) mod formula_field;
 mod identifier;
 pub(crate) mod properties;
 mod quantity;
@@ -16,6 +17,7 @@ pub(crate) mod template_field;
 mod text_field;
 mod typed_properties;
 
+pub use formula_field::{FormulaDraft, FormulaField, FormulaStatusRow};
 pub use properties::*;
 pub use template_field::{
     TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateSamplesLayer, TemplateStatusRow,

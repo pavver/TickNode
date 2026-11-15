@@ -41,6 +41,10 @@ fn type_of(types: &[(String, DataType)], operand: &Operand) -> DataType {
             .iter()
             .find(|(n, _)| n == name)
             .map_or(DataType::Any, |(_, t)| t.clone()),
+        Operand::Variable(vref) => types
+            .iter()
+            .find(|(n, _)| n == &vref.to_str() || n == &vref.name)
+            .map_or(DataType::Any, |(_, t)| t.clone()),
         Operand::Value(v) => v.get_type(),
     }
 }
@@ -83,7 +87,7 @@ fn fit_condition(reg: &TypeRegistry, c: &mut Condition, left: &DataType) {
 
 fn operand_fits(reg: &TypeRegistry, right: Option<&Operand>, expected: &DataType) -> bool {
     match right {
-        Some(Operand::Input(_)) => true,
+        Some(Operand::Input(_)) | Some(Operand::Variable(_)) => true,
         Some(Operand::Value(value)) => {
             *expected == DataType::Any
                 || input_value_fits(reg, expected, value)

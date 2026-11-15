@@ -15,6 +15,7 @@ pub enum TokenKind {
     Number(NumberValue),
     Bool(bool),
     Ident(String),
+    VarRef(crate::VariableRef),
     Plus,
     Minus,
     Star,
@@ -372,6 +373,12 @@ impl<'a> Lexer<'a> {
 
         let slice = &self.source[start..self.cursor];
         if saw_dot {
+            if let Some(vref) = crate::VariableRef::parse(slice) {
+                return Ok(Token {
+                    kind: TokenKind::VarRef(vref),
+                    span: start..self.cursor,
+                });
+            }
             return Err(FormulaError::reserved_name(start..self.cursor, slice));
         }
 

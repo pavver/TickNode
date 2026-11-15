@@ -8,6 +8,7 @@ impl Operand {
     fn resolve(&self, value_of: &impl Fn(&str) -> Option<DataValue>) -> Option<DataValue> {
         match self {
             Self::Input(name) => value_of(name),
+            Self::Variable(vref) => value_of(&vref.to_str()),
             Self::Value(v) => Some(v.clone()),
         }
     }
@@ -140,9 +141,13 @@ impl MatchCase {
     ) -> bool {
         self.matches_by(|condition| {
             let mut c = condition.clone();
-            if let (Operand::Input(left), Some(Operand::Input(right))) = (&c.left, &c.right) {
-                let a = type_of(left);
-                let b = type_of(right);
+            let named_type = |op: &Operand| match op {
+                Operand::Input(name) => Some(type_of(name)),
+                Operand::Variable(vref) => Some(type_of(&vref.to_str())),
+                Operand::Value(_) => None,
+            };
+            if let (Some(a), Some(b)) = (named_type(&c.left), c.right.as_ref().and_then(named_type))
+            {
                 let quantity = |t: &DataType| {
                     types
                         .definition_of(t)
@@ -156,9 +161,13 @@ impl MatchCase {
                     return false;
                 }
             }
-            if let Operand::Input(name) = &c.left
-                && let Some(Operand::Value(v)) = &mut c.right
-                && let Some(t) = c.op.right_type(&type_of(name))
+            let left_type = match &c.left {
+                Operand::Input(name) => type_of(name),
+                Operand::Variable(vref) => type_of(&vref.to_str()),
+                Operand::Value(v) => v.get_type(),
+            };
+            if let Some(Operand::Value(v)) = &mut c.right
+                && let Some(t) = c.op.right_type(&left_type)
             {
                 if let DataValue::String(text) = v
                     && types
@@ -173,17 +182,17 @@ impl MatchCase {
                     *v = crate::text::coerce_to_in(types, v.clone(), &t);
                 }
             }
-            if let Operand::Input(name) = &c.left {
-                let t = type_of(name);
-                if types.definition_of(&t).is_some_and(|d| d.is_identifier()) {
-                    if !super::ops_in(types, &t).contains(&c.op) {
-                        return false;
-                    }
-                    if let Some(Operand::Value(v)) = &c.right
-                        && !matches!(v, DataValue::Number(crate::NumberValue::Int(_)))
-                    {
-                        return false;
-                    }
+            if types
+                .definition_of(&left_type)
+                .is_some_and(|d| d.is_identifier())
+            {
+                if !super::ops_in(types, &left_type).contains(&c.op) {
+                    return false;
+                }
+                if let Some(Operand::Value(v)) = &c.right
+                    && !matches!(v, DataValue::Number(crate::NumberValue::Int(_)))
+                {
+                    return false;
                 }
             }
             c.holds(&value_of)

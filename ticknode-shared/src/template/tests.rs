@@ -161,3 +161,64 @@ fn test_template_options_trim_blocks() {
         .unwrap();
     assert_eq!(trimmed_for, "Items:\n  - a\n  - b\n");
 }
+
+#[test]
+fn test_template_variables_rendering_and_exclusion_from_pins() {
+    let dummy_format = |v: &DataValue, _: &DataType| match v {
+        DataValue::Number(NumberValue::Int(n)) => format!("{n} deg"),
+        _ => format!("{v:?}"),
+    };
+    let dummy_runtime = std::sync::Arc::new(|v: &DataValue| format!("{v:?}"));
+
+    let src = "Hello {{ var.name }}, sheet={{ sheet.count }}, global={{ global.count }}, y={{ var.y }}, text={{ text.var.temp }}!";
+    let vars = variables(src).unwrap();
+    assert!(
+        vars.is_empty(),
+        "var, sheet, global must not become input pins"
+    );
+
+    let tpl = CompiledTemplate::new(src).unwrap();
+    let vars_list = vec![
+        crate::Variable {
+            key: crate::VariableKey::sheet(crate::SheetId::generate(), "count"),
+            data_type: DataType::Number,
+            value: DataValue::Number(10.into()),
+        },
+        crate::Variable {
+            key: crate::VariableKey::global("count"),
+            data_type: DataType::Number,
+            value: DataValue::Number(99.into()),
+        },
+        crate::Variable {
+            key: crate::VariableKey::global("name"),
+            data_type: DataType::String,
+            value: DataValue::String("World".into()),
+        },
+        crate::Variable {
+            key: crate::VariableKey::global("y"),
+            data_type: DataType::Number,
+            value: DataValue::Number(42.into()),
+        },
+        crate::Variable {
+            key: crate::VariableKey::global("temp"),
+            data_type: DataType::Number,
+            value: DataValue::Number(21.into()),
+        },
+    ];
+
+    let mut env = super::RenderEnv::default().with_variables(vars_list);
+    env.to_text = std::sync::Arc::new(|v, _, _| match v {
+        DataValue::Number(n) => format!("{n:?} deg"),
+        _ => String::new(),
+    });
+
+    let types = crate::TypeRegistry::new();
+    let rendered = tpl
+        .render_localized(&[], &dummy_format, dummy_runtime, env, &types)
+        .unwrap();
+
+    assert_eq!(
+        rendered,
+        "Hello World, sheet=10, global=99, y=42, text=21 deg!"
+    );
+}

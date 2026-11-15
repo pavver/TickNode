@@ -58,6 +58,27 @@ pub fn eval_expr<F>(expr: &Expr, lookup: &F) -> Result<FormulaValue, FormulaErro
 where
     F: Fn(&str) -> Option<FormulaValue>,
 {
+    eval_expr_with(expr, lookup, &|vref| {
+        lookup(&vref.to_str()).ok_or_else(|| {
+            FormulaError::new(
+                0..0,
+                "error-variable-missing",
+                format!("Variable \"{}\" not found", vref.name),
+            )
+            .with_arg("name", &vref.name)
+        })
+    })
+}
+
+pub fn eval_expr_with<F, V>(
+    expr: &Expr,
+    lookup: &F,
+    var_lookup: &V,
+) -> Result<FormulaValue, FormulaError>
+where
+    F: Fn(&str) -> Option<FormulaValue>,
+    V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+{
     match &expr.kind {
         ExprKind::Number(num) => Ok(FormulaValue::Number(*num)),
         ExprKind::Bool(b) => Ok(FormulaValue::Bool(*b)),
@@ -65,8 +86,9 @@ where
             let val = lookup(name).unwrap_or(FormulaValue::Number(NumberValue::Int(0)));
             Ok(val)
         }
+        ExprKind::VariableRef(vref) => var_lookup(vref),
         ExprKind::Unary { op, expr: inner } => {
-            let val = eval_expr(inner, lookup)?;
+            let val = eval_expr_with(inner, lookup, var_lookup)?;
             match op {
                 UnaryOp::Not => Ok(FormulaValue::Bool(!val.is_truthy())),
                 UnaryOp::Pos => Ok(val),
@@ -85,24 +107,24 @@ where
         ExprKind::Binary { op, left, right } => {
             // Short-circuiting logical operators
             if *op == BinaryOp::And {
-                let l = eval_expr(left, lookup)?;
+                let l = eval_expr_with(left, lookup, var_lookup)?;
                 if !l.is_truthy() {
                     return Ok(FormulaValue::Bool(false));
                 }
-                let r = eval_expr(right, lookup)?;
+                let r = eval_expr_with(right, lookup, var_lookup)?;
                 return Ok(FormulaValue::Bool(r.is_truthy()));
             }
             if *op == BinaryOp::Or {
-                let l = eval_expr(left, lookup)?;
+                let l = eval_expr_with(left, lookup, var_lookup)?;
                 if l.is_truthy() {
                     return Ok(FormulaValue::Bool(true));
                 }
-                let r = eval_expr(right, lookup)?;
+                let r = eval_expr_with(right, lookup, var_lookup)?;
                 return Ok(FormulaValue::Bool(r.is_truthy()));
             }
 
-            let l = eval_expr(left, lookup)?;
-            let r = eval_expr(right, lookup)?;
+            let l = eval_expr_with(left, lookup, var_lookup)?;
+            let r = eval_expr_with(right, lookup, var_lookup)?;
             eval_binary_op(*op, l, r, expr.span.clone())
         }
         ExprKind::Ternary {
@@ -110,27 +132,27 @@ where
             then_expr,
             else_expr,
         } => {
-            let c = eval_expr(cond, lookup)?;
+            let c = eval_expr_with(cond, lookup, var_lookup)?;
             if c.is_truthy() {
-                eval_expr(then_expr, lookup)
+                eval_expr_with(then_expr, lookup, var_lookup)
             } else {
-                eval_expr(else_expr, lookup)
+                eval_expr_with(else_expr, lookup, var_lookup)
             }
         }
         ExprKind::Call { name, args } => {
             // Short-circuiting if(c, a, b)
             if name == "if" {
-                let cond = eval_expr(&args[0], lookup)?;
+                let cond = eval_expr_with(&args[0], lookup, var_lookup)?;
                 return if cond.is_truthy() {
-                    eval_expr(&args[1], lookup)
+                    eval_expr_with(&args[1], lookup, var_lookup)
                 } else {
-                    eval_expr(&args[2], lookup)
+                    eval_expr_with(&args[2], lookup, var_lookup)
                 };
             }
 
             let vals: Vec<FormulaValue> = args
                 .iter()
-                .map(|a| eval_expr(a, lookup))
+                .map(|a| eval_expr_with(a, lookup, var_lookup))
                 .collect::<Result<_, _>>()?;
 
             let nums: Vec<NumberValue> = vals.iter().map(FormulaValue::to_number_value).collect();

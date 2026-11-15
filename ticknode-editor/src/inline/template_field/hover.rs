@@ -250,9 +250,19 @@ pub fn resolve_hover_tooltip_with_context(
             .into_iter()
             .map(|(name, _, ty)| (name, ty))
             .collect();
-        let lints = ed
-            .types
-            .with(|types| ticknode_shared::template::lint(src, &inputs, types));
+        let sheet = ed.open_sheet.get();
+        let visible_vars = ed.variables.with(|vars| {
+            vars.values()
+                .filter(|v| {
+                    v.key.scope != ticknode_shared::VariableScope::Sheet
+                        || (sheet.is_some() && v.key.sheet == sheet)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+        let lints = ed.types.with(|types| {
+            ticknode_shared::template::lint_with_variables(src, &inputs, types, &visible_vars)
+        });
         if let Some(lint) = lints
             .iter()
             .find(|l| l.range.start < range.end && range.start < l.range.end)

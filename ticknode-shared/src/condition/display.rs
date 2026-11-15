@@ -64,6 +64,7 @@ impl Operand {
     pub fn to_text(&self) -> String {
         match self {
             Self::Input(name) => name.clone(),
+            Self::Variable(vref) => vref.to_str(),
             Self::Value(DataValue::String(s)) => quote(s),
             Self::Value(DataValue::Number(NumberValue::Int(i))) => i.to_string(),
             Self::Value(DataValue::Number(NumberValue::Float(f))) => f.to_string(),

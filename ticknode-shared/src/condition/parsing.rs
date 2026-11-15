@@ -68,6 +68,7 @@ fn parse_conditions(text: &str) -> Result<Vec<Condition>, ConditionError> {
 fn found(token: Option<&Token>) -> Option<String> {
     token.map(|t| match t {
         Token::Ident(s) => s.clone(),
+        Token::VarRef(vref) => vref.to_str(),
         Token::Value(v) => Operand::Value(v.clone()).to_text(),
         Token::Op(op) => op.symbol().to_string(),
         Token::Join(j) => j.symbol().to_string(),

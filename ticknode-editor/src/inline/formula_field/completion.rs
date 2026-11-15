@@ -75,8 +75,23 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
             .map(|(name, _, ty)| (name, ty))
             .collect::<Vec<_>>();
 
-        let completion =
-            ticknode_shared::formula::complete(&current_text, caret_byte, &typed_inputs);
+        let sheet = ed.open_sheet.get();
+        let visible_vars = ed.variables.with(|vars| {
+            vars.values()
+                .filter(|v| {
+                    v.key.scope != ticknode_shared::VariableScope::Sheet
+                        || (sheet.is_some() && v.key.sheet == sheet)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+
+        let completion = ticknode_shared::formula::complete_with_variables(
+            &current_text,
+            caret_byte,
+            &typed_inputs,
+            &visible_vars,
+        );
 
         if completion.items.is_empty() {
             ed.template_completion.set(None);

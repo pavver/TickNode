@@ -16,7 +16,7 @@ mod tests;
 
 pub use ast::{BinaryOp, Expr, ExprKind, UnaryOp};
 pub use catalog::{CATALOG, FunctionDoc, catalog, find_function};
-pub use complete::{Completion, complete};
+pub use complete::{Completion, complete, complete_with_variables};
 pub use error::FormulaError;
 pub use eval::{FormulaValue, eval_expr};
 pub use highlight::{Highlight, TokenClass, highlight};
@@ -44,6 +44,14 @@ impl CompiledFormula {
         F: Fn(&str) -> Option<FormulaValue>,
     {
         eval_expr(&self.ast, lookup)
+    }
+
+    pub fn eval_with<F, V>(&self, lookup: &F, var_lookup: &V) -> Result<FormulaValue, FormulaError>
+    where
+        F: Fn(&str) -> Option<FormulaValue>,
+        V: Fn(&crate::VariableRef) -> Result<FormulaValue, FormulaError>,
+    {
+        eval::eval_expr_with(&self.ast, lookup, var_lookup)
     }
 
     pub fn infer_type(
@@ -105,6 +113,6 @@ fn collect_variables(expr: &Expr, vars: &mut Vec<String>) {
                 collect_variables(arg, vars);
             }
         }
-        ExprKind::Number(_) | ExprKind::Bool(_) => {}
+        ExprKind::Number(_) | ExprKind::Bool(_) | ExprKind::VariableRef(_) => {}
     }
 }

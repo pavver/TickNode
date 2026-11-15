@@ -31,6 +31,7 @@ pub struct CompletionInput<'a> {
     pub types: &'a TypeRegistry,
     pub now: Option<chrono::DateTime<chrono::Local>>,
     pub labels: Option<&'a dyn QuantityLabels>,
+    pub variables: &'a [crate::Variable],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,8 +145,14 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Context 1: after `.`
     if before.ends_with('.') {
-        let items =
-            scan::resolve_dot_context(before, partial, input.inputs, input.types, &for_stack);
+        let items = scan::resolve_dot_context(
+            before,
+            partial,
+            input.inputs,
+            input.types,
+            &for_stack,
+            input.variables,
+        );
         return Some(Completion { range, items });
     }
 
@@ -255,6 +262,16 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
             help: None,
             caret: None,
         });
+        for scope_name in ["var", "sheet", "global"] {
+            raw_items.push(CompletionItem {
+                label: scope_name.to_string(),
+                kind: CompletionKind::Variable,
+                detail: format!("{scope_name} variables"),
+                insert: format!("{scope_name}."),
+                help: None,
+                caret: None,
+            });
+        }
     }
 
     // Functions
@@ -309,4 +326,67 @@ pub(crate) fn filter_and_dedup(items: Vec<CompletionItem>, partial: &str) -> Vec
         }
     }
     result
+}
+
+pub(crate) fn variable_items(
+    scope: &str,
+    variables: &[crate::Variable],
+    types: &TypeRegistry,
+) -> Vec<CompletionItem> {
+    let mut map = std::collections::BTreeMap::new();
+    for v in variables {
+        match scope {
+            "sheet" if v.key.scope == crate::VariableScope::Sheet => {
+                map.insert(v.key.name.clone(), v.data_type.clone());
+            }
+            "global" if v.key.scope != crate::VariableScope::Sheet => {
+                map.insert(v.key.name.clone(), v.data_type.clone());
+            }
+            "var" if v.key.scope == crate::VariableScope::Sheet || !map.contains_key(&v.key.name) => {
+                map.insert(v.key.name.clone(), v.data_type.clone());
+            }
+            _ => {}
+        }
+    }
+    map.into_iter()
+        .map(|(name, ty)| CompletionItem {
+            label: name.clone(),
+            kind: CompletionKind::Variable,
+            detail: type_label(&ty, types),
+            insert: name,
+            help: None,
+            caret: None,
+        })
+        .collect()
+}
+
+pub(crate) fn find_var_type(
+    scope: &str,
+    name: &str,
+    variables: &[crate::Variable],
+) -> Option<DataType> {
+    let mut found = None;
+    for v in variables {
+        if v.key.name != name {
+            continue;
+        }
+        match scope {
+            "sheet" if v.key.scope == crate::VariableScope::Sheet => {
+                return Some(v.data_type.clone());
+            }
+            "global" if v.key.scope != crate::VariableScope::Sheet => {
+                return Some(v.data_type.clone());
+            }
+            "var" => {
+                if v.key.scope == crate::VariableScope::Sheet {
+                    return Some(v.data_type.clone());
+                }
+                if found.is_none() {
+                    found = Some(v.data_type.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    found
 }

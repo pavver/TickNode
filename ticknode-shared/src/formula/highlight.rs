@@ -147,7 +147,10 @@ pub fn highlight(source: &str, _inputs: &[String]) -> Vec<Highlight> {
         // Identifiers (functions, constants, inputs, operator keywords)
         if is_ident_start(bytes[i]) {
             let start = i;
-            while i < len && is_ident_continue(bytes[i]) {
+            while i < len
+                && (is_ident_continue(bytes[i])
+                    || (bytes[i] == b'.' && i + 1 < len && is_ident_start(bytes[i + 1])))
+            {
                 i += 1;
                 if i + 1 < len && bytes[i] == b':' && bytes[i + 1] == b':' {
                     i += 2;

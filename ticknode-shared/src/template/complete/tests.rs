@@ -24,6 +24,7 @@ fn complete_at<'a>(
         types,
         now: None,
         labels: None,
+        variables: &[],
     };
     let completion = complete(&input);
     (source, completion)
@@ -364,6 +365,7 @@ fn unparsable_for_header_keeps_endfor_balanced() {
         types: &types,
         now: None,
         labels: None,
+        variables: &[],
     })
     .unwrap();
     assert!(result.items.iter().any(|i| i.label == "a"));
@@ -390,4 +392,34 @@ fn test_expression_at() {
     // Inside string literal
     let str_pos = source.find("str").unwrap();
     assert!(!expression_at(source, str_pos));
+}
+
+#[test]
+fn test_variable_completion() {
+    let types = TypeRegistry::new();
+    let vars = vec![
+        crate::Variable {
+            key: crate::VariableKey::sheet(crate::SheetId::generate(), "threshold"),
+            data_type: DataType::Number,
+            value: crate::DataValue::Number(50.into()),
+        },
+        crate::Variable {
+            key: crate::VariableKey::global("title"),
+            data_type: DataType::String,
+            value: crate::DataValue::String("Living Room".into()),
+        },
+    ];
+
+    let input = CompletionInput {
+        source: "{{ var.t",
+        caret: 8,
+        inputs: &[],
+        types: &types,
+        now: None,
+        labels: None,
+        variables: &vars,
+    };
+    let c = complete(&input).expect("var.t should offer variables");
+    let labels: Vec<_> = c.items.iter().map(|i| i.label.as_str()).collect();
+    assert_eq!(labels, vec!["threshold", "title"]);
 }

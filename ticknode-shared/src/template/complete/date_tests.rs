@@ -33,6 +33,7 @@ fn complete_at_full<'a>(
         types,
         now,
         labels,
+        variables: &[],
     };
     let completion = complete(&input);
     (source, completion)

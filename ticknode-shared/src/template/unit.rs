@@ -338,7 +338,54 @@ pub fn register(
     inputs: &[(String, Option<DataValue>, DataType)],
     types: &TypeRegistry,
 ) {
-    let (path_types, path_values) = build_path_maps(inputs, types);
+    let (mut path_types, mut path_values) = build_path_maps(inputs, types);
+    for v in &env_ctx.variables {
+        match v.key.scope {
+            crate::VariableScope::Sheet => {
+                populate_paths(
+                    &format!("sheet.{}", v.key.name),
+                    Some(&v.value),
+                    &v.data_type,
+                    types,
+                    &mut path_types,
+                    &mut path_values,
+                    0,
+                );
+                populate_paths(
+                    &format!("var.{}", v.key.name),
+                    Some(&v.value),
+                    &v.data_type,
+                    types,
+                    &mut path_types,
+                    &mut path_values,
+                    0,
+                );
+            }
+            crate::VariableScope::Global | crate::VariableScope::Persistent => {
+                populate_paths(
+                    &format!("global.{}", v.key.name),
+                    Some(&v.value),
+                    &v.data_type,
+                    types,
+                    &mut path_types,
+                    &mut path_values,
+                    0,
+                );
+                let var_path = format!("var.{}", v.key.name);
+                if !path_types.contains_key(&var_path) {
+                    populate_paths(
+                        &var_path,
+                        Some(&v.value),
+                        &v.data_type,
+                        types,
+                        &mut path_types,
+                        &mut path_values,
+                        0,
+                    );
+                }
+            }
+        }
+    }
     let to_text_fn = env_ctx.to_text.clone();
     env.add_filter(
         "unit",

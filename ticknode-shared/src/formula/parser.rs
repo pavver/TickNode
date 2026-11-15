@@ -126,6 +126,18 @@ impl Parser {
                 kind: ExprKind::Bool(b),
                 span: token.span,
             }),
+            TokenKind::VarRef(vref) => {
+                if self.peek().kind == TokenKind::LParen {
+                    return Err(FormulaError::unexpected_token(
+                        self.peek().span.clone(),
+                        "(",
+                    ));
+                }
+                Ok(Expr {
+                    kind: ExprKind::VariableRef(vref),
+                    span: token.span,
+                })
+            }
             TokenKind::Ident(ref name) => self.parse_ident(name, token.span, depth),
             TokenKind::Minus => {
                 let right = self.parse_expr(Precedence::Unary, depth + 1)?;

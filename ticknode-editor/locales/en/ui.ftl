@@ -597,6 +597,8 @@ template-lint-filter-type = Filter '{ $name }' cannot be applied to { $type }
 template-lint-unknown-field = Unknown field '{ $field }' on { $type }
 template-lint-unknown-field-suggest = Unknown field '{ $field }' on { $type }. Did you mean '{ $suggestion }'?
 template-lint-unknown-test = Unknown test '{ $name }'
+template-lint-unknown-variable = Unknown variable '{ $name }'
+template-lint-unknown-variable-suggest = Unknown variable '{ $name }'. Did you mean '{ $suggestion }'?
 
 template-help-filter-date = Formats a date-time or time: date('DD.MM.YYYY HH:mm') or a preset; type inside the quotes for format codes
 template-help-filter-strftime = Formats a date-time or time using strftime format codes
@@ -838,6 +840,7 @@ error-formula-domain-error = Mathematical domain error in function '{ $name }'
 error-formula-overflow = Arithmetic overflow in formula
 error-formula-incompatible-quantities = Incompatible physical quantities: cannot combine { $a } and { $b }
 error-formula-type-mismatch = Type mismatch: expected { $expected }, got { $got }
+error-formula-variable-type = Variable '{ $name }' has non-numeric type
 error-formula-syntax = Invalid formula syntax
 error-formula-eval = Formula evaluation failed: { $message }
 

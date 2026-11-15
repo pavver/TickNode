@@ -139,6 +139,29 @@ impl MathExpressionNode {
         DataType::Number
     }
 
+    fn effective_output_type_in(&self, ctx: &NodeContext) -> DataType {
+        if self.value_type != "auto"
+            && let Some(t) = parse_data_type(&self.value_type).filter(numeric_type)
+        {
+            return t;
+        }
+        if let Some(compiled) = &self.compiled {
+            let mut map: HashMap<String, DataType> = self
+                .pins
+                .iter()
+                .map(|(n, _, ty)| (n.clone(), ty.clone()))
+                .collect();
+            for v in ctx.variables.for_sheet_and_global(ctx.sheet) {
+                map.insert(format!("var.{}", v.key.name), v.data_type.clone());
+                map.insert(format!("{}.{}", v.key.prefix(), v.key.name), v.data_type);
+            }
+            if let Ok(inferred) = compiled.infer_type(&map) {
+                return inferred;
+            }
+        }
+        DataType::Number
+    }
+
     fn report_error(&mut self, ctx: &mut NodeContext, message: UiMessage) {
         if self.reported {
             ctx.host_state.report_error(self.id, message);
@@ -223,10 +246,31 @@ impl Node for MathExpressionNode {
             }
         };
 
-        match compiled.eval(&lookup) {
+        let var_lookup = |vref: &VariableRef| -> Result<FormulaValue, FormulaError> {
+            let var = ctx.variable(&vref.name, vref.lookup).ok_or_else(|| {
+                FormulaError::new(
+                    0..self.expression.len(),
+                    "error-variable-missing",
+                    format!("Variable \"{}\" not found", vref.name),
+                )
+                .with_arg("name", &vref.name)
+            })?;
+            match &var.value {
+                DataValue::Number(n) => Ok(FormulaValue::Number(*n)),
+                DataValue::Bool(b) => Ok(FormulaValue::Bool(*b)),
+                _ => Err(FormulaError::new(
+                    0..self.expression.len(),
+                    "error-formula-variable-type",
+                    format!("Variable '{}' has non-numeric type", vref.name),
+                )
+                .with_arg("name", &vref.name)),
+            }
+        };
+
+        match compiled.eval_with(&lookup, &var_lookup) {
             Ok(val) => {
                 self.reported = false;
-                let out_type = self.effective_output_type();
+                let out_type = self.effective_output_type_in(ctx);
                 let data_val = if out_type == DataType::Bool {
                     DataValue::Bool(val.is_truthy())
                 } else {

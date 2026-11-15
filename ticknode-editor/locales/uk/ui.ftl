@@ -612,6 +612,8 @@ template-lint-filter-type = Фільтр '{ $name }' не застосовуєт
 template-lint-unknown-field = Невідоме поле '{ $field }' у { $type }
 template-lint-unknown-field-suggest = Невідоме поле '{ $field }' у { $type }. Можливо, ви мали на увазі '{ $suggestion }'?
 template-lint-unknown-test = Невідомий тест '{ $name }'
+template-lint-unknown-variable = Невідома змінна '{ $name }'
+template-lint-unknown-variable-suggest = Невідома змінна '{ $name }'. Можливо, ви мали на увазі '{ $suggestion }'?
 
 template-help-filter-date = Форматує дату й час або час: date('DD.MM.YYYY HH:mm') чи пресет; у лапках доступні коди формату
 template-help-filter-strftime = Форматує дату й час або час за допомогою кодів strftime
@@ -853,6 +855,7 @@ error-formula-domain-error = Помилка області визначення 
 error-formula-overflow = Арифметичне переповнення у формулі
 error-formula-incompatible-quantities = Несумісні фізичні величини: неможливо поєднати { $a } та { $b }
 error-formula-type-mismatch = Невідповідність типів: очікується { $expected }, отримано { $got }
+error-formula-variable-type = Змінна «{ $name }» має нечисловий тип
 error-formula-syntax = Некоректний синтаксис формули
 error-formula-eval = Помилка обчислення формули: { $message }
 

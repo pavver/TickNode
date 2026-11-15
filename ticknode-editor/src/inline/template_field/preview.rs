@@ -210,6 +210,21 @@ pub fn evaluate_preview(
         })
     });
 
+    let visible_vars = if let Some(ed) = use_context::<Editor>() {
+        let sheet = ed.open_sheet.get();
+        ed.variables.with(|vars| {
+            vars.values()
+                .filter(|v| {
+                    v.key.scope != ticknode_shared::VariableScope::Sheet
+                        || (sheet.is_some() && v.key.sheet == sheet)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+    } else {
+        Vec::new()
+    };
+
     let res = crate::i18n::TYPES.with(|types| {
         compiled.render_localized(
             inputs,
@@ -219,6 +234,7 @@ pub fn evaluate_preview(
                 labels: Arc::new(crate::i18n::UiQuantityLabels),
                 now: chrono::Utc::now(),
                 to_text: to_text_closure,
+                variables: visible_vars,
             },
             &types.borrow(),
         )

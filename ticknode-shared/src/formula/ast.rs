@@ -13,6 +13,7 @@ pub enum ExprKind {
     Number(NumberValue),
     Bool(bool),
     Variable(String),
+    VariableRef(crate::VariableRef),
     Unary {
         op: UnaryOp,
         expr: Box<Expr>,

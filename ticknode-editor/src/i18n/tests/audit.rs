@@ -176,6 +176,8 @@ fn every_template_lint_key_exists_in_bundles() {
         "template-lint-unknown-field",
         "template-lint-unknown-field-suggest",
         "template-lint-unknown-test",
+        "template-lint-unknown-variable",
+        "template-lint-unknown-variable-suggest",
     ];
 
     BUNDLES.with(|b| {

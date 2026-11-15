@@ -40,6 +40,13 @@ impl VariableKey {
         }
     }
 
+    pub fn prefix(&self) -> &'static str {
+        match self.scope {
+            VariableScope::Sheet => "sheet",
+            VariableScope::Global | VariableScope::Persistent => "global",
+        }
+    }
+
     pub fn is_valid(&self) -> bool {
         valid_variable_name(&self.name)
             && (self.sheet.is_some() == (self.scope == VariableScope::Sheet))
@@ -62,6 +69,72 @@ pub enum VariableLookup {
     Sheet,
     /// Global or persistent scope.
     Global,
+}
+
+/// A reference to a variable using scoped syntax:
+/// `var.<name>` (Auto lookup), `sheet.<name>` (Sheet only), or `global.<name>` (Global only).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct VariableRef {
+    pub lookup: VariableLookup,
+    pub name: String,
+}
+
+impl VariableRef {
+    pub fn new(lookup: VariableLookup, name: impl Into<String>) -> Self {
+        Self {
+            lookup,
+            name: name.into(),
+        }
+    }
+
+    pub fn auto(name: impl Into<String>) -> Self {
+        Self::new(VariableLookup::Auto, name)
+    }
+
+    pub fn sheet(name: impl Into<String>) -> Self {
+        Self::new(VariableLookup::Sheet, name)
+    }
+
+    pub fn global(name: impl Into<String>) -> Self {
+        Self::new(VariableLookup::Global, name)
+    }
+
+    /// Parses a variable reference with syntax `var.<name>`, `sheet.<name>`, or `global.<name>`.
+    pub fn parse(s: &str) -> Option<Self> {
+        let (prefix, name) = s.split_once('.')?;
+        let lookup = match prefix {
+            "var" => VariableLookup::Auto,
+            "sheet" => VariableLookup::Sheet,
+            "global" => VariableLookup::Global,
+            _ => return None,
+        };
+        if valid_variable_name(name) {
+            Some(Self {
+                lookup,
+                name: name.to_string(),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn prefix(&self) -> &'static str {
+        match self.lookup {
+            VariableLookup::Auto => "var",
+            VariableLookup::Sheet => "sheet",
+            VariableLookup::Global => "global",
+        }
+    }
+
+    pub fn to_str(&self) -> String {
+        format!("{}.{}", self.prefix(), self.name)
+    }
+}
+
+impl std::fmt::Display for VariableRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

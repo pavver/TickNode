@@ -259,3 +259,30 @@ fn test_syntax_errors_return_no_lints() {
     let lints = lint("{{ user.ag", &inputs, &types);
     assert!(lints.is_empty());
 }
+
+#[test]
+fn test_lint_with_variables() {
+    let (types, inputs) = setup_test_types();
+    let vars = vec![crate::Variable {
+        key: crate::VariableKey::global("temperature"),
+        data_type: DataType::Number,
+        value: crate::DataValue::Number(20.into()),
+    }];
+
+    // Known variable produces no lint
+    let lints = lint_with_variables("{{ var.temperature }}", &inputs, &types, &vars);
+    assert!(lints.is_empty());
+
+    // Unknown variable with close match suggests
+    let lints = lint_with_variables("{{ var.temperatura }}", &inputs, &types, &vars);
+    assert_eq!(lints.len(), 1);
+    assert_eq!(
+        lints[0].message.key,
+        "template-lint-unknown-variable-suggest"
+    );
+
+    // Unknown variable without close match
+    let lints = lint_with_variables("{{ var.completely_unknown }}", &inputs, &types, &vars);
+    assert_eq!(lints.len(), 1);
+    assert_eq!(lints[0].message.key, "template-lint-unknown-variable");
+}

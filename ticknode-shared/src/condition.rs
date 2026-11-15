@@ -23,11 +23,12 @@ pub use error::{ConditionError, Expected};
 pub use evaluation::loosely_equal;
 pub use operators::{CompareOp, ops_for, ops_in};
 
-/// Condition operand: a node input or a constant.
+/// Condition operand: a node input, a constant, or a variable reference.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operand {
     Input(String),
     Value(DataValue),
+    Variable(crate::VariableRef),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +62,7 @@ impl MatchCase {
             .flat_map(|c| std::iter::once(&c.left).chain(c.right.as_ref()))
             .filter_map(|o| match o {
                 Operand::Input(name) => Some(name.as_str()),
-                Operand::Value(_) => None,
+                Operand::Value(_) | Operand::Variable(_) => None,
             })
     }
 

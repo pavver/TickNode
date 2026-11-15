@@ -205,6 +205,7 @@ fn test_unit_completion_inside_quotes() {
         types: &TypeRegistry::new(),
         now: None,
         labels: Some(&crate::quantity::CanonicalLabels),
+        variables: &[],
     })
     .unwrap();
 

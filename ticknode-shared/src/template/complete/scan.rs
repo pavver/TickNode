@@ -258,6 +258,7 @@ pub(crate) fn resolve_dot_context(
     inputs: &[(String, DataType)],
     types: &TypeRegistry,
     for_stack: &[ForScope],
+    variables: &[crate::Variable],
 ) -> Vec<CompletionItem> {
     let before_dot = &before[..before.len() - 1];
     let Some(path) = parse_dotted_path(before_dot) else {
@@ -282,8 +283,23 @@ pub(crate) fn resolve_dot_context(
                     caret: None,
                 })
                 .collect();
+            if !variables.is_empty() {
+                for scope in ["var", "sheet", "global"] {
+                    items.push(CompletionItem {
+                        label: scope.to_string(),
+                        kind: CompletionKind::Variable,
+                        detail: format!("{scope} variables"),
+                        insert: scope.to_string(),
+                        help: None,
+                        caret: None,
+                    });
+                }
+            }
             items.sort_by(|a, b| a.label.cmp(&b.label));
             return filter_and_dedup(items, partial);
+        }
+        if fields.len() == 1 && ["var", "sheet", "global"].contains(&fields[0].as_str()) {
+            return filter_and_dedup(super::variable_items(&fields[0], variables, types), partial);
         }
         return Vec::new();
     }
@@ -295,23 +311,34 @@ pub(crate) fn resolve_dot_context(
         return Vec::new();
     }
 
-    let root_type = if let Some(scope) = for_stack
-        .iter()
-        .rev()
-        .find(|s| s.vars.iter().any(|v| v == root))
-    {
-        scope.var_type.clone()
-    } else if let Some((_, ty)) = inputs.iter().find(|(name, _)| name == root) {
-        Some(ty.clone())
-    } else {
-        None
-    };
+    if (root == "var" || root == "sheet" || root == "global") && fields.is_empty() {
+        return filter_and_dedup(super::variable_items(root, variables, types), partial);
+    }
+
+    let (root_type, subfields) =
+        if (root == "var" || root == "sheet" || root == "global") && !fields.is_empty() {
+            let ty = super::find_var_type(root, &fields[0], variables);
+            (ty, &fields[1..])
+        } else {
+            let ty = if let Some(scope) = for_stack
+                .iter()
+                .rev()
+                .find(|s| s.vars.iter().any(|v| v == root))
+            {
+                scope.var_type.clone()
+            } else if let Some((_, ty)) = inputs.iter().find(|(name, _)| name == root) {
+                Some(ty.clone())
+            } else {
+                None
+            };
+            (ty, fields)
+        };
 
     let Some(mut current_type) = root_type else {
         return Vec::new();
     };
 
-    for field in fields {
+    for field in subfields {
         if let Some(next) = resolve_struct_field(&current_type, field, types) {
             current_type = next;
         } else {

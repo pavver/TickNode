@@ -202,6 +202,11 @@ impl Node for MatchNode {
     }
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let value_of = |name: &str| {
+            if let Some(vref) = VariableRef::parse(name) {
+                return ctx
+                    .variable(&vref.name, vref.lookup)
+                    .map(|v| v.value.clone());
+            }
             self.inputs
                 .iter()
                 .find(|i| i.name == name)
@@ -213,6 +218,11 @@ impl Node for MatchNode {
             if case.matches_in(
                 ctx.types,
                 |name| {
+                    if let Some(vref) = VariableRef::parse(name) {
+                        if let Some(v) = ctx.variable(&vref.name, vref.lookup) {
+                            return v.data_type.clone();
+                        }
+                    }
                     self.inputs
                         .iter()
                         .find(|i| i.name == name)

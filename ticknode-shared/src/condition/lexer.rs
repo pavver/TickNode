@@ -5,6 +5,7 @@ use crate::DataValue;
 pub(super) enum Token {
     Ident(String),
     Value(DataValue),
+    VarRef(crate::VariableRef),
     Op(CompareOp),
     Join(Join),
 }
@@ -13,6 +14,7 @@ impl Token {
     pub(super) fn into_operand(self) -> Option<Operand> {
         match self {
             Token::Ident(name) if is_input_name(&name) => Some(Operand::Input(name)),
+            Token::VarRef(vref) => Some(Operand::Variable(vref)),
             Token::Value(v) => Some(Operand::Value(v)),
             _ => None,
         }
@@ -121,7 +123,7 @@ impl Lexer {
             }
         }
         let number =
-            crate::text::parse_number(&text).ok_or_else(|| ConditionError::NotNumber(text))?;
+            crate::text::parse_number(&text).ok_or(ConditionError::NotNumber(text))?;
         Ok(Token::Value(DataValue::Number(number)))
     }
 
@@ -135,6 +137,23 @@ impl Lexer {
             self.position += 1;
         }
         let word: String = self.chars[start..self.position].iter().collect();
+        if (word == "var" || word == "sheet" || word == "global")
+            && self.chars.get(self.position) == Some(&'.')
+        {
+            self.position += 1;
+            let name_start = self.position;
+            while self
+                .chars
+                .get(self.position)
+                .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_')
+            {
+                self.position += 1;
+            }
+            let name: String = self.chars[name_start..self.position].iter().collect();
+            if let Some(vref) = crate::VariableRef::parse(&format!("{word}.{name}")) {
+                return Token::VarRef(vref);
+            }
+        }
         match word.as_str() {
             "true" => Token::Value(DataValue::Bool(true)),
             "false" => Token::Value(DataValue::Bool(false)),

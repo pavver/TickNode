@@ -13,6 +13,11 @@ pub fn infer_type(
         ExprKind::Number(_) => Ok(DataType::Number),
         ExprKind::Bool(_) => Ok(DataType::Bool),
         ExprKind::Variable(name) => Ok(input_types.get(name).cloned().unwrap_or(DataType::Number)),
+        ExprKind::VariableRef(vref) => Ok(input_types
+            .get(&vref.to_str())
+            .or_else(|| input_types.get(&vref.name))
+            .cloned()
+            .unwrap_or(DataType::Number)),
         ExprKind::Unary { op, expr: inner } => {
             let t = infer_type(inner, input_types)?;
             match op {

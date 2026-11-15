@@ -19,11 +19,26 @@ const CONSTANTS: &[(&str, &str, &str)] = &[
 ];
 
 fn is_prefix_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_' || b == b':'
+    b.is_ascii_alphanumeric() || b == b'_' || b == b':' || b == b'.'
+}
+
+fn is_numeric_type(ty: &DataType) -> bool {
+    matches!(ty, DataType::Number | DataType::Bool)
+        || matches!(ty, DataType::Named(name) if crate::quantity::kind(name).is_some())
 }
 
 /// Provides completion items (functions, constants, inputs) at `caret` in `source`.
 pub fn complete(source: &str, caret: usize, inputs: &[(String, DataType)]) -> Completion {
+    complete_with_variables(source, caret, inputs, &[])
+}
+
+/// Provides completion items (functions, constants, inputs, variables) at `caret` in `source`.
+pub fn complete_with_variables(
+    source: &str,
+    caret: usize,
+    inputs: &[(String, DataType)],
+    variables: &[crate::Variable],
+) -> Completion {
     let caret = caret.min(source.len());
     let mut aligned_caret = caret;
     while !source.is_char_boundary(aligned_caret) {
@@ -52,6 +67,38 @@ pub fn complete(source: &str, caret: usize, inputs: &[(String, DataType)]) -> Co
                 help: None,
                 caret: None,
             });
+        }
+    }
+
+    // 2. Numeric / quantity variables
+    let mut seen_candidates = std::collections::HashSet::new();
+    for v in variables {
+        if !is_numeric_type(&v.data_type) {
+            continue;
+        }
+        let detail = crate::template::complete::type_label(&v.data_type, &Default::default());
+        let mut candidates = vec![format!("var.{}", v.key.name)];
+        match v.key.scope {
+            crate::VariableScope::Sheet => {
+                candidates.push(format!("sheet.{}", v.key.name));
+            }
+            crate::VariableScope::Global | crate::VariableScope::Persistent => {
+                candidates.push(format!("global.{}", v.key.name));
+            }
+        }
+        for cand in candidates {
+            if seen_candidates.insert(cand.clone())
+                && (prefix.is_empty() || cand.to_ascii_lowercase().starts_with(&prefix_lower))
+            {
+                items.push(CompletionItem {
+                    label: cand.clone(),
+                    kind: CompletionKind::Variable,
+                    detail: detail.clone(),
+                    insert: cand,
+                    help: None,
+                    caret: None,
+                });
+            }
         }
     }
 

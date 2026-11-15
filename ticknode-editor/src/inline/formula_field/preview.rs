@@ -79,9 +79,58 @@ pub fn FormulaStatusRow(node: NodeId) -> impl IntoView {
             }
         };
 
-        match compiled.eval(&lookup) {
+        let sheet = ed.open_sheet.get();
+        let visible_vars = ed.variables.with(|vars| {
+            vars.values()
+                .filter(|v| {
+                    v.key.scope != ticknode_shared::VariableScope::Sheet
+                        || (sheet.is_some() && v.key.sheet == sheet)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+
+        let var_lookup = |vref: &ticknode_shared::VariableRef| -> Result<FormulaValue, ticknode_shared::formula::FormulaError> {
+            let var = visible_vars.iter().find(|v| {
+                if v.key.name != vref.name {
+                    return false;
+                }
+                match vref.lookup {
+                    ticknode_shared::VariableLookup::Sheet => v.key.scope == ticknode_shared::VariableScope::Sheet,
+                    ticknode_shared::VariableLookup::Global => v.key.scope != ticknode_shared::VariableScope::Sheet,
+                    ticknode_shared::VariableLookup::Auto => true,
+                }
+            }).ok_or_else(|| {
+                ticknode_shared::formula::FormulaError::new(
+                    0..0,
+                    "error-variable-missing",
+                    format!("Variable \"{}\" not found", vref.name),
+                )
+                .with_arg("name", &vref.name)
+            })?;
+            match &var.value {
+                DataValue::Number(n) => Ok(FormulaValue::Number(*n)),
+                DataValue::Bool(b) => Ok(FormulaValue::Bool(*b)),
+                _ => Err(ticknode_shared::formula::FormulaError::new(
+                    0..0,
+                    "error-formula-variable-type",
+                    format!("Variable '{}' has non-numeric type", vref.name),
+                )
+                .with_arg("name", &vref.name)),
+            }
+        };
+
+        match compiled.eval_with(&lookup, &var_lookup) {
             Ok(res) => {
-                let input_types_map: HashMap<String, DataType> = typed_inputs.into_iter().collect();
+                let mut input_types_map: HashMap<String, DataType> =
+                    typed_inputs.into_iter().collect();
+                for v in &visible_vars {
+                    input_types_map.insert(format!("var.{}", v.key.name), v.data_type.clone());
+                    input_types_map.insert(
+                        format!("{}.{}", v.key.prefix(), v.key.name),
+                        v.data_type.clone(),
+                    );
+                }
                 let inferred_ty =
                     infer_type(&compiled.ast, &input_types_map).unwrap_or(DataType::Number);
                 let ty_label = ed.type_title(&inferred_ty);

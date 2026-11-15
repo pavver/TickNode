@@ -391,3 +391,26 @@ fn operators_preserve_results_and_lazy_operand_resolution() {
         assert_eq!(*reads.borrow(), ["left"], "missing left: {op:?}");
     }
 }
+
+#[test]
+fn test_condition_variable_operands() {
+    let types = crate::TypeRegistry::new();
+    let case = MatchCase::parse("1: a > var.limit").unwrap();
+    assert_eq!(case.inputs().collect::<Vec<_>>(), vec!["a"]);
+    assert_eq!(case.conditions[0].right.as_ref().unwrap().to_text(), "var.limit");
+    assert_eq!(case.to_text(), "1: a > var.limit");
+
+    let val_of = |name: &str| match name {
+        "a" => Some(DataValue::Number(20.into())),
+        "var.limit" => Some(DataValue::Number(15.into())),
+        _ => None,
+    };
+    assert!(case.matches_in(&types, |_| DataType::Number, val_of));
+
+    // String literal "var.limit" stays string value, not variable
+    let str_case = MatchCase::parse("1: a = \"var.limit\"").unwrap();
+    assert_eq!(
+        str_case.conditions[0].right,
+        Some(Operand::Value(DataValue::String("var.limit".into())))
+    );
+}

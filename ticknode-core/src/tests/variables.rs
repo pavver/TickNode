@@ -284,3 +284,120 @@ fn test_legacy_var_name_property_migration() {
             .any(|(k, v)| k == "name" && v == &DataValue::from("migrated"))
     );
 }
+
+#[test]
+fn test_nodes_read_variables_with_sheet_shadowing_and_cache_invalidation() {
+    let mut engine = TickEngine::new();
+    let sheet = SheetId::generate();
+
+    // Global and sheet variables with shadowing on 'x'
+    engine
+        .variables
+        .create(VariableKey::global("x"), DataType::Number, number(99));
+    engine
+        .variables
+        .create(VariableKey::sheet(sheet, "x"), DataType::Number, number(10));
+    engine
+        .variables
+        .create(VariableKey::sheet(sheet, "y"), DataType::Number, number(5));
+
+    // 1. Template node
+    let tpl = add(
+        &mut engine,
+        "text/template",
+        &[property(
+            "template",
+            "val={{ var.x }}, sheet={{ sheet.x }}, global={{ global.x }}",
+        )],
+    );
+    engine.set_node_sheet(tpl, Some(sheet));
+
+    // First pull caches pure output
+    assert_eq!(
+        pull(&mut engine, tpl, 0),
+        Some(DataValue::String("val=10, sheet=10, global=99".into()))
+    );
+
+    // Update variable and clear pure cache
+    engine
+        .variables
+        .set(&VariableKey::sheet(sheet, "x"), number(20));
+    engine.pure_cache.clear();
+
+    // Pull reflects updated variable
+    assert_eq!(
+        pull(&mut engine, tpl, 0),
+        Some(DataValue::String("val=20, sheet=20, global=99".into()))
+    );
+
+    // 2. Formula node
+    let formula = add(
+        &mut engine,
+        "math/expression",
+        &[property("expression", "var.x * 2 + sheet.y")],
+    );
+    engine.set_node_sheet(formula, Some(sheet));
+    assert_eq!(pull(&mut engine, formula, 0), Some(number(45)));
+
+    // 3. Formula error on non-numeric variable
+    engine.variables.create(
+        VariableKey::global("text_var"),
+        DataType::String,
+        DataValue::from("hello"),
+    );
+    let formula_bad_type = add(
+        &mut engine,
+        "math/expression",
+        &[property("expression", "var.text_var + 1")],
+    );
+    assert_eq!(pull(&mut engine, formula_bad_type, 0), None);
+    engine.take_node_error_changes();
+    let err = engine
+        .node_errors()
+        .into_iter()
+        .find(|e| e.node == formula_bad_type)
+        .unwrap();
+    assert_eq!(err.message.key, "error-formula-variable-type");
+
+    // 4. Formula error on missing variable
+    let formula_missing = add(
+        &mut engine,
+        "math/expression",
+        &[property("expression", "var.non_existent + 1")],
+    );
+    assert_eq!(pull(&mut engine, formula_missing, 0), None);
+    engine.take_node_error_changes();
+    let err = engine
+        .node_errors()
+        .into_iter()
+        .find(|e| e.node == formula_missing)
+        .unwrap();
+    assert_eq!(err.message.key, "error-variable-missing");
+
+    // 5. Match node
+    engine.variables.create(
+        VariableKey::sheet(sheet, "limit"),
+        DataType::Number,
+        number(15),
+    );
+    let match_node = NodeId::generate();
+    engine
+        .create_node(match_node, "match", &[super::cases(&["1: a > var.limit"])])
+        .unwrap();
+    engine.set_node_sheet(match_node, Some(sheet));
+    let def = engine.node_definition(match_node).unwrap();
+    let pin_a = def.pins.iter().find(|p| p.name == "a").unwrap().id;
+    let pin_case1 = def
+        .pins
+        .iter()
+        .find(|p| p.name == "a > var.limit")
+        .unwrap()
+        .id;
+
+    engine
+        .set_input_value(match_node, pin_a, Some(number(20)))
+        .unwrap();
+
+    let fired = super::fire(&mut engine, match_node);
+    assert_eq!(fired, vec![pin_case1]);
+}

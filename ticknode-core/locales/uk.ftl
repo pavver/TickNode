@@ -1102,8 +1102,10 @@ error-formula-domain-error = Помилка області визначення 
 error-formula-overflow = Арифметичне переповнення у формулі
 error-formula-incompatible-quantities = Несумісні фізичні величини: неможливо поєднати { $a } та { $b }
 error-formula-type-mismatch = Невідповідність типів: очікується { $expected }, отримано { $got }
+error-formula-variable-type = Змінна «{ $name }» має нечисловий тип
 error-formula-syntax = Некоректний синтаксис формули
 error-formula-eval = Помилка обчислення формули: { $message }
+error-variable-missing = Змінну «{ $name }» не знайдено
 
 # time/now
 node-time-now-title = Зараз

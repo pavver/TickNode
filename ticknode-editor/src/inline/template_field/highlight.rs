@@ -178,9 +178,24 @@ pub fn TemplateHighlightLayer(
                     .into_iter()
                     .map(|(name, _, ty)| (name, ty))
                     .collect::<Vec<_>>();
-            let lints = ed
-                .types
-                .with(|types| ticknode_shared::template::lint(&text, &typed_inputs, types));
+            let sheet = ed.open_sheet.get();
+            let visible_vars = ed.variables.with(|vars| {
+                vars.values()
+                    .filter(|v| {
+                        v.key.scope != ticknode_shared::VariableScope::Sheet
+                            || (sheet.is_some() && v.key.sheet == sheet)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            });
+            let lints = ed.types.with(|types| {
+                ticknode_shared::template::lint_with_variables(
+                    &text,
+                    &typed_inputs,
+                    types,
+                    &visible_vars,
+                )
+            });
             lints.into_iter().map(|l| l.range).collect::<Vec<_>>()
         } else {
             Vec::new()

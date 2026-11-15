@@ -52,11 +52,12 @@ pub(super) fn CaseBlock(
     }
 }
 
-/// Right-hand side of a condition: none (unary operator), a constant value, or another input.
+/// Right-hand side of a condition: none (unary operator), a constant value, or another input / variable.
 #[derive(Debug, Clone, PartialEq)]
 enum Right {
     Value(DataType),
     Input(String),
+    Variable(VariableRef),
 }
 
 #[component]
@@ -95,7 +96,41 @@ fn ConditionRow(
         let rt = op.right_type(&left_type.get())?;
         Some(match right {
             Some(Operand::Input(n)) => Right::Input(n),
+            Some(Operand::Variable(vref)) => Right::Variable(vref),
             _ => Right::Value(rt),
+        })
+    });
+    let compatible_vars = Memo::new(move |_| {
+        let (op, _) = match cond.with(|c| c.as_ref().map(|c| (c.op, c.right.clone()))) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let rt = match op.right_type(&left_type.get()) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+        let sheet = ed.open_sheet.get();
+        ed.variables.with(|vars| {
+            let mut list = Vec::new();
+            for v in vars.values() {
+                if v.key.scope == VariableScope::Sheet && v.key.sheet != sheet {
+                    continue;
+                }
+                let fits = ed.types.with(|reg| {
+                    rt == DataType::Any
+                        || reg.compatible(&v.data_type, &rt)
+                        || reg.convertible(&v.data_type, &rt).is_some()
+                });
+                if fits {
+                    list.push((VariableRef::auto(&v.key.name), v.data_type.clone()));
+                    if v.key.scope == VariableScope::Sheet {
+                        list.push((VariableRef::sheet(&v.key.name), v.data_type.clone()));
+                    } else {
+                        list.push((VariableRef::global(&v.key.name), v.data_type.clone()));
+                    }
+                }
+            }
+            list
         })
     });
     let right_value = Signal::derive(move || {
@@ -108,7 +143,11 @@ fn ConditionRow(
     let set_left = move |name: String| {
         edit.run(EditFn::new(move |s, env| {
             let c = &mut s.cases[ci].conditions[ri];
-            c.left = Operand::Input(name);
+            if let Some(vref) = VariableRef::parse(&name) {
+                c.left = Operand::Variable(vref);
+            } else {
+                c.left = Operand::Input(name);
+            }
             let t = type_of(&env.types, &c.left);
             fit_condition(&env.reg, c, &t);
         }))
@@ -155,7 +194,7 @@ fn ConditionRow(
                 style=move || format!("--pin-color:{}", ed.types.with(|r| type_color(r, &left_type.get())))
                 on:change=move |ev| {
                     let name = event_target_value(&ev);
-                    if is_input_name(&name) {
+                    if is_input_name(&name) || VariableRef::parse(&name).is_some() {
                         set_left(name);
                     }
                 }
@@ -167,10 +206,26 @@ fn ConditionRow(
                     if !list.contains(&current) {
                         list.insert(0, current.clone());
                     }
-                    list.into_iter().map(|n| {
-                        let selected = n == current;
-                        view! { <option value=n.clone() selected=selected>{n.clone()}</option> }
-                    }).collect_view()
+                    let sheet = ed.open_sheet.get();
+                    let var_options = ed.variables.with(|vars| {
+                        let mut vlist = Vec::new();
+                        for v in vars.values() {
+                            if v.key.scope == VariableScope::Sheet && v.key.sheet != sheet {
+                                continue;
+                            }
+                            vlist.push(format!("var.{}", v.key.name));
+                        }
+                        vlist
+                    });
+                    view! {
+                        {list.into_iter().map(|n| {
+                            let selected = n == current;
+                            view! { <option value=n.clone() selected=selected>{n.clone()}</option> }
+                        }).collect_view()}
+                        {var_options.into_iter().filter(|n| n != &current).map(|n| {
+                            view! { <option value=n.clone() selected=false>{n.clone()}</option> }
+                        }).collect_view()}
+                    }
                 }}
             </select>
             <select
@@ -204,14 +259,25 @@ fn ConditionRow(
                             title=move || t!("match-right-source-title")
                             on:change=move |ev| {
                                 let v = event_target_value(&ev);
-                                // An empty right operand will be replaced with a default value by fit_condition
-                                set_right(if v.is_empty() { None } else { Some(Operand::Input(v)) });
+                                if v.is_empty() {
+                                    set_right(None);
+                                } else if let Some(vref) = VariableRef::parse(&v) {
+                                    set_right(Some(Operand::Variable(vref)));
+                                } else {
+                                    set_right(Some(Operand::Input(v)));
+                                }
                             }
                         >
                             <option value="" selected=is_value>"✎"</option>
                             {names.get().into_iter().map(|n| {
                                 let selected = matches!(&r, Right::Input(x) if *x == n);
                                 view! { <option value=n.clone() selected=selected>{n.clone()}</option> }
+                            }).collect_view()}
+                            {compatible_vars.get().into_iter().map(|(vref, ty)| {
+                                let val_str = vref.to_str();
+                                let selected = matches!(&r, Right::Variable(x) if x == &vref);
+                                let label = format!("{} ({})", val_str, ed.type_title(&ty));
+                                view! { <option value=val_str selected=selected>{label}</option> }
                             }).collect_view()}
                         </select>
                     };
@@ -232,7 +298,7 @@ fn ConditionRow(
                                 />
                             })
                         }
-                        Right::Input(_) => None,
+                        Right::Input(_) | Right::Variable(_) => None,
                     };
                     view! { {source} {value} }.into_any()
                 }

@@ -225,13 +225,13 @@ fn test_variables_extraction() {
         vec!["x".to_string(), "y".to_string()]
     );
 
-    // Rejection of dotted variable names
+    // Variable references are excluded from input pins
+    assert_eq!(variables("var.my_var + 1").unwrap(), Vec::<String>::new());
+    assert_eq!(variables("sheet.x * 2 + a").unwrap(), vec!["a".to_string()]);
+
+    // Rejection of invalid dotted names
     assert!(matches!(
-        variables("var.my_var + 1"),
-        Err(FormulaError { ref message, .. }) if message.key == "error-formula-reserved-name"
-    ));
-    assert!(matches!(
-        variables("sheet.x * 2"),
+        variables("other.my_var + 1"),
         Err(FormulaError { ref message, .. }) if message.key == "error-formula-reserved-name"
     ));
 }
@@ -256,4 +256,27 @@ fn test_source_limits_and_errors() {
     let err = compile("1 + * 2").unwrap_err();
     assert_eq!(err.range, 4..5);
     assert_eq!(err.message.key, "error-formula-unexpected-token");
+}
+
+#[test]
+fn test_formula_variable_evaluation() {
+    let f = compile("var.x * 2 + sheet.y").unwrap();
+    let vars = variables("var.x * 2 + sheet.y").unwrap();
+    assert!(
+        vars.is_empty(),
+        "formula variables should not become pins"
+    );
+
+    let val = f
+        .eval_with(
+            &|_| None,
+            &|vref| match vref.name.as_str() {
+                "x" => Ok(FormulaValue::Number(10.into())),
+                "y" => Ok(FormulaValue::Number(5.into())),
+                _ => Err(super::error::FormulaError::new(0..0, "err", "unknown")),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(val, FormulaValue::Number(25.into()));
 }

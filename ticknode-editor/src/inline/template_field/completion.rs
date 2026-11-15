@@ -180,6 +180,17 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
             })
         });
 
+        let sheet = ed.open_sheet.get();
+        let visible_vars = ed.variables.with_untracked(|vars| {
+            vars.values()
+                .filter(|v| {
+                    v.key.scope != ticknode_shared::VariableScope::Sheet
+                        || (sheet.is_some() && v.key.sheet == sheet)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+
         let completion = ed.types.with_untracked(|types| {
             ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
                 source: &current_text,
@@ -188,6 +199,7 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
                 types,
                 now: Some(chrono::Local::now()),
                 labels: Some(&crate::i18n::UiQuantityLabels),
+                variables: &visible_vars,
             })
         });
 

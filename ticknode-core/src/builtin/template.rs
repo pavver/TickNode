@@ -165,6 +165,7 @@ impl TemplateNode {
                 labels: std::sync::Arc::new(labels),
                 now: ctx.host_state.now(),
                 to_text: to_text_closure,
+                variables: ctx.variables.for_sheet_and_global(ctx.sheet),
             },
             ctx.types,
         )

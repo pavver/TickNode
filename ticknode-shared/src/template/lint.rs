@@ -83,6 +83,16 @@ pub fn is_known_filter(name: &str) -> bool {
 
 /// Analyzes a template for type-aware and semantic issues.
 pub fn lint(source: &str, inputs: &[(String, DataType)], types: &TypeRegistry) -> Vec<Lint> {
+    lint_with_variables(source, inputs, types, &[])
+}
+
+/// Analyzes a template for type-aware and semantic issues, including visible variables.
+pub fn lint_with_variables(
+    source: &str,
+    inputs: &[(String, DataType)],
+    types: &TypeRegistry,
+    variables: &[crate::Variable],
+) -> Vec<Lint> {
     if crate::template::validate(source).is_err() {
         return Vec::new();
     }
@@ -240,87 +250,80 @@ pub fn lint(source: &str, inputs: &[(String, DataType)], types: &TypeRegistry) -
                 if !prev_is_dot
                     && i + 1 < tokens.len()
                     && matches!(tokens[i + 1].0, Token::Dot)
+                    && (*root_name == "var" || *root_name == "sheet" || *root_name == "global")
+                    && !variables.is_empty()
+                {
+                    if i + 2 < tokens.len()
+                        && let Token::Ident(var_name) = &tokens[i + 2].0
+                    {
+                        let var_span = tokens[i + 2].1;
+                        let scope_matches = |v: &&crate::Variable| match *root_name {
+                            "sheet" => v.key.scope == crate::VariableScope::Sheet,
+                            "global" => v.key.scope != crate::VariableScope::Sheet,
+                            _ => true,
+                        };
+                        let found = variables
+                            .iter()
+                            .filter(scope_matches)
+                            .find(|v| v.key.name == *var_name);
+                        match found {
+                            None => {
+                                let range =
+                                    var_span.start_offset as usize..var_span.end_offset as usize;
+                                let candidates = variables
+                                    .iter()
+                                    .filter(scope_matches)
+                                    .map(|v| v.key.name.as_str());
+                                let suggestion = find_suggestion(var_name, candidates);
+                                if let Some(sugg) = suggestion {
+                                    lints.push(Lint {
+                                        range,
+                                        message: UiMessage::new(
+                                            "template-lint-unknown-variable-suggest",
+                                            format!("Unknown variable '{var_name}'. Did you mean '{sugg}'?"),
+                                        )
+                                        .arg("name", var_name)
+                                        .arg("suggestion", sugg),
+                                        severity: LintSeverity::Warning,
+                                    });
+                                } else {
+                                    lints.push(Lint {
+                                        range,
+                                        message: UiMessage::new(
+                                            "template-lint-unknown-variable",
+                                            format!("Unknown variable '{var_name}'"),
+                                        )
+                                        .arg("name", var_name),
+                                        severity: LintSeverity::Warning,
+                                    });
+                                }
+                            }
+                            Some(var) => {
+                                check_struct_fields(
+                                    &tokens,
+                                    i + 2,
+                                    var.data_type.clone(),
+                                    types,
+                                    &mut lints,
+                                );
+                            }
+                        }
+                    }
+                } else if !prev_is_dot
+                    && i + 1 < tokens.len()
+                    && matches!(tokens[i + 1].0, Token::Dot)
                     && *root_name != "loop"
                     && *root_name != "text"
+                    && *root_name != "var"
+                    && *root_name != "sheet"
+                    && *root_name != "global"
                     && !for_stack
                         .iter()
                         .any(|s| s.vars.iter().any(|v| v == root_name))
                     && !set_vars.iter().any(|v| v == root_name)
                     && let Some((_, root_type)) = inputs.iter().find(|(name, _)| name == root_name)
                 {
-                    let mut current_type = root_type.clone();
-                    let mut k = i + 1;
-                    while k < tokens.len() && matches!(tokens[k].0, Token::Dot) {
-                        if k + 1 < tokens.len()
-                            && let Token::Ident(field_name) = &tokens[k + 1].0
-                        {
-                            let field_span = tokens[k + 1].1;
-                            let struct_info = match &current_type {
-                                DataType::Named(name) => {
-                                    types.get(name).and_then(|def| match &def.kind {
-                                        TypeKind::Struct { fields } => Some((def, fields)),
-                                        _ => None,
-                                    })
-                                }
-                                _ => None,
-                            };
-
-                            match struct_info {
-                                None => break,
-                                Some((def, struct_fields)) => {
-                                    if let Some(f) =
-                                        struct_fields.iter().find(|f| f.name == *field_name)
-                                    {
-                                        current_type = f.data_type.clone();
-                                        k += 2;
-                                    } else {
-                                        let range = field_span.start_offset as usize
-                                            ..field_span.end_offset as usize;
-                                        let type_label = if def.title.is_empty() {
-                                            def.name.clone()
-                                        } else {
-                                            def.title.clone()
-                                        };
-                                        let suggestion = find_suggestion(
-                                            field_name,
-                                            struct_fields.iter().map(|f| f.name.as_str()),
-                                        );
-                                        if let Some(sugg) = suggestion {
-                                            lints.push(Lint {
-                                                    range,
-                                                    message: UiMessage::new(
-                                                        "template-lint-unknown-field-suggest",
-                                                        format!(
-                                                            "Unknown field '{field_name}' on {type_label}. Did you mean '{sugg}'?"
-                                                        ),
-                                                    )
-                                                    .arg("field", field_name)
-                                                    .arg("type", &type_label)
-                                                    .arg("suggestion", sugg),
-                                                    severity: LintSeverity::Warning,
-                                                });
-                                        } else {
-                                            lints.push(Lint {
-                                                    range,
-                                                    message: UiMessage::new(
-                                                        "template-lint-unknown-field",
-                                                        format!(
-                                                            "Unknown field '{field_name}' on {type_label}"
-                                                        ),
-                                                    )
-                                                    .arg("field", field_name)
-                                                    .arg("type", &type_label),
-                                                    severity: LintSeverity::Warning,
-                                                });
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
+                    check_struct_fields(&tokens, i, root_type.clone(), types, &mut lints);
                 }
             }
             _ => {}
@@ -329,4 +332,79 @@ pub fn lint(source: &str, inputs: &[(String, DataType)], types: &TypeRegistry) -
     }
 
     lints
+}
+
+fn check_struct_fields(
+    tokens: &[(Token, minijinja::machinery::Span)],
+    root_idx: usize,
+    mut current_type: DataType,
+    types: &TypeRegistry,
+    lints: &mut Vec<Lint>,
+) {
+    let mut k = root_idx + 1;
+    while k < tokens.len() && matches!(tokens[k].0, Token::Dot) {
+        if k + 1 < tokens.len()
+            && let Token::Ident(field_name) = &tokens[k + 1].0
+        {
+            let field_span = tokens[k + 1].1;
+            let struct_info = match &current_type {
+                DataType::Named(name) => types.get(name).and_then(|def| match &def.kind {
+                    TypeKind::Struct { fields } => Some((def, fields)),
+                    _ => None,
+                }),
+                _ => None,
+            };
+
+            match struct_info {
+                None => break,
+                Some((def, struct_fields)) => {
+                    if let Some(f) = struct_fields.iter().find(|f| f.name == *field_name) {
+                        current_type = f.data_type.clone();
+                        k += 2;
+                    } else {
+                        let range =
+                            field_span.start_offset as usize..field_span.end_offset as usize;
+                        let type_label = if def.title.is_empty() {
+                            def.name.clone()
+                        } else {
+                            def.title.clone()
+                        };
+                        let suggestion = find_suggestion(
+                            field_name,
+                            struct_fields.iter().map(|f| f.name.as_str()),
+                        );
+                        if let Some(sugg) = suggestion {
+                            lints.push(Lint {
+                                range,
+                                message: UiMessage::new(
+                                    "template-lint-unknown-field-suggest",
+                                    format!(
+                                        "Unknown field '{field_name}' on {type_label}. Did you mean '{sugg}'?"
+                                    ),
+                                )
+                                .arg("field", field_name)
+                                .arg("type", &type_label)
+                                .arg("suggestion", sugg),
+                                severity: LintSeverity::Warning,
+                            });
+                        } else {
+                            lints.push(Lint {
+                                range,
+                                message: UiMessage::new(
+                                    "template-lint-unknown-field",
+                                    format!("Unknown field '{field_name}' on {type_label}"),
+                                )
+                                .arg("field", field_name)
+                                .arg("type", &type_label),
+                                severity: LintSeverity::Warning,
+                            });
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            break;
+        }
+    }
 }

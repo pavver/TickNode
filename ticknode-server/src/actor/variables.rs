@@ -71,6 +71,7 @@ impl Actor {
         if self.engine.variables.is_persistent_dirty() {
             self.dirty_since.get_or_insert_with(Instant::now);
         }
+        self.engine.pure_cache.clear();
         Ok(())
     }
 
@@ -103,7 +104,9 @@ impl Actor {
                 "Value does not match variable type",
             ));
         };
-        self.engine.variables.set(&key, fitted);
+        if self.engine.variables.set(&key, fitted) {
+            self.engine.pure_cache.clear();
+        }
         if self.engine.variables.is_persistent_dirty() {
             self.dirty_since.get_or_insert_with(Instant::now);
         }
@@ -111,7 +114,9 @@ impl Actor {
     }
 
     pub(super) fn delete_variable(&mut self, key: VariableKey) -> Result<(), UiMessage> {
-        self.engine.variables.delete(&key);
+        if self.engine.variables.delete(&key) {
+            self.engine.pure_cache.clear();
+        }
         if self.engine.variables.is_persistent_dirty() {
             self.dirty_since.get_or_insert_with(Instant::now);
         }

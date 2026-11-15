@@ -1102,8 +1102,10 @@ error-formula-domain-error = Mathematical domain error in function '{ $name }'
 error-formula-overflow = Arithmetic overflow in formula
 error-formula-incompatible-quantities = Incompatible physical quantities: cannot combine { $a } and { $b }
 error-formula-type-mismatch = Type mismatch: expected { $expected }, got { $got }
+error-formula-variable-type = Variable '{ $name }' has non-numeric type
 error-formula-syntax = Invalid formula syntax
 error-formula-eval = Formula evaluation failed: { $message }
+error-variable-missing = Variable "{ $name }" not found
 
 # time/now
 node-time-now-title = Now

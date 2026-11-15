@@ -48,6 +48,7 @@ pub(super) struct Runtime {
     pub(super) tick_backoff_until: u64,
     pub(super) options: Arc<Mutex<OptionStore>>,
     pub(crate) metrics: PluginUsageMetrics,
+    pub(super) blob_store: Arc<dyn crate::blobs::BlobStore>,
 }
 
 impl Runtime {
@@ -82,8 +83,9 @@ impl Runtime {
                 grants: self.grants.clone(),
                 call: None,
                 ws: WsHub::new(self.tokio.clone()),
-                http: super::http::Tasks::new(self.tokio.clone()),
+                http: super::http::Tasks::new(self.tokio.clone(), Some(self.blob_store.clone())),
                 options: self.options.clone(),
+                blob_store: self.blob_store.clone(),
             };
             let mut store = Store::new(engine(), state);
             store.limiter(|s| &mut s.limits);
@@ -118,6 +120,8 @@ impl Runtime {
             .expect("the instance was just created");
         store.data_mut().ws.set_runtime(self.tokio.clone());
         store.data_mut().http.runtime = self.tokio.clone();
+        store.data_mut().http.blob_store = Some(self.blob_store.clone());
+        store.data_mut().blob_store = self.blob_store.clone();
         store.set_fuel(FUEL_PER_CALL)?;
         Ok((store, plugin.ticknode_plugin_nodes()))
     }
@@ -128,8 +132,10 @@ impl Runtime {
         &mut self,
         settings: &[(String, DataValue)],
         tokio: Option<tokio::runtime::Handle>,
+        blob_store: Arc<dyn crate::blobs::BlobStore>,
     ) -> Result<(), UiMessage> {
         self.tokio = tokio;
+        self.blob_store = blob_store;
         let props: Vec<wit::Property> = settings
             .iter()
             .map(|(name, value)| wit::Property {
@@ -177,6 +183,7 @@ impl Runtime {
             return Ok(Vec::new());
         }
         self.tokio = host.runtime.clone();
+        self.blob_store = host.blob_store.clone();
         let outcome = self.api().map(|_| ()).and_then(|()| {
             let (store, plugin) = self.instance.as_mut().expect("api() creates the instance");
             let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);

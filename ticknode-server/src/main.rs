@@ -70,6 +70,8 @@ async fn main() -> anyhow::Result<()> {
         // Plugins may open connections already in `configure` while loading
         engine.host_state.runtime = Some(runtime);
         engine.host_state.tick_duration = Duration::from_millis(tick_ms as u64);
+        let blob_store = ticknode_core::FileBlobStore::open(data_dir.join("blobs"))?;
+        engine.host_state.blob_store = std::sync::Arc::new(blob_store);
         // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
         let mut plugins = plugins::Plugins::new(&data_dir).with_bundled_dir(bundled_dir);
         plugins.load_all(&mut engine);

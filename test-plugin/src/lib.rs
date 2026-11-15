@@ -2,6 +2,7 @@
 
 use ticknode_plugin_sdk::*;
 
+mod blobs;
 mod clock;
 mod cost;
 mod execution;
@@ -24,6 +25,7 @@ struct TestPlugin;
 impl Plugin for TestPlugin {
     const NODE_TYPES: &'static [&'static str] = &[
         "test/identifier",
+        "test/blob_probe",
         "test/http_probe",
         "test/properties",
         "test/clock",
@@ -200,6 +202,7 @@ impl Plugin for TestPlugin {
     fn create(type_name: &str, node: NodeId) -> Option<Box<dyn PluginNode>> {
         Some(match type_name {
             "test/identifier" => Box::new(identifiers::Identifier::default()),
+            "test/blob_probe" => Box::new(blobs::BlobProbe),
             "test/http_probe" => Box::new(http::Probe::new(node)),
             "test/properties" => Box::new(properties::Properties::default()),
             "test/clock" => Box::new(clock::Clock),

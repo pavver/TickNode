@@ -336,6 +336,31 @@ node-sleep-pin-In = In
 node-sleep-pin-Delay = Затримка
 node-sleep-pin-Out = Out
 
+# media/fetch
+node-media-fetch-title = Завантажити медіа
+node-media-fetch-description = Завантажує медіафайл у сховище блобів
+node-media-fetch-help =
+    Завантажує медіафайл за HTTP(S) URL у сховище блобів хоста та формує дескриптор медіа.
+
+    • URL — HTTP(S) URL для завантаження. Підтримується базова автентифікація в URL (http://user:pass@host/...).
+    • Заголовки — необов'язкові HTTP-заголовки, по одному 'Name: value' на рядок.
+    • Тип — цільовий тип медіа (photo, audio, video, document).
+
+    Подає сигнал на Done у разі успіху або Failed у разі помилки.
+node-media-fetch-pin-In = Вхід
+node-media-fetch-pin-URL = URL
+node-media-fetch-pin-Headers = Заголовки
+node-media-fetch-pin-Done = Готово
+node-media-fetch-pin-Failed = Помилка
+node-media-fetch-pin-Error = Помилка
+node-media-fetch-pin-Media = Медіа
+node-media-fetch-prop-kind-title = Тип
+node-media-fetch-prop-kind-description = Тип медіа
+node-media-fetch-prop-kind-option-photo = Світлина
+node-media-fetch-prop-kind-option-audio = Аудіо
+node-media-fetch-prop-kind-option-video = Відео
+node-media-fetch-prop-kind-option-document = Файл
+
 # list/create
 node-list-create-title = Create List
 node-list-create-description = Створює порожній список
@@ -1217,6 +1242,7 @@ type-media-photo-field-size = Розмір
 type-media-photo-field-width = Ширина
 type-media-photo-field-height = Висота
 type-media-photo-field-duration = Тривалість
+type-media-photo-field-blob = Блоб
 
 type-media-audio-title = Аудіо
 type-media-audio-description = Посилання на аудіозапис
@@ -1228,6 +1254,7 @@ type-media-audio-field-size = Розмір
 type-media-audio-field-width = Ширина
 type-media-audio-field-height = Висота
 type-media-audio-field-duration = Тривалість
+type-media-audio-field-blob = Блоб
 
 type-media-video-title = Відео
 type-media-video-description = Посилання на відеозапис
@@ -1239,6 +1266,7 @@ type-media-video-field-size = Розмір
 type-media-video-field-width = Ширина
 type-media-video-field-height = Висота
 type-media-video-field-duration = Тривалість
+type-media-video-field-blob = Блоб
 
 type-media-document-title = Файл
 type-media-document-description = Посилання на документ або довільний файл
@@ -1250,6 +1278,7 @@ type-media-document-field-size = Розмір
 type-media-document-field-width = Ширина
 type-media-document-field-height = Висота
 type-media-document-field-duration = Тривалість
+type-media-document-field-blob = Блоб
 
-error-media-missing-source = Об'єкт медіа повинен містити url або file_id
+error-media-missing-source = Об'єкт медіа повинен містити url, file_id або blob
 

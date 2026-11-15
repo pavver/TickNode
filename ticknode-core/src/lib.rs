@@ -1,3 +1,4 @@
+pub mod blobs;
 mod custom_types;
 mod host;
 mod plugin;
@@ -6,6 +7,7 @@ mod stub;
 pub mod translations;
 pub mod variables;
 mod ws;
+pub use blobs::*;
 pub use variables::*;
 
 pub use host::*;

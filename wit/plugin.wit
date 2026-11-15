@@ -192,6 +192,18 @@ interface types {
         resources: list<resource-collection>,
     }
 
+    variant part-data {
+        text(string),
+        blob(string),
+    }
+
+    record multipart-part {
+        name: string,
+        file-name: option<string>,
+        content-type: option<string>,
+        data: part-data,
+    }
+
     record http-request {
         method: string,
         url: string,
@@ -199,6 +211,8 @@ interface types {
         body: list<u8>,
         /// 0 — default host timeout.
         timeout-ms: u32,
+        multipart: list<multipart-part>,
+        save-to-blob: bool,
     }
 
     record http-response {
@@ -207,11 +221,28 @@ interface types {
         body: list<u8>,
     }
 
+    record blob-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        blob: string,
+        size: u64,
+        content-type: option<string>,
+    }
+
     type task-id = u64;
 
     variant task-output {
         delay,
         http(http-response),
+        blob(blob-response),
+    }
+
+    record blob-info {
+        id: string,
+        size: u64,
+        content-type: option<string>,
+        file-name: option<string>,
+        created: string,
     }
 
     record task-done {
@@ -277,7 +308,7 @@ interface types {
 /// Host services. Task-starting functions work only during `execute`/`poll`
 /// (the task belongs to the currently executing node).
 interface host {
-    use types.{log-level, task-id, http-request, ws-id, property-option, ui-error};
+    use types.{log-level, task-id, http-request, ws-id, property-option, ui-error, blob-info as blob-meta};
 
     /// Log message to the editor console (on behalf of the current node). Logs are never translated:
     /// always write them in English.
@@ -318,6 +349,15 @@ interface host {
     /// length of every string (options violating the limits are dropped and logged); an empty list
     /// removes the source. Unchanged lists are not re-sent to editors.
     set-options: func(source: string, options: list<property-option>);
+
+    /// Stores binary data in the host blob store (up to 16 MiB per call); returns the blob ID.
+    blob-put: func(data: list<u8>, content-type: option<string>, file-name: option<string>) -> result<string, string>;
+
+    /// Reads a range from a blob (len clamped to 4 MiB).
+    blob-read: func(id: string, offset: u64, len: u32) -> result<list<u8>, string>;
+
+    /// Returns metadata of a blob in the host store.
+    blob-info: func(id: string) -> option<blob-meta>;
 }
 
 interface nodes {

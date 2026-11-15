@@ -15,13 +15,15 @@ fn request() -> HttpRequest {
         headers: vec![],
         body: vec![],
         timeout: std::time::Duration::from_secs(70),
+        multipart: vec![],
+        save_to_blob: false,
     }
 }
 
 #[test]
 fn plugin_owned_task_limit_cancellation_and_runtime_errors_need_no_network() {
     let rt = runtime(); // Never driven: no HTTP future can open a socket.
-    let mut tasks = Tasks::new(Some(rt.handle().clone()));
+    let mut tasks = Tasks::new(Some(rt.handle().clone()), None);
     let ids: Vec<_> = (0..8).map(|_| tasks.start(request()).unwrap()).collect();
     assert!(ids.windows(2).all(|w| w[0] < w[1]));
     assert!(tasks.start(request()).unwrap_err().contains("maximum 8"));
@@ -113,6 +115,8 @@ fn plugin_http_permissions_and_owners_are_enforced_without_driving_transport() {
         headers: vec![],
         body: vec![],
         timeout_ms: 70_000,
+        multipart: vec![],
+        save_to_blob: false,
     };
     assert!(
         state

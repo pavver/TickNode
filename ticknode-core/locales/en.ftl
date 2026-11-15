@@ -336,6 +336,31 @@ node-sleep-pin-In = In
 node-sleep-pin-Delay = Delay
 node-sleep-pin-Out = Out
 
+# media/fetch
+node-media-fetch-title = Download media
+node-media-fetch-description = Downloads a media file into blob storage
+node-media-fetch-help =
+    Downloads a media file from an HTTP(S) URL into host blob storage and produces a media descriptor.
+
+    • URL — HTTP(S) URL to download from. Basic authentication in the URL (http://user:pass@host/...) is supported.
+    • Headers — optional HTTP headers, one 'Name: value' per line.
+    • Kind — target media type (photo, audio, video, document).
+
+    Fires Done on success or Failed on error.
+node-media-fetch-pin-In = In
+node-media-fetch-pin-URL = URL
+node-media-fetch-pin-Headers = Headers
+node-media-fetch-pin-Done = Done
+node-media-fetch-pin-Failed = Failed
+node-media-fetch-pin-Error = Error
+node-media-fetch-pin-Media = Media
+node-media-fetch-prop-kind-title = Kind
+node-media-fetch-prop-kind-description = Media kind
+node-media-fetch-prop-kind-option-photo = Photo
+node-media-fetch-prop-kind-option-audio = Audio
+node-media-fetch-prop-kind-option-video = Video
+node-media-fetch-prop-kind-option-document = File
+
 # list/create
 node-list-create-title = Create List
 node-list-create-description = Creates an empty list
@@ -1217,6 +1242,7 @@ type-media-photo-field-size = Size
 type-media-photo-field-width = Width
 type-media-photo-field-height = Height
 type-media-photo-field-duration = Duration
+type-media-photo-field-blob = Blob
 
 type-media-audio-title = Audio
 type-media-audio-description = Audio recording reference
@@ -1228,6 +1254,7 @@ type-media-audio-field-size = Size
 type-media-audio-field-width = Width
 type-media-audio-field-height = Height
 type-media-audio-field-duration = Duration
+type-media-audio-field-blob = Blob
 
 type-media-video-title = Video
 type-media-video-description = Video recording reference
@@ -1239,6 +1266,7 @@ type-media-video-field-size = Size
 type-media-video-field-width = Width
 type-media-video-field-height = Height
 type-media-video-field-duration = Duration
+type-media-video-field-blob = Blob
 
 type-media-document-title = File
 type-media-document-description = Document or generic file reference
@@ -1250,6 +1278,7 @@ type-media-document-field-size = Size
 type-media-document-field-width = Width
 type-media-document-field-height = Height
 type-media-document-field-duration = Duration
+type-media-document-field-blob = Blob
 
-error-media-missing-source = Media object must have either url or file_id set
+error-media-missing-source = Media object must have either url, file_id or blob set
 

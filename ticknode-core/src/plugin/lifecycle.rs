@@ -251,7 +251,11 @@ impl TickEngine {
     fn apply_settings(&self, name: &str, settings: &[(String, DataValue)]) -> Option<UiMessage> {
         let slot = &self.plugins[name];
         lock(&slot.runtime)
-            .configure(settings, self.host_state.runtime.clone())
+            .configure(
+                settings,
+                self.host_state.runtime.clone(),
+                self.host_state.blob_store.clone(),
+            )
             .err()
             .or_else(|| missing_required(&slot.manifest, settings))
     }

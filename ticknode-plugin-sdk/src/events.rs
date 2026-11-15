@@ -3,6 +3,50 @@ use crate::*;
 pub type TaskId = u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PartData {
+    Text(String),
+    Blob(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MultipartPart {
+    pub name: String,
+    pub file_name: Option<String>,
+    pub content_type: Option<String>,
+    pub data: PartData,
+}
+
+impl MultipartPart {
+    pub fn text(name: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            file_name: None,
+            content_type: None,
+            data: PartData::Text(text.into()),
+        }
+    }
+
+    pub fn blob(name: impl Into<String>, blob: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            file_name: None,
+            content_type: None,
+            data: PartData::Blob(blob.into()),
+        }
+    }
+
+    pub fn file_name(mut self, name: impl Into<String>) -> Self {
+        self.file_name = Some(name.into());
+        self
+    }
+
+    pub fn content_type(mut self, mime: impl Into<String>) -> Self {
+        self.content_type = Some(mime.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HttpRequest {
     pub method: String,
     pub url: String,
@@ -10,6 +54,8 @@ pub struct HttpRequest {
     pub body: Vec<u8>,
     /// 0 — default host timeout.
     pub timeout_ms: u32,
+    pub multipart: Vec<MultipartPart>,
+    pub save_to_blob: bool,
 }
 
 impl HttpRequest {
@@ -17,9 +63,7 @@ impl HttpRequest {
         Self {
             method: "GET".into(),
             url: url.into(),
-            headers: Vec::new(),
-            body: Vec::new(),
-            timeout_ms: 0,
+            ..Default::default()
         }
     }
 
@@ -33,6 +77,16 @@ impl HttpRequest {
 
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
+        self
+    }
+
+    pub fn multipart(mut self, part: MultipartPart) -> Self {
+        self.multipart.push(part);
+        self
+    }
+
+    pub fn save_to_blob(mut self, save: bool) -> Self {
+        self.save_to_blob = save;
         self
     }
 }
@@ -55,9 +109,28 @@ impl HttpResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub blob: String,
+    pub size: u64,
+    pub content_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobInfo {
+    pub id: String,
+    pub size: u64,
+    pub content_type: Option<String>,
+    pub file_name: Option<String>,
+    pub created: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskOutput {
     Delay,
     Http(HttpResponse),
+    Blob(BlobResponse),
 }
 
 /// Reason why a node is executed.

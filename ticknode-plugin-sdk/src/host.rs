@@ -75,6 +75,45 @@ pub fn http(request: HttpRequest) -> Result<TaskId, String> {
         headers: request.headers,
         body: request.body,
         timeout_ms: request.timeout_ms,
+        multipart: request
+            .multipart
+            .into_iter()
+            .map(|p| wit::MultipartPart {
+                name: p.name,
+                file_name: p.file_name,
+                content_type: p.content_type,
+                data: match p.data {
+                    PartData::Text(t) => wit::PartData::Text(t),
+                    PartData::Blob(b) => wit::PartData::Blob(b),
+                },
+            })
+            .collect(),
+        save_to_blob: request.save_to_blob,
+    })
+}
+
+/// Stores binary data in the host blob store (up to 16 MiB per call); returns the blob ID.
+pub fn blob_put(
+    data: &[u8],
+    content_type: Option<&str>,
+    file_name: Option<&str>,
+) -> Result<String, String> {
+    wit_host::blob_put(data, content_type, file_name)
+}
+
+/// Reads a range from a blob in the host store (len clamped to 4 MiB).
+pub fn blob_read(id: &str, offset: u64, len: u32) -> Result<Vec<u8>, String> {
+    wit_host::blob_read(id, offset, len)
+}
+
+/// Retrieves metadata for a blob from the host store.
+pub fn blob_info(id: &str) -> Option<BlobInfo> {
+    wit_host::blob_info(id).map(|b| BlobInfo {
+        id: b.id,
+        size: b.size,
+        content_type: b.content_type,
+        file_name: b.file_name,
+        created: b.created,
     })
 }
 

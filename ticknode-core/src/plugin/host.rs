@@ -36,6 +36,7 @@ pub(super) struct PluginState {
     pub(super) ws: WsHub,
     pub(super) http: super::http::Tasks,
     pub(super) options: Arc<Mutex<OptionStore>>,
+    pub(super) blob_store: Arc<dyn crate::blobs::BlobStore>,
 }
 
 impl WasiView for PluginState {
@@ -53,6 +54,14 @@ impl PluginState {
             .as_mut()
             .filter(|c| !c.node_id.0.is_nil())
             .ok_or_else(|| "Only available during execute/poll".to_string())
+    }
+
+    pub(super) fn blob_store(&self) -> Arc<dyn crate::blobs::BlobStore> {
+        if let Some(c) = &self.call {
+            c.host.blob_store.clone()
+        } else {
+            self.blob_store.clone()
+        }
     }
 }
 
@@ -136,6 +145,20 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
             headers: request.headers,
             body: request.body,
             timeout: std::time::Duration::from_millis(request.timeout_ms as u64),
+            multipart: request
+                .multipart
+                .into_iter()
+                .map(|p| crate::host::MultipartPart {
+                    name: p.name,
+                    file_name: p.file_name,
+                    content_type: p.content_type,
+                    data: match p.data {
+                        wit::PartData::Text(t) => crate::host::PartData::Text(t),
+                        wit::PartData::Blob(b) => crate::host::PartData::Blob(b),
+                    },
+                })
+                .collect(),
+            save_to_blob: request.save_to_blob,
         };
         match self.call.as_mut().filter(|c| !c.node_id.0.is_nil()) {
             Some(c) => c.host.start_http(c.node_id, request),
@@ -190,6 +213,38 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
             self.log(wit::LogLevel::Warn, w);
         }
         lock(&self.options).set(&source, accepted);
+    }
+
+    fn blob_put(
+        &mut self,
+        data: Vec<u8>,
+        content_type: Option<String>,
+        file_name: Option<String>,
+    ) -> Result<String, String> {
+        if data.len() > 16 * 1024 * 1024 {
+            return Err("Data exceeds 16 MiB limit".into());
+        }
+        self.blob_store()
+            .put(data, content_type, file_name)
+            .map(|info| info.id)
+            .map_err(|e| e.to_string())
+    }
+
+    fn blob_read(&mut self, id: String, offset: u64, len: u32) -> Result<Vec<u8>, String> {
+        let len = len.min(4 * 1024 * 1024);
+        self.blob_store()
+            .read(&id, offset, len)
+            .map_err(|e| e.to_string())
+    }
+
+    fn blob_info(&mut self, id: String) -> Option<wit::BlobInfo> {
+        self.blob_store().info(&id).map(|info| wit::BlobInfo {
+            id: info.id,
+            size: info.size,
+            content_type: info.content_type,
+            file_name: info.file_name,
+            created: info.created.to_rfc3339(),
+        })
     }
 }
 

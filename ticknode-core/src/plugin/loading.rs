@@ -171,6 +171,7 @@ fn unprivileged_runtime(wasm: &[u8]) -> Result<Runtime, UiMessage> {
         tick_backoff_until: 0,
         options: Arc::default(),
         metrics: Default::default(),
+        blob_store: Arc::new(crate::blobs::MemoryBlobStore::default()),
     })
 }
 

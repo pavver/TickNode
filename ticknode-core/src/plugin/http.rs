@@ -3,7 +3,10 @@ use super::wit;
 use crate::host::{HttpRequest, TaskId, TaskOutput, TaskResult, spawn_http};
 use std::{
     collections::BTreeMap,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 pub(super) const MAX_PLUGIN_HTTP_TASKS: usize = 8;
@@ -13,12 +16,17 @@ static NEXT_TASK: AtomicU64 = AtomicU64::new(1 << 63);
 #[derive(Default)]
 pub(super) struct Tasks {
     pub(super) runtime: Option<tokio::runtime::Handle>,
+    pub(super) blob_store: Option<Arc<dyn crate::blobs::BlobStore>>,
     pending: BTreeMap<TaskId, tokio::task::JoinHandle<TaskResult>>,
 }
 impl Tasks {
-    pub(super) fn new(runtime: Option<tokio::runtime::Handle>) -> Self {
+    pub(super) fn new(
+        runtime: Option<tokio::runtime::Handle>,
+        blob_store: Option<Arc<dyn crate::blobs::BlobStore>>,
+    ) -> Self {
         Self {
             runtime,
+            blob_store,
             pending: BTreeMap::new(),
         }
     }
@@ -33,7 +41,11 @@ impl Tasks {
             .clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
             .ok_or("HTTP unavailable: the engine is running without a tokio runtime")?;
-        let task = spawn_http(&runtime, request)?;
+        let blob_store = self
+            .blob_store
+            .clone()
+            .unwrap_or_else(|| Arc::new(crate::blobs::MemoryBlobStore::default()));
+        let task = spawn_http(&runtime, request, blob_store)?;
         let id = NEXT_TASK.fetch_add(1, Ordering::Relaxed);
         self.pending.insert(id, task);
         Ok(id)
@@ -79,6 +91,13 @@ pub(super) fn done(id: TaskId, result: TaskResult) -> wit::TaskDone {
                 status: r.status,
                 headers: r.headers,
                 body: r.body,
+            }),
+            TaskOutput::Blob(b) => wit::TaskOutput::Blob(wit::BlobResponse {
+                status: b.status,
+                headers: b.headers,
+                blob: b.blob,
+                size: b.size,
+                content_type: b.content_type,
             }),
         }),
     }

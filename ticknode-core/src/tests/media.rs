@@ -11,7 +11,7 @@ fn media_types_registered_at_engine_construction() {
             .get(name)
             .unwrap_or_else(|| panic!("missing {name}"));
         assert!(def.is_struct());
-        assert_eq!(def.fields().len(), 8);
+        assert_eq!(def.fields().len(), 9);
         assert_eq!(def.fields()[0].name, "url");
         assert_eq!(def.fields()[1].name, "file_id");
         assert_eq!(def.fields()[2].name, "mime_type");
@@ -20,6 +20,7 @@ fn media_types_registered_at_engine_construction() {
         assert_eq!(def.fields()[5].name, "width");
         assert_eq!(def.fields()[6].name, "height");
         assert_eq!(def.fields()[7].name, "duration");
+        assert_eq!(def.fields()[8].name, "blob");
     }
 }
 

@@ -10,12 +10,42 @@ use ticknode_shared::{DataValue, NodeId, NodeTimer, SheetId, UiMessage, Variable
 pub type TaskId = u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PartData {
+    Text(String),
+    Blob(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MultipartPart {
+    pub name: String,
+    pub file_name: Option<String>,
+    pub content_type: Option<String>,
+    pub data: PartData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
     pub method: String,
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
     pub timeout: Duration,
+    pub multipart: Vec<MultipartPart>,
+    pub save_to_blob: bool,
+}
+
+impl HttpRequest {
+    pub fn get(url: impl Into<String>) -> Self {
+        Self {
+            method: "GET".into(),
+            url: url.into(),
+            headers: Vec::new(),
+            body: Vec::new(),
+            timeout: DEFAULT_HTTP_TIMEOUT,
+            multipart: Vec::new(),
+            save_to_blob: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,9 +56,19 @@ pub struct HttpResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub blob: String,
+    pub size: u64,
+    pub content_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskOutput {
     Delay,
     Http(HttpResponse),
+    Blob(BlobResponse),
 }
 
 pub type TaskResult = Result<TaskOutput, String>;
@@ -68,6 +108,8 @@ pub struct HostState {
     pub active_sheet_variables: HashSet<(SheetId, String)>,
     /// Optional clock override for deterministic tests.
     pub clock_override: Option<DateTime<Utc>>,
+    /// Blob storage for media and file transfers.
+    pub blob_store: std::sync::Arc<dyn crate::blobs::BlobStore>,
 }
 
 impl Default for HostState {
@@ -86,6 +128,7 @@ impl Default for HostState {
             changed_variables: HashSet::new(),
             active_sheet_variables: HashSet::new(),
             clock_override: None,
+            blob_store: std::sync::Arc::new(crate::blobs::MemoryBlobStore::default()),
         }
     }
 }
@@ -200,7 +243,7 @@ impl HostState {
             .clone()
             .or_else(|| tokio::runtime::Handle::try_current().ok())
             .ok_or("HTTP unavailable: the engine is running without a tokio runtime")?;
-        let handle = spawn_http(&runtime, request)?;
+        let handle = spawn_http(&runtime, request, self.blob_store.clone())?;
         Ok(self.insert(node_id, TaskState::Spawned(HttpTask(Some(handle)))))
     }
 
@@ -233,7 +276,7 @@ impl HostState {
     }
 
     /// Drains tasks completed up to and including the current tick, in start order.
-    pub(crate) fn take_finished(&mut self) -> Vec<(NodeId, TaskId, TaskResult)> {
+    pub fn take_finished(&mut self) -> Vec<(NodeId, TaskId, TaskResult)> {
         let tick = self.current_tick;
         let mut ready: Vec<TaskId> = self
             .active_tasks

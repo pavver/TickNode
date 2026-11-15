@@ -254,6 +254,13 @@ impl Node for WasmNode {
                 headers: r.headers,
                 body: r.body,
             }),
+            TaskOutput::Blob(b) => wit::TaskOutput::Blob(wit::BlobResponse {
+                status: b.status,
+                headers: b.headers,
+                blob: b.blob,
+                size: b.size,
+                content_type: b.content_type,
+            }),
         });
         self.run(wit::Trigger::Task(wit::TaskDone { id: task, result }), ctx)
     }

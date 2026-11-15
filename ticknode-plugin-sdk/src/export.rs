@@ -198,6 +198,13 @@ fn from_wit_trigger(trigger: wit::Trigger) -> Trigger {
                     headers: r.headers,
                     body: r.body,
                 }),
+                wit::TaskOutput::Blob(b) => TaskOutput::Blob(BlobResponse {
+                    status: b.status,
+                    headers: b.headers,
+                    blob: b.blob,
+                    size: b.size,
+                    content_type: b.content_type,
+                }),
             }),
         },
     }

@@ -42,6 +42,9 @@ pub fn media_fields() -> Vec<FieldDefinition> {
         FieldDefinition::new("duration", "Duration", DataType::Duration)
             .optional()
             .described("Playback duration for audio or video"),
+        FieldDefinition::new("blob", "Blob", DataType::String)
+            .optional()
+            .described("Blob identifier in host storage"),
     ]
 }
 
@@ -68,23 +71,24 @@ pub fn builtin_media_types() -> Vec<TypeDefinition> {
 pub enum MediaSource<'a> {
     FileId(&'a str),
     Url(&'a str),
+    Blob(&'a str),
 }
 
 impl<'a> MediaSource<'a> {
     pub fn as_str(&self) -> &'a str {
         match self {
-            Self::FileId(s) | Self::Url(s) => s,
+            Self::FileId(s) | Self::Url(s) | Self::Blob(s) => s,
         }
     }
 }
 
-/// Validates that a media DataValue object has either `file_id` or `url` set and non-empty.
-/// Prefers `file_id` when both are present.
+/// Validates that a media DataValue object has either `file_id`, `url`, or `blob` set and non-empty.
+/// Prefers `file_id` over `url` over `blob` when multiple are present.
 pub fn validate_media(value: &DataValue) -> Result<MediaSource<'_>, UiMessage> {
     let DataValue::Object { fields, .. } = value else {
         return Err(UiMessage::new(
             "error-media-missing-source",
-            "Media object must have either url or file_id set",
+            "Media object must have either url, file_id or blob set",
         ));
     };
     let file_id = fields.get("file_id").and_then(|f| match &f.value {
@@ -95,14 +99,20 @@ pub fn validate_media(value: &DataValue) -> Result<MediaSource<'_>, UiMessage> {
         DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
         _ => None,
     });
+    let blob = fields.get("blob").and_then(|f| match &f.value {
+        DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
+        _ => None,
+    });
     if let Some(id) = file_id {
         Ok(MediaSource::FileId(id))
     } else if let Some(u) = url {
         Ok(MediaSource::Url(u))
+    } else if let Some(b) = blob {
+        Ok(MediaSource::Blob(b))
     } else {
         Err(UiMessage::new(
             "error-media-missing-source",
-            "Media object must have either url or file_id set",
+            "Media object must have either url, file_id or blob set",
         ))
     }
 }
@@ -118,7 +128,7 @@ mod tests {
         let types = builtin_media_types();
         assert_eq!(types.len(), 4);
         let fields = media_fields();
-        assert_eq!(fields.len(), 8);
+        assert_eq!(fields.len(), 9);
         for t in &types {
             assert!(t.name.starts_with(PREFIX));
             assert_eq!(t.fields(), fields.as_slice());
@@ -172,6 +182,24 @@ mod tests {
             validate_media(&val).unwrap(),
             MediaSource::Url("https://example.com/audio.mp3")
         );
+    }
+
+    #[test]
+    fn validate_media_falls_back_to_blob_when_file_id_and_url_missing() {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "blob".into(),
+            ObjectField {
+                name: "blob".into(),
+                description: String::new(),
+                value: DataValue::String("blob_456".into()),
+            },
+        );
+        let val = DataValue::Object {
+            type_name: Some(DOCUMENT.into()),
+            fields,
+        };
+        assert_eq!(validate_media(&val).unwrap(), MediaSource::Blob("blob_456"));
     }
 
     #[test]

@@ -35,3 +35,5 @@ mod convert;
 pub use convert::*;
 mod datetime;
 pub use datetime::*;
+mod media;
+pub use media::*;

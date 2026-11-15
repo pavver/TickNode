@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo/ticknode.svg" width="96" height="96" alt="TickNode logo">
+<img src="assets/logo/ticknode-animated.svg" width="96" height="96" alt="TickNode logo">
 
 # TickNode
 

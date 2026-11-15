@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>TickNode</title>
+  <!-- Animated mark for the README: the editor header animation (styles/logo.css) looping forever.
+       One 4 s cycle: the source node pulses, the signal leaves it as its last flash fades, and the
+       target pulses from the moment the signal's head touches it. Keep in sync with ticknode.svg
+       and ticknode-editor/src/logo.rs. -->
+  <style>
+    .outline { stroke: #1B1F24 }
+    @media (prefers-color-scheme: dark) { .outline { stroke: #E6EDF3 } }
+    .run { stroke-dasharray: 30 200; stroke-dashoffset: 30; animation: run 4s linear infinite }
+    .src-idle { opacity: 0 }
+    .src { animation: src 4s ease-in-out infinite }
+    .dst { opacity: 0; animation: dst 4s ease-in-out infinite }
+    @keyframes src { 0% { opacity: 1 } 8% { opacity: 0.55 } 16% { opacity: 1 } 24% { opacity: 0.55 } 34%, 100% { opacity: 0 } }
+    @keyframes dst { 0%, 57.2% { opacity: 0 } 57.3% { opacity: 1 } 64% { opacity: 0.55 } 71% { opacity: 1 } 78% { opacity: 0.55 } 85% { opacity: 1 } 95%, 100% { opacity: 0 } }
+    @keyframes run { 0%, 24% { stroke-dashoffset: 30 } 34% { stroke-dashoffset: 0 } 67.3%, 100% { stroke-dashoffset: -100 } }
+    @media (prefers-reduced-motion: reduce) {
+      .src-idle { opacity: 1 }
+      .src, .dst, .run { animation: none }
+      .src-base, .src, .dst, .run { opacity: 0 }
+    }
+  </style>
+  <defs>
+    <clipPath id="tn-wire"><path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z"/></clipPath>
+    <clipPath id="tn-src"><path d="M0 28h16v24H0Z"/></clipPath>
+    <clipPath id="tn-dst"><path d="M48 40h16v24H48Z"/></clipPath>
+  </defs>
+  <path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z" fill="#1E7F88"/>
+  <path class="run" d="M16 40H24V4H40V52H48" pathLength="100" fill="none" stroke="#00B7C2" stroke-width="8" clip-path="url(#tn-wire)"/>
+  <rect x="4" y="32" width="8" height="16" fill="#3B4859"/>
+  <path class="src-idle" d="M0 28h16v24H0Z M4 32v16h8V32Z" fill="#FFB020"/>
+  <path class="src-base" d="M0 28h16v24H0Z M4 32v16h8V32Z" fill="#E6EDF3"/>
+  <path class="src" d="M0 28h16v24H0Z M4 32v16h8V32Z" fill="#FFB020"/>
+  <rect x="52" y="44" width="8" height="16" fill="#2C3746"/>
+  <path d="M48 40h16v24H48Z M52 44v16h8V44Z" fill="#E6EDF3"/>
+  <path class="dst" d="M48 40h16v24H48Z M52 44v16h8V44Z" fill="#FFB020"/>
+  <g class="outline" fill="none" stroke-width="2">
+    <path d="M16 36H20V0H44V48H48V56H36V8H28V44H16Z" clip-path="url(#tn-wire)" vector-effect="non-scaling-stroke"/>
+    <path d="M0 28h16v24H0Z" clip-path="url(#tn-src)" vector-effect="non-scaling-stroke"/>
+    <path d="M48 40h16v24H48Z" clip-path="url(#tn-dst)" vector-effect="non-scaling-stroke"/>
+  </g>
+</svg>

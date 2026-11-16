@@ -32,8 +32,8 @@ Scope: move the editor onto the Operator design system ([../../../operator-desig
 
 ## 2. Design system gap analysis
 
-The design system targets application screens: its controls are `10–12 DU` tall (TextField `row_standard`, DropdownMenu options `row_control`), while node rows are `6 DU` with `4.5 DU` fields.
-There is no density concept, which is the root gap.
+The design system targets application screens: its standalone controls are `10–12 DU` tall (TextField `row_standard`, DropdownMenu options `row_control`), while node rows are `6 DU` with `4.5 DU` fields.
+Maximum density stays the default everywhere; the gap is that a control embedded in a dense row (a node row, a table cell, a property row) has no size that fits the row.
 
 ### 2.1 Add to the design system core
 
@@ -41,20 +41,22 @@ These are generic and useful to any Operator app.
 
 | Need | Today | Change |
 | :--- | :--- | :--- |
-| Dense controls | Fixed heights per component | A `density` foundation (`comfortable` 10 DU, `compact` 8 DU, `dense` 6 DU rows) honoured by every field, select, switch, chip and menu. |
-| Anchored floating surfaces | Each popup positions itself | A `Popover` primitive (anchor, flip, viewport clamp, outside-press, focus return) reused by Menu, DropdownMenu, Combobox, Tooltip and completion lists. |
-| Large pickers | Combobox takes `list of strings`, no icons, no virtualization | Rich options (icon, label, detail, group), virtualized list, caller-driven async filtering, typed free input. |
+| Controls embedded in rows | Every field has one standalone height | An `embedded` size for fields, selects, switches and chips that fills the host row (`row_dense`/`row_compact`); standalone sizes stay as they are. Open question: or make node rows `row_compact` and use one embedded size. |
+| Shared overlay layer | Menu, Combobox, Tooltip, Toolbar overflow and TextArea each compute placement themselves (`getBoundingClientRect` in each module) | Not a new visible component: one internal placement primitive (anchor, flip, viewport clamp, stacking above canvas transforms, outside press, focus return) that those components share, so nested and canvas-anchored popups behave the same. |
+| Rich hover help | Tooltip is plain text, at most 6 lines | A hover card: title, formatted paragraphs, scrolls, stays open while the pointer is on it; used by the node info icon. |
+| Large pickers and quick add | Combobox takes a static `Vec<String>` fixed at creation | Options as a signal (caller-driven filtering), icon, label, detail, sections (recent/frequent), virtualized list, typed free input, and a mode that opens at the pointer without a field (quick add, wire menu). |
+| Virtualization | None in any component | A shared windowed-list primitive used by Combobox, DropdownMenu, DataTable, ConsoleTerminal, Tree and long ListItem lists. |
 | Context menu | Menu exists | Submenus, shortcut column (`Kbd`), disabled reasons. |
 | Number with unit | Missing | `NumberField` with optional unit select and step; covers quantities. |
-| Duration, time, date-time | Missing | `DurationField` (signed option), `TimeField`, `DateTimeField` with a calendar popover. |
+| Duration, time, date-time | Missing | `DurationField` (signed option), `TimeField`, `DateTimeField` with a calendar popup. |
 | Color | Missing | `ColorField` with a swatch palette (frame colors, type colors). |
-| Multi-select | CheckboxGroup tiles are too large | `ChipGroup` / multi-select chips in dense density (weekdays). |
 | Tree | Accordion only | `Tree` with lazy children, search highlight and keyboard navigation (resources, value trees, JSON). |
-| Inline rename | Missing | `EditableText` (click or F2 to edit, Enter/Escape, pending/error states). |
 | Navigation rail | Home page has its own rail | `NavigationRail` that becomes top tabs below the narrow breakpoint. |
-| Command palette | Quick add is custom | `CommandPalette` (ranked search, recents, sections). |
 | Collapsible side panel | SplitPane exists | Collapsible/overlay mode for the narrow layout. |
 | Finish drafts | PropertyList, Toolbar, DataTable are Draft | Review them; PropertyList gets editable rows. |
+
+Multi-select values (weekdays) use the existing filter Chip in a row; no new component is needed.
+Renaming in place (sheet titles, frame titles, variable names) uses TextField; if a borderless "looks like text until focused" look is wanted, it becomes a TextField variant, not a new component.
 
 ### 2.2 Separate extension crates in the design system repository
 
@@ -86,7 +88,9 @@ Type colors and type badges, quantity/identifier formatting, the wire suggestion
 
 ### 3.2 Panels and pages
 
-* Remove the right inspector; descriptions, last execution and actions move into node popovers (header info, trace on hover/click) and a compact bottom drawer for the selected node.
+* Remove the right inspector; everything lives on the node.
+  Each node header gets an info icon whose hover card shows the detailed help (what the node is for and how to use it).
+  Last execution values stay on pins and wires (hover shows the latest trace and its age); node errors and frozen-pin explanations use the same hover card from their status icons; actions go to the node context menu.
 * Left panel (Nodes, Resources, Variables) uses Tabs, SearchField, the virtualized list and Tree.
 * Home page: NavigationRail, Sheets as ListItem cards, Variables and Usage as DataTable, Plugins with PropertyList-based forms, Log on ConsoleTerminal.
 * Results and errors of user actions follow the state model (Pending blocks, results do not, errors roll back) and use Toast for non-local feedback.
@@ -100,7 +104,7 @@ Minimap, find node (Ctrl+F over titles and values), zoom to selection, alignment
 Each phase is a shippable release step; later phases depend on earlier ones.
 
 1. **Foundation.** Depend on `operator-ui` and `operator-ui-tokens`; generate editor tokens instead of mirroring them; replace the `ui.rs` copies; convert shell CSS to DU/TU (canvas stays as is until phase 4).
-2. **Design system core additions.** Density, Popover, rich virtualized Combobox, NumberField with unit, Duration/Time/DateTime, Color, ChipGroup, Tree, EditableText, NavigationRail, CommandPalette; finish PropertyList, Toolbar, DataTable.
+2. **Design system core additions.** Embedded size, shared overlay layer, hover card, rich virtualized Combobox (with the pointer mode for quick add), windowed list, NumberField with unit, Duration/Time/DateTime, Color, Tree, NavigationRail; finish PropertyList, Toolbar, DataTable.
    Each needs a spec, demo page and the maintainer's Draft → Reviewed check, so this phase runs in the design system repository in parallel with phase 3.
 3. **Shell migration.** Home page, left panel, plugin cards, settings, console, dialogs and menus on design-system components; remove the inspector.
 4. **Node row stack.** `RowSpec` layout with measured content rows, the two-column grid, content-proportional growth, TU fonts on the canvas; layout tests move from pixel constants to row descriptions.
@@ -118,5 +122,4 @@ Each phase is a shippable release step; later phases depend on earlier ones.
 ## 6. Open questions
 
 * Should the extension crates live in the design system repository (shared) or in TickNode until a second app needs them?
-* Inspector removal: is a bottom drawer for the selected node acceptable, or should everything live in popovers?
 * Canvas text scaling: follow the browser text size (TU) or only the canvas zoom?

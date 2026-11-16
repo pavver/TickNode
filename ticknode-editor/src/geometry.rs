@@ -30,7 +30,8 @@ pub const NODE_WIDTH: f64 = 60.0 * DU;
 pub const MATCH_WIDTH: f64 = 100.0 * DU;
 const HEADER_H: f64 = 8.0 * DU;
 const BODY_PAD: f64 = 1.0 * DU;
-pub const ROW_H: f64 = 6.0 * DU;
+/// Node row height: the design system's `row_standard` (10 DU), mirrored by `--node-row` in nodes.css.
+pub const ROW_H: f64 = 10.0 * DU;
 /// Height of a node with a single pin row (or without a definition).
 pub const MIN_NODE_HEIGHT: f64 = HEADER_H + 2.0 * BODY_PAD + ROW_H;
 

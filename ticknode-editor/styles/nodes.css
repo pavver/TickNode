@@ -47,6 +47,10 @@
 
 /* --- Node --- */
 .node {
+    /* Row = ROW_H (geometry.rs) = DS row_standard; controls = DS IconButton default (row_compact); chips = DS Chip. */
+    --node-row: calc(var(--du) * 10);
+    --node-control: calc(var(--du) * 8);
+    --node-chip: calc(var(--du) * 6);
     position: absolute;
     background: var(--surface);
     cursor: grab;
@@ -95,7 +99,7 @@
 /* Property rows between header and pins: row height = ROW_H (geometry.rs) */
 .node-props { position: absolute; top: calc(var(--du) * 9); left: 0; right: 0; display: flex; flex-direction: column; }
 .prop-row {
-    height: calc(var(--du) * 6);
+    height: var(--node-row);
     display: flex;
     align-items: center;
     gap: calc(var(--du) * 2);
@@ -111,7 +115,7 @@
 .pins.in { left: 0; align-items: flex-start; }
 .pins.out { right: 0; align-items: flex-end; }
 .pin {
-    height: calc(var(--du) * 6);
+    height: var(--node-row);
     display: flex;
     align-items: center;
     gap: calc(var(--du) * 1.5);
@@ -144,7 +148,7 @@
 
 /* Inline value directly on a node (property or unconnected input) */
 .inline-value {
-    height: calc(var(--du) * 4.5);
+    height: var(--node-control);
     width: calc(var(--du) * 13);
     max-width: calc(var(--du) * 13);
     flex: none;
@@ -166,7 +170,7 @@
 .inline-value.bool.on { color: var(--success); border-color: color-mix(in srgb, var(--success) 50%, var(--divider)); }
 .inline-value.bool.unset { color: var(--text-disabled); }
 .pin .inline-value { margin-left: auto; }
-.duration-value { display: flex; gap: 2px; flex: 1 0 auto; min-width: min-content; height: calc(var(--du) * 4.5); }
+.duration-value { display: flex; gap: 2px; flex: 1 0 auto; min-width: min-content; height: var(--node-control); }
 .pin .duration-value { margin-left: auto; }
 .input-row .duration-value, .cond-row .duration-value { flex: 1 1 80px; min-width: 0; }
 .duration-value > .inline-value.duration-number { flex: 1 0 72px; min-width: 72px; width: 0; max-width: none; margin-left: 0; padding: 0 2px; }
@@ -176,7 +180,7 @@
 .inline-chip {
     display: inline-flex;
     align-items: center;
-    height: calc(var(--du) * 4.5);
+    height: var(--node-chip);
     background: var(--surface-alt);
     border: calc(var(--du) * 0.25) solid var(--divider);
     border-radius: 0;
@@ -230,7 +234,7 @@
 /* --- Match cases on a node (like a decider combinator window); row height = ROW_H --- */
 .match-body { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; }
 .case-row {
-    height: calc(var(--du) * 6);
+    height: var(--node-row);
     flex: none;
     display: flex;
     align-items: center;
@@ -245,8 +249,8 @@
 .cond-row { padding-right: calc(var(--du) * 2); }
 .cond-row.always { padding-left: calc(var(--du) * 9); font-style: italic; color: var(--text-disabled); }
 .case-index {
-    min-width: calc(var(--du) * 4.5);
-    height: calc(var(--du) * 4.5);
+    min-width: var(--node-control);
+    height: var(--node-control);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -257,7 +261,7 @@
     border: var(--border-w) solid var(--cat-color, var(--accent));
 }
 .mini-btn, .join-btn {
-    height: calc(var(--du) * 4.5);
+    height: var(--node-control);
     flex: none;
     padding: 0 calc(var(--du) * 1.5);
     display: inline-flex;
@@ -271,7 +275,7 @@
     font-weight: 700;
     cursor: pointer;
 }
-.mini-btn.icon { width: calc(var(--du) * 4.5); padding: 0; border-color: transparent; background: transparent; }
+.mini-btn.icon { width: var(--node-control); padding: 0; border-color: transparent; background: transparent; }
 .mini-btn .icon { width: calc(var(--du) * 3.5); height: calc(var(--du) * 3.5); }
 .mini-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
 .mini-btn.danger:hover { color: var(--error); }
@@ -281,7 +285,7 @@
 .join-btn { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--divider)); }
 .join-btn.or { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--divider)); }
 .operand, .op-select {
-    height: calc(var(--du) * 4.5);
+    height: var(--node-control);
     min-width: 0;
     font-size: 12px;
     background: var(--surface-alt);
@@ -322,7 +326,7 @@
 .case-head .pin { font-weight: 700; color: var(--text-primary); }
 .case-foot .pin { font-style: italic; }
 .cond-left, .cond-src {
-    height: calc(var(--du) * 4.5);
+    height: var(--node-control);
     flex: none;
     width: calc(var(--du) * 18);
     min-width: 0;
@@ -451,7 +455,7 @@
 .duration-property { display: flex; flex: 1 0 auto; min-width: min-content; gap: 2px; }
 .duration-property .duration-value { flex: 1 0 auto; }
 .duration-sign { flex: 0 0 20px; width: 20px; min-width: 0; padding: 0; }
-.property-chips { display: flex; flex: 1 0 72px; min-width: 72px; gap: 2px; overflow-x: auto; height: 20px; scrollbar-width: none; }
+.property-chips { display: flex; flex: 1 0 72px; min-width: 72px; gap: 2px; overflow-x: auto; height: var(--node-chip); scrollbar-width: none; }
 .property-chip { flex: none; padding: 0 4px; font-size: 11px; border: 1px solid var(--divider); background: var(--surface-alt); color: var(--text-secondary); cursor: pointer; }
 .property-chip.selected { color: var(--text-primary); border-color: var(--accent); }
 

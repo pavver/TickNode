@@ -32,7 +32,8 @@ Scope: move the editor onto the Operator design system ([../../../operator-desig
 
 ## 2. Design system gap analysis
 
-The design system targets application screens: its standalone controls are `10–12 DU` tall (TextField `row_standard`, DropdownMenu options `row_control`), while node rows are `6 DU` with `4.5 DU` fields.
+The design system targets application screens: its standalone controls are `10–12 DU` tall (TextField `row_standard`, DropdownMenu options `row_control`), while node rows were `6 DU` with `4.5 DU` fields.
+Decision (2026-11-17): node rows are `row_standard` (`10 DU`, `ROW_H`), node controls `row_compact` (`8 DU`, the IconButton default) and chips `6 DU` (Chip), so no separate embedded size is needed.
 Maximum density stays the default everywhere; the gap is that a control embedded in a dense row (a node row, a table cell, a property row) has no size that fits the row.
 
 ### 2.1 Add to the design system core

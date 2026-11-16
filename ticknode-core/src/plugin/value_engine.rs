@@ -93,6 +93,28 @@ impl TickEngine {
                     );
                 }
             }
+            if definition.type_name == "match" {
+                for (_, value) in properties.iter().filter(|(name, _)| name == "cases") {
+                    if let DataValue::List { elements, .. } = value {
+                        for element in elements {
+                            if let DataValue::String(source) = element
+                                && let Ok(case) = condition::MatchCase::parse(source)
+                            {
+                                for c in &case.conditions {
+                                    for operand in std::iter::once(&c.left).chain(c.right.as_ref())
+                                    {
+                                        if let condition::Operand::Variable(reference) = operand
+                                            && reference.lookup == VariableLookup::Plugin
+                                        {
+                                            paths.push(reference.name.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         paths.extend(
             self.input_variables

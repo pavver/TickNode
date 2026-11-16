@@ -18,6 +18,7 @@ mod graph_tests;
 pub use graph::is_required_missing;
 mod messages;
 pub mod timers;
+mod values;
 mod wires;
 pub use wires::{WireContext, WireKey, WireRoutes};
 

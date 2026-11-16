@@ -45,8 +45,7 @@ fn large_catalog_handles_and_indexed_projection() {
             fields: [(
                 "state".into(),
                 ObjectField {
-                    name: "state".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: true.into(),
                 },
             )]

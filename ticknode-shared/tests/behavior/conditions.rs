@@ -184,8 +184,7 @@ fn collection_comparisons_preserve_type_mismatches_and_unicode_lengths() {
         fields: [(
             "room".into(),
             ObjectField {
-                name: "room".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::Bool(true),
             },
         )]

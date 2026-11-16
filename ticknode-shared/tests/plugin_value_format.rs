@@ -19,8 +19,7 @@ fn plugin_value_format() {
     let fields = BTreeMap::from([(
         "field".into(),
         ObjectField {
-            name: "field".into(),
-            description: "Example field".into(),
+            data_type: Some(DataType::Bool),
             value: DataValue::Bool(true),
         },
     )]);

@@ -193,8 +193,7 @@ fn lists_structs_conditions_missing_values_and_arithmetic() {
             (
                 name.into(),
                 ObjectField {
-                    name: name.into(),
-                    description: String::new(),
+                    data_type: None,
                     value,
                 },
             )

@@ -106,8 +106,18 @@ impl Node for ObjectMakeNode {
                 fields.insert(
                     f.name.clone(),
                     ObjectField {
-                        name: f.name.clone(),
-                        description: f.description.clone(),
+                        data_type: effective_type(
+                            Some(&value),
+                            if matches!(f.data_type, DataType::Any | DataType::Object) {
+                                ctx.input_types
+                                    .get(&PinId(i as u32 + 1))
+                                    .unwrap_or(&f.data_type)
+                            } else {
+                                &f.data_type
+                            },
+                            "",
+                            ctx.types,
+                        ),
                         value,
                     },
                 );

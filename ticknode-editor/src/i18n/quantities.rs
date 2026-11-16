@@ -79,19 +79,6 @@ pub fn decimal_separator() -> String {
     lookup("number-decimal-separator").unwrap_or_else(|| ".".into())
 }
 
-/// Declared structure fields retain quantity types even though their values are plain numbers.
-pub fn declared_field_type(t: &DataType, name: &str) -> Option<DataType> {
-    TYPES.with(|types| {
-        types
-            .borrow()
-            .definition_of(t)?
-            .fields()
-            .iter()
-            .find(|f| f.name == name)
-            .map(|f| f.data_type.clone())
-    })
-}
-
 pub fn quantity_text(value: &DataValue, t: &DataType) -> Option<String> {
     let DataValue::Number(n) = value else {
         return None;
@@ -277,8 +264,7 @@ mod structure_tests {
             fields: [(
                 "value".into(),
                 ObjectField {
-                    name: "Value".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: 5000i64.into(),
                 },
             )]

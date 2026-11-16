@@ -39,6 +39,8 @@ pub struct MathExpressionNode {
     pub had_pin_ids: bool,
     pub reported: bool,
     catalogs: crate::value_catalog::ValueCatalogs,
+    runtime_type: Option<DataType>,
+    revision: u64,
 }
 
 impl MathExpressionNode {
@@ -55,12 +57,16 @@ impl MathExpressionNode {
             had_pin_ids: false,
             reported: false,
             catalogs: Default::default(),
+            runtime_type: None,
+            revision: 0,
         };
         node.compile();
         node
     }
 
     fn compile(&mut self) {
+        self.runtime_type = None;
+        self.revision = self.revision.wrapping_add(1);
         let (compiled, ordered) = match formula::compile(&self.expression) {
             Ok(c) => {
                 let vars = c.variables.clone();
@@ -144,6 +150,9 @@ impl MathExpressionNode {
         {
             return t;
         }
+        if let Some(ty) = &self.runtime_type {
+            return ty.clone();
+        }
         if let Some(compiled) = &self.compiled {
             let mut map: HashMap<String, DataType> = self
                 .pins
@@ -168,19 +177,33 @@ impl MathExpressionNode {
             let mut map: HashMap<String, DataType> = self
                 .pins
                 .iter()
-                .map(|(n, _, ty)| (n.clone(), ty.clone()))
+                .map(|(n, pin, ty)| {
+                    (
+                        n.clone(),
+                        ctx.input_types
+                            .get(pin)
+                            .cloned()
+                            .unwrap_or_else(|| ty.clone()),
+                    )
+                })
                 .collect();
             for v in ctx.variables.for_sheet_and_global(ctx.sheet) {
                 map.insert(format!("var.{}", v.key.name), v.data_type.clone());
                 map.insert(format!("{}.{}", v.key.prefix(), v.key.name), v.data_type);
             }
-            for reference in compiled
-                .references()
-                .into_iter()
-                .filter(|r| r.lookup == VariableLookup::Plugin)
-            {
-                if let Some((_, ty)) = ctx.plugin_values.resolve(&reference.name) {
-                    map.insert(reference.name, ty);
+            for reference in compiled.references().into_iter() {
+                let resolved = if reference.lookup == VariableLookup::Plugin {
+                    ctx.plugin_values.resolve(&reference.name)
+                } else {
+                    ctx.variables.resolve_value(
+                        &reference.name,
+                        reference.lookup,
+                        ctx.sheet,
+                        ctx.types,
+                    )
+                };
+                if let Some((_, ty)) = resolved {
+                    map.insert(reference.to_str(), ty);
                 }
             }
             map.extend(self.referenced_types());
@@ -208,9 +231,14 @@ impl MathExpressionNode {
 impl Node for MathExpressionNode {
     fn values_catalogs_changed(&mut self, catalogs: &crate::value_catalog::ValueCatalogs) {
         self.catalogs = catalogs.clone();
+        self.runtime_type = None;
+        self.revision = self.revision.wrapping_add(1);
     }
     fn id(&self) -> NodeId {
         self.id
+    }
+    fn definition_revision(&self) -> u64 {
+        self.revision
     }
 
     fn is_pure(&self) -> bool {
@@ -276,6 +304,10 @@ impl Node for MathExpressionNode {
             Ok(val) => {
                 self.reported = false;
                 let out_type = self.effective_output_type_in(ctx);
+                if self.runtime_type.as_ref() != Some(&out_type) {
+                    self.runtime_type = Some(out_type.clone());
+                    self.revision = self.revision.wrapping_add(1);
+                }
                 let data_val = if out_type == DataType::Bool {
                     DataValue::Bool(val.is_truthy())
                 } else {
@@ -412,6 +444,8 @@ impl Node for MathExpressionNode {
             return false;
         }
         entry.2 = t.clone();
+        self.runtime_type = None;
+        self.revision = self.revision.wrapping_add(1);
         true
     }
 }

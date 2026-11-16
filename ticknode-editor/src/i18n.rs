@@ -262,3 +262,5 @@ fn slug(name: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tree_tests;

@@ -224,8 +224,7 @@ fn insert_field(fields: &mut BTreeMap<String, ObjectField>, name: &str, value: D
     fields.insert(
         name.into(),
         ObjectField {
-            name: name.into(),
-            description: String::new(),
+            data_type: Some(value.get_type()),
             value,
         },
     );

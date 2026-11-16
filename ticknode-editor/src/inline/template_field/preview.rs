@@ -142,9 +142,10 @@ pub fn node_preview_inputs(ed: Editor, id: NodeId) -> Vec<(String, Option<DataVa
                     None
                 };
 
+            let bound = ed.bound_input(id, pin_id).map(|(v, _)| v);
             let value = resolve_input_value(
                 own_trace.as_ref(),
-                source_trace.as_ref(),
+                source_trace.as_ref().or(bound.as_ref()),
                 inline_value.as_ref(),
                 sample_value.as_ref(),
             );
@@ -235,8 +236,15 @@ pub fn evaluate_preview(
                 now: chrono::Utc::now(),
                 to_text: to_text_closure,
                 variables: visible_vars,
-                plugin_values: Vec::new(),
-                namespaces: Vec::new(),
+                plugin_values: use_context::<Editor>()
+                    .map(|ed| ed.template_values())
+                    .unwrap_or_default(),
+                namespaces: use_context::<Editor>()
+                    .map(|ed| {
+                        ed.value_catalogs
+                            .with(|catalogs| catalogs.iter().map(|c| c.namespace.clone()).collect())
+                    })
+                    .unwrap_or_default(),
             },
             &types.borrow(),
         )

@@ -35,3 +35,11 @@ Formulas resolve dotted plugin references as numeric, quantity, or boolean value
 Bindings project entry fields and use the same registry compatibility/conversion rules as variables; missing values block required inputs with a throttled translated error.
 Value publications and unavailability invalidate pure caches, while active output caches remain intact.
 Disabling a plugin removes its namespace and current values.
+
+## Effective types in value trees
+
+`ticknode_shared::effective_type` resolves a value path using pin, variable, catalog and registered struct declarations, then hidden field contracts where declarations are generic.
+`input_source_types` retains wired source contracts and includes variable and plugin value bindings.
+Reads of nested variable and plugin paths preserve the same effective field types as direct template access.
+Variable writes retain known nested field and list contracts before fitting the value to an Any/Object declaration.
+Connection conversions and Match use effective input types; plugin fields absent from the snapshot catalog fall back to their live tree contracts without mutating or cloning the catalog.

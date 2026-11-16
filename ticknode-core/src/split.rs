@@ -138,7 +138,7 @@ impl TickEngine {
     }
 
     pub(crate) fn assemble_split_inputs(
-        &self,
+        &mut self,
         node: NodeId,
         inputs: &mut HashMap<PinId, Option<DataValue>>,
     ) {
@@ -149,6 +149,7 @@ impl TickEngine {
         {
             return;
         }
+        let source_types = self.input_source_types(node);
         let Some(n) = self.nodes.get(&node) else {
             return;
         };
@@ -171,8 +172,16 @@ impl TickEngine {
                     fields.insert(
                         field.name.clone(),
                         ObjectField {
-                            name: field.name.clone(),
-                            description: field.description.clone(),
+                            data_type: effective_type(
+                                Some(value),
+                                if matches!(field.data_type, DataType::Any | DataType::Object) {
+                                    source_types.get(&id).unwrap_or(&field.data_type)
+                                } else {
+                                    &field.data_type
+                                },
+                                "",
+                                &self.types,
+                            ),
                             value: value.clone(),
                         },
                     );

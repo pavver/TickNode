@@ -110,16 +110,37 @@ pub fn resolve_variable<'a>(
     }
 }
 
+/// Reads an exact variable name or a typed path inside its value.
+pub fn resolve_variable_value<'a>(
+    reference: &VariableRef,
+    sheet: Option<SheetId>,
+    variables: &'a BTreeMap<VariableKey, Variable>,
+    types: &TypeRegistry,
+) -> Option<(&'a DataValue, DataType)> {
+    let mut end = reference.name.len();
+    loop {
+        let root = VariableRef::new(reference.lookup, &reference.name[..end]);
+        if let Some(var) = resolve_variable(&root, sheet, variables) {
+            let path = reference.name[end..].trim_start_matches('.');
+            return Some((
+                plugin_values::project(&var.value, path)?,
+                effective_type(Some(&var.value), &var.data_type, path, types)?,
+            ));
+        }
+        end = reference.name[..end].rfind('.')?;
+    }
+}
+
 /// Builds the tooltip string for a bound variable chip.
 pub fn variable_tooltip(
     vref: &VariableRef,
-    resolved: Option<&Variable>,
+    resolved: Option<(&DataValue, &DataType)>,
     types: &TypeRegistry,
 ) -> String {
     match resolved {
-        Some(var) => {
-            let type_name = i18n::data_type_title(types, &var.data_type);
-            let val_str = text::format_value(&var.value);
+        Some((value, ty)) => {
+            let type_name = i18n::data_type_title(types, ty);
+            let val_str = i18n::value_as_text(value, ty);
             t!(
                 "inline-variable-tooltip",
                 name = vref.name.clone(),

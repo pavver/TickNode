@@ -41,8 +41,7 @@ fn publications_invalidate_pure_caches_immediately_and_do_not_touch_active_outpu
         fields: [(
             "state".into(),
             ObjectField {
-                name: "state".into(),
-                description: String::new(),
+                data_type: None,
                 value: 42i64.into(),
             },
         )]

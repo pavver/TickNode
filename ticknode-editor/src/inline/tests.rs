@@ -261,7 +261,7 @@ fn variable_tooltip_presentation() {
 
     i18n::with_locale(i18n::Locale::En, || {
         assert_eq!(
-            variable_tooltip(&vref, Some(&var), &types),
+            variable_tooltip(&vref, Some((&var.value, &var.data_type)), &types),
             "Variable «temp» (Number): 25"
         );
         assert_eq!(
@@ -272,7 +272,7 @@ fn variable_tooltip_presentation() {
 
     i18n::with_locale(i18n::Locale::Uk, || {
         assert_eq!(
-            variable_tooltip(&vref, Some(&var), &types),
+            variable_tooltip(&vref, Some((&var.value, &var.data_type)), &types),
             "Змінна «temp» (Число): 25"
         );
         assert_eq!(

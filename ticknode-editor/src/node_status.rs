@@ -64,6 +64,11 @@ fn declared_type(node: crate::state::ClientNode, pin: PinId, dir: PinDirection) 
 }
 
 pub(crate) fn trace_type(ed: Editor, id: NodeId, pin: PinId, dir: PinDirection) -> DataType {
+    if dir == PinDirection::Output
+        && let Some(ty) = ed.output_type(id, pin)
+    {
+        return ty;
+    }
     let declared = ed
         .node_tracked(id)
         .map(|node| declared_type(node, pin, dir))

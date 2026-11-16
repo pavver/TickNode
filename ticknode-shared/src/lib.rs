@@ -45,8 +45,10 @@ pub use formula::{CompiledFormula, FormulaError, FormulaValue};
 mod definitions;
 mod graph;
 mod signatures;
+pub mod value_tree;
 mod values;
 pub use signatures::*;
+pub use value_tree::{effective_type, retain_field_types};
 mod manifest;
 mod protocol;
 

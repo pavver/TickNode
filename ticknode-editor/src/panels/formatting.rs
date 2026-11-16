@@ -29,12 +29,10 @@ pub fn property_label(name: &str) -> String {
 
 /// Formats a value for display in the inspector: strings are quoted to distinguish `"5"` from `5`.
 pub fn display_value_in(value: &DataValue, declared: &DataType) -> String {
-    let runtime = value.get_type();
-    let declared = if *declared == DataType::Any {
-        &runtime
-    } else {
-        declared
-    };
+    let effective = i18n::TYPES
+        .with(|types| effective_type(Some(value), declared, "", &types.borrow()))
+        .unwrap_or_else(|| declared.clone());
+    let declared = &effective;
     if let Some(text) = i18n::identifier_text(value, declared) {
         return text;
     }
@@ -55,7 +53,9 @@ pub fn display_value_in(value: &DataValue, declared: &DataType) -> String {
         let fields = fields
             .iter()
             .map(|(name, f)| {
-                let ty = i18n::declared_field_type(declared, name).unwrap_or(DataType::Any);
+                let ty = i18n::TYPES
+                    .with(|types| effective_type(Some(value), declared, name, &types.borrow()))
+                    .unwrap_or(DataType::Any);
                 format!("{name}: {}", display_value_in(&f.value, &ty))
             })
             .collect::<Vec<_>>()

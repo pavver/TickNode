@@ -43,8 +43,7 @@ pub fn tick() {
                 fields: [(
                     "state".into(),
                     ObjectField {
-                        name: "state".into(),
-                        description: String::new(),
+                        data_type: Some(DataType::Named("quantity.power".into())),
                         value: (host::current_tick() as i64 * 1000).into(),
                     },
                 )]

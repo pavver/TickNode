@@ -1,4 +1,4 @@
-use crate::{DataValue, ObjectField, PinId};
+use crate::{DataType, DataValue, ObjectField, PinId};
 use std::collections::{BTreeMap, HashMap};
 
 /// Values of connected input data pins.
@@ -73,12 +73,30 @@ impl StructValue {
     }
 
     pub fn field(mut self, name: &str, value: impl Into<DataValue>) -> Self {
+        let value = value.into();
+        let data_type = value.get_type();
+        self = self.typed_field(name, data_type, value);
+        self
+    }
+
+    /// Adds a field with its semantic contract (e.g. a quantity or opaque identifier).
+    pub fn typed_field(
+        mut self,
+        name: &str,
+        data_type: DataType,
+        value: impl Into<DataValue>,
+    ) -> Self {
+        let mut value = value.into();
+        ticknode_shared::retain_field_types(
+            &mut value,
+            &data_type,
+            &ticknode_shared::TypeRegistry::new(),
+        );
         self.fields.insert(
             name.into(),
             ObjectField {
-                name: name.into(),
-                description: String::new(),
-                value: value.into(),
+                data_type: Some(data_type),
+                value,
             },
         );
         self
@@ -88,6 +106,19 @@ impl StructValue {
     pub fn field_opt(self, name: &str, value: Option<impl Into<DataValue>>) -> Self {
         match value {
             Some(v) => self.field(name, v),
+            None => self,
+        }
+    }
+
+    /// Adds an optional field while retaining its declared semantic contract.
+    pub fn typed_field_opt(
+        self,
+        name: &str,
+        data_type: DataType,
+        value: Option<impl Into<DataValue>>,
+    ) -> Self {
+        match value {
+            Some(value) => self.typed_field(name, data_type, value),
             None => self,
         }
     }
@@ -132,5 +163,38 @@ pub fn field_bool(value: &DataValue, name: &str) -> Option<bool> {
     match field(value, name)? {
         DataValue::Bool(b) => Some(*b),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod typed_tests {
+    use super::*;
+    #[test]
+    fn builder_keeps_explicit_quantity_and_identifier_list_contracts() {
+        let quantity = DataType::Named("quantity.power".into());
+        let ids = DataType::Named("test.id".into());
+        let value = StructValue::new("test.device")
+            .typed_field("power", quantity.clone(), 1200i64)
+            .typed_field(
+                "ids",
+                DataType::List(Box::new(ids.clone())),
+                DataValue::List {
+                    element_type: DataType::Any,
+                    elements: vec![42i64.into()],
+                },
+            )
+            .field("name", "Kitchen")
+            .build();
+        let DataValue::Object { fields, .. } = &value else {
+            panic!("not an object")
+        };
+        assert_eq!(fields["power"].data_type, Some(quantity));
+        assert_eq!(fields["name"].data_type, Some(DataType::String));
+        assert_eq!(
+            fields["ids"].value.get_type(),
+            DataType::List(Box::new(ids))
+        );
+        let bytes = postcard::to_allocvec(&value).unwrap();
+        assert_eq!(postcard::from_bytes::<DataValue>(&bytes).unwrap(), value);
     }
 }

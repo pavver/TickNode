@@ -196,6 +196,8 @@ pub fn fit_typed_variable_value(
     rules: &crate::DisplayRules,
     labels: &dyn crate::quantity::QuantityLabels,
 ) -> Option<DataValue> {
+    let mut value = value;
+    crate::retain_field_types(&mut value, source, types);
     let opaque = |mut t: &DataType| {
         while let DataType::List(inner) = t {
             t = inner;

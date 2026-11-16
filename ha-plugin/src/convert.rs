@@ -22,8 +22,7 @@ fn object(fields: BTreeMap<String, DataValue>) -> DataValue {
                 (
                     name.clone(),
                     ObjectField {
-                        name,
-                        description: String::new(),
+                        data_type: None,
                         value,
                     },
                 )

@@ -161,8 +161,7 @@ fn media_validation_and_source_extraction() {
     fields.insert(
         "file_id".into(),
         ObjectField {
-            name: "file_id".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::String("file_xyz".into()),
         },
     );

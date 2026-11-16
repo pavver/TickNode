@@ -203,9 +203,16 @@ impl Node for MatchNode {
     fn execute(&mut self, _: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
         let value_of = |name: &str| {
             if let Some(vref) = VariableRef::parse(name) {
+                if vref.lookup == VariableLookup::Plugin {
+                    return ctx
+                        .plugin_values
+                        .resolve(&vref.name)
+                        .map(|(v, _)| v.clone());
+                }
                 return ctx
-                    .variable(&vref.name, vref.lookup)
-                    .map(|v| v.value.clone());
+                    .variables
+                    .resolve_value(&vref.name, vref.lookup, ctx.sheet, ctx.types)
+                    .map(|(v, _)| v.clone());
             }
             self.inputs
                 .iter()
@@ -218,10 +225,22 @@ impl Node for MatchNode {
             if case.matches_in(
                 ctx.types,
                 |name| {
-                    if let Some(vref) = VariableRef::parse(name)
-                        && let Some(v) = ctx.variable(&vref.name, vref.lookup)
-                    {
-                        return v.data_type.clone();
+                    if let Some(vref) = VariableRef::parse(name) {
+                        if vref.lookup == VariableLookup::Plugin {
+                            return ctx
+                                .plugin_values
+                                .resolve(&vref.name)
+                                .map(|(_, t)| t)
+                                .unwrap_or(DataType::Any);
+                        }
+                        if let Some((_, ty)) = ctx.variables.resolve_value(
+                            &vref.name,
+                            vref.lookup,
+                            ctx.sheet,
+                            ctx.types,
+                        ) {
+                            return ty;
+                        }
                     }
                     self.inputs
                         .iter()

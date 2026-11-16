@@ -17,6 +17,7 @@ pub mod signature;
 pub mod snippets;
 #[cfg(test)]
 mod tests;
+mod tree;
 
 pub use docs::{Doc, DocKind, find_doc};
 pub use kinds::{ValueKind, kind_of};
@@ -87,6 +88,14 @@ pub fn type_label(data_type: &DataType, types: &TypeRegistry) -> String {
 }
 
 pub fn complete(input: &CompletionInput) -> Option<Completion> {
+    complete_with_values(input, &[])
+}
+
+/// Completes runtime object fields while retaining declared structure contracts.
+pub fn complete_with_values(
+    input: &CompletionInput,
+    values: &[(String, Option<crate::DataValue>, DataType)],
+) -> Option<Completion> {
     let mut caret = input.caret.min(input.source.len());
     while !input.source.is_char_boundary(caret) {
         caret -= 1;
@@ -145,6 +154,9 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 
     // Context 1: after `.`
     if before.ends_with('.') {
+        if let Some(items) = tree::dot_items(before, partial, input, values) {
+            return Some(Completion { range, items });
+        }
         let items = scan::resolve_dot_context(
             before,
             partial,

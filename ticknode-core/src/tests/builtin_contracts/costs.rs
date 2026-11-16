@@ -83,7 +83,13 @@ fn pure_nodes_charge_one_work_unit_for_their_results() {
                 type_name: None,
             },
         ),
-        ("object/set_field", 3, object()),
+        ("object/set_field", 3, {
+            let mut value = object();
+            if let DataValue::Object { fields, .. } = &mut value {
+                fields.get_mut("answer").unwrap().data_type = Some(DataType::Number);
+            }
+            value
+        }),
         ("object/get_field", 2, number(42)),
         ("object/unpack", 1, number(42)),
     ] {

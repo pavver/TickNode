@@ -109,20 +109,28 @@ pub(super) fn convert(
     }
     if let Value::Array(elements) = json {
         let mut converted = Vec::new();
+        let mut element_types = Vec::new();
         // Element contracts belong to the list type, never numeric catalog paths.
         for value in elements {
             let mut element_contracts = Contracts::new();
-            if let Some(value) =
+            if let Some(mut value) =
                 convert(value, temperature, &mut element_contracts, path, depth + 1)
             {
+                super::stamp(&mut value, path, &element_contracts);
+                element_types.push(
+                    element_contracts
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_else(|| value.get_type()),
+                );
                 converted.push(value);
             }
         }
         let elements = converted;
-        let element_type = elements
+        let element_type = element_types
             .first()
-            .map(DataValue::get_type)
-            .filter(|ty| elements.iter().all(|v| &v.get_type() == ty))
+            .cloned()
+            .filter(|ty| element_types.iter().all(|t| t == ty))
             .unwrap_or(DataType::Any);
         return Some(DataValue::List {
             element_type,

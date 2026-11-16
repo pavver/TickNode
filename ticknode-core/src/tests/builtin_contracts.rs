@@ -49,8 +49,7 @@ pub(super) fn object() -> DataValue {
         fields: [(
             "answer".into(),
             ObjectField {
-                name: "answer".into(),
-                description: String::new(),
+                data_type: None,
                 value: number(42),
             },
         )]

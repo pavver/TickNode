@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod ago;
 pub mod dates;
 pub mod duration;
+mod formatted;
 mod namespace;
 pub mod plural;
 #[cfg(test)]
@@ -304,7 +305,6 @@ impl CompiledTemplate {
         dates::register(&mut env, env_ctx.labels.clone());
         ago::register(&mut env, env_ctx.labels.clone(), env_ctx.now);
         duration::register(&mut env, env_ctx.labels.clone());
-        unit::register(&mut env, &env_ctx, inputs, types);
 
         let mut global_map = std::collections::BTreeMap::new();
         let mut sheet_map = std::collections::BTreeMap::new();
@@ -314,9 +314,21 @@ impl CompiledTemplate {
         let mut text_sheet_map = std::collections::BTreeMap::new();
         let mut text_var_map = std::collections::BTreeMap::new();
 
+        let (path_types, path_values) = unit::render_path_maps(&env_ctx, inputs, types);
         for v in &env_ctx.variables {
             let plain_val = values::plain(&v.value);
-            let text_val = Value::from(format(&v.value, &v.data_type));
+            let scope = if v.key.scope == crate::VariableScope::Sheet {
+                "sheet"
+            } else {
+                "global"
+            };
+            let text_val = formatted::value(
+                &v.value,
+                &format!("{scope}.{}", v.key.name),
+                &path_types,
+                types,
+                format,
+            );
             match v.key.scope {
                 crate::VariableScope::Sheet => {
                     sheet_map.insert(v.key.name.clone(), plain_val.clone());
@@ -339,15 +351,26 @@ impl CompiledTemplate {
 
         let mut text_fields: Vec<(String, Value)> = inputs
             .iter()
-            .filter_map(|(name, value, ty)| {
-                Some((name.clone(), Value::from(format(value.as_ref()?, ty))))
+            .filter_map(|(name, value, _)| {
+                Some((
+                    name.clone(),
+                    formatted::value(value.as_ref()?, name, &path_types, types, format),
+                ))
             })
             .collect();
         text_fields.push(("var".to_string(), Value::from_iter(text_var_map)));
         text_fields.push(("sheet".to_string(), Value::from_iter(text_sheet_map)));
         text_fields.push(("global".to_string(), Value::from_iter(text_global_map)));
-        namespace::register(&mut env, &env_ctx, &mut text_fields, format);
+        namespace::register(
+            &mut env,
+            &env_ctx,
+            &mut text_fields,
+            &path_types,
+            types,
+            format,
+        );
         env.add_global("text", Value::from_iter(text_fields));
+        unit::register(&mut env, &env_ctx, path_types, path_values);
         let zero = runtime_text(&DataValue::Number(crate::NumberValue::Int(0)));
         let int_decimal_suffix = zero.strip_prefix('0').unwrap_or("").to_string();
         plural::register(

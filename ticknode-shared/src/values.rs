@@ -130,8 +130,8 @@ pub enum DataType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ObjectField {
-    pub name: String,
-    pub description: String,
+    /// Hidden field contract; object keys come exclusively from the parent map.
+    pub data_type: Option<DataType>,
     pub value: DataValue,
 }
 
@@ -252,8 +252,7 @@ pub fn data_type_name(t: &DataType) -> String {
         _ => BUILTIN_TYPES
             .iter()
             .find(|(ty, _)| ty == t)
-            .expect("every built-in type has a name")
-            .1
+            .map_or("any", |(_, name)| *name)
             .into(),
     }
 }

@@ -24,9 +24,10 @@ pub use properties::*;
 pub use template_field::{
     TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateSamplesLayer, TemplateStatusRow,
 };
-pub use variable::{
-    BoundInputEditor, InputCommit, decide_input_commit, resolve_variable, variable_tooltip,
-};
+pub use variable::{BoundInputEditor, InputCommit, decide_input_commit, variable_tooltip};
+
+#[cfg(test)]
+pub use variable::resolve_variable;
 
 /// Display text for a field value. For `Any`, a string that looks like a number or `true`/`false` is quoted.
 fn value_text(value: &DataValue, value_type: &DataType) -> String {
@@ -295,11 +296,7 @@ pub fn PinValue(
             if let Some(ref_text) = bound_var.get() {
                 if !is_editing.get() {
                     let vref = VariableRef::parse(&ref_text);
-                    let resolved = {
-                        let ed_vars = ed.variables.get();
-                        let sheet = ed.open_sheet.get();
-                        vref.as_ref().and_then(|vr| resolve_variable(vr, sheet, &ed_vars).cloned())
-                    };
+                    let resolved = vref.as_ref().and_then(|vr| ed.variable_value(vr));
                     let missing_required = is_required && resolved.is_none();
                     let state = if missing_required {
                         ControlState::Error
@@ -308,7 +305,7 @@ pub fn PinValue(
                     };
                     let tooltip = vref.as_ref().map_or_else(
                         || t!("inline-variable-not-found", name = ref_text.clone()),
-                        |vr| variable_tooltip(vr, resolved.as_ref(), &ed.types.get()),
+                        |vr| variable_tooltip(vr, resolved.as_ref().map(|(v, ty)| (v, ty)), &ed.types.get()),
                     );
 
                     view! {

@@ -320,16 +320,14 @@ fn ha_state_roundtrip_with_attributes_and_timestamps() {
     attr_fields.insert(
         "friendly_name".to_string(),
         ObjectField {
-            name: "friendly_name".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::String("Living Room Light".into()),
         },
     );
     attr_fields.insert(
         "brightness".to_string(),
         ObjectField {
-            name: "brightness".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::Number(NumberValue::Int(255)),
         },
     );

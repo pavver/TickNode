@@ -104,3 +104,18 @@ Input `var:<pin>` properties and `SetInputVariable` also accept full plugin path
 These bindings are read-only, persist with the graph, and yield to connected wires.
 Formula nodes share immutable catalog indexes and look up only their referenced namespace field types, including after formula edits.
 The editor stores slim namespace catalogs, a per-entry field cache invalidated on namespace replacement, and sheet value telemetry; completion, lints and preview integration are deferred to task B.
+
+## Self-describing value fields
+
+Object keys exist only in the `DataValue::Object.fields` map; each `ObjectField` contains its value and an optional hidden `data_type` contract.
+Field names and descriptions are not duplicated in values.
+Known producers, including Make, split input assembly, object field setters and SDK `StructValue::typed_field`, retain semantic field contracts; list values retain their element contracts.
+Plain JSON parsing leaves field contracts absent.
+The shared `effective_type` resolver follows declarations first, refining generic Any/Object declarations with field contracts and runtime kinds at each path segment.
+To text, nested `text.<path>`, the `unit` filter, Match, bound input conversions and editor value presentation use these contracts.
+Formatted template objects and lists support field/index access and iteration while rendering whole containers with To text formatting.
+Hidden contracts never become object keys in templates, object nodes or external JSON.
+Field help is derived on demand from the registered structure field description, otherwise the effective field type description or title, with Fluent translation.
+Template completion uses available value trees alongside declarations, including under `text.` and variable roots.
+Formula result contracts follow effective live reference and bound input types after evaluation, and the editor uses these reference contracts for preview and trace labels.
+Static numeric list indices in template paths retain element contracts in both `text.value.items[0]` and `value.items[0] | unit`.

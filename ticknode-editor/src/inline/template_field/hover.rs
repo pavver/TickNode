@@ -166,30 +166,13 @@ pub fn hit_test_token(
 }
 
 /// Resolves the nested struct field type from `root_type` along `fields`.
+#[cfg(test)]
 pub fn resolve_field_path_type(
     root_type: &DataType,
     fields: &[String],
     types: &TypeRegistry,
 ) -> Option<DataType> {
-    let mut current = root_type.clone();
-    for field in fields {
-        match &current {
-            DataType::Named(name) => {
-                let def = types.get(name)?;
-                match &def.kind {
-                    TypeKind::Struct {
-                        fields: struct_fields,
-                    } => {
-                        let f = struct_fields.iter().find(|sf| sf.name == *field)?;
-                        current = f.data_type.clone();
-                    }
-                    _ => return None,
-                }
-            }
-            _ => return None,
-        }
-    }
-    Some(current)
+    effective_type(None, root_type, &fields.join("."), types)
 }
 
 /// Descends into `DataValue::Object` along `fields`.
@@ -271,6 +254,9 @@ pub fn resolve_hover_tooltip_with_context(
         }
     }
 
+    if let Some(text) = super::tree_hover::tooltip(ed, node, path) {
+        return Some(text);
+    }
     let client_node = ed.node_tracked(node)?;
     let root = &path[0];
 
@@ -315,15 +301,14 @@ pub fn resolve_hover_tooltip_with_context(
         };
         let eff_type = crate::canvas::display_type(&declared_ty, ed.source_type(node, pin.id));
         let fields = &path[1..];
-        let field_type = ed
-            .types
-            .with(|types| resolve_field_path_type(&eff_type, fields, types))?;
-
         let preview_inputs = crate::inline::template_field::preview::node_preview_inputs(ed, node);
         let input_val = preview_inputs
             .into_iter()
             .find(|(name, _, _)| name == root)
             .and_then(|(_, v, _)| v);
+        let field_type = ed.types.with(|types| {
+            effective_type(input_val.as_ref(), &eff_type, &fields.join("."), types)
+        })?;
         let field_val = resolve_field_path_value(input_val.as_ref(), fields);
         let type_title = ed.type_title(&field_type);
         return Some(format_field_tooltip(

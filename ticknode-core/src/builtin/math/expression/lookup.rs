@@ -21,7 +21,9 @@ pub(super) fn lookup_var_value(
     let value = if vref.lookup == VariableLookup::Plugin {
         ctx.plugin_values.resolve(&vref.name).map(|(v, _)| v)
     } else {
-        ctx.variable(&vref.name, vref.lookup).map(|v| &v.value)
+        ctx.variables
+            .resolve_value(&vref.name, vref.lookup, ctx.sheet, ctx.types)
+            .map(|(v, _)| v)
     };
     let value = value.ok_or_else(|| {
         FormulaError::new(

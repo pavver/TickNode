@@ -100,8 +100,16 @@ impl Node for ObjectSetFieldNode {
             fields.insert(
                 name.clone(),
                 ObjectField {
-                    name,
-                    description: String::new(),
+                    data_type: effective_type(
+                        Some(&v),
+                        if matches!(self.field_type, DataType::Any | DataType::Object) {
+                            ctx.input_types.get(&PinId(2)).unwrap_or(&self.field_type)
+                        } else {
+                            &self.field_type
+                        },
+                        "",
+                        ctx.types,
+                    ),
                     value: v,
                 },
             );

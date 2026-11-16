@@ -25,42 +25,12 @@ impl Tree {
         }
     }
 }
-fn presentation(
-    value: &DataValue,
-    path: &str,
-    ctx: &RenderEnv,
-    format: &dyn Fn(&DataValue, &DataType) -> String,
-) -> Value {
-    match value {
-        DataValue::Object { fields, .. } => fields
-            .iter()
-            .map(|(key, field)| {
-                (
-                    key.clone(),
-                    presentation(&field.value, &format!("{path}.{key}"), ctx, format),
-                )
-            })
-            .collect(),
-        DataValue::List { elements, .. } => elements
-            .iter()
-            .enumerate()
-            .map(|(i, value)| presentation(value, &format!("{path}.{i}"), ctx, format))
-            .collect(),
-        _ => {
-            let ty = ctx
-                .plugin_values
-                .iter()
-                .find(|(p, _, _)| p == path)
-                .map(|(_, _, ty)| ty.clone())
-                .unwrap_or_else(|| value.get_type());
-            Value::from(format(value, &ty))
-        }
-    }
-}
 pub(super) fn register(
     env: &mut Environment<'static>,
     ctx: &RenderEnv,
     text: &mut Vec<(String, Value)>,
+    path_types: &std::collections::HashMap<String, DataType>,
+    types: &crate::TypeRegistry,
     format: &dyn Fn(&DataValue, &DataType) -> String,
 ) {
     for namespace in &ctx.namespaces {
@@ -75,7 +45,10 @@ pub(super) fn register(
                 parents.push(full.clone());
                 if let Some(value) = value {
                     plain.insert(path, values::plain(value));
-                    formatted.insert(path, presentation(value, full, ctx, format));
+                    formatted.insert(
+                        path,
+                        super::formatted::value(value, full, path_types, types, format),
+                    );
                 }
             }
         }

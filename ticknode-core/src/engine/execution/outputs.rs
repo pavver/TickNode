@@ -9,23 +9,9 @@ struct VariableOutputs<'a> {
 }
 
 impl TickEngine {
-    fn variable_input_type(&self, id: NodeId) -> DataType {
-        let source = self
-            .connections
-            .data_into(id)
-            .iter()
-            .find(|c| c.dst_pin == PinId(3));
-        source
-            .and_then(|c| {
-                self.node_definition(c.src_node)?
-                    .pins
-                    .into_iter()
-                    .find(|p| p.id == c.src_pin && p.direction == PinDirection::Output)
-            })
-            .and_then(|p| match p.pin_type {
-                PinType::Data(t) => Some(t),
-                _ => None,
-            })
+    fn variable_input_type(&mut self, id: NodeId) -> DataType {
+        self.input_source_types(id)
+            .remove(&PinId(3))
             .or_else(|| {
                 self.node_definition(id)?
                     .pins
@@ -222,10 +208,11 @@ impl TickEngine {
                 .error(node_id, err.ui_message(), err.log_message());
             return false;
         }
+        let source_type = self.variable_input_type(node_id);
         let Some(converted) = fit_typed_variable_value(
             &self.types,
             value,
-            &self.variable_input_type(node_id),
+            &source_type,
             &data_type,
             &self.host_state.display,
             crate::quantity::labels(&self.host_state.locale),
@@ -277,10 +264,11 @@ impl TickEngine {
             return false;
         };
         let var_type = var.data_type.clone();
+        let source_type = self.variable_input_type(node_id);
         let Some(converted) = fit_typed_variable_value(
             &self.types,
             value,
-            &self.variable_input_type(node_id),
+            &source_type,
             &var_type,
             &self.host_state.display,
             crate::quantity::labels(&self.host_state.locale),

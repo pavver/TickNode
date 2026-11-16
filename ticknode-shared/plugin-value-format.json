@@ -174,10 +174,11 @@
   "ObjectField": {
     "STRUCT": [
       {
-        "name": "STR"
-      },
-      {
-        "description": "STR"
+        "data_type": {
+          "OPTION": {
+            "TYPENAME": "DataType"
+          }
+        }
       },
       {
         "value": {

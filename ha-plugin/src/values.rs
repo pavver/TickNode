@@ -14,8 +14,7 @@ pub(super) fn object(fields: impl IntoIterator<Item = (String, DataValue)>) -> D
                 (
                     name.clone(),
                     ObjectField {
-                        name,
-                        description: String::new(),
+                        data_type: Some(value.get_type()),
                         value,
                     },
                 )
@@ -61,7 +60,8 @@ pub fn tree(state: &State, temperature_unit: Option<&str>) -> (DataValue, Vec<Va
     if let Some(value) = crate::entity::typed_value(state, kind) {
         fields.push(("state".into(), value));
     }
-    let value = object(fields);
+    let mut value = object(fields);
+    stamp(&mut value, "", &contracts);
     collect_fields(&value, "", &mut contracts, 0);
     let fields = contracts
         .into_iter()
@@ -72,6 +72,21 @@ pub fn tree(state: &State, temperature_unit: Option<&str>) -> (DataValue, Vec<Va
         })
         .collect();
     (value, fields)
+}
+pub(super) fn stamp(value: &mut DataValue, prefix: &str, contracts: &Contracts) {
+    if let DataValue::Object { fields, .. } = value {
+        for (key, field) in fields {
+            let path = if prefix.is_empty() {
+                key.clone()
+            } else {
+                format!("{prefix}.{key}")
+            };
+            if let Some(ty) = contracts.get(&path) {
+                field.data_type = Some(ty.clone());
+            }
+            stamp(&mut field.value, &path, contracts);
+        }
+    }
 }
 fn collect_fields(value: &DataValue, prefix: &str, contracts: &mut Contracts, depth: usize) {
     if depth > 16 {

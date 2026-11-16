@@ -186,16 +186,21 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
                 .collect::<Vec<_>>()
         });
 
+        let mut values = super::preview::node_preview_inputs(ed, node);
+        values.extend(ed.template_values());
         let completion = ed.types.with_untracked(|types| {
-            ticknode_shared::template::complete(&ticknode_shared::template::CompletionInput {
-                source: &current_text,
-                caret: caret_byte,
-                inputs: &input_pins,
-                types,
-                now: Some(chrono::Local::now()),
-                labels: Some(&crate::i18n::UiQuantityLabels),
-                variables: &visible_vars,
-            })
+            ticknode_shared::template::complete::complete_with_values(
+                &ticknode_shared::template::CompletionInput {
+                    source: &current_text,
+                    caret: caret_byte,
+                    inputs: &input_pins,
+                    types,
+                    now: Some(chrono::Local::now()),
+                    labels: Some(&crate::i18n::UiQuantityLabels),
+                    variables: &visible_vars,
+                },
+                &values,
+            )
         });
 
         if let Some(completion) = completion

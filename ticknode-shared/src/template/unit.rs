@@ -2,8 +2,7 @@
 
 use super::values;
 use crate::{
-    DataType, DataValue, NumberValue, Rounding, TypeKind, TypeRegistry, quantity,
-    to_text::ToTextOptions,
+    DataType, DataValue, NumberValue, Rounding, TypeRegistry, quantity, to_text::ToTextOptions,
 };
 use minijinja::{
     machinery::{Token, tokenize},
@@ -69,35 +68,35 @@ pub fn rewrite_unit_paths(source: &str) -> (String, Vec<(usize, usize)>) {
         {
             let mut p = k - 1;
             let mut segments = Vec::new();
-            if p > 0 {
-                p -= 1;
-                let mut expecting_ident = true;
-                loop {
-                    if expecting_ident {
-                        if let Token::Ident(name) = &tokens[p].0 {
-                            segments.push(name.to_string());
-                            expecting_ident = false;
-                            if p == 0 {
-                                break;
-                            }
+            let mut valid_root = false;
+            while p > 0 {
+                match &tokens[p - 1].0 {
+                    Token::BracketClose
+                        if p >= 3 && matches!(tokens[p - 3].0, Token::BracketOpen) =>
+                    {
+                        let Token::Int(index) = &tokens[p - 2].0 else {
+                            break;
+                        };
+                        segments.push(index.to_string());
+                        p -= 3;
+                    }
+                    Token::Int(index) if p >= 2 && matches!(tokens[p - 2].0, Token::Dot) => {
+                        segments.push(index.to_string());
+                        p -= 2;
+                    }
+                    Token::Ident(name) => {
+                        segments.push(name.to_string());
+                        p -= 1;
+                        if p > 0 && matches!(tokens[p - 1].0, Token::Dot) {
                             p -= 1;
                         } else {
+                            valid_root = p == 0 || !matches!(tokens[p - 1].0, Token::Pipe);
                             break;
                         }
-                    } else if matches!(tokens[p].0, Token::Dot) {
-                        expecting_ident = true;
-                        if p == 0 {
-                            break;
-                        }
-                        p -= 1;
-                    } else {
-                        break;
                     }
+                    _ => break,
                 }
             }
-
-            let valid_root = !segments.is_empty()
-                && (p == 0 && !segments.is_empty() || !matches!(tokens[p].0, Token::Pipe));
 
             if valid_root {
                 segments.reverse();
@@ -209,36 +208,40 @@ fn populate_paths(
     path_values: &mut HashMap<String, DataValue>,
     depth: usize,
 ) {
-    if depth > 16 {
+    // Bound declaration-only expansion, but retain contracts at every level of a live tree.
+    if depth > 16 && val.is_none() {
         return;
     }
-    path_types.insert(prefix.to_string(), ty.clone());
+    let effective = crate::effective_type(val, ty, "", types).unwrap_or_else(|| ty.clone());
+    path_types.insert(prefix.to_string(), effective.clone());
     if let Some(v) = val {
         path_values.insert(prefix.to_string(), v.clone());
     }
-
-    if let DataType::Named(name) = ty
-        && let Some(def) = types.get(name)
-        && let TypeKind::Struct { fields } = &def.kind
-    {
-        for field in fields {
-            let child_prefix = format!("{prefix}.{}", field.name);
-            let child_val = match val {
-                Some(DataValue::Object {
-                    fields: obj_fields, ..
-                }) => obj_fields.get(&field.name).map(|f| &f.value),
-                _ => None,
-            };
-            populate_paths(
-                &child_prefix,
-                child_val,
-                &field.data_type,
-                types,
-                path_types,
-                path_values,
-                depth + 1,
-            );
+    let mut children: std::collections::BTreeSet<String> = types
+        .definition_of(&effective)
+        .map(|d| d.fields().iter().map(|f| f.name.clone()).collect())
+        .unwrap_or_default();
+    match val {
+        Some(DataValue::Object { fields, .. }) => children.extend(fields.keys().cloned()),
+        Some(DataValue::List { elements, .. }) => {
+            children.extend((0..elements.len()).map(|i| i.to_string()))
         }
+        _ => {}
+    }
+    for child in children {
+        let Some(child_type) = crate::effective_type(val, ty, &child, types) else {
+            continue;
+        };
+        let child_val = val.and_then(|v| crate::plugin_values::project(v, &child));
+        populate_paths(
+            &format!("{prefix}.{child}"),
+            child_val,
+            &child_type,
+            types,
+            path_types,
+            path_values,
+            depth + 1,
+        );
     }
 }
 
@@ -331,15 +334,13 @@ pub fn unit_filter(
     Ok(Value::from(text))
 }
 
-/// Registers the localized `unit` filter on the MiniJinja environment.
-pub fn register(
-    env: &mut minijinja::Environment<'static>,
-    env_ctx: &super::RenderEnv,
-    inputs: &[(String, Option<DataValue>, DataType)],
+fn add_variable_paths(
+    variables: &[crate::Variable],
     types: &TypeRegistry,
+    path_types: &mut HashMap<String, DataType>,
+    path_values: &mut HashMap<String, DataValue>,
 ) {
-    let (mut path_types, mut path_values) = build_path_maps(inputs, types);
-    for v in &env_ctx.variables {
+    for v in variables {
         match v.key.scope {
             crate::VariableScope::Sheet => {
                 populate_paths(
@@ -347,8 +348,8 @@ pub fn register(
                     Some(&v.value),
                     &v.data_type,
                     types,
-                    &mut path_types,
-                    &mut path_values,
+                    path_types,
+                    path_values,
                     0,
                 );
                 populate_paths(
@@ -356,8 +357,8 @@ pub fn register(
                     Some(&v.value),
                     &v.data_type,
                     types,
-                    &mut path_types,
-                    &mut path_values,
+                    path_types,
+                    path_values,
                     0,
                 );
             }
@@ -367,8 +368,8 @@ pub fn register(
                     Some(&v.value),
                     &v.data_type,
                     types,
-                    &mut path_types,
-                    &mut path_values,
+                    path_types,
+                    path_values,
                     0,
                 );
                 let var_path = format!("var.{}", v.key.name);
@@ -378,20 +379,37 @@ pub fn register(
                         Some(&v.value),
                         &v.data_type,
                         types,
-                        &mut path_types,
-                        &mut path_values,
+                        path_types,
+                        path_values,
                         0,
                     );
                 }
             }
         }
     }
-    for (path, value, ty) in &env_ctx.plugin_values {
-        path_types.insert(path.clone(), ty.clone());
-        if let Some(value) = value {
-            path_values.insert(path.clone(), value.clone());
-        }
-    }
+}
+
+/// Resolves the paths once for both text trees and the unit filter.
+pub(super) fn render_path_maps(
+    env_ctx: &super::RenderEnv,
+    inputs: &[(String, Option<DataValue>, DataType)],
+    types: &TypeRegistry,
+) -> (HashMap<String, DataType>, HashMap<String, DataValue>) {
+    let (mut path_types, mut path_values) = build_path_maps(inputs, types);
+    add_variable_paths(&env_ctx.variables, types, &mut path_types, &mut path_values);
+    let (plugin_types, plugin_values) = build_path_maps(&env_ctx.plugin_values, types);
+    path_types.extend(plugin_types);
+    path_values.extend(plugin_values);
+    (path_types, path_values)
+}
+
+/// Registers the localized `unit` filter on the MiniJinja environment.
+pub(super) fn register(
+    env: &mut minijinja::Environment<'static>,
+    env_ctx: &super::RenderEnv,
+    path_types: HashMap<String, DataType>,
+    path_values: HashMap<String, DataValue>,
+) {
     let to_text_fn = env_ctx.to_text.clone();
     env.add_filter(
         "unit",

@@ -17,7 +17,7 @@ pub struct User {
 impl User {
     pub fn value(&self) -> DataValue {
         StructValue::new("telegram.user")
-            .field("id", self.id)
+            .typed_field("id", crate::schema::named("user_id"), self.id)
             .field("first_name", self.first_name.clone())
             .field_opt("last_name", self.last_name.clone())
             .field_opt("username", self.username.clone())
@@ -141,14 +141,19 @@ impl Message {
                 .build()
         });
         StructValue::new("telegram.message")
-            .field("chat", self.chat.id)
-            .field_opt("topic", self.message_thread_id)
-            .field("id", self.message_id)
+            .typed_field("chat", crate::schema::named("chat_id"), self.chat.id)
+            .typed_field_opt(
+                "topic",
+                crate::schema::named("topic_id"),
+                self.message_thread_id,
+            )
+            .typed_field("id", crate::schema::named("message_id"), self.message_id)
             .field_opt("from", self.from.as_ref().map(User::value))
             .field_opt("text", text)
             .field("date", DataValue::DateTime(date))
-            .field_opt(
+            .typed_field_opt(
                 "reply_to",
+                crate::schema::named("message_id"),
                 self.reply_to_message.as_ref().map(|m| m.message_id),
             )
             .field_opt("chat_title", self.chat.title.clone())

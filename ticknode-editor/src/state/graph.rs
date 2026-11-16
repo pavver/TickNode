@@ -98,17 +98,11 @@ impl Editor {
             d.iter()
                 .find(|c| c.dst_node == node && c.dst_pin == pin)
                 .map(|c| (c.src_node, c.src_pin))
-        })?;
-        self.node_tracked(src.0)?.instance.with(|i| {
-            i.definition
-                .pins
-                .iter()
-                .find(|p| p.id == src.1 && p.direction == PinDirection::Output)
-                .and_then(|p| match &p.pin_type {
-                    PinType::Data(t) => Some(t.clone()),
-                    PinType::Exec => None,
-                })
-        })
+        });
+        let Some(src) = src else {
+            return self.bound_input(node, pin).map(|(_, ty)| ty);
+        };
+        self.output_type(src.0, src.1)
     }
 
     /// Required data input that is neither connected nor has an inline value or variable binding on the node (tracked).

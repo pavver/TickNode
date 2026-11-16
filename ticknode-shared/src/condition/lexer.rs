@@ -136,15 +136,13 @@ impl Lexer {
             self.position += 1;
         }
         let word: String = self.chars[start..self.position].iter().collect();
-        if (word == "var" || word == "sheet" || word == "global")
-            && self.chars.get(self.position) == Some(&'.')
-        {
+        if self.chars.get(self.position) == Some(&'.') {
             self.position += 1;
             let name_start = self.position;
             while self
                 .chars
                 .get(self.position)
-                .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_')
+                .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_' || *ch == '.')
             {
                 self.position += 1;
             }

@@ -154,12 +154,9 @@ pub fn to_text_with_identifiers(
     types: &TypeRegistry,
     identifiers: &dyn IdentifierLabels,
 ) -> String {
-    let runtime = value.get_type();
-    let declared = if *declared == DataType::Any {
-        &runtime
-    } else {
-        declared
-    };
+    let effective =
+        effective_type(Some(value), declared, "", types).unwrap_or_else(|| declared.clone());
+    let declared = &effective;
     if let (DataValue::Number(n), DataType::Named(name)) = (value, declared)
         && let Some(q) = quantity::kind(name)
     {
@@ -250,16 +247,14 @@ pub fn to_text_with_identifiers(
                 .join(", ")
         }
         DataValue::Object { fields, .. } => {
-            let definition = types.definition_of(declared);
             let shown = fields
                 .iter()
                 .map(|(name, field)| {
-                    let ty = definition
-                        .and_then(|d| d.fields().iter().find(|f| &f.name == name))
-                        .map(|f| &f.data_type);
+                    let ty =
+                        effective_type(Some(value), declared, name, types).unwrap_or(DataType::Any);
                     let text = to_text_with_identifiers(
                         &field.value,
-                        ty.unwrap_or(&DataType::Any),
+                        &ty,
                         options,
                         rules,
                         labels,

@@ -280,8 +280,7 @@ fn insert_field(
     fields.insert(
         key.into(),
         ObjectField {
-            name: key.into(),
-            description: String::new(),
+            data_type: Some(value.get_type()),
             value,
         },
     );

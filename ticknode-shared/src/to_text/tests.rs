@@ -41,8 +41,7 @@ fn every_runtime_type_has_a_readable_presentation() {
         fields: [(
             "x".into(),
             ObjectField {
-                name: "x".into(),
-                description: String::new(),
+                data_type: None,
                 value: 2i64.into(),
             },
         )]
@@ -153,16 +152,14 @@ fn struct_fields_use_their_declared_quantity_types() {
             (
                 "power".into(),
                 ObjectField {
-                    name: "Power".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: 1970i64.into(),
                 },
             ),
             (
                 "label".into(),
                 ObjectField {
-                    name: "Label".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: "Kitchen".into(),
                 },
             ),

@@ -201,3 +201,32 @@ fn list_contracts_follow_compacted_null_elements() {
         "{fields:?}"
     );
 }
+
+#[test]
+fn live_tree_retains_quantity_contracts_in_objects_and_lists_without_json_metadata() {
+    let (value, _) = tree(
+        &state(
+            "climate.room",
+            "heat",
+            json!({"current_temperature":68, "nested":{"items":[{"temperature":86}]}}),
+        ),
+        Some("°F"),
+    );
+    let registry = ticknode_shared::TypeRegistry::from_definitions(
+        ticknode_shared::quantity::builtin_quantities(),
+    );
+    for path in [
+        "attributes.current_temperature",
+        "attributes.nested.items.0.temperature",
+    ] {
+        assert_eq!(
+            ticknode_shared::effective_type(Some(&value), &DataType::Object, path, &registry),
+            Some(DataType::Named("quantity.temperature".into()))
+        );
+    }
+    let json = crate::convert::value_to_json(&value);
+    let text = serde_json::to_string(&json).unwrap();
+    assert!(!text.contains("data_type"), "{text}");
+    assert!(!text.contains("description"), "{text}");
+    assert_eq!(json["attributes"]["current_temperature"], json!(20));
+}

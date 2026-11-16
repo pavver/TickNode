@@ -105,8 +105,7 @@ fn test_unit_struct_field_path() {
     fields.insert(
         "power".to_string(),
         ObjectField {
-            name: "power".to_string(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::Number(NumberValue::Float(1970.0)),
         },
     );

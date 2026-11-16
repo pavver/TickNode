@@ -142,16 +142,14 @@ mod tests {
         fields.insert(
             "file_id".into(),
             ObjectField {
-                name: "file_id".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::String("tg_123".into()),
             },
         );
         fields.insert(
             "url".into(),
             ObjectField {
-                name: "url".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::String("https://example.com/p.jpg".into()),
             },
         );
@@ -168,8 +166,7 @@ mod tests {
         fields.insert(
             "url".into(),
             ObjectField {
-                name: "url".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::String("https://example.com/audio.mp3".into()),
             },
         );
@@ -189,8 +186,7 @@ mod tests {
         fields.insert(
             "blob".into(),
             ObjectField {
-                name: "blob".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::String("blob_456".into()),
             },
         );

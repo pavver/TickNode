@@ -12,8 +12,7 @@ fn object(fields: impl IntoIterator<Item = (&'static str, DataValue)>) -> DataVa
                 (
                     name.into(),
                     ObjectField {
-                        name: name.into(),
-                        description: String::new(),
+                        data_type: None,
                         value,
                     },
                 )

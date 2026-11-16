@@ -141,9 +141,13 @@ impl MatchCase {
     ) -> bool {
         self.matches_by(|condition| {
             let mut c = condition.clone();
+            let resolved_type = |name: &str| {
+                crate::effective_type(value_of(name).as_ref(), &type_of(name), "", types)
+                    .unwrap_or_else(|| type_of(name))
+            };
             let named_type = |op: &Operand| match op {
-                Operand::Input(name) => Some(type_of(name)),
-                Operand::Variable(vref) => Some(type_of(&vref.to_str())),
+                Operand::Input(name) => Some(resolved_type(name)),
+                Operand::Variable(vref) => Some(resolved_type(&vref.to_str())),
                 Operand::Value(_) => None,
             };
             if let (Some(a), Some(b)) = (named_type(&c.left), c.right.as_ref().and_then(named_type))
@@ -162,8 +166,8 @@ impl MatchCase {
                 }
             }
             let left_type = match &c.left {
-                Operand::Input(name) => type_of(name),
-                Operand::Variable(vref) => type_of(&vref.to_str()),
+                Operand::Input(name) => resolved_type(name),
+                Operand::Variable(vref) => resolved_type(&vref.to_str()),
                 Operand::Value(v) => v.get_type(),
             };
             if let Some(Operand::Value(v)) = &mut c.right

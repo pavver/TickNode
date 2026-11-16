@@ -121,6 +121,28 @@ impl VariableStore {
         }
     }
 
+    /// Resolves an exact variable name first, then a typed path inside its value.
+    pub fn resolve_value(
+        &self,
+        name: &str,
+        lookup: VariableLookup,
+        sheet: Option<SheetId>,
+        types: &TypeRegistry,
+    ) -> Option<(&DataValue, DataType)> {
+        let mut end = name.len();
+        loop {
+            if let Some(key) = self.resolve(&name[..end], lookup, sheet) {
+                let var = self.get(&key)?;
+                let path = name[end..].trim_start_matches('.');
+                return Some((
+                    plugin_values::project(&var.value, path)?,
+                    effective_type(Some(&var.value), &var.data_type, path, types)?,
+                ));
+            }
+            end = name[..end].rfind('.')?;
+        }
+    }
+
     /// Checks if a variable with `name` exists in the target scope's namespace.
     pub fn exists_in_scope_namespace(
         &self,

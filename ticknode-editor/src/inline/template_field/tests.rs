@@ -263,16 +263,14 @@ fn hover_field_resolution_and_formatting() {
     fields.insert(
         "name".to_string(),
         ticknode_shared::ObjectField {
-            name: "name".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::from("Alice"),
         },
     );
     fields.insert(
         "age".to_string(),
         ticknode_shared::ObjectField {
-            name: "age".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::from(30),
         },
     );

@@ -1,7 +1,7 @@
 use super::*;
 
 impl TickEngine {
-    pub(super) fn input_source_types(&mut self, node_id: NodeId) -> HashMap<PinId, DataType> {
+    pub(crate) fn input_source_types(&mut self, node_id: NodeId) -> HashMap<PinId, DataType> {
         let mut result: HashMap<PinId, DataType> = self
             .connections
             .data_into(node_id)
@@ -26,13 +26,13 @@ impl TickEngine {
                     .map(|(_, ty)| ty)
             } else {
                 self.variables
-                    .resolve(
+                    .resolve_value(
                         &reference.name,
                         reference.lookup,
                         self.node_sheets.get(&node_id).copied(),
+                        &self.types,
                     )
-                    .and_then(|key| self.variables.get(&key))
-                    .map(|var| var.data_type.clone())
+                    .map(|(_, ty)| ty)
             };
             if let Some(ty) = ty {
                 result.entry(PinId(*pin)).or_insert(ty);
@@ -114,7 +114,11 @@ impl TickEngine {
                 });
                 if let (Some(PinType::Data(src)), Some(PinType::Data(dst))) =
                     (src_pin.map(|p| &p.pin_type), dst_pin.map(|p| &p.pin_type))
-                    && let Some(conversion) = self.types.convertible(src, dst)
+                    && let Some(conversion) = self.types.convertible(
+                        &effective_type(value.as_ref(), src, "", &self.types)
+                            .unwrap_or_else(|| src.clone()),
+                        dst,
+                    )
                     && let Some(original) = value.take()
                 {
                     value = conversion.apply_with_display(
@@ -208,12 +212,10 @@ impl TickEngine {
         let (original, data_type) = if var_ref.lookup == VariableLookup::Plugin {
             self.plugin_values.resolve(&var_ref.name)?
         } else {
-            let key = self
-                .variables
-                .resolve(&var_ref.name, var_ref.lookup, sheet)?;
-            let var = self.variables.get(&key)?;
-            (&var.value, var.data_type.clone())
+            self.variables
+                .resolve_value(&var_ref.name, var_ref.lookup, sheet, &self.types)?
         };
+        let data_type = effective_type(Some(original), &data_type, "", &self.types)?;
         let value = if self.types.compatible(&data_type, pin_type) {
             Some(original.clone())
         } else {

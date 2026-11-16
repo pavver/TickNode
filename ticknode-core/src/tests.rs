@@ -17,6 +17,7 @@ mod property_validation;
 mod quantities;
 mod release_regressions;
 mod rs_trigger;
+mod typed_tree;
 mod universal_struct_nodes;
 mod variables;
 

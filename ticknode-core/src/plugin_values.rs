@@ -30,11 +30,17 @@ impl PluginValues {
         if !self.counts.contains_key(&entry) {
             return None;
         }
-        let value = plugin_values::project(self.values.get(&entry)?, suffix)?;
-        let ty = catalog
-            .field_type(key, suffix)
-            .cloned()
-            .unwrap_or_else(|| value.get_type());
+        let root = self.values.get(&entry)?;
+        let value = plugin_values::project(root, suffix)?;
+        let declared = catalog.field_type(key, suffix).unwrap_or(&DataType::Any);
+        let tree_type =
+            effective_type(Some(root), &DataType::Object, suffix, &TypeRegistry::new())?;
+        let ty = effective_type(Some(value), declared, "", &TypeRegistry::new())?;
+        let ty = if matches!(declared, DataType::Any | DataType::Object) {
+            tree_type
+        } else {
+            ty
+        };
         Some((value, ty))
     }
     pub(crate) fn set_usage(&mut self, node: NodeId, paths: BTreeSet<String>) {

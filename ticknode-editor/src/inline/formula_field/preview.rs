@@ -91,25 +91,10 @@ pub fn FormulaStatusRow(node: NodeId) -> impl IntoView {
         });
 
         let var_lookup = |vref: &ticknode_shared::VariableRef| -> Result<FormulaValue, ticknode_shared::formula::FormulaError> {
-            let var = visible_vars.iter().find(|v| {
-                if v.key.name != vref.name {
-                    return false;
-                }
-                match vref.lookup {
-                    ticknode_shared::VariableLookup::Sheet => v.key.scope == ticknode_shared::VariableScope::Sheet,
-                    ticknode_shared::VariableLookup::Global => v.key.scope != ticknode_shared::VariableScope::Sheet,
-                    ticknode_shared::VariableLookup::Auto => true,
-                    ticknode_shared::VariableLookup::Plugin => false,
-                }
-            }).ok_or_else(|| {
-                ticknode_shared::formula::FormulaError::new(
-                    0..0,
-                    "error-variable-missing",
-                    format!("Variable \"{}\" not found", vref.name),
-                )
-                .with_arg("name", &vref.name)
+            let (value, _) = ed.variable_value(vref).ok_or_else(|| {
+                ticknode_shared::formula::FormulaError::new(0..0, "error-variable-missing", format!("Variable \"{}\" not found", vref.name)).with_arg("name", &vref.name)
             })?;
-            match &var.value {
+            match &value {
                 DataValue::Number(n) => Ok(FormulaValue::Number(*n)),
                 DataValue::Bool(b) => Ok(FormulaValue::Bool(*b)),
                 _ => Err(ticknode_shared::formula::FormulaError::new(
@@ -131,6 +116,11 @@ pub fn FormulaStatusRow(node: NodeId) -> impl IntoView {
                         format!("{}.{}", v.key.prefix(), v.key.name),
                         v.data_type.clone(),
                     );
+                }
+                for reference in compiled.references() {
+                    if let Some((_, ty)) = ed.variable_value(&reference) {
+                        input_types_map.insert(reference.to_str(), ty);
+                    }
                 }
                 let inferred_ty =
                     infer_type(&compiled.ast, &input_types_map).unwrap_or(DataType::Number);

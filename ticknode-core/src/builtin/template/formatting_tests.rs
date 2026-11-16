@@ -101,8 +101,7 @@ fn text_map_matches_to_text_for_every_value_kind_in_both_locales() {
             fields: [(
                 "n".into(),
                 ObjectField {
-                    name: "n".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: 123.into(),
                 },
             )]
@@ -166,8 +165,7 @@ fn list_and_struct_field_formatting_keeps_declared_quantity_types() {
             fields: [(
                 "power".into(),
                 ObjectField {
-                    name: "power".into(),
-                    description: String::new(),
+                    data_type: None,
                     value: 1200.into(),
                 },
             )]

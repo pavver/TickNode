@@ -399,8 +399,7 @@ fn telegram_plugin_send_blob_multipart_reaches_fake_server() {
         fields: [(
             "blob".into(),
             ObjectField {
-                name: "blob".into(),
-                description: String::new(),
+                data_type: None,
                 value: blob.id.into(),
             },
         )]

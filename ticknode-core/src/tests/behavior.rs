@@ -191,8 +191,7 @@ fn object_get_reports_found_and_leaves_missing_value_empty() {
                 fields: [(
                     "answer".into(),
                     ObjectField {
-                        name: "answer".into(),
-                        description: String::new(),
+                        data_type: None,
                         value: DataValue::from(42i64),
                     },
                 )]
@@ -295,8 +294,7 @@ fn console_formats_scalars_and_nested_collections_for_the_user() {
                 fields: [(
                     "nested".into(),
                     ObjectField {
-                        name: "nested".into(),
-                        description: String::new(),
+                        data_type: None,
                         value: DataValue::List {
                             element_type: DataType::String,
                             elements: vec![DataValue::from("value")],

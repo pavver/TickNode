@@ -93,8 +93,7 @@ fn inspector_values_preserve_types_and_nested_contents() {
         fields: [(
             "items".into(),
             ObjectField {
-                name: "Items".into(),
-                description: String::new(),
+                data_type: None,
                 value: list,
             },
         )]

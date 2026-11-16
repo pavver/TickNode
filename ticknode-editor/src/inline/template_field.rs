@@ -13,6 +13,7 @@ pub mod hover;
 pub mod preview;
 pub mod samples;
 pub mod signature_help;
+mod tree_hover;
 
 #[cfg(test)]
 mod tests;

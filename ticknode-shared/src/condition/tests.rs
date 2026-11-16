@@ -116,8 +116,7 @@ fn typed_comparisons() {
     fields.insert(
         "temp".to_string(),
         ObjectField {
-            name: "temp".into(),
-            description: String::new(),
+            data_type: None,
             value: num(20).unwrap(),
         },
     );
@@ -253,8 +252,7 @@ fn empty_and_single_element_collections_have_opposite_emptiness() {
                 fields: [(
                     "x".into(),
                     ObjectField {
-                        name: "x".into(),
-                        description: String::new(),
+                        data_type: None,
                         value: 1i64.into(),
                     },
                 )]

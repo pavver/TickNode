@@ -140,8 +140,7 @@ fn identifier_presentation_preserves_ids_and_resolves_nested_labels() {
         fields: [(
             "chat".into(),
             ObjectField {
-                name: "Chat".into(),
-                description: String::new(),
+                data_type: None,
                 value: id.into(),
             },
         )]

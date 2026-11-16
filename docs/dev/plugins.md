@@ -49,3 +49,11 @@ The host ignores values outside the plugin's accepted namespace or requested ent
 The runtime mailbox survives instance recreation, invalidates old values on traps/configure, and is cleared on disable.
 The engine reads its own `PluginValues` store during pulls without calling WASM.
 The WIT change updates the automatically computed `PLUGIN_API` fingerprint and requires rebuilding all components and the Telegram test fixture.
+
+## Hidden field contracts at the plugin boundary
+
+`ObjectField` contains only `value` and optional `data_type`; its parent object map supplies the key.
+`StructValue::field` records the runtime kind and `StructValue::typed_field` records an explicit semantic contract, including quantity and identifier list element types.
+HA namespace values embed the same contracts used by their catalog, including typed fields inside nested objects and list elements.
+The contracts travel through the existing postcard WIT value payload and never appear in HA or HTTP JSON object keys.
+Changing this layout updates `ticknode-shared/plugin-value-format.json` and the plugin ABI fingerprint, so all plugins and the Telegram test fixture must be rebuilt together.

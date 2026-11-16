@@ -79,8 +79,7 @@ pub(super) fn point(x: i64) -> DataValue {
         fields: [(
             "x".into(),
             ObjectField {
-                name: "x".into(),
-                description: String::new(),
+                data_type: Some(DataType::Number),
                 value: x.into(),
             },
         )]

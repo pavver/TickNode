@@ -337,8 +337,7 @@ fn tagged_object_has_named_type_and_survives_postcard() {
     fields.insert(
         "x".to_string(),
         crate::ObjectField {
-            name: "x".into(),
-            description: String::new(),
+            data_type: None,
             value: DataValue::Number(NumberValue::Int(1)),
         },
     );
@@ -369,8 +368,7 @@ fn match_treats_struct_as_object_and_enum_as_string() {
         fields: [(
             "label".to_string(),
             crate::ObjectField {
-                name: "label".into(),
-                description: String::new(),
+                data_type: None,
                 value: DataValue::String("a".into()),
             },
         )]

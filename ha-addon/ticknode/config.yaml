@@ -1,6 +1,6 @@
 name: TickNode
 slug: ticknode
-version: "0.1.0"
+version: "0.2.0"
 description: Node-based visual automation editor and engine with a Home Assistant integration
 url: https://github.com/pavver/TickNode
 arch:

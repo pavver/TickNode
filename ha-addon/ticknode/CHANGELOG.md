@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 First release with prebuilt images (`amd64`, `aarch64`): Home Assistant now offers updates.
 

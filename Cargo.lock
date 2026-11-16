@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "delay-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticknode-plugin-sdk",
 ]
@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "ha-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "ha-core-client",
@@ -1350,7 +1350,7 @@ checksum = "9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c"
 
 [[package]]
 name = "http-weather-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticknode-plugin-sdk",
 ]
@@ -1954,7 +1954,7 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "math-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticknode-plugin-sdk",
 ]
@@ -3036,7 +3036,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "string-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "regex",
  "ticknode-plugin-sdk",
@@ -3151,7 +3151,7 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 
 [[package]]
 name = "telegram-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "fluent-syntax",
@@ -3185,7 +3185,7 @@ dependencies = [
 
 [[package]]
 name = "test-plugin"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ticknode-plugin-sdk",
 ]
@@ -3250,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "ticknode-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "criterion",
@@ -3278,7 +3278,7 @@ dependencies = [
 
 [[package]]
 name = "ticknode-editor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "any_spawner",
  "chrono",
@@ -3301,7 +3301,7 @@ dependencies = [
 
 [[package]]
 name = "ticknode-plugin-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "postcard",
  "ticknode-shared",
@@ -3310,7 +3310,7 @@ dependencies = [
 
 [[package]]
 name = "ticknode-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3332,7 +3332,7 @@ dependencies = [
 
 [[package]]
 name = "ticknode-shared"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "getrandom 0.2.17",

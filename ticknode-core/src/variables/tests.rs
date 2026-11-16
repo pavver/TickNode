@@ -117,3 +117,56 @@ fn persistent_dirty_flag_updates() {
     store.delete(&pk);
     assert!(store.is_persistent_dirty());
 }
+
+#[test]
+fn unchanged_edits_and_deletion_report_whether_storage_changed() {
+    let mut store = VariableStore::new();
+    let key = VariableKey::persistent("counter");
+    assert!(!store.set(&key, 0i64.into()));
+    assert!(store.create(key.clone(), DataType::Number, 4i64.into()));
+    store.clear_persistent_dirty();
+    store.take_changes();
+    assert!(!store.set(&key, 4i64.into()));
+    assert!(!store.is_persistent_dirty());
+    assert!(store.take_changes().set.is_empty());
+    assert!(store.delete(&key));
+    assert!(store.is_persistent_dirty());
+    assert_eq!(store.take_changes().removed, std::slice::from_ref(&key));
+    assert!(!store.delete(&key));
+    store.clear_persistent_dirty();
+    assert!(store.create(key.clone(), DataType::Number, 1i64.into()));
+    store.clear_persistent_dirty();
+    store.clear();
+    assert!(store.is_persistent_dirty());
+    assert!(store.is_empty());
+    assert_eq!(store.take_changes().removed, [key]);
+}
+
+#[test]
+fn sheet_snapshots_include_global_and_persistent_values_without_other_sheets() {
+    let mut store = VariableStore::new();
+    let first = SheetId::generate();
+    let second = SheetId::generate();
+    let keys = [
+        VariableKey::global("global"),
+        VariableKey::persistent("saved"),
+        VariableKey::sheet(first, "first"),
+        VariableKey::sheet(second, "second"),
+    ];
+    for key in &keys {
+        assert!(store.create(key.clone(), DataType::Number, 1i64.into()));
+    }
+    let selected = |sheet| {
+        store
+            .for_sheet_and_global(sheet)
+            .into_iter()
+            .map(|v| v.key)
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert_eq!(selected(None), keys[..2].iter().cloned().collect());
+    assert_eq!(selected(Some(first)), keys[..3].iter().cloned().collect());
+    assert_eq!(
+        store.active_sheet_variables(),
+        [(first, "first".into()), (second, "second".into())].into()
+    );
+}

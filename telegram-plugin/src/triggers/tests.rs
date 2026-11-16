@@ -11,6 +11,37 @@ fn filter(kind: &str, values: &[(&str, &str)]) -> Filter {
 fn parsed(value: serde_json::Value) -> crate::model::Update {
     serde_json::from_value(value).unwrap()
 }
+
+#[test]
+fn trigger_projections_keep_execution_and_payload_pins_distinct() {
+    let command = parsed(update(1, "/status one two"));
+    let outputs = filter("command", &[("command", "status")])
+        .outputs(&command, "Bot")
+        .unwrap();
+    assert!(outputs.contains(&Output::Exec(PinId(0))));
+    assert!(outputs.contains(&Output::Data(PinId(1), "one two".into())));
+
+    let callback = parsed(json!({"update_id":2,"callback_query":{
+        "id":"query", "from":{"id":17,"is_bot":false,"first_name":"Ada"},
+        "message":message(-100,50,"ordinary"), "data":"go"
+    }}));
+    assert!(filter("message", &[]).outputs(&callback, "Bot").is_none());
+    let outputs = filter("callback", &[("pattern", "go")])
+        .outputs(&callback, "Bot")
+        .unwrap();
+    assert!(outputs.contains(&Output::Exec(PinId(0))));
+    assert!(outputs.contains(&Output::Data(PinId(1), "go".into())));
+}
+
+#[test]
+fn incomplete_message_filters_do_not_emit_for_an_unspecified_text_mode() {
+    let filter = Filter::new("message", std::collections::BTreeMap::new()).unwrap();
+    assert!(
+        filter
+            .outputs(&parsed(update(1, "ordinary")), "Bot")
+            .is_none()
+    );
+}
 #[test]
 fn message_filters_chat_topic_user_and_text_modes() {
     let mut raw = update(1, "hello world");

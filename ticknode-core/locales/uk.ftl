@@ -1282,3 +1282,7 @@ type-media-document-field-blob = Блоб
 
 error-media-missing-source = Об'єкт медіа повинен містити url, file_id або blob
 
+
+error-media-fetch-url = Відсутня або порожня URL-адреса
+error-media-fetch-http = HTTP { $status }
+error-media-fetch-transport = Не вдалося завантажити медіа: { $detail }

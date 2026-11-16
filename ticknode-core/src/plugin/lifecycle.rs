@@ -127,7 +127,7 @@ impl TickEngine {
         let slot = self
             .plugins
             .get_mut(name)
-            .expect("the plugin was just found");
+            .ok_or_else(|| plugin_not_loaded(name))?;
         slot.active = true;
         slot.settings_error = settings_error;
 
@@ -197,7 +197,7 @@ impl TickEngine {
         let slot = self
             .plugins
             .get_mut(name)
-            .expect("the plugin was just found");
+            .ok_or_else(|| plugin_not_loaded(name))?;
         slot.active = false;
         slot.settings_error = None;
         // Node resources were already dropped when replaced with stubs; the instance is no longer needed
@@ -243,7 +243,7 @@ impl TickEngine {
         let slot = self
             .plugins
             .get_mut(name)
-            .expect("the plugin was just found");
+            .ok_or_else(|| plugin_not_loaded(name))?;
         slot.settings_error = error.clone();
         error.map_or(Ok(()), Err)
     }

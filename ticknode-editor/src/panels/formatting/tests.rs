@@ -2,6 +2,54 @@ use super::*;
 use crate::i18n::{Locale, with_locale};
 
 #[test]
+fn universal_object_field_labels_use_the_selected_type_translation() {
+    let types = TypeRegistry::from_definitions([TypeDefinition::new_struct(
+        "weather.state",
+        "State",
+        vec![FieldDefinition::new(
+            "temp",
+            "Temperature",
+            DataType::Number,
+        )],
+    )]);
+    i18n::set_known_types(&types);
+    i18n::set_runtime_translations(&[(
+        "uk".into(),
+        "type-weather-state-field-temp = Температура\n".into(),
+    )]);
+    for kind in ["object/make", "object/break"] {
+        let instance = NodeInstance {
+            model: NodeModel {
+                id: NodeId::generate(),
+                type_name: kind.into(),
+                properties: vec![("type".into(), "weather.state".into())],
+                position: Position::default(),
+                pins: None,
+                size: None,
+            },
+            definition: NodeDefinition {
+                type_name: kind.into(),
+                ..Default::default()
+            },
+            unavailable: None,
+            frozen: vec![],
+        };
+        with_locale(Locale::Uk, || {
+            assert_eq!(
+                instance_pin_label(&instance, PinId(1), PinDirection::Input, "Temperature"),
+                "Температура"
+            );
+        });
+        with_locale(Locale::En, || {
+            assert_eq!(
+                instance_pin_label(&instance, PinId(1), PinDirection::Input, "Temperature"),
+                "Temperature"
+            );
+        });
+    }
+}
+
+#[test]
 fn inspector_values_preserve_types_and_nested_contents() {
     let values = [
         (DataValue::String("5".into()), "\"5\""),

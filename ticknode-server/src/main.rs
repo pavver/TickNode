@@ -47,6 +47,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env();
+    let handle = initialize(&config)?;
+    serve(config, handle).await
+}
+
+fn initialize(config: &Config) -> anyhow::Result<actor::EngineHandle> {
     std::fs::create_dir_all(&config.data_dir)?;
 
     let storage = Storage::new(config.data_dir.clone());
@@ -63,31 +68,57 @@ async fn main() -> anyhow::Result<()> {
     // Plugin calls (configure, node creation) may use synchronous WASI (files), which panics on a
     // tokio worker thread: build the engine on a plain OS thread, like the actor that runs it.
     let (engine, plugins, loaded, storage) = std::thread::spawn(move || -> anyhow::Result<_> {
-        let mut engine = TickEngine::new();
-        engine.budget = TickBudget {
-            limit: (tick_budget != 0).then_some(tick_budget),
-        };
-        // Plugins may open connections already in `configure` while loading
-        engine.host_state.runtime = Some(runtime);
-        engine.host_state.tick_duration = Duration::from_millis(tick_ms as u64);
-        let blob_store = ticknode_core::FileBlobStore::open(data_dir.join("blobs"))?;
-        engine.host_state.blob_store = std::sync::Arc::new(blob_store);
-        // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
-        let mut plugins = plugins::Plugins::new(&data_dir).with_bundled_dir(bundled_dir);
-        plugins.load_all(&mut engine);
-        let loaded = storage.load(&mut engine)?;
-        if usage_stats {
-            if let Ok(buckets) = storage.load_recent_usage_hours(48) {
-                engine.usage.set_hour_history(buckets);
-            }
-            let _ = storage.prune_old_stats(6);
-        }
-        Ok((engine, plugins, loaded, storage))
+        load_engine(
+            storage,
+            data_dir,
+            bundled_dir,
+            tick_ms,
+            tick_budget,
+            usage_stats,
+            runtime,
+        )
     })
     .join()
     .map_err(|_| anyhow::anyhow!("engine initialization panicked"))??;
-    let handle = actor::spawn(engine, loaded, storage, plugins, server_settings)?;
+    actor::spawn(engine, loaded, storage, plugins, server_settings).map_err(Into::into)
+}
 
+fn load_engine(
+    storage: Storage,
+    data_dir: PathBuf,
+    bundled_dir: Option<PathBuf>,
+    tick_ms: u32,
+    tick_budget: u32,
+    usage_stats: bool,
+    runtime: tokio::runtime::Handle,
+) -> anyhow::Result<(TickEngine, plugins::Plugins, storage::LoadedSheets, Storage)> {
+    let mut engine = TickEngine::new();
+    engine.budget = TickBudget {
+        limit: (tick_budget != 0).then_some(tick_budget),
+    };
+    // Plugins may open connections already in `configure` while loading
+    engine.host_state.runtime = Some(runtime);
+    engine.host_state.tick_duration = Duration::from_millis(tick_ms as u64);
+    let blob_store = ticknode_core::FileBlobStore::open(data_dir.join("blobs"))?;
+    engine.host_state.blob_store = std::sync::Arc::new(blob_store);
+    // Load plugins before the graph so nodes of their types are instantiated live rather than as stubs
+    let mut plugins = plugins::Plugins::new(&data_dir).with_bundled_dir(bundled_dir);
+    plugins.load_all(&mut engine);
+    let loaded = storage.load(&mut engine)?;
+    restore_usage(&mut engine, &storage, usage_stats);
+    Ok((engine, plugins, loaded, storage))
+}
+
+fn restore_usage(engine: &mut TickEngine, storage: &Storage, enabled: bool) {
+    if enabled {
+        if let Ok(buckets) = storage.load_recent_usage_hours(48) {
+            engine.usage.set_hour_history(buckets);
+        }
+        let _ = storage.prune_old_stats(6);
+    }
+}
+
+async fn serve(config: Config, handle: actor::EngineHandle) -> anyhow::Result<()> {
     let app = router(handle.clone(), &config.web_dir);
 
     let listener = tokio::net::TcpListener::bind(&config.bind).await?;
@@ -105,8 +136,8 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(0);
             });
         })
-        .await?;
-    Ok(())
+        .await
+        .map_err(Into::into)
 }
 
 fn router(handle: actor::EngineHandle, web_dir: &Path) -> Router {

@@ -1,4 +1,4 @@
-use crate::{EngineError, TickEngine};
+use crate::{EngineError, RemovedConnections, TickEngine};
 use ticknode_shared::*;
 
 pub(super) enum PendingInput {
@@ -7,6 +7,35 @@ pub(super) enum PendingInput {
 }
 
 impl TickEngine {
+    pub(super) fn set_engine_property(
+        &mut self,
+        node: NodeId,
+        name: &str,
+        value: DataValue,
+    ) -> std::ops::ControlFlow<Result<RemovedConnections, EngineError>, DataValue> {
+        use std::ops::ControlFlow::{Break, Continue};
+        if let Some(pin) = parse_split_pin_property(name) {
+            return Break(match value {
+                DataValue::Bool(split) => self.set_pin_split(node, pin, split),
+                _ => Err(EngineError::InvalidPinConnection),
+            });
+        }
+        if let Some(pin) = parse_input_value_property(name) {
+            return Break(
+                self.set_input_value(node, pin, Some(value))
+                    .map(|()| RemovedConnections::default()),
+            );
+        }
+        if let Some(pin) = input_variable_pin(name) {
+            return Break(
+                super::parse_variable_property(name, value)
+                    .and_then(|variable| self.set_input_variable(node, pin, Some(variable)))
+                    .map(|()| RemovedConnections::default()),
+            );
+        }
+        Continue(value)
+    }
+
     /// Value of an unconnected data input (`None` clears it). Effective while nothing is connected to the pin.
     pub fn set_input_value(
         &mut self,

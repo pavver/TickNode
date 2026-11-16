@@ -72,26 +72,7 @@ impl DownloadNode {
         }
         validation::stored("download", &self.props)?;
         let media = inputs.get(PinId(1)).ok_or_else(media_error)?;
-        let DataValue::Object {
-            type_name: Some(name),
-            ..
-        } = media
-        else {
-            return Err(media_error());
-        };
-        if !matches!(
-            name.as_str(),
-            "media.photo" | "media.audio" | "media.video" | "media.document"
-        ) {
-            return Err(media_error());
-        }
-        let kind = self.props.get("kind").map(String::as_str).unwrap_or("auto");
-        if kind != "auto" && name != &format!("media.{kind}") {
-            return Err(validation::error(
-                "download-kind",
-                "Media type does not match the selected Kind",
-            ));
-        }
+        self.validate_media(media)?;
         let Some(file_id) = nonempty_field(media, "file_id") else {
             if nonempty_field(media, "blob").is_some() {
                 return Ok(Self::completed(media.clone()));
@@ -124,6 +105,30 @@ impl DownloadNode {
         Ok(Vec::new())
     }
 
+    fn validate_media(&self, media: &DataValue) -> Result<(), UiError> {
+        let DataValue::Object {
+            type_name: Some(name),
+            ..
+        } = media
+        else {
+            return Err(media_error());
+        };
+        if !matches!(
+            name.as_str(),
+            "media.photo" | "media.audio" | "media.video" | "media.document"
+        ) {
+            return Err(media_error());
+        }
+        let kind = self.props.get("kind").map(String::as_str).unwrap_or("auto");
+        if kind != "auto" && name != &format!("media.{kind}") {
+            return Err(validation::error(
+                "download-kind",
+                "Media type does not match the selected Kind",
+            ));
+        }
+        Ok(())
+    }
+
     fn task(
         &mut self,
         id: TaskId,
@@ -134,7 +139,7 @@ impl DownloadNode {
         if !self.pending.as_ref().is_some_and(|p| p.task == id) {
             return Ok(Vec::new());
         }
-        let Some(mut pending) = self.pending.take() else {
+        let Some(pending) = self.pending.take() else {
             return Ok(Vec::new());
         };
         if pending.generation != hub.generation {
@@ -144,77 +149,89 @@ impl DownloadNode {
             ));
         }
         if pending.waiting {
-            if !matches!(result, Ok(TaskOutput::Delay)) {
-                return Err(http_error());
-            }
-            hub.ready()?;
-            pending.task = env
-                .http(pending.request.clone())
-                .map_err(|_| http_error())?;
-            pending.waiting = false;
-            self.pending = Some(pending);
-            return Ok(Vec::new());
+            return self.retry(pending, result, hub, env);
         }
         if pending.downloading
             && let Ok(TaskOutput::Blob(response)) = &result
             && (200..300).contains(&response.status)
         {
-            let DataValue::Object { fields, .. } = &mut pending.media else {
-                return Err(media_error());
-            };
-            insert_field(fields, "blob", response.blob.clone().into());
-            if !fields.contains_key("size") {
-                insert_field(fields, "size", (response.size as i64).into());
-            }
-            if nonempty_field(&pending.media, "mime_type").is_none()
-                && let Some(content_type) = &response.content_type
-                && let DataValue::Object { fields, .. } = &mut pending.media
-            {
-                insert_field(fields, "mime_type", content_type.clone().into());
-            }
-            return Ok(Self::completed(pending.media));
+            return complete_download(pending.media, response);
         }
         match api::response(result) {
-            Ok(file) if !pending.downloading => {
-                if file["file_size"].as_u64().unwrap_or(0) > MAX_DOWNLOAD_BYTES {
-                    return Err(validation::error(
-                        "download-size",
-                        "Telegram file exceeds download limit of 20 MB",
-                    ));
-                }
-                let path = file["file_path"]
-                    .as_str()
-                    .filter(|s| !s.trim().is_empty())
-                    .ok_or_else(file_response_error)?;
-                // Keep the credential-bearing URL only in the private pending request.
-                pending.request =
-                    HttpRequest::get(format!("{}/file/bot{}/{path}", hub.base, hub.token))
-                        .save_to_blob(true);
-                pending.request.timeout_ms = 60_000;
-                pending.task = env
-                    .http(pending.request.clone())
-                    .map_err(|_| http_error())?;
-                pending.downloading = true;
-                self.pending = Some(pending);
-                Ok(Vec::new())
-            }
+            Ok(file) if !pending.downloading => self.download_file(pending, &file, hub, env),
             Ok(_) => Err(file_response_error()),
-            Err(failure) => {
-                if failure.code == 401 {
-                    hub.unauthorized();
-                }
-                if failure.code == 429 && pending.retries < 5 {
-                    pending.task = env
-                        .delay(failure.retry_after.unwrap_or(1).max(1))
-                        .map_err(|_| http_error())?;
-                    pending.waiting = true;
-                    pending.retries += 1;
-                    self.pending = Some(pending);
-                    return Ok(Vec::new());
-                }
-                Err(failure.ui())
-            }
+            Err(failure) => self.retry_failure(pending, failure, hub, env),
         }
+    }
+
+    fn retry(
+        &mut self,
+        mut pending: PendingDownload,
+        result: Result<TaskOutput, String>,
+        hub: &Hub,
+        env: &mut impl Env,
+    ) -> Result<Vec<Output>, UiError> {
+        if !matches!(result, Ok(TaskOutput::Delay)) {
+            return Err(http_error());
+        }
+        hub.ready()?;
+        pending.task = env
+            .http(pending.request.clone())
+            .map_err(|_| http_error())?;
+        pending.waiting = false;
+        self.pending = Some(pending);
+        Ok(Vec::new())
+    }
+
+    fn download_file(
+        &mut self,
+        mut pending: PendingDownload,
+        file: &serde_json::Value,
+        hub: &Hub,
+        env: &mut impl Env,
+    ) -> Result<Vec<Output>, UiError> {
+        if file["file_size"].as_u64().unwrap_or(0) > MAX_DOWNLOAD_BYTES {
+            return Err(validation::error(
+                "download-size",
+                "Telegram file exceeds download limit of 20 MB",
+            ));
+        }
+        let path = file["file_path"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(file_response_error)?;
+        // Keep the credential-bearing URL only in the private pending request.
+        pending.request = HttpRequest::get(format!("{}/file/bot{}/{path}", hub.base, hub.token))
+            .save_to_blob(true);
+        pending.request.timeout_ms = 60_000;
+        pending.task = env
+            .http(pending.request.clone())
+            .map_err(|_| http_error())?;
+        pending.downloading = true;
+        self.pending = Some(pending);
+        Ok(Vec::new())
+    }
+
+    fn retry_failure(
+        &mut self,
+        mut pending: PendingDownload,
+        failure: api::Failure,
+        hub: &mut Hub,
+        env: &mut impl Env,
+    ) -> Result<Vec<Output>, UiError> {
+        if failure.code == 401 {
+            hub.unauthorized();
+        }
+        if failure.code == 429 && pending.retries < 5 {
+            pending.task = env
+                .delay(failure.retry_after.unwrap_or(1).max(1))
+                .map_err(|_| http_error())?;
+            pending.waiting = true;
+            pending.retries += 1;
+            self.pending = Some(pending);
+            return Ok(Vec::new());
+        }
+        Err(failure.ui())
     }
 
     fn run(
@@ -231,6 +248,24 @@ impl DownloadNode {
         };
         result.unwrap_or_else(|error| self.failed(error, &hub.token))
     }
+}
+
+fn complete_download(
+    mut media: DataValue,
+    response: &BlobResponse,
+) -> Result<Vec<Output>, UiError> {
+    let missing_mime = nonempty_field(&media, "mime_type").is_none();
+    let DataValue::Object { fields, .. } = &mut media else {
+        return Err(media_error());
+    };
+    insert_field(fields, "blob", response.blob.clone().into());
+    if !fields.contains_key("size") {
+        insert_field(fields, "size", (response.size as i64).into());
+    }
+    if missing_mime && let Some(content_type) = &response.content_type {
+        insert_field(fields, "mime_type", content_type.clone().into());
+    }
+    Ok(DownloadNode::completed(media))
 }
 
 fn nonempty_field<'a>(media: &'a DataValue, key: &str) -> Option<&'a str> {
@@ -273,31 +308,21 @@ impl PluginNode for DownloadNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.props
-            .iter()
-            .map(|(name, value)| (name.clone(), value.clone().into()))
-            .collect()
+        validation::node_properties(self.definition(), &self.props)
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        let DataValue::String(text) = value else {
-            return Err(validation::error("property", "Expected a text property"));
-        };
-        validation::property("download", name, text, &self.props)
+        validation::node_property("download", name, value, &self.props)
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if let DataValue::String(text) = value
-            && self.props.contains_key(name)
-        {
-            self.props.insert(name.into(), text);
-        }
+        validation::set_known_property(&mut self.props, name, value);
     }
 
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output> {
         let outputs = runtime::with(|hub, env| self.run(trigger, inputs, hub, env));
         if let Some(error) = &self.error {
-            runtime::report_error(error, true);
+            runtime::report_error(error);
         }
         outputs
     }

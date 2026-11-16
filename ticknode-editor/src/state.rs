@@ -13,6 +13,8 @@ use crate::i18n::{self, Locale};
 pub mod errors;
 mod graph;
 #[cfg(test)]
+mod graph_tests;
+#[cfg(test)]
 pub use graph::is_required_missing;
 mod messages;
 pub mod timers;
@@ -336,17 +338,11 @@ pub fn use_editor() -> Editor {
 }
 
 pub fn now_ms() -> f64 {
-    js_sys::Date::now()
+    chrono::Utc::now().timestamp_millis() as f64
 }
 
 fn clock_time() -> String {
-    let d = js_sys::Date::new_0();
-    format!(
-        "{:02}:{:02}:{:02}",
-        d.get_hours(),
-        d.get_minutes(),
-        d.get_seconds()
-    )
+    chrono::Local::now().format("%H:%M:%S").to_string()
 }
 
 impl Editor {

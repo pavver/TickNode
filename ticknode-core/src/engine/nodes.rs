@@ -50,8 +50,14 @@ impl TickEngine {
         let node = self.nodes.get(&id);
         let active = node.is_some() && !self.is_disabled(id);
         for (set, member) in [
-            (&mut self.sources, active && node.unwrap().polls()),
-            (&mut self.live_nodes, active && node.unwrap().needs_live()),
+            (
+                &mut self.sources,
+                active && node.is_some_and(|node| node.polls()),
+            ),
+            (
+                &mut self.live_nodes,
+                active && node.is_some_and(|node| node.needs_live()),
+            ),
         ] {
             if member {
                 set.insert(id);
@@ -294,40 +300,10 @@ impl TickEngine {
         name: &str,
         value: DataValue,
     ) -> Result<RemovedConnections, EngineError> {
-        if let Some(pin) = parse_split_pin_property(name) {
-            let DataValue::Bool(split) = value else {
-                return Err(EngineError::InvalidPinConnection);
-            };
-            return self.set_pin_split(node_id, pin, split);
-        }
-        if let Some(pin) = parse_input_value_property(name) {
-            self.set_input_value(node_id, pin, Some(value))?;
-            return Ok(RemovedConnections::default());
-        }
-        if let Some(pin) = input_variable_pin(name) {
-            let variable = match value {
-                DataValue::String(ref s) => VariableRef::parse(s).ok_or_else(|| {
-                    EngineError::InvalidProperty(
-                        UiMessage::new(
-                            "error-invalid-variable-ref",
-                            format!("Invalid variable reference: {s}"),
-                        )
-                        .arg("reference", s),
-                    )
-                })?,
-                _ => {
-                    return Err(EngineError::InvalidProperty(
-                        UiMessage::new(
-                            "error-invalid-property",
-                            format!("Invalid property: {name}"),
-                        )
-                        .arg("property", name),
-                    ));
-                }
-            };
-            self.set_input_variable(node_id, pin, Some(variable))?;
-            return Ok(RemovedConnections::default());
-        }
+        let value = match self.set_engine_property(node_id, name, value) {
+            std::ops::ControlFlow::Break(result) => return result,
+            std::ops::ControlFlow::Continue(value) => value,
+        };
         let node = self
             .nodes
             .get_mut(&node_id)
@@ -368,7 +344,9 @@ impl TickEngine {
         self.data_cache.remove(&node_id);
 
         // Input values whose pins disappeared or changed type are no longer valid
-        let definition = self.node_definition(node_id).expect("node exists");
+        let definition = self
+            .node_definition(node_id)
+            .ok_or(EngineError::NodeNotFound(node_id))?;
         if let Some(values) = self.input_values.get_mut(&node_id) {
             values.retain(|pin, v| {
                 input_pin_type(&definition, PinId(*pin))
@@ -421,4 +399,25 @@ fn validated_property(
     node.validate_property(name, &value)
         .map_err(EngineError::InvalidProperty)?;
     Ok(value)
+}
+
+fn parse_variable_property(name: &str, value: DataValue) -> Result<VariableRef, EngineError> {
+    match value {
+        DataValue::String(ref s) => VariableRef::parse(s).ok_or_else(|| {
+            EngineError::InvalidProperty(
+                UiMessage::new(
+                    "error-invalid-variable-ref",
+                    format!("Invalid variable reference: {s}"),
+                )
+                .arg("reference", s),
+            )
+        }),
+        _ => Err(EngineError::InvalidProperty(
+            UiMessage::new(
+                "error-invalid-property",
+                format!("Invalid property: {name}"),
+            )
+            .arg("property", name),
+        )),
+    }
 }

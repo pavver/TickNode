@@ -183,7 +183,7 @@ impl Plugins {
         let enabled = config.enabled;
         Ok(match (enabled, engine.plugin_active(name)) {
             (true, false) => {
-                let settings = effective_settings(&manifest, &stored(&manifest, &config));
+                let settings = effective_settings(manifest, &stored(manifest, config));
                 match engine.enable_plugin(name, &settings) {
                     Ok(change) => change,
                     Err(e) => {

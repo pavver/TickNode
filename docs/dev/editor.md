@@ -3,6 +3,8 @@
 Developer reference split out of [AGENTS.md](../../AGENTS.md).
 Keep it current when the described code changes.
 
+Universal Make Object and Break Object nodes translate field labels using the selected struct type's Fluent keys, including canvas pins, inspector labels, paste previews, and width measurement.
+
 - Runtime node errors appear as an error icon with translated message, count and age, plus the Error outline; frozen UI takes precedence. Pin/wire hover shows the latest trace value and age; hovering a variable name or struct field inside `text/template` shows the corresponding input pin or field tooltip with its type and latest trace/inline value. The toolbar toggles wire value labels, remembered in `ticknode.show-values`; labels use the To text presentation (`i18n::value_as_text`: UI locale, project display rules, browser time zone); labels follow live positions and route points.
 - Arrow keys move the selected nodes, or the selected frame with its contents, by one grid cell (`5 * DU`); Alt moves by `DU`, Shift by five cells (`canvas/nudge.rs`). Presses are previewed locally and a burst separated by less than 400 ms is sent as one `Batch` (one Undo step); pointer presses and other shortcuts flush it first.
 - Quick add: double-click empty canvas or press Space/Tab while hovering it; the shared node popup ranks translated catalog entries, promotes up to five browser-local recent types (`ticknode.recent-nodes`), and sends `AddNode` at the snapped opening point. Palette and wire-menu additions also update recents.

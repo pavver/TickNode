@@ -2,7 +2,22 @@
 use std::collections::BTreeMap;
 use ticknode_plugin_sdk::*;
 
+#[cfg(test)]
+mod tests;
+
 pub type Properties = BTreeMap<String, String>;
+
+pub fn set_text_property(props: &mut Properties, name: &str, value: DataValue) {
+    if let DataValue::String(text) = value {
+        props.insert(name.into(), text);
+    }
+}
+
+pub fn set_known_property(props: &mut Properties, name: &str, value: DataValue) {
+    if props.contains_key(name) {
+        set_text_property(props, name, value);
+    }
+}
 pub fn error(key: &str, text: &str) -> UiError {
     UiError::new(format!("telegram-error-{key}"), text)
 }
@@ -16,56 +31,59 @@ pub fn command(text: &str) -> Option<&str> {
     .then_some(name)
 }
 pub fn property(kind: &str, name: &str, text: &str, props: &Properties) -> Result<(), UiError> {
-    match name {
-        "chat" | "user" | "topic" => validate_id_property(text)?,
-        "command" if command(text).is_none() => {
-            return Err(error(
-                "command",
-                "Command must contain 1–32 lowercase letters, digits or underscores",
-            ));
-        }
-        "placeholder" if text.chars().count() > 64 => {
-            return Err(error(
-                "placeholder",
-                "Placeholder text cannot exceed 64 characters",
-            ));
-        }
-        "toast" if text.chars().count() > 200 => {
-            return Err(error(
-                "toast",
-                "Callback toast text cannot exceed 200 characters",
-            ));
-        }
-        "count" if kind == "keyboard" => {
-            let valid = text
-                .parse::<u32>()
-                .ok()
-                .is_some_and(|n| (1..=24).contains(&n));
-            if !valid {
-                return Err(error(
-                    "keyboard-count",
-                    "Button count must be between 1 and 24",
-                ));
-            }
-        }
-        "columns" if kind == "keyboard" => {
-            let valid = text
-                .parse::<u32>()
-                .ok()
-                .is_some_and(|n| (1..=8).contains(&n));
-            if !valid {
-                return Err(error(
-                    "keyboard-columns",
-                    "Columns count must be between 1 and 8",
-                ));
-            }
-        }
-        _ => validate_choice_property(kind, name, text)?,
+    validate_text_property(name, text)?;
+    if kind == "keyboard" {
+        validate_keyboard_range(name, text)?;
     }
+    validate_choice_property(kind, name, text)?;
     if kind == "message" {
         validate_message_regex(name, text, props)?;
     }
     Ok(())
+}
+
+fn validate_text_property(name: &str, text: &str) -> Result<(), UiError> {
+    match name {
+        "chat" | "user" | "topic" => validate_id_property(text),
+        "command" if command(text).is_none() => Err(error(
+            "command",
+            "Command must contain 1–32 lowercase letters, digits or underscores",
+        )),
+        "placeholder" if text.chars().count() > 64 => Err(error(
+            "placeholder",
+            "Placeholder text cannot exceed 64 characters",
+        )),
+        "toast" if text.chars().count() > 200 => Err(error(
+            "toast",
+            "Callback toast text cannot exceed 200 characters",
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn validate_keyboard_range(name: &str, text: &str) -> Result<(), UiError> {
+    let (maximum, key, fallback) = match name {
+        "count" => (
+            24,
+            "keyboard-count",
+            "Button count must be between 1 and 24",
+        ),
+        "columns" => (
+            8,
+            "keyboard-columns",
+            "Columns count must be between 1 and 8",
+        ),
+        _ => return Ok(()),
+    };
+    if text
+        .parse::<u32>()
+        .ok()
+        .is_some_and(|n| (1..=maximum).contains(&n))
+    {
+        Ok(())
+    } else {
+        Err(error(key, fallback))
+    }
 }
 
 fn validate_id_property(text: &str) -> Result<(), UiError> {
@@ -76,7 +94,15 @@ fn validate_id_property(text: &str) -> Result<(), UiError> {
 }
 
 fn validate_choice_property(kind: &str, name: &str, text: &str) -> Result<(), UiError> {
-    let valid = match name {
+    if choice_property_is_valid(kind, name, text) {
+        Ok(())
+    } else {
+        Err(error("choice", "Select a valid option"))
+    }
+}
+
+fn choice_property_is_valid(kind: &str, name: &str, text: &str) -> bool {
+    match name {
         "keep_buttons" | "resize" | "one_time" | "persistent" | "include_edited" | "silent"
         | "disable_preview" => ["yes", "no"].contains(&text),
         "action" => ["callback", "url", "text", "contact", "location"].contains(&text),
@@ -90,11 +116,6 @@ fn validate_choice_property(kind: &str, name: &str, text: &str) -> Result<(), Ui
         "text_mode" => ["any", "equals", "contains", "starts_with", "regex"].contains(&text),
         "data_mode" => ["equals", "prefix"].contains(&text),
         _ => true,
-    };
-    if !valid {
-        Err(error("choice", "Select a valid option"))
-    } else {
-        Ok(())
     }
 }
 
@@ -198,4 +219,27 @@ pub fn args(text: &str) -> Vec<String> {
         parser.step(ch);
     }
     parser.finish()
+}
+
+pub fn node_properties(definition: NodeDefinition, props: &Properties) -> Vec<(String, DataValue)> {
+    definition
+        .properties
+        .into_iter()
+        .map(|property| {
+            let value = props.get(&property.name).cloned().unwrap_or_default();
+            (property.name, value.into())
+        })
+        .collect()
+}
+
+pub fn node_property(
+    kind: &str,
+    name: &str,
+    value: &DataValue,
+    props: &Properties,
+) -> Result<(), UiError> {
+    let DataValue::String(text) = value else {
+        return Err(error("property", "Expected a text property"));
+    };
+    property(kind, name, text, props)
 }

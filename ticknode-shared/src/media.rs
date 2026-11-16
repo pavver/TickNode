@@ -91,18 +91,10 @@ pub fn validate_media(value: &DataValue) -> Result<MediaSource<'_>, UiMessage> {
             "Media object must have either url, file_id or blob set",
         ));
     };
-    let file_id = fields.get("file_id").and_then(|f| match &f.value {
-        DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
-        _ => None,
-    });
-    let url = fields.get("url").and_then(|f| match &f.value {
-        DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
-        _ => None,
-    });
-    let blob = fields.get("blob").and_then(|f| match &f.value {
-        DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
-        _ => None,
-    });
+    let source = |key| fields.get(key).and_then(|f| nonempty_source(&f.value));
+    let file_id = source("file_id");
+    let url = source("url");
+    let blob = source("blob");
     if let Some(id) = file_id {
         Ok(MediaSource::FileId(id))
     } else if let Some(u) = url {
@@ -114,6 +106,13 @@ pub fn validate_media(value: &DataValue) -> Result<MediaSource<'_>, UiMessage> {
             "error-media-missing-source",
             "Media object must have either url, file_id or blob set",
         ))
+    }
+}
+
+fn nonempty_source(value: &DataValue) -> Option<&str> {
+    match value {
+        DataValue::String(s) if !s.trim().is_empty() => Some(s.as_str()),
+        _ => None,
     }
 }
 

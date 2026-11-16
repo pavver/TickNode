@@ -133,7 +133,12 @@ pub(super) fn instance_pin_label(
             &crate::geometry::match_inputs_of(&instance.model.properties),
         );
     }
-    i18n::node_pin_label(&instance.definition.type_name, fallback)
+    i18n::node_pin_label_with_properties(
+        &instance.definition.type_name,
+        &instance.model.properties,
+        pin,
+        fallback,
+    )
 }
 
 #[cfg(test)]

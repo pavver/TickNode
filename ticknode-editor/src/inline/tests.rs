@@ -2,6 +2,23 @@ use super::properties::default_value;
 use super::*;
 
 #[test]
+fn typed_variable_commit_only_emits_a_binding_when_the_field_accepts_variables() {
+    let owner = Owner::new();
+    owner.with(|| {
+        let committed = RwSignal::new(Vec::<Option<String>>::new());
+        let callback = Callback::new(move |value| committed.update(|items| items.push(value)));
+        assert!(!variable::commit_variable_binding("var.amount", None));
+        assert!(!variable::commit_variable_binding("42", Some(callback)));
+        assert!(committed.get_untracked().is_empty());
+        assert!(variable::commit_variable_binding(
+            "  var.amount  ",
+            Some(callback)
+        ));
+        assert_eq!(committed.get_untracked(), [Some("var.amount".into())]);
+    });
+}
+
+#[test]
 fn typed_parsing() {
     assert_eq!(
         parse_text("2,5", &DataType::Number),

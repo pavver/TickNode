@@ -1282,3 +1282,7 @@ type-media-document-field-blob = Blob
 
 error-media-missing-source = Media object must have either url, file_id or blob set
 
+
+error-media-fetch-url = Missing or empty URL
+error-media-fetch-http = HTTP { $status }
+error-media-fetch-transport = Media download failed: { $detail }

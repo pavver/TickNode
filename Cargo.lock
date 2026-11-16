@@ -3256,6 +3256,7 @@ dependencies = [
  "criterion",
  "fluent-syntax",
  "futures",
+ "http",
  "minijinja",
  "postcard",
  "reqwest",

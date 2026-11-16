@@ -177,7 +177,7 @@ fn test_variables_changed_telemetry_filtering_by_sheet() {
         if let ServerMessage::VariablesChanged { set, removed } = msg {
             if tag == Some(sheet_id) {
                 sheet_messages.push((set, removed));
-            } else if tag == None {
+            } else if tag.is_none() {
                 global_messages.push((set, removed));
             }
         }

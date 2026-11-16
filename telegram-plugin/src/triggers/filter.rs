@@ -51,66 +51,10 @@ impl Filter {
         } else {
             message.and_then(|m| m.from.as_ref())
         };
-        if !self.id_matches("chat", message.map(|m| m.chat.id))
-            || !self.id_matches("topic", message.and_then(|m| m.message_thread_id))
-            || !self.id_matches("user", from.map(|u| u.id))
-        {
+        if !self.matches_ids(update) {
             return None;
         }
-        let mut outputs = match self.kind.as_str() {
-            "message" => {
-                if callback.is_some() || update.my_chat_member.is_some() {
-                    return None;
-                }
-                if update.edited_message.is_some() && self.prop("include_edited") != "yes" {
-                    return None;
-                }
-                let text = message?.text.as_deref().unwrap_or("");
-                let pattern = self.prop("pattern");
-                let matches = match self.prop("text_mode") {
-                    "any" => true,
-                    "equals" => text == pattern,
-                    "contains" => text.contains(pattern),
-                    "starts_with" => text.starts_with(pattern),
-                    "regex" => self.regex.as_ref()?.is_match(text),
-                    _ => false,
-                };
-                if !matches {
-                    return None;
-                }
-                vec![opt(1, message?.text.clone().map(DataValue::from))]
-            }
-            "command" => {
-                update.message.as_ref()?;
-                let arguments = command_args(message?, self.prop("command"), bot)?;
-                vec![
-                    Output::Data(PinId(1), arguments.into()),
-                    Output::Data(
-                        PinId(2),
-                        DataValue::List {
-                            element_type: DataType::String,
-                            elements: validation::args(arguments)
-                                .into_iter()
-                                .map(DataValue::from)
-                                .collect(),
-                        },
-                    ),
-                ]
-            }
-            "callback" => {
-                let data = callback?.data.as_deref()?;
-                let matches = if self.prop("data_mode") == "prefix" {
-                    data.starts_with(self.prop("pattern"))
-                } else {
-                    data == self.prop("pattern")
-                };
-                if !matches {
-                    return None;
-                }
-                vec![Output::Data(PinId(1), data.into())]
-            }
-            _ => return None,
-        };
+        let mut outputs = self.kind_outputs(update, bot)?;
         outputs.extend([
             opt(3, message.map(Message::value)),
             opt(4, message.map(|m| m.chat.id.into())),
@@ -124,6 +68,79 @@ impl Filter {
             Output::Exec(PinId(0)),
         ]);
         Some(outputs)
+    }
+    fn matches_ids(&self, update: &Update) -> bool {
+        let message = update.message();
+        let from = if self.kind == "callback" {
+            update.callback_query.as_ref().map(|c| &c.from)
+        } else {
+            message.and_then(|m| m.from.as_ref())
+        };
+        self.id_matches("chat", message.map(|m| m.chat.id))
+            && self.id_matches("topic", message.and_then(|m| m.message_thread_id))
+            && self.id_matches("user", from.map(|u| u.id))
+    }
+
+    fn kind_outputs(&self, update: &Update, bot: &str) -> Option<Vec<Output>> {
+        match self.kind.as_str() {
+            "message" => self.message_outputs(update),
+            "command" => self.command_outputs(update, bot),
+            "callback" => self.callback_outputs(update),
+            _ => None,
+        }
+    }
+
+    fn message_outputs(&self, update: &Update) -> Option<Vec<Output>> {
+        if update.callback_query.is_some() || update.my_chat_member.is_some() {
+            return None;
+        }
+        if update.edited_message.is_some() && self.prop("include_edited") != "yes" {
+            return None;
+        }
+        let message = update.message()?;
+        let text = message.text.as_deref().unwrap_or("");
+        self.text_matches(text)
+            .then(|| vec![opt(1, message.text.clone().map(DataValue::from))])
+    }
+
+    fn text_matches(&self, text: &str) -> bool {
+        let pattern = self.prop("pattern");
+        match self.prop("text_mode") {
+            "any" => true,
+            "equals" => text == pattern,
+            "contains" => text.contains(pattern),
+            "starts_with" => text.starts_with(pattern),
+            "regex" => self.regex.as_ref().is_some_and(|r| r.is_match(text)),
+            _ => false,
+        }
+    }
+
+    fn command_outputs(&self, update: &Update, bot: &str) -> Option<Vec<Output>> {
+        let message = update.message.as_ref()?;
+        let arguments = command_args(message, self.prop("command"), bot)?;
+        Some(vec![
+            Output::Data(PinId(1), arguments.into()),
+            Output::Data(
+                PinId(2),
+                DataValue::List {
+                    element_type: DataType::String,
+                    elements: validation::args(arguments)
+                        .into_iter()
+                        .map(DataValue::from)
+                        .collect(),
+                },
+            ),
+        ])
+    }
+
+    fn callback_outputs(&self, update: &Update) -> Option<Vec<Output>> {
+        let data = update.callback_query.as_ref()?.data.as_deref()?;
+        let matches = if self.prop("data_mode") == "prefix" {
+            data.starts_with(self.prop("pattern"))
+        } else {
+            data == self.prop("pattern")
+        };
+        matches.then(|| vec![Output::Data(PinId(1), data.into())])
     }
 }
 fn opt(pin: u32, value: Option<DataValue>) -> Output {

@@ -269,7 +269,7 @@ pub fn defaults(kind: &str) -> std::collections::BTreeMap<String, String> {
     if matches!(kind, "button" | "keyboard" | "compose") {
         return outgoing::defaults(kind);
     }
-    let mut map = definition(kind)
+    definition(kind)
         .properties
         .into_iter()
         .map(|p| {
@@ -279,13 +279,5 @@ pub fn defaults(kind: &str) -> std::collections::BTreeMap<String, String> {
             };
             (p.name, value)
         })
-        .collect::<std::collections::BTreeMap<String, String>>();
-    if kind == "send" {
-        map.entry("disable_preview".into())
-            .or_insert_with(|| "no".into());
-    } else if kind == "edit" {
-        map.entry("keep_buttons".into())
-            .or_insert_with(|| "yes".into());
-    }
-    map
+        .collect::<std::collections::BTreeMap<String, String>>()
 }

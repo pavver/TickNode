@@ -246,3 +246,46 @@ fn blob_passthrough_does_not_require_network_authentication() {
     );
     assert!(env.requests.is_empty());
 }
+
+#[test]
+fn successful_reconfiguration_invalidates_an_existing_download_task() {
+    let (mut node, mut hub, mut env, inputs) = start(file());
+    let old_task = env.requests.last().unwrap().0;
+    hub.configure(
+        &[("token".into(), "replacement".into())],
+        1_700_000_002,
+        &mut env,
+    )
+    .unwrap();
+    let out = node.run(
+        Trigger::Task {
+            id: old_task,
+            result: response(200, json!({"ok":true,"result":{"file_path":"old.bin"}})),
+        },
+        &inputs,
+        &mut hub,
+        &mut env,
+    );
+    assert!(out.contains(&Output::Exec(PinId(11))));
+    assert_eq!(node.error.unwrap().key, "telegram-error-changed");
+}
+
+#[test]
+fn telegram_zero_retry_after_is_clamped_to_one_second() {
+    let (mut node, mut hub, mut env, inputs) = start(file());
+    let id = env.requests.last().unwrap().0;
+    let out = node.run(
+        Trigger::Task {
+            id,
+            result: response(
+                429,
+                json!({"ok":false,"error_code":429,"parameters":{"retry_after":0}}),
+            ),
+        },
+        &inputs,
+        &mut hub,
+        &mut env,
+    );
+    assert!(out.is_empty());
+    assert_eq!(env.delays.last().unwrap().1, 1);
+}

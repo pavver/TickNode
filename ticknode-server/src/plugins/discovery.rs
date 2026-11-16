@@ -15,7 +15,7 @@ impl Plugins {
         let stem = path
             .file_stem()
             .map_or_else(String::new, |f| f.to_string_lossy().into_owned());
-        let loaded = std::fs::read(&path)
+        let loaded = std::fs::read(path)
             .map_err(|e| UiMessage::plain(format!("Failed to read the plugin: {e}")))
             .and_then(|bytes| {
                 engine.add_plugin(&bytes, Some(&self.plugin_data), |m| {

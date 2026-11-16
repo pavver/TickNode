@@ -17,3 +17,6 @@ In `match`, conditions accept `var.<name>`, `sheet.<name>`, and `global.<name>` 
 Pure caches (`TickEngine::pure_cache`) are cleared whenever variables change, including user mutations via `SetVariable`.
 - Asynchronous tasks (delays in ticks, HTTP in abortable tokio tasks) live in `HostState::active_tasks`. At the start of a tick finished tasks are removed and delivered to their owner node via `Node::on_task` (outputs are handled like in `execute`); then event sources are polled, then the queue runs. `remove_node` cancels the node's tasks.
 - `HostState::logs` collects node messages for the tick (plugin errors included), `TickEngine::executed` — the nodes that ran (the server broadcasts both).
+
+Pure node results, including absent outputs, are cached for the current tick.
+Repeated reads of an absent output do not execute or charge the node again until cache invalidation.

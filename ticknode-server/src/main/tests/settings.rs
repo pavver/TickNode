@@ -130,17 +130,17 @@ async fn plugins_are_managed_over_websocket() {
     )
     .await;
     loop {
-        if let ServerMessage::Executed(traces) = recv_any(&mut ws).await {
-            if let Some(t) = traces.iter().find(|t| t.node_id == greeter.model.id) {
-                assert_eq!(
-                    t.outputs,
-                    vec![(
-                        PinId(1),
-                        DataValue::String("Hello there|quiet|token".into())
-                    )]
-                );
-                break;
-            }
+        if let ServerMessage::Executed(traces) = recv_any(&mut ws).await
+            && let Some(t) = traces.iter().find(|t| t.node_id == greeter.model.id)
+        {
+            assert_eq!(
+                t.outputs,
+                vec![(
+                    PinId(1),
+                    DataValue::String("Hello there|quiet|token".into())
+                )]
+            );
+            break;
         }
     }
 

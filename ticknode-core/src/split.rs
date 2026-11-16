@@ -49,20 +49,22 @@ impl TickEngine {
                         .fields()
                         .iter()
                         .enumerate()
-                        .map(|(index, field)| PinDefinition {
-                            id: split_field_pin(pin.id, index).expect("splittable type"),
-                            name: format!(
-                                "{}.{}",
-                                pin.name,
-                                if field.title.is_empty() {
-                                    &field.name
-                                } else {
-                                    &field.title
-                                }
-                            ),
-                            pin_type: PinType::Data(field.data_type.clone()),
-                            direction: pin.direction,
-                            required: pin.direction == PinDirection::Input && !field.optional,
+                        .filter_map(|(index, field)| {
+                            Some(PinDefinition {
+                                id: split_field_pin(pin.id, index)?,
+                                name: format!(
+                                    "{}.{}",
+                                    pin.name,
+                                    if field.title.is_empty() {
+                                        &field.name
+                                    } else {
+                                        &field.title
+                                    }
+                                ),
+                                pin_type: PinType::Data(field.data_type.clone()),
+                                direction: pin.direction,
+                                required: pin.direction == PinDirection::Input && !field.optional,
+                            })
                         })
                         .collect::<Vec<_>>();
                 }
@@ -106,7 +108,9 @@ impl TickEngine {
         self.pure_cache.clear();
         self.required_reported.remove(&node);
         self.pure_exec_reported.remove(&node);
-        let effective = self.node_definition(node).expect("node exists");
+        let effective = self
+            .node_definition(node)
+            .ok_or(EngineError::NodeNotFound(node))?;
         if let Some(values) = self.input_values.get_mut(&node) {
             values.retain(|id, value| {
                 super::input_pin_type(&effective, PinId(*id))
@@ -160,7 +164,9 @@ impl TickEngine {
             let mut fields = BTreeMap::new();
             let mut complete = true;
             for (index, field) in t.fields().iter().enumerate() {
-                let id = split_field_pin(pin.id, index).expect("splittable type");
+                let Some(id) = split_field_pin(pin.id, index) else {
+                    continue;
+                };
                 if let Some(Some(value)) = inputs.get(&id) {
                     fields.insert(
                         field.name.clone(),

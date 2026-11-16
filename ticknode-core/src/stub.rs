@@ -159,7 +159,9 @@ impl TickEngine {
             let Some(model) = self.node_model(*id) else {
                 continue;
             };
-            let definition = self.node_definition(*id).expect("node exists");
+            let Some(definition) = self.node_definition(*id) else {
+                continue;
+            };
             self.host_state.cancel_node_tasks(*id);
             self.input_values.remove(id);
             self.input_variables.remove(id);

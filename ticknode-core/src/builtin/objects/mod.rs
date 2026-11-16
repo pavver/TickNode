@@ -1,6 +1,7 @@
 mod break_node;
 mod legacy;
 mod make_node;
+mod object_type;
 pub(crate) mod snapshot;
 
 pub use break_node::ObjectBreakNode;

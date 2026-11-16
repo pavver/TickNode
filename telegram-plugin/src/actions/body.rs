@@ -21,63 +21,53 @@ pub(super) enum RequestParam {
 }
 
 pub(super) fn render_request_body(params: Vec<RequestParam>) -> RequestBody {
-    let has_blob = params
+    if params
         .iter()
-        .any(|p| matches!(p, RequestParam::Blob { .. }));
-    if has_blob {
-        let mut parts = Vec::with_capacity(params.len());
-        for p in params {
-            match p {
-                RequestParam::Text(name, val) => {
-                    parts.push(MultipartPart::text(name, val));
-                }
-                RequestParam::Bool(name, val) => {
-                    parts.push(MultipartPart::text(
-                        name,
-                        if val { "true" } else { "false" },
-                    ));
-                }
-                RequestParam::Int(name, val) => {
-                    parts.push(MultipartPart::text(name, val.to_string()));
-                }
-                RequestParam::Json(name, val) => {
-                    parts.push(MultipartPart::text(name, val.to_string()));
-                }
-                RequestParam::Blob {
-                    field_name,
-                    blob_id,
-                    file_name,
-                    content_type,
-                } => {
-                    let mut part = MultipartPart::blob(field_name, blob_id).file_name(file_name);
-                    if let Some(ct) = content_type {
-                        part = part.content_type(ct);
-                    }
-                    parts.push(part);
-                }
-            }
-        }
-        RequestBody::Multipart(parts)
+        .any(|p| matches!(p, RequestParam::Blob { .. }))
+    {
+        RequestBody::Multipart(params.into_iter().map(RequestParam::into_part).collect())
     } else {
-        let mut map = serde_json::Map::with_capacity(params.len());
-        for p in params {
-            match p {
-                RequestParam::Text(name, val) => {
-                    map.insert(name.into(), Value::String(val));
+        RequestBody::Json(Value::Object(
+            params.into_iter().map(RequestParam::into_json).collect(),
+        ))
+    }
+}
+
+impl RequestParam {
+    fn into_part(self) -> MultipartPart {
+        match self {
+            Self::Blob {
+                field_name,
+                blob_id,
+                file_name,
+                content_type,
+            } => {
+                let mut part = MultipartPart::blob(field_name, blob_id).file_name(file_name);
+                if let Some(content_type) = content_type {
+                    part = part.content_type(content_type);
                 }
-                RequestParam::Bool(name, val) => {
-                    map.insert(name.into(), Value::Bool(val));
-                }
-                RequestParam::Int(name, val) => {
-                    map.insert(name.into(), json!(val));
-                }
-                RequestParam::Json(name, val) => {
-                    map.insert(name.into(), val);
-                }
-                RequestParam::Blob { .. } => unreachable!("blob handled in multipart branch"),
+                part
+            }
+            param => {
+                let (name, value) = param.into_json();
+                let text = match value {
+                    Value::String(text) => text,
+                    value => value.to_string(),
+                };
+                MultipartPart::text(name, text)
             }
         }
-        RequestBody::Json(Value::Object(map))
+    }
+
+    fn into_json(self) -> (String, Value) {
+        let (name, value) = match self {
+            Self::Text(name, value) => (name, Value::String(value)),
+            Self::Bool(name, value) => (name, Value::Bool(value)),
+            Self::Int(name, value) => (name, json!(value)),
+            Self::Json(name, value) => (name, value),
+            Self::Blob { .. } => unreachable!("blob handled in multipart branch"),
+        };
+        (name.into(), value)
     }
 }
 
@@ -194,88 +184,84 @@ fn build_send(
 
     let method = if let Some(media) = &outgoing.media {
         let (field_name, method) = media_kind_and_method(&media.kind);
-        match &media.source {
-            MediaSource::FileId(fid) => {
-                params.push(RequestParam::Text(field_name, fid.clone()));
-            }
-            MediaSource::Url(url) => {
-                params.push(RequestParam::Text(field_name, url.clone()));
-            }
-            MediaSource::Blob(blob_id) => {
-                let info = env.blob_info(blob_id).ok_or_else(|| {
-                    UiError::new(
-                        "telegram-error-blob-evicted",
-                        "Media blob was evicted or not found in storage",
-                    )
-                })?;
-                let (limit, limit_mb) = if media.kind == "photo" {
-                    (10 * 1024 * 1024, 10)
-                } else {
-                    (50 * 1024 * 1024, 50)
-                };
-                if info.size > limit {
-                    return Err(UiError::new(
-                        "telegram-error-upload-size",
-                        format!("Media exceeds Telegram upload limit ({limit_mb} MB)"),
-                    )
-                    .arg("limit", limit_mb.to_string()));
-                }
-                let content_type = media.mime_type.clone().or(info.content_type);
-                let file_name = media
-                    .file_name
-                    .clone()
-                    .or(info.file_name)
-                    .unwrap_or_else(|| default_file_name(&media.kind, content_type.as_deref()));
-                params.push(RequestParam::Blob {
-                    field_name,
-                    blob_id: blob_id.clone(),
-                    file_name,
-                    content_type,
-                });
-            }
-        }
-        params.push(RequestParam::Bool("disable_notification", outgoing.silent));
+        params.push(media_param(field_name, media, env)?);
         if let Some(caption) = &outgoing.text
             && !caption.is_empty()
         {
             params.push(RequestParam::Text("caption", caption.clone()));
-            if let Some(pm) = outgoing.parse_mode.api_str() {
-                params.push(RequestParam::Text("parse_mode", pm.into()));
-            }
         }
-        if let Some(kb) = &outgoing.keyboard {
-            params.push(RequestParam::Json(
-                "reply_markup",
-                outgoing::keyboard_markup(kb),
-            ));
-        }
-        attach_thread_and_reply_params(&mut params, chat, inputs, hub);
         method
     } else {
         let text = outgoing
             .text
+            .clone()
             .ok_or_else(|| validation::error("text", "Message text is required"))?;
         let disable_preview = props.get("disable_preview").map(String::as_str) == Some("yes");
         params.push(RequestParam::Text("text", text));
-        params.push(RequestParam::Bool("disable_notification", outgoing.silent));
         params.push(RequestParam::Json(
             "link_preview_options",
             json!({"is_disabled": disable_preview}),
         ));
-        if let Some(pm) = outgoing.parse_mode.api_str() {
-            params.push(RequestParam::Text("parse_mode", pm.into()));
-        }
-        if let Some(kb) = &outgoing.keyboard {
-            params.push(RequestParam::Json(
-                "reply_markup",
-                outgoing::keyboard_markup(kb),
-            ));
-        }
-        attach_thread_and_reply_params(&mut params, chat, inputs, hub);
         "sendMessage"
     };
+    attach_message_params(&mut params, &outgoing);
+    attach_thread_and_reply_params(&mut params, chat, inputs, hub);
 
     Ok((method, render_request_body(params)))
+}
+
+fn media_param(
+    field_name: &'static str,
+    media: &outgoing::OutgoingMedia,
+    env: &impl Env,
+) -> Result<RequestParam, UiError> {
+    let blob_id = match &media.source {
+        MediaSource::FileId(value) | MediaSource::Url(value) => {
+            return Ok(RequestParam::Text(field_name, value.clone()));
+        }
+        MediaSource::Blob(id) => id,
+    };
+    let info = env.blob_info(blob_id).ok_or_else(|| {
+        UiError::new(
+            "telegram-error-blob-evicted",
+            "Media blob was evicted or not found in storage",
+        )
+    })?;
+    let limit_mb = if media.kind == "photo" { 10 } else { 50 };
+    if info.size > limit_mb * 1024 * 1024 {
+        return Err(UiError::new(
+            "telegram-error-upload-size",
+            format!("Media exceeds Telegram upload limit ({limit_mb} MB)"),
+        )
+        .arg("limit", limit_mb.to_string()));
+    }
+    let content_type = media.mime_type.clone().or(info.content_type);
+    let file_name = media
+        .file_name
+        .clone()
+        .or(info.file_name)
+        .unwrap_or_else(|| default_file_name(&media.kind, content_type.as_deref()));
+    Ok(RequestParam::Blob {
+        field_name,
+        blob_id: blob_id.clone(),
+        file_name,
+        content_type,
+    })
+}
+
+fn attach_message_params(params: &mut Vec<RequestParam>, message: &outgoing::Outgoing) {
+    params.push(RequestParam::Bool("disable_notification", message.silent));
+    if message.text.as_ref().is_some_and(|s| !s.is_empty())
+        && let Some(mode) = message.parse_mode.api_str()
+    {
+        params.push(RequestParam::Text("parse_mode", mode.into()));
+    }
+    if let Some(keyboard) = &message.keyboard {
+        params.push(RequestParam::Json(
+            "reply_markup",
+            outgoing::keyboard_markup(keyboard),
+        ));
+    }
 }
 
 fn build_edit(
@@ -312,7 +298,17 @@ fn build_edit(
         body["parse_mode"] = pm.into();
     }
 
-    if let Some(kb) = &outgoing.keyboard {
+    attach_edit_keyboard(&mut body, outgoing.keyboard.as_ref(), props)?;
+
+    Ok(("editMessageText", body))
+}
+
+fn attach_edit_keyboard(
+    body: &mut Value,
+    keyboard: Option<&outgoing::Keyboard>,
+    props: &Properties,
+) -> Result<(), UiError> {
+    if let Some(kb) = keyboard {
         if kb.kind != KeyboardKind::Inline {
             return Err(validation::error(
                 "edit-keyboard",
@@ -330,7 +326,7 @@ fn build_edit(
         }
     }
 
-    Ok(("editMessageText", body))
+    Ok(())
 }
 
 fn build_delete(chat: i64, inputs: &Inputs) -> Result<(&'static str, Value), UiError> {

@@ -235,28 +235,17 @@ impl PluginNode for ActionNode {
         schema::action_definition(&self.kind, &self.props)
     }
     fn properties(&self) -> Vec<(String, DataValue)> {
-        schema::action_definition(&self.kind, &self.props)
-            .properties
-            .into_iter()
-            .map(|p| {
-                let value = self.props.get(&p.name).cloned().unwrap_or_default();
-                (p.name, value.into())
-            })
-            .collect()
+        validation::node_properties(self.definition(), &self.props)
     }
+
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        let DataValue::String(text) = value else {
-            return Err(validation::error("property", "Expected a text property"));
-        };
-        validation::property(&self.kind, name, text, &self.props)
+        validation::node_property(&self.kind, name, value, &self.props)
     }
+
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if let DataValue::String(text) = value
-            && self.props.contains_key(name)
-        {
-            self.props.insert(name.into(), text);
-        }
+        validation::set_known_property(&mut self.props, name, value);
     }
+
     fn execute(&mut self, trigger: Trigger, inputs: &Inputs) -> Vec<Output> {
         let outputs = runtime::with(|hub, env| self.run(trigger, inputs, runtime::now(), hub, env));
         if let Some(error) = &self.error {

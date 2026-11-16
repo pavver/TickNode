@@ -55,7 +55,7 @@ impl Default for Camera {
 }
 
 impl Camera {
-    pub fn to_world(&self, sx: f64, sy: f64) -> (f64, f64) {
+    pub fn to_world(self, sx: f64, sy: f64) -> (f64, f64) {
         ((sx - self.x) / self.zoom, (sy - self.y) / self.zoom)
     }
 

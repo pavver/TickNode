@@ -252,3 +252,6 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
 pub(super) fn domain_allowed(host: &str, allowed: &str) -> bool {
     allowed == "*" || host == allowed || host.ends_with(&format!(".{}", allowed))
 }
+
+#[cfg(test)]
+mod tests;

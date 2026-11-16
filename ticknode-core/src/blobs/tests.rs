@@ -169,3 +169,95 @@ fn memory_and_file_store_parity() {
         mem_store.read_all(&mem_info.id).unwrap()
     );
 }
+
+#[test]
+fn restart_rejects_sidecar_id_that_does_not_match_its_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = FileBlobStore::open(temp.path()).unwrap();
+    let info = store.put(b"payload".to_vec(), None, None).unwrap();
+    drop(store);
+    let mut altered = info.clone();
+    altered.id = "../outside".into();
+    fs::write(
+        temp.path().join(format!("{}.json", info.id)),
+        serde_json::to_vec(&altered).unwrap(),
+    )
+    .unwrap();
+    let reopened = FileBlobStore::open(temp.path()).unwrap();
+    assert!(reopened.info("../outside").is_none());
+    assert!(reopened.info(&info.id).is_none());
+    assert!(!temp.path().join(&info.id).exists());
+}
+
+#[test]
+fn stores_keep_exact_quota_and_reject_oversize_without_eviction() {
+    let temp = tempfile::tempdir().unwrap();
+    let stores: Vec<Box<dyn BlobStore>> = vec![
+        Box::new(MemoryBlobStore::with_quota(4)),
+        Box::new(FileBlobStore::open_with_quota(temp.path(), 4).unwrap()),
+    ];
+    for store in stores {
+        let first = store.put(vec![1; 2], None, None).unwrap();
+        let second = store.put(vec![2; 2], None, None).unwrap();
+        assert_eq!(store.read_all(&first.id).unwrap(), [1; 2]);
+        assert_eq!(store.read_all(&second.id).unwrap(), [2; 2]);
+        assert!(matches!(
+            store.put(vec![3; 5], None, None),
+            Err(BlobError::TooLarge(5, 4))
+        ));
+        assert_eq!(store.read_all(&first.id).unwrap(), [1; 2]);
+        assert_eq!(store.read(&second.id, 1, u32::MAX).unwrap(), [2]);
+        assert!(store.read(&second.id, 2, 1).unwrap().is_empty());
+        assert!(store.read(&second.id, u64::MAX, 1).unwrap().is_empty());
+        assert!(store.read(&second.id, 0, 0).unwrap().is_empty());
+        assert!(matches!(
+            store.read_all("missing"),
+            Err(BlobError::NotFound(_))
+        ));
+        assert!(matches!(
+            store.read("missing", 0, 1),
+            Err(BlobError::NotFound(_))
+        ));
+        assert!(store.info("missing").is_none());
+    }
+}
+
+#[test]
+fn restart_enforces_reduced_quota_and_removes_invalid_data() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = FileBlobStore::open_with_quota(temp.path(), 8).unwrap();
+    let first = store.put(vec![1; 4], None, None).unwrap();
+    let second = store.put(vec![2; 4], None, None).unwrap();
+    drop(store);
+    let reopened = FileBlobStore::open_with_quota(temp.path(), 4).unwrap();
+    let surviving = [&first, &second]
+        .into_iter()
+        .filter(|i| reopened.info(&i.id).is_some())
+        .collect::<Vec<_>>();
+    assert_eq!(surviving.len(), 1);
+    let kept = surviving[0];
+    assert_eq!(reopened.read_all(&kept.id).unwrap().len(), 4);
+    drop(reopened);
+    fs::write(temp.path().join(&kept.id), b"short").unwrap();
+    let reopened = FileBlobStore::open(temp.path()).unwrap();
+    assert!(reopened.info(&kept.id).is_none());
+    assert!(!temp.path().join(&kept.id).exists());
+}
+
+#[test]
+fn zero_quota_accepts_empty_blobs_and_rejects_nonempty_blobs() {
+    let temp = tempfile::tempdir().unwrap();
+    let stores: Vec<Box<dyn BlobStore>> = vec![
+        Box::new(MemoryBlobStore::with_quota(0)),
+        Box::new(FileBlobStore::open_with_quota(temp.path(), 0).unwrap()),
+    ];
+    for store in stores {
+        let info = store.put(vec![], None, None).unwrap();
+        assert!(store.read_all(&info.id).unwrap().is_empty());
+        assert!(matches!(
+            store.put(vec![1], None, None),
+            Err(BlobError::TooLarge(1, 0))
+        ));
+        assert!(store.info(&info.id).is_some());
+    }
+}

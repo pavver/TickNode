@@ -9,11 +9,18 @@ use ticknode_shared::*;
 const STORAGE_KEY: &str = "ticknode.show-values";
 
 pub fn load_show_values() -> bool {
-    web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
-        .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten())
-        .as_deref()
-        == Some("true")
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|w| w.local_storage().ok().flatten())
+            .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten())
+            .as_deref()
+            == Some("true")
+    }
 }
 
 pub fn set_show_values(ed: Editor, show: bool) {

@@ -25,27 +25,15 @@ impl PluginNode for ButtonNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.definition()
-            .properties
-            .into_iter()
-            .map(|p| {
-                let value = self.props.get(&p.name).cloned().unwrap_or_default();
-                (p.name, value.into())
-            })
-            .collect()
+        validation::node_properties(self.definition(), &self.props)
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if let DataValue::String(text) = value {
-            self.props.insert(name.into(), text);
-        }
+        validation::set_text_property(&mut self.props, name, value);
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        let DataValue::String(text) = value else {
-            return Err(validation::error("property", "Expected a text property"));
-        };
-        validation::property("button", name, text, &self.props)
+        validation::node_property("button", name, value, &self.props)
     }
 
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
@@ -75,7 +63,7 @@ impl PluginNode for ButtonNode {
                 let Some(url) = data_in.filter(|s| !s.trim().is_empty()) else {
                     let err = validation::error("button-url", "A URL is required for URL buttons");
                     self.error = Some(err.clone());
-                    runtime::report_error(&err, true);
+                    runtime::report_error(&err);
                     return vec![];
                 };
                 Some(url.to_string())

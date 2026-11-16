@@ -194,7 +194,7 @@ fn call_with_host<R>(
             .data_mut()
             .call
             .take()
-            .expect("the call context is in place")
+            .ok_or_else(|| CallError::Trap("Plugin call context is unavailable".into()))?
             .host;
     }
     result.map_err(trap_error)

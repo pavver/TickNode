@@ -19,13 +19,16 @@ const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
 /// Pause before `plugin-tick` is called again after the plugin trapped in it.
 const TICK_BACKOFF_TICKS: u64 = 50;
 
-pub(super) fn engine() -> &'static Engine {
-    static ENGINE: OnceLock<Engine> = OnceLock::new();
-    ENGINE.get_or_init(|| {
-        let mut config = Config::new();
-        config.consume_fuel(true);
-        Engine::new(&config).expect("the wasmtime configuration is valid")
-    })
+pub(super) fn engine() -> wasmtime::Result<&'static Engine> {
+    static ENGINE: OnceLock<Result<Engine, String>> = OnceLock::new();
+    ENGINE
+        .get_or_init(|| {
+            let mut config = Config::new();
+            config.consume_fuel(true);
+            Engine::new(&config).map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map_err(|error| wasmtime::Error::msg(error.clone()))
 }
 
 pub(super) struct Runtime {
@@ -87,29 +90,37 @@ impl Runtime {
                 options: self.options.clone(),
                 blob_store: self.blob_store.clone(),
             };
-            let mut store = Store::new(engine(), state);
+            let mut store = Store::new(engine()?, state);
             store.limiter(|s| &mut s.limits);
             store.set_fuel(FUEL_PER_CALL)?;
             let plugin = self.pre.instantiate(&mut store)?;
-            // A recreated instance after a crash receives settings first — otherwise it would lose its config
-            if let Some(settings) = &self.settings {
-                store.set_fuel(FUEL_PER_CALL)?;
-                let res = plugin
-                    .ticknode_plugin_nodes()
-                    .call_configure(&mut store, settings);
-                let remaining = store.get_fuel().unwrap_or(0);
-                let consumed = FUEL_PER_CALL.saturating_sub(remaining);
-                self.metrics.fuel = self.metrics.fuel.saturating_add(consumed);
-                self.metrics.calls = self.metrics.calls.saturating_add(1);
-                if res.is_err() {
-                    self.metrics.traps = self.metrics.traps.saturating_add(1);
-                }
-                self.configure_error = res?.err().map(|e| self.ui_error(e));
-            }
+            self.restore_settings(&mut store, &plugin)?;
             self.instance = Some((store, plugin));
             self.generation += 1;
         }
         Ok(self.generation)
+    }
+
+    fn restore_settings(
+        &mut self,
+        store: &mut Store<PluginState>,
+        plugin: &bindings::Plugin,
+    ) -> wasmtime::Result<()> {
+        if let Some(settings) = &self.settings {
+            store.set_fuel(FUEL_PER_CALL)?;
+            let res = plugin
+                .ticknode_plugin_nodes()
+                .call_configure(&mut *store, settings);
+            let remaining = store.get_fuel().unwrap_or(0);
+            let consumed = FUEL_PER_CALL.saturating_sub(remaining);
+            self.metrics.fuel = self.metrics.fuel.saturating_add(consumed);
+            self.metrics.calls = self.metrics.calls.saturating_add(1);
+            if res.is_err() {
+                self.metrics.traps = self.metrics.traps.saturating_add(1);
+            }
+            self.configure_error = res?.err().map(|e| self.ui_error(e));
+        }
+        Ok(())
     }
 
     pub(super) fn api(&mut self) -> wasmtime::Result<(&mut Store<PluginState>, &NodesApi)> {
@@ -117,7 +128,7 @@ impl Runtime {
         let (store, plugin) = self
             .instance
             .as_mut()
-            .expect("the instance was just created");
+            .ok_or_else(|| wasmtime::Error::msg("Plugin instance is unavailable"))?;
         store.data_mut().ws.set_runtime(self.tokio.clone());
         store.data_mut().http.runtime = self.tokio.clone();
         store.data_mut().http.blob_store = Some(self.blob_store.clone());
@@ -185,7 +196,10 @@ impl Runtime {
         self.tokio = host.runtime.clone();
         self.blob_store = host.blob_store.clone();
         let outcome = self.api().map(|_| ()).and_then(|()| {
-            let (store, plugin) = self.instance.as_mut().expect("api() creates the instance");
+            let (store, plugin) = self
+                .instance
+                .as_mut()
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance is unavailable"))?;
             let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);
             let mut events: Vec<wit::WsEvent> = store
                 .data_mut()
@@ -212,7 +226,7 @@ impl Runtime {
                 .data_mut()
                 .call
                 .take()
-                .expect("the call context is in place")
+                .ok_or_else(|| wasmtime::Error::msg("Plugin call context is unavailable"))?
                 .host;
             result
         });

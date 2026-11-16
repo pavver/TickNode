@@ -110,7 +110,7 @@ pub(super) fn PastePreview() -> impl IntoView {
                 // Position comes from the layout (in Match, outputs sit next to their respective cases)
                 let y = layout.as_ref().and_then(|l| l.anchor(Position::default(), pin.id, dir)).map_or(0.0, |(_, y)| y - top);
                 let side = if dir == PinDirection::Input { "left:0" } else { "right:0" };
-                let pin_label = i18n::node_pin_label(&d.type_name, &pin.name);
+                let pin_label = i18n::node_pin_label_with_properties(&d.type_name, &n.properties, pin.id, &pin.name);
                 view! {
                     <div class=if dir == PinDirection::Input { "pin in" } else { "pin out" } style=format!("position:absolute;{side};top:{}px;white-space:nowrap", y - ROW_H / 2.0)>
                         <span class="socket" class:exec=exec style=format!("--pin-color:{}", pin_color(&types, &pin.pin_type))></span>

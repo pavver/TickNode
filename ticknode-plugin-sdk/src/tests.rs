@@ -3,6 +3,52 @@ use crate::convert::*;
 use crate::*;
 
 #[test]
+fn default_node_definitions_advertise_cost_one_and_require_explicit_purity() {
+    for definition in [
+        NodeDefinition::default(),
+        NodeDefinition::new("demo/node", "Node", "Data"),
+        NodeDefinition::from(ticknode_shared::NodeDefinition::default()),
+    ] {
+        assert_eq!(definition.cost, 1);
+        assert!(!definition.pure);
+        let exported = to_wit_definition(definition, false);
+        assert_eq!(exported.cost, 1);
+        assert!(!exported.pure);
+        assert!(!exported.polls);
+    }
+}
+
+#[test]
+fn multipart_request_builders_keep_text_blob_metadata_and_save_mode() {
+    let request = HttpRequest::post("https://example.com/upload", b"body".to_vec())
+        .header("X-Test", "value")
+        .multipart(MultipartPart::text("caption", "hello"))
+        .multipart(
+            MultipartPart::blob("photo", "blob-id")
+                .file_name("camera.png")
+                .content_type("image/png"),
+        )
+        .save_to_blob(true);
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.url, "https://example.com/upload");
+    assert_eq!(request.body, b"body");
+    assert_eq!(request.headers, [("X-Test".into(), "value".into())]);
+    assert_eq!(request.timeout_ms, 0);
+    assert!(request.save_to_blob);
+    assert_eq!(request.multipart[0].data, PartData::Text("hello".into()));
+    assert_eq!(request.multipart[1].data, PartData::Blob("blob-id".into()));
+    assert_eq!(
+        request.multipart[1].file_name.as_deref(),
+        Some("camera.png")
+    );
+    assert_eq!(
+        request.multipart[1].content_type.as_deref(),
+        Some("image/png")
+    );
+    assert!(!request.save_to_blob(false).save_to_blob);
+}
+
+#[test]
 fn input_and_struct_helpers_preserve_types_defaults_and_optional_fields() {
     let value = StructValue::new("demo.state")
         .field("number", 2i64)

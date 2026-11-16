@@ -53,6 +53,37 @@ pub fn node_pin_label(type_name: &str, pin_name: &str) -> String {
     pin_name.to_string()
 }
 
+/// Universal object nodes get their field labels from the selected struct's translations.
+pub fn node_pin_label_with_properties(
+    type_name: &str,
+    properties: &[(String, DataValue)],
+    pin: PinId,
+    pin_name: &str,
+) -> String {
+    if pin != PinId(0)
+        && matches!(type_name, "object/make" | "object/break")
+        && let Some(label) = object_field_label(properties, pin_name)
+    {
+        return label;
+    }
+    node_pin_label(type_name, pin_name)
+}
+
+fn object_field_label(properties: &[(String, DataValue)], pin_name: &str) -> Option<String> {
+    let (_, DataValue::String(type_name)) = properties.iter().find(|(name, _)| name == "type")?
+    else {
+        return None;
+    };
+    let field_name = TYPES.with(|types| {
+        let types = types.borrow();
+        let field = types.get(type_name)?.fields().iter().find(|field| {
+            field.title == pin_name || (field.title.is_empty() && field.name == pin_name)
+        })?;
+        Some(field.name.clone())
+    })?;
+    lookup(&format!("type-{}-field-{field_name}", slug(type_name)))
+}
+
 /// Fluent key fragment of a property name: the name as written when it consists of `[A-Za-z0-9_-]`
 /// (`entity_id`), otherwise its slug.
 fn property_key(name: &str) -> Vec<String> {

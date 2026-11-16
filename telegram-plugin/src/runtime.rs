@@ -14,17 +14,14 @@ pub fn remove(node: NodeId, serial: u64) {
     });
 }
 pub fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    chrono::Utc::now().timestamp().max(0) as u64
 }
-pub fn report_error(error: &UiError, log: bool) {
+pub fn report_error(error: &UiError) {
     #[cfg(target_arch = "wasm32")]
-    host::node_error(error, log);
+    host::node_error(error, true);
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let _ = (error, log);
+        let _ = error;
     }
 }
 pub struct HostEnv;

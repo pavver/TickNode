@@ -295,10 +295,11 @@ impl HostState {
                 let result = match task.state {
                     TaskState::Delay { .. } => Ok(TaskOutput::Delay),
                     // The task has already finished, so block_on does not wait.
-                    TaskState::Spawned(mut task) => {
-                        futures::executor::block_on(task.0.take().expect("task handle exists"))
-                            .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {}", e)))
-                    }
+                    TaskState::Spawned(mut task) => match task.0.take() {
+                        Some(handle) => futures::executor::block_on(handle)
+                            .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {e}"))),
+                        None => Err("Task handle is unavailable".into()),
+                    },
                 };
                 (task.node_id, id, result)
             })

@@ -145,9 +145,10 @@ impl TickEngine {
 }
 
 fn unprivileged_runtime(wasm: &[u8]) -> Result<Runtime, UiMessage> {
-    let component = Component::new(engine(), wasm)
+    let engine = engine().map_err(|error| super::lifecycle::crash_message(&error.to_string()))?;
+    let component = Component::new(engine, wasm)
         .map_err(|e| UiMessage::plain(format!("Invalid component: {e:#}")))?;
-    let mut linker = Linker::new(engine());
+    let mut linker = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
         .map_err(|e| UiMessage::plain(e.to_string()))?;
     bindings::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker, |s| s)

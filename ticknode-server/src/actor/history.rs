@@ -268,7 +268,7 @@ impl Actor {
             .sheets
             .iter()
             .find(|sh| sh.id == s)
-            .map_or(true, |sh| sh.enabled);
+            .is_none_or(|sh| sh.enabled);
         if !sheet_enabled {
             self.engine
                 .set_disabled(result.added_nodes.iter().copied(), true);

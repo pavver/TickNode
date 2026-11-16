@@ -16,6 +16,22 @@ pub enum InputCommit {
     Variable(String),
 }
 
+/// Typed fields commit a variable reference before trying their unit-specific literal parser.
+pub(super) fn commit_variable_binding(
+    text: &str,
+    callback: Option<Callback<Option<String>>>,
+) -> bool {
+    let Some(callback) = callback else {
+        return false;
+    };
+    let text = text.trim();
+    if VariableRef::parse(text).is_none() {
+        return false;
+    }
+    callback.run(Some(text.to_string()));
+    true
+}
+
 /// Decides whether committed text represents a variable binding or a literal value.
 ///
 /// When `allow_variable` is true:
@@ -29,34 +45,31 @@ pub fn decide_input_commit(
     allow_variable: bool,
 ) -> Result<InputCommit, String> {
     let trimmed = raw_text.trim();
-    if trimmed.is_empty() && (*value_type != DataType::String || optional) {
+    if clears_input(trimmed, value_type, optional) {
         return Ok(InputCommit::Value(None));
     }
-
-    if *value_type == DataType::String {
-        if allow_variable
-            && trimmed.starts_with('"')
-            && trimmed.ends_with('"')
-            && trimmed.len() >= 2
-        {
-            let literal = &trimmed[1..trimmed.len() - 1];
-            return Ok(InputCommit::Value(Some(DataValue::String(
-                literal.to_string(),
-            ))));
-        }
-        if allow_variable && VariableRef::parse(trimmed).is_some() {
-            return Ok(InputCommit::Variable(trimmed.to_string()));
-        }
-        return Ok(InputCommit::Value(Some(DataValue::String(
-            raw_text.to_string(),
-        ))));
+    if *value_type == DataType::String
+        && allow_variable
+        && let Some(literal) = quoted_literal(trimmed)
+    {
+        return Ok(InputCommit::Value(Some(literal.into())));
     }
-
     if allow_variable && VariableRef::parse(trimmed).is_some() {
         return Ok(InputCommit::Variable(trimmed.to_string()));
     }
+    if *value_type == DataType::String {
+        return Ok(InputCommit::Value(Some(raw_text.into())));
+    }
 
     parse_text(raw_text, value_type).map(InputCommit::Value)
+}
+
+fn clears_input(text: &str, value_type: &DataType, optional: bool) -> bool {
+    text.is_empty() && (*value_type != DataType::String || optional)
+}
+
+fn quoted_literal(text: &str) -> Option<&str> {
+    text.strip_prefix('"')?.strip_suffix('"')
 }
 
 /// Resolves a variable reference against open sheet variables first (shadowing), then global/persistent.

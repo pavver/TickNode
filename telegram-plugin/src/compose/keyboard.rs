@@ -25,27 +25,15 @@ impl PluginNode for KeyboardNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.definition()
-            .properties
-            .into_iter()
-            .map(|p| {
-                let value = self.props.get(&p.name).cloned().unwrap_or_default();
-                (p.name, value.into())
-            })
-            .collect()
+        validation::node_properties(self.definition(), &self.props)
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if let DataValue::String(text) = value {
-            self.props.insert(name.into(), text);
-        }
+        validation::set_text_property(&mut self.props, name, value);
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        let DataValue::String(text) = value else {
-            return Err(validation::error("property", "Expected a text property"));
-        };
-        validation::property("keyboard", name, text, &self.props)
+        validation::node_property("keyboard", name, value, &self.props)
     }
 
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
@@ -78,63 +66,20 @@ impl PluginNode for KeyboardNode {
             .unwrap_or(1)
             .clamp(1, 8);
 
-        let mut buttons: Vec<DataValue> = Vec::new();
+        let mut buttons = Vec::new();
         for i in 1..=count {
-            let Some(val) = inputs.get(PinId(i)) else {
-                continue;
-            };
-            match val {
-                DataValue::String(s) => {
-                    if s.trim().is_empty() {
-                        continue;
-                    }
-                    let (action, data) = if kind == "inline" {
-                        ("callback", Some(s.clone()))
-                    } else {
-                        ("text", None)
-                    };
-                    let btn = StructValue::new("telegram.button")
-                        .field("text", s.clone())
-                        .field("action", action)
-                        .field_opt("data", data)
-                        .build();
-                    buttons.push(btn);
+            match inputs
+                .get(PinId(i))
+                .map(|value| keyboard_button(value, kind))
+                .transpose()
+            {
+                Ok(Some(Some(button))) => buttons.push(button),
+                Ok(_) => {}
+                Err(error) => {
+                    self.error = Some(error.clone());
+                    runtime::report_error(&error);
+                    return vec![];
                 }
-                DataValue::Object { .. } => {
-                    let text = field_string(val, "text").unwrap_or("");
-                    if text.trim().is_empty() {
-                        continue;
-                    }
-                    let action = field_string(val, "action").unwrap_or("callback");
-                    if kind == "inline" && matches!(action, "text" | "contact" | "location") {
-                        let err = UiError::new(
-                            "telegram-error-inline-action",
-                            format!(
-                                "Inline keyboard cannot use '{action}' action for button '{text}'"
-                            ),
-                        )
-                        .arg("text", text)
-                        .arg("action", action);
-                        self.error = Some(err.clone());
-                        runtime::report_error(&err, true);
-                        return vec![];
-                    }
-                    if kind == "reply" && matches!(action, "callback" | "url") {
-                        let err = UiError::new(
-                            "telegram-error-reply-action",
-                            format!(
-                                "Reply keyboard cannot use '{action}' action for button '{text}'"
-                            ),
-                        )
-                        .arg("text", text)
-                        .arg("action", action);
-                        self.error = Some(err.clone());
-                        runtime::report_error(&err, true);
-                        return vec![];
-                    }
-                    buttons.push(val.clone());
-                }
-                _ => {}
             }
         }
 
@@ -173,4 +118,53 @@ impl PluginNode for KeyboardNode {
 
         vec![Output::Data(PinId(0), kb.build())]
     }
+}
+
+fn keyboard_button(value: &DataValue, kind: &str) -> Result<Option<DataValue>, UiError> {
+    match value {
+        DataValue::String(text) => {
+            if text.trim().is_empty() {
+                return Ok(None);
+            }
+            let (action, data) = if kind == "inline" {
+                ("callback", Some(text.clone()))
+            } else {
+                ("text", None)
+            };
+            Ok(Some(
+                StructValue::new("telegram.button")
+                    .field("text", text.clone())
+                    .field("action", action)
+                    .field_opt("data", data)
+                    .build(),
+            ))
+        }
+        DataValue::Object { .. } => object_button(value, kind),
+        _ => Ok(None),
+    }
+}
+
+fn object_button(value: &DataValue, kind: &str) -> Result<Option<DataValue>, UiError> {
+    let text = field_string(value, "text").unwrap_or("");
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    let action = field_string(value, "action").unwrap_or("callback");
+    let error = match kind {
+        "inline" if matches!(action, "text" | "contact" | "location") => Some((
+            "telegram-error-inline-action",
+            format!("Inline keyboard cannot use '{action}' action for button '{text}'"),
+        )),
+        "reply" if matches!(action, "callback" | "url") => Some((
+            "telegram-error-reply-action",
+            format!("Reply keyboard cannot use '{action}' action for button '{text}'"),
+        )),
+        _ => None,
+    };
+    if let Some((key, fallback)) = error {
+        return Err(UiError::new(key, fallback)
+            .arg("text", text)
+            .arg("action", action));
+    }
+    Ok(Some(value.clone()))
 }

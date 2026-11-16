@@ -81,7 +81,7 @@ pub fn Pin(
     let pin_name_label = pin.name;
     let pin_label = move || match label {
         Some(custom) => custom.get(),
-        None => translated_pin_name(ed, node, &pin_name_label),
+        None => translated_pin_name(ed, node, pin_id, &pin_name_label),
     };
     view! {
         <div
@@ -119,7 +119,7 @@ pub(crate) fn pin_title_text(
 ) -> String {
     let is_input = dir == PinDirection::Input;
     let eff_type = effective_pin_type(ed, node, pin.id, is_input, &pin.pin_type);
-    let translated_pin = translated_pin_name(ed, node, &pin.name);
+    let translated_pin = translated_pin_name(ed, node, pin.id, &pin.name);
     let type_name = pin_type_title_label(ed, &eff_type);
     let exec = pin.pin_type == PinType::Exec;
     let status = crate::node_status::pin_status(ed, node, pin.id, dir, exec);
@@ -153,12 +153,18 @@ fn effective_pin_type(
     }
 }
 
-fn translated_pin_name(ed: crate::state::Editor, node: NodeId, name: &str) -> String {
+fn translated_pin_name(ed: crate::state::Editor, node: NodeId, pin: PinId, name: &str) -> String {
     ed.node_tracked(node).map_or_else(
         || name.to_string(),
         |n| {
-            n.instance
-                .with(|i| i18n::node_pin_label(&i.definition.type_name, name))
+            n.instance.with(|i| {
+                i18n::node_pin_label_with_properties(
+                    &i.definition.type_name,
+                    &i.model.properties,
+                    pin,
+                    name,
+                )
+            })
         },
     )
 }

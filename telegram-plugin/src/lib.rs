@@ -53,7 +53,9 @@ impl Plugin for Telegram {
             "message" | "command" | "callback" => Box::new(triggers::TriggerNode::new(kind, node)),
             "send" | "edit" | "delete" => Box::new(actions::ActionNode::new(kind)),
             "download" => Box::new(download::DownloadNode::new()),
-            "button" | "keyboard" | "compose" => compose::create(kind),
+            "button" => Box::new(compose::ButtonNode::new()),
+            "keyboard" => Box::new(compose::KeyboardNode::new()),
+            "compose" => Box::new(compose::ComposeNode::new()),
             _ => return None,
         })
     }
@@ -67,5 +69,7 @@ impl Plugin for Telegram {
 
 #[cfg(target_arch = "wasm32")]
 export_plugin!(Telegram);
+#[cfg(test)]
+mod contract_tests;
 #[cfg(test)]
 mod tests;

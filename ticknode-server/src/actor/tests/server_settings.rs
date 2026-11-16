@@ -127,10 +127,9 @@ async fn live_tick_change_speeds_up_actor() {
     while window_start.elapsed() < Duration::from_millis(100) {
         if let Ok(Ok((_, bytes))) =
             tokio::time::timeout(Duration::from_millis(20), events.recv()).await
+            && let Ok(ServerMessage::Executed(_)) = postcard::from_bytes::<ServerMessage>(&bytes)
         {
-            if let Ok(ServerMessage::Executed(_)) = postcard::from_bytes::<ServerMessage>(&bytes) {
-                count_before += 1;
-            }
+            count_before += 1;
         }
     }
     assert!(
@@ -156,14 +155,12 @@ async fn live_tick_change_speeds_up_actor() {
     while window_start.elapsed() < Duration::from_millis(300) {
         if let Ok(Ok((_, bytes))) =
             tokio::time::timeout(Duration::from_millis(50), events.recv()).await
-        {
-            if let Ok(ServerMessage::Executed(traces)) =
+            && let Ok(ServerMessage::Executed(traces)) =
                 postcard::from_bytes::<ServerMessage>(&bytes)
-            {
-                for t in traces {
-                    min_tick_seen = min_tick_seen.min(t.tick);
-                    max_tick_seen = max_tick_seen.max(t.tick);
-                }
+        {
+            for t in traces {
+                min_tick_seen = min_tick_seen.min(t.tick);
+                max_tick_seen = max_tick_seen.max(t.tick);
             }
         }
     }

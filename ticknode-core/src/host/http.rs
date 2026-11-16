@@ -2,6 +2,10 @@
 use super::*;
 use std::sync::Arc;
 
+mod body;
+mod request;
+use futures::TryStreamExt;
+
 const MAX_HTTP_BODY: usize = 4 * 1024 * 1024;
 
 pub(crate) fn spawn_http(
@@ -9,126 +13,65 @@ pub(crate) fn spawn_http(
     request: HttpRequest,
     blob_store: Arc<dyn crate::blobs::BlobStore>,
 ) -> Result<tokio::task::JoinHandle<TaskResult>, String> {
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let timeout = if request.timeout.is_zero() {
-        DEFAULT_HTTP_TIMEOUT
-    } else {
-        request.timeout.min(MAX_HTTP_TIMEOUT)
-    };
-
-    let method =
-        reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| e.to_string())?;
-    let mut req = client.request(method, &request.url).timeout(timeout);
-
-    if let Ok(parsed_url) = url::Url::parse(&request.url) {
-        let user = parsed_url.username();
-        if !user.is_empty() {
-            let has_auth = request
-                .headers
-                .iter()
-                .any(|(n, _)| n.eq_ignore_ascii_case("authorization"));
-            if !has_auth {
-                req = req.basic_auth(user, parsed_url.password());
-            }
-        }
-    }
-
-    if !request.multipart.is_empty() {
-        let mut form = reqwest::multipart::Form::new();
-        for part in request.multipart {
-            let mut p = match part.data {
-                PartData::Text(t) => reqwest::multipart::Part::text(t),
-                PartData::Blob(id) => {
-                    let bytes = blob_store
-                        .read_all(&id)
-                        .map_err(|_| "unknown blob".to_string())?;
-                    reqwest::multipart::Part::bytes(bytes)
-                }
-            };
-            if let Some(file_name) = part.file_name {
-                p = p.file_name(file_name);
-            }
-            if let Some(content_type) = part.content_type {
-                p = p.mime_str(&content_type).map_err(|e| e.to_string())?;
-            }
-            form = form.part(part.name, p);
-        }
-        req = req.multipart(form);
-        for (name, value) in request.headers {
-            if !name.eq_ignore_ascii_case("content-type") {
-                req = req.header(name, value);
-            }
-        }
-    } else {
-        req = req.body(request.body);
-        for (name, value) in request.headers {
-            req = req.header(name, value);
-        }
-    }
-
     let save_to_blob = request.save_to_blob;
     let req_url = request.url.clone();
+    let req = request::build_request(request, blob_store.as_ref())?;
 
     Ok(runtime.spawn(async move {
-        let mut response = req.send().await.map_err(request_error)?;
-        let status = response.status().as_u16();
-        let headers: Vec<(String, String)> = response
-            .headers()
-            .iter()
-            .filter_map(|(n, v)| Some((n.to_string(), v.to_str().ok()?.to_string())))
-            .collect();
-
-        if save_to_blob && (200..300).contains(&status) {
-            let mut body = Vec::new();
-            while (body.len() as u64) < crate::blobs::BLOB_STORE_QUOTA {
-                let Some(chunk) = response.chunk().await.map_err(request_error)? else {
-                    break;
-                };
-                if (body.len() as u64).saturating_add(chunk.len() as u64)
-                    > crate::blobs::BLOB_STORE_QUOTA
-                {
-                    return Err("Response body exceeds maximum blob quota".into());
-                }
-                body.extend_from_slice(&chunk);
-            }
-
-            let content_type = headers
-                .iter()
-                .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
-                .map(|(_, v)| v.clone());
-            let file_name = parse_filename(&headers, &req_url);
-
-            let info = blob_store
-                .put(body, content_type.clone(), file_name)
-                .map_err(|e| e.to_string())?;
-
-            Ok(TaskOutput::Blob(BlobResponse {
-                status,
-                headers,
-                blob: info.id,
-                size: info.size,
-                content_type,
-            }))
-        } else {
-            let mut body = Vec::new();
-            while body.len() < MAX_HTTP_BODY {
-                let Some(chunk) = response.chunk().await.map_err(request_error)? else {
-                    break;
-                };
-                body.extend_from_slice(&chunk[..chunk.len().min(MAX_HTTP_BODY - body.len())]);
-            }
-            Ok(TaskOutput::Http(HttpResponse {
-                status,
-                headers,
-                body,
-            }))
-        }
+        let response = req.send().await.map_err(request_error)?;
+        receive_response(response, save_to_blob, &req_url, blob_store).await
     }))
+}
+
+async fn receive_response(
+    response: reqwest::Response,
+    save_to_blob: bool,
+    req_url: &str,
+    blob_store: Arc<dyn crate::blobs::BlobStore>,
+) -> TaskResult {
+    let status = response.status().as_u16();
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .filter_map(|(n, v)| Some((n.to_string(), v.to_str().ok()?.to_string())))
+        .collect();
+
+    if save_to_blob && (200..300).contains(&status) {
+        let body = body::read_blob_body(
+            response.bytes_stream().map_err(request_error),
+            crate::blobs::BLOB_STORE_QUOTA as usize,
+        )
+        .await?;
+
+        let content_type = headers
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+            .map(|(_, v)| v.clone());
+        let file_name = parse_filename(&headers, req_url);
+
+        let info = blob_store
+            .put(body, content_type.clone(), file_name)
+            .map_err(|e| e.to_string())?;
+
+        Ok(TaskOutput::Blob(BlobResponse {
+            status,
+            headers,
+            blob: info.id,
+            size: info.size,
+            content_type,
+        }))
+    } else {
+        let body = body::read_http_body(
+            response.bytes_stream().map_err(request_error),
+            MAX_HTTP_BODY,
+        )
+        .await?;
+        Ok(TaskOutput::Http(HttpResponse {
+            status,
+            headers,
+            body,
+        }))
+    }
 }
 
 pub(crate) fn parse_filename(headers: &[(String, String)], url: &str) -> Option<String> {
@@ -171,6 +114,113 @@ fn request_error(error: reqwest::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blobs::BlobStore;
+
+    #[test]
+    fn filenames_use_disposition_then_url_path_without_credentials_or_query() {
+        for (headers, url, expected) in [
+            (
+                vec![(
+                    "Content-Disposition".into(),
+                    "attachment; filename=\"image.jpg\"".into(),
+                )],
+                "https://example.com/fallback",
+                Some("image.jpg"),
+            ),
+            (
+                vec![(
+                    "content-disposition".into(),
+                    "attachment; filename*=UTF-8''photo.png".into(),
+                )],
+                "https://example.com/",
+                Some("photo.png"),
+            ),
+            (
+                vec![("content-disposition".into(), "filename*=raw.txt".into())],
+                "https://example.com/",
+                Some("raw.txt"),
+            ),
+            (
+                vec![("content-disposition".into(), "filename=\"\"".into())],
+                "https://user:password@example.com/path/file.txt?token=secret",
+                Some("file.txt"),
+            ),
+            (
+                vec![],
+                "https://example.com/path/file.txt/",
+                Some("file.txt"),
+            ),
+            (vec![], "https://example.com/", None),
+            (vec![], "not a URL", None),
+        ] {
+            assert_eq!(parse_filename(&headers, url).as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn request_building_applies_auth_headers_timeouts_and_blob_validation_without_sockets() {
+        let store = crate::blobs::MemoryBlobStore::new();
+        let mut input = HttpRequest::get("http://user:pass@example.com/image");
+        input.timeout = chrono::TimeDelta::zero().to_std().unwrap();
+        let request = request::build_request(input.clone(), &store)
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(request.headers()["authorization"], "Basic dXNlcjpwYXNz");
+        assert_eq!(request.timeout(), Some(&DEFAULT_HTTP_TIMEOUT));
+        input.timeout = chrono::TimeDelta::seconds(1000).to_std().unwrap();
+        input.headers = vec![("aUtHoRiZaTiOn".into(), "Bearer explicit".into())];
+        let request = request::build_request(input.clone(), &store)
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(request.headers()["authorization"], "Bearer explicit");
+        assert_eq!(request.timeout(), Some(&MAX_HTTP_TIMEOUT));
+        input.multipart.push(MultipartPart {
+            name: "file".into(),
+            file_name: None,
+            content_type: None,
+            data: PartData::Blob("missing".into()),
+        });
+        assert_eq!(
+            request::build_request(input.clone(), &store).err().unwrap(),
+            "unknown blob"
+        );
+        let mut ordinary = HttpRequest::get("https://example.com/");
+        ordinary
+            .headers
+            .push(("Content-Type".into(), "application/json".into()));
+        let ordinary = request::build_request(ordinary, &store)
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(ordinary.headers()["content-type"], "application/json");
+        assert!(!ordinary.headers().contains_key("authorization"));
+        let blob = store.put(vec![1, 2], None, None).unwrap();
+        input.multipart[0].data = PartData::Blob(blob.id);
+        input.multipart[0].file_name = Some("image.png".into());
+        input.multipart[0].content_type = Some("image/png".into());
+        input.multipart.push(MultipartPart {
+            name: "caption".into(),
+            file_name: None,
+            content_type: None,
+            data: PartData::Text("hello".into()),
+        });
+        input
+            .headers
+            .push(("Content-Type".into(), "application/json".into()));
+        let request = request::build_request(input, &store)
+            .unwrap()
+            .build()
+            .unwrap();
+        assert!(
+            request.headers()["content-type"]
+                .to_str()
+                .unwrap()
+                .starts_with("multipart/form-data; boundary=")
+        );
+        assert_eq!(request.headers()["authorization"], "Bearer explicit");
+    }
 
     /// Needs loopback networking: connects to a closed local port.
     #[test]
@@ -191,3 +241,6 @@ mod tests {
         assert!(!error.contains("s3cret"), "{error}");
     }
 }
+
+#[cfg(test)]
+mod response_tests;

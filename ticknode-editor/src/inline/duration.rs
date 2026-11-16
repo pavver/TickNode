@@ -51,11 +51,7 @@ pub(super) fn DurationValue(
         ) else {
             return;
         };
-        let trimmed = text.trim();
-        if let Some(cb) = on_commit_variable
-            && VariableRef::parse(trimmed).is_some()
-        {
-            cb.run(Some(trimmed.to_string()));
+        if variable::commit_variable_binding(&text, on_commit_variable) {
             return;
         }
         let parsed = if wall_only {

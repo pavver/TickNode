@@ -2,7 +2,9 @@ use crate::bindings::ticknode::plugin::types as wit;
 use crate::*;
 
 pub(crate) fn encode(value: &DataValue) -> Vec<u8> {
-    postcard::to_allocvec(value).expect("DataValue always serializes")
+    postcard::to_allocvec(value)
+        .inspect_err(|_| eprintln!("Could not serialize a plugin value"))
+        .unwrap_or_default()
 }
 
 pub(crate) fn decode(bytes: &[u8]) -> Option<DataValue> {

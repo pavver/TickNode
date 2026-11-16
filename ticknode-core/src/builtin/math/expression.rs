@@ -220,7 +220,6 @@ impl Node for MathExpressionNode {
                 PropertyDefinition::hidden("next_pin"),
             ],
             pins,
-            ..Default::default()
         }
     }
 

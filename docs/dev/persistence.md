@@ -15,6 +15,7 @@ Keep it current when the described code changes.
   When a new blob exceeds available space, the oldest blobs (by creation timestamp) are evicted until the new blob fits.
   Blobs larger than the total quota are rejected.
   On startup, orphan temporary files and files without valid sidecars are cleaned up.
+  Sidecar IDs must match their file names, and blob data must be a regular file with the recorded size; mismatched metadata and symlinks are rejected.
   Blobs are internal to the host and are never exposed over a public URL.
 
 # Usage statistics (`ticknode-shared/src/usage.rs`, `ticknode-core/src/usage.rs`)

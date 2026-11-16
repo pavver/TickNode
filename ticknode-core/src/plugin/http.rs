@@ -66,11 +66,11 @@ impl Tasks {
             .collect();
         ready
             .into_iter()
-            .map(|id| {
-                let task = self.pending.remove(&id).expect("finished task exists");
+            .filter_map(|id| {
+                let task = self.pending.remove(&id)?;
                 let result = futures::executor::block_on(task)
                     .unwrap_or_else(|e| Err(format!("Task terminated abnormally: {e}")));
-                wit::WsEvent::HttpDone(done(id, result))
+                Some(wit::WsEvent::HttpDone(done(id, result)))
             })
             .collect()
     }

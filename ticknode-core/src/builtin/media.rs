@@ -101,62 +101,32 @@ impl Node for MediaFetchNode {
         vec![("kind".into(), DataValue::String(self.kind.clone()))]
     }
 
+    fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiMessage> {
+        if name == "kind" && !valid_kind(value) {
+            return Err(
+                UiMessage::new("error-invalid-property", "Invalid property: kind")
+                    .arg("property", "kind"),
+            );
+        }
+        Ok(())
+    }
+
     fn set_property(&mut self, name: &str, value: DataValue) {
         if name == "kind"
             && let DataValue::String(k) = value
-            && matches!(k.as_str(), "photo" | "audio" | "video" | "document")
+            && valid_kind(&DataValue::String(k.clone()))
         {
             self.kind = k;
         }
     }
 
     fn execute(&mut self, trigger_pin: Option<PinId>, ctx: &mut NodeContext) -> Vec<NodeOutput> {
-        if trigger_pin == Some(PinId(0)) {
-            let url = match ctx.get_value(PinId(1)) {
-                Some(DataValue::String(u)) if !u.trim().is_empty() => u.trim().to_string(),
-                _ => {
-                    return vec![
-                        NodeOutput::Data(
-                            PinId(12),
-                            DataValue::String("Missing or empty URL".into()),
-                        ),
-                        NodeOutput::Execution(PinId(11)),
-                    ];
-                }
-            };
-
-            let mut headers = Vec::new();
-            if let Some(DataValue::String(h)) = ctx.get_value(PinId(2)) {
-                for line in h.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    if let Some((name, val)) = line.split_once(':') {
-                        headers.push((name.trim().to_string(), val.trim().to_string()));
-                    }
-                }
-            }
-
-            let request = crate::host::HttpRequest {
-                method: "GET".into(),
-                url,
-                headers,
-                body: Vec::new(),
-                timeout: crate::host::DEFAULT_HTTP_TIMEOUT,
-                multipart: Vec::new(),
-                save_to_blob: true,
-            };
-
-            match ctx.host_state.start_http(self.id, request) {
-                Ok(_) => vec![],
-                Err(err) => vec![
-                    NodeOutput::Data(PinId(12), DataValue::String(err)),
-                    NodeOutput::Execution(PinId(11)),
-                ],
-            }
-        } else {
-            vec![]
+        if trigger_pin != Some(PinId(0)) {
+            return vec![];
+        }
+        match self.start_request(ctx) {
+            Ok(()) => vec![],
+            Err(message) => self.failed(message, ctx),
         }
     }
 
@@ -167,73 +137,116 @@ impl Node for MediaFetchNode {
         ctx: &mut NodeContext,
     ) -> Vec<NodeOutput> {
         match result {
-            Ok(TaskOutput::Blob(resp)) => {
-                let type_name = format!("media.{}", self.kind);
-                let mut fields = BTreeMap::new();
-
-                fields.insert(
-                    "blob".into(),
-                    ObjectField {
-                        name: "blob".into(),
-                        description: String::new(),
-                        value: DataValue::String(resp.blob.clone()),
-                    },
-                );
-                if let Some(ct) = resp.content_type {
-                    fields.insert(
-                        "mime_type".into(),
-                        ObjectField {
-                            name: "mime_type".into(),
-                            description: String::new(),
-                            value: DataValue::String(ct),
-                        },
-                    );
-                }
-                fields.insert(
-                    "size".into(),
-                    ObjectField {
-                        name: "size".into(),
-                        description: String::new(),
-                        value: DataValue::Number(NumberValue::Int(resp.size as i64)),
-                    },
-                );
-
-                let info = ctx.host_state.blob_store.info(&resp.blob);
-                if let Some(info) = info
-                    && let Some(file_name) = info.file_name
-                {
-                    fields.insert(
-                        "file_name".into(),
-                        ObjectField {
-                            name: "file_name".into(),
-                            description: String::new(),
-                            value: DataValue::String(file_name),
-                        },
-                    );
-                }
-
-                let media_obj = DataValue::Object {
-                    type_name: Some(type_name),
-                    fields,
-                };
-
-                vec![
-                    NodeOutput::Data(PinId(13), media_obj),
-                    NodeOutput::Execution(PinId(10)),
-                ]
-            }
-            Ok(TaskOutput::Http(resp)) => {
-                let err_msg = format!("HTTP {}", resp.status);
-                vec![
-                    NodeOutput::Data(PinId(12), DataValue::String(err_msg)),
-                    NodeOutput::Execution(PinId(11)),
-                ]
-            }
-            Ok(TaskOutput::Delay) => vec![],
-            Err(e) => vec![
-                NodeOutput::Data(PinId(12), DataValue::String(e)),
-                NodeOutput::Execution(PinId(11)),
+            Ok(TaskOutput::Blob(response)) => vec![
+                NodeOutput::Clear(PinId(12)),
+                NodeOutput::Data(PinId(13), self.media_value(response, ctx)),
+                NodeOutput::Execution(PinId(10)),
             ],
+            Ok(TaskOutput::Http(response)) => self.failed(
+                UiMessage::new(
+                    "error-media-fetch-http",
+                    format!("HTTP {}", response.status),
+                )
+                .arg("status", response.status.to_string()),
+                ctx,
+            ),
+            Ok(TaskOutput::Delay) => vec![],
+            Err(error) => self.failed(transport_error(error), ctx),
         }
     }
 }
+
+impl MediaFetchNode {
+    fn start_request(&self, ctx: &mut NodeContext) -> Result<(), UiMessage> {
+        let url = match ctx.get_value(PinId(1)) {
+            Some(DataValue::String(url)) if !url.trim().is_empty() => url.trim().to_string(),
+            _ => {
+                return Err(UiMessage::new(
+                    "error-media-fetch-url",
+                    "Missing or empty URL",
+                ));
+            }
+        };
+        let headers = match ctx.get_value(PinId(2)) {
+            Some(DataValue::String(text)) => parse_headers(&text),
+            _ => Vec::new(),
+        };
+        let request = crate::host::HttpRequest {
+            method: "GET".into(),
+            url,
+            headers,
+            body: Vec::new(),
+            timeout: crate::host::DEFAULT_HTTP_TIMEOUT,
+            multipart: Vec::new(),
+            save_to_blob: true,
+        };
+        ctx.host_state
+            .start_http(self.id, request)
+            .map(|_| ())
+            .map_err(transport_error)
+    }
+
+    fn failed(&self, message: UiMessage, ctx: &mut NodeContext) -> Vec<NodeOutput> {
+        let fallback = message.fallback.clone();
+        ctx.host_state
+            .error(self.id, message, format!("[ERROR] {fallback}"));
+        vec![
+            NodeOutput::Data(PinId(12), fallback.into()),
+            NodeOutput::Clear(PinId(13)),
+            NodeOutput::Execution(PinId(11)),
+        ]
+    }
+
+    fn media_value(&self, response: crate::host::BlobResponse, ctx: &NodeContext) -> DataValue {
+        let mut fields = BTreeMap::new();
+        insert_field(&mut fields, "blob", response.blob.clone().into());
+        insert_field(&mut fields, "size", (response.size as i64).into());
+        if let Some(mime) = response.content_type {
+            insert_field(&mut fields, "mime_type", mime.into());
+        }
+        if let Some(info) = ctx.host_state.blob_store.info(&response.blob)
+            && let Some(name) = info.file_name
+        {
+            insert_field(&mut fields, "file_name", name.into());
+        }
+        DataValue::Object {
+            type_name: Some(format!("media.{}", self.kind)),
+            fields,
+        }
+    }
+}
+
+fn valid_kind(value: &DataValue) -> bool {
+    matches!(value, DataValue::String(kind) if matches!(kind.as_str(), "photo" | "audio" | "video" | "document"))
+}
+
+fn insert_field(fields: &mut BTreeMap<String, ObjectField>, name: &str, value: DataValue) {
+    fields.insert(
+        name.into(),
+        ObjectField {
+            name: name.into(),
+            description: String::new(),
+            value,
+        },
+    );
+}
+
+fn parse_headers(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let (name, value) = line.trim().split_once(':')?;
+            Some((name.trim().into(), value.trim().into()))
+        })
+        .collect()
+}
+
+fn transport_error(detail: String) -> UiMessage {
+    UiMessage::new(
+        "error-media-fetch-transport",
+        format!("Media download failed: {detail}"),
+    )
+    .arg("detail", detail)
+}
+
+#[cfg(test)]
+mod tests;

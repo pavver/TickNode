@@ -183,7 +183,7 @@
     box-sizing: border-box;
     color: var(--text-primary);
     font-size: calc(var(--tu) * 12);
-    line-height: calc(var(--du) * 4.5);
+    line-height: calc(var(--tu) * 18);
     padding: 0 calc(var(--du) * 1);
     gap: calc(var(--du) * 1);
     max-width: 100%;

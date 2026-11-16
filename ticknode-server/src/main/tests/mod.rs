@@ -136,3 +136,5 @@ pub(super) fn plugin_of(plugins: &[ticknode_shared::PluginInfo]) -> &ticknode_sh
 mod session;
 mod settings;
 mod telemetry;
+
+mod startup;

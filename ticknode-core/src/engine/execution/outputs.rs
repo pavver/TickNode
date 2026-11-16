@@ -1,6 +1,13 @@
 use super::*;
 use crate::VariableError;
 
+struct VariableOutputs<'a> {
+    node: NodeId,
+    sheet: Option<SheetId>,
+    fired: &'a mut Vec<PinId>,
+    queue: &'a mut VecDeque<(NodeId, PinId)>,
+}
+
 impl TickEngine {
     fn variable_input_type(&self, id: NodeId) -> DataType {
         let source = self
@@ -189,15 +196,14 @@ impl TickEngine {
 
     fn apply_variable_create(
         &mut self,
-        node_id: NodeId,
         name: String,
         scope: VariableScope,
         data_type: DataType,
         value: DataValue,
-        sheet: Option<SheetId>,
-        fired: &mut Vec<PinId>,
-        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+        output: &mut VariableOutputs<'_>,
     ) -> bool {
+        let node_id = output.node;
+        let sheet = output.sheet;
         let Some(key) = self.resolve_create_key(node_id, &name, scope, sheet) else {
             return false;
         };
@@ -205,8 +211,8 @@ impl TickEngine {
             .variables
             .exists_in_scope_namespace(&name, scope, sheet)
         {
-            fired.push(PinId(2));
-            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            output.fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), output.queue);
             return false;
         }
         if self.variables.len() >= MAX_VARIABLES {
@@ -236,35 +242,34 @@ impl TickEngine {
         }
         self.variables.create(key.clone(), data_type, converted);
         self.current_tick_changed_variables.insert(key);
-        fired.push(PinId(1));
-        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        output.fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), output.queue);
         true
     }
 
     fn apply_variable_set(
         &mut self,
-        node_id: NodeId,
         name: String,
         lookup: VariableLookup,
         value: DataValue,
-        sheet: Option<SheetId>,
-        fired: &mut Vec<PinId>,
-        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+        output: &mut VariableOutputs<'_>,
     ) -> bool {
+        let node_id = output.node;
+        let sheet = output.sheet;
         if !valid_variable_name(&name) {
             let err = VariableError::InvalidName(name);
             self.host_state
                 .error(node_id, err.ui_message(), err.log_message());
-            fired.push(PinId(2));
-            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            output.fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), output.queue);
             return false;
         }
         let Some(key) = self.variables.resolve(&name, lookup, sheet) else {
             let err = VariableError::Missing(name);
             self.host_state
                 .error(node_id, err.ui_message(), err.log_message());
-            fired.push(PinId(2));
-            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            output.fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), output.queue);
             return false;
         };
         let Some(var) = self.variables.get(&key) else {
@@ -282,44 +287,43 @@ impl TickEngine {
             let err = VariableError::TypeMismatch(name);
             self.host_state
                 .error(node_id, err.ui_message(), err.log_message());
-            fired.push(PinId(2));
-            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            output.fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), output.queue);
             return false;
         };
         if !valid_variable_value(&converted) {
             let err = VariableError::LimitReached;
             self.host_state
                 .error(node_id, err.ui_message(), err.log_message());
-            fired.push(PinId(2));
-            self.queue_exec_output(node_id, PinId(2), next_tick_queue);
+            output.fired.push(PinId(2));
+            self.queue_exec_output(node_id, PinId(2), output.queue);
             return false;
         }
         let changed = self.variables.set(&key, converted);
         if changed {
             self.current_tick_changed_variables.insert(key);
         }
-        fired.push(PinId(1));
-        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        output.fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), output.queue);
         true
     }
 
     fn apply_variable_delete(
         &mut self,
-        node_id: NodeId,
         name: String,
         lookup: VariableLookup,
-        sheet: Option<SheetId>,
-        fired: &mut Vec<PinId>,
-        next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
+        output: &mut VariableOutputs<'_>,
     ) -> bool {
+        let node_id = output.node;
+        let sheet = output.sheet;
         let mut changed = false;
         if valid_variable_name(&name)
             && let Some(key) = self.variables.resolve(&name, lookup, sheet)
         {
             changed = self.variables.delete(&key);
         }
-        fired.push(PinId(1));
-        self.queue_exec_output(node_id, PinId(1), next_tick_queue);
+        output.fired.push(PinId(1));
+        self.queue_exec_output(node_id, PinId(1), output.queue);
         changed
     }
 
@@ -330,32 +334,26 @@ impl TickEngine {
         fired: &mut Vec<PinId>,
         next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
     ) -> bool {
-        let sheet = self.node_sheets.get(&node_id).copied();
+        let mut output = VariableOutputs {
+            node: node_id,
+            sheet: self.node_sheets.get(&node_id).copied(),
+            fired,
+            queue: next_tick_queue,
+        };
         match cmd {
             VariableCommand::Create {
                 name,
                 scope,
                 data_type,
                 value,
-            } => self.apply_variable_create(
-                node_id,
-                name,
-                scope,
-                data_type,
-                value,
-                sheet,
-                fired,
-                next_tick_queue,
-            ),
+            } => self.apply_variable_create(name, scope, data_type, value, &mut output),
             VariableCommand::Set {
                 name,
                 lookup,
                 value,
-            } => {
-                self.apply_variable_set(node_id, name, lookup, value, sheet, fired, next_tick_queue)
-            }
+            } => self.apply_variable_set(name, lookup, value, &mut output),
             VariableCommand::Delete { name, lookup } => {
-                self.apply_variable_delete(node_id, name, lookup, sheet, fired, next_tick_queue)
+                self.apply_variable_delete(name, lookup, &mut output)
             }
         }
     }

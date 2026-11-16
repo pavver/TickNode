@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use std::fmt;
 
 mod file;
+mod index;
 mod memory;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -27,6 +28,18 @@ pub struct BlobInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_name: Option<String>,
     pub created: DateTime<Utc>,
+}
+
+impl BlobInfo {
+    fn new(size: u64, content_type: Option<String>, file_name: Option<String>) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            size,
+            content_type,
+            file_name,
+            created: chrono::Utc::now(),
+        }
+    }
 }
 
 /// Errors returned by blob store operations.

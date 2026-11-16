@@ -90,6 +90,28 @@ impl Hub {
         events: Vec<PluginEvent>,
         env: &mut impl Env,
     ) -> Vec<Emission> {
+        self.handle_events(now, events, env);
+        self.persist_offset(env);
+        self.directory.maintain(now, self.ttl);
+        self.directory.publish(env);
+        self.directory.flush(now, env);
+        self.lookup_days.retain(|_, day| *day >= now / 86400);
+        self.start_pending_requests(now, env);
+        self.drain_watches(env)
+    }
+    fn drain_watches(&mut self, env: &mut impl Env) -> Vec<Emission> {
+        self.watches
+            .iter_mut()
+            .filter_map(|(node, watch)| {
+                if watch.overflow {
+                    env.log("Telegram trigger queue full; oldest event discarded");
+                    watch.overflow = false;
+                }
+                Some(Emission::new(*node, watch.queue.pop_front()?))
+            })
+            .collect()
+    }
+    fn handle_events(&mut self, now: u64, events: Vec<PluginEvent>, env: &mut impl Env) {
         for event in events {
             if let PluginEvent::HttpDone { id, result } = event
                 && let Some(request) = self.pending.remove(&id)
@@ -103,6 +125,9 @@ impl Hub {
                 "Telegram rejected the bot token; update the plugin settings",
             ));
         }
+    }
+
+    fn persist_offset(&mut self, env: &mut impl Env) {
         // Never confirm an offset with Telegram until it is durably recorded locally.
         if self.offset_dirty {
             if env
@@ -114,10 +139,9 @@ impl Hub {
                 env.log("Could not persist Telegram offset; polling paused until storage recovers");
             }
         }
-        self.directory.maintain(now, self.ttl);
-        self.directory.publish(env);
-        self.directory.flush(now, env);
-        self.lookup_days.retain(|_, day| *day >= now / 86400);
+    }
+
+    fn start_pending_requests(&mut self, now: u64, env: &mut impl Env) {
         if !self.stopped && now >= self.next {
             if self.username.is_none() {
                 if !self.pending.values().any(|r| matches!(r, Request::Me)) {
@@ -129,42 +153,30 @@ impl Hub {
                     self.start(Request::Poll, json!({"offset":self.offset,"timeout":50,"limit":100,
                         "allowed_updates":["message","edited_message","callback_query","my_chat_member"]}), env, now);
                 }
-                // Leave room in the host's eight plugin HTTP slots for the poll and authentication.
-                while self.pending.len() < 6 {
-                    let Some((request, body)) = self.aux.pop_front() else {
-                        break;
-                    };
-                    if let Request::Chat(chat) = request {
-                        if self.directory.chats.contains_key(&chat) || !self.permits(chat) {
-                            continue;
-                        }
-                        self.lookup_days.insert(chat, now / 86400);
-                        if env
-                            .write(
-                                "lookups.json",
-                                &serde_json::to_vec(&self.lookup_days).unwrap(),
-                            )
-                            .is_err()
-                        {
-                            env.log(
-                                "Could not persist Telegram getChat lookup day; request skipped",
-                            );
-                            continue;
-                        }
-                    }
-                    self.start(request, body, env, now);
-                }
+                self.start_aux_requests(now, env);
             }
         }
-        self.watches
-            .iter_mut()
-            .filter_map(|(node, watch)| {
-                if watch.overflow {
-                    env.log("Telegram trigger queue full; oldest event discarded");
-                    watch.overflow = false;
+    }
+    fn start_aux_requests(&mut self, now: u64, env: &mut impl Env) {
+        // Leave room in the host's eight plugin HTTP slots for the poll and authentication.
+        while self.pending.len() < 6 {
+            let Some((request, body)) = self.aux.pop_front() else {
+                break;
+            };
+            if let Request::Chat(chat) = request {
+                if self.directory.chats.contains_key(&chat) || !self.permits(chat) {
+                    continue;
                 }
-                Some(Emission::new(*node, watch.queue.pop_front()?))
-            })
-            .collect()
+                self.lookup_days.insert(chat, now / 86400);
+                let saved = serde_json::to_vec(&self.lookup_days)
+                    .map_err(|error| error.to_string())
+                    .and_then(|bytes| env.write("lookups.json", &bytes));
+                if saved.is_err() {
+                    env.log("Could not persist Telegram getChat lookup day; request skipped");
+                    continue;
+                }
+            }
+            self.start(request, body, env, now);
+        }
     }
 }

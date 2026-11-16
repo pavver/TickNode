@@ -40,11 +40,10 @@ async fn client(socket: WebSocket, engine: EngineHandle) {
                     if sheet_tag.is_none() || sheet_tag == open_sheet {
                         // Only a sheet-tagged `Init` (variant 0, the first postcard byte) sends the
                         // session home after its sheet was deleted; skip decoding everything else.
-                        if sheet_tag.is_some() && bytes.first() == Some(&0) {
-                            if let Ok(ServerMessage::Init { open_sheet: None, .. }) = postcard::from_bytes::<ServerMessage>(&bytes) {
+                        if sheet_tag.is_some() && bytes.first() == Some(&0)
+                            && let Ok(ServerMessage::Init { open_sheet: None, .. }) = postcard::from_bytes::<ServerMessage>(&bytes) {
                                 open_sheet = None;
                             }
-                        }
                         if sink.send(Message::Binary(bytes)).await.is_err() { break }
                     }
                 }

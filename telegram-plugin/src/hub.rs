@@ -1,6 +1,8 @@
 //! Sans-IO bot session, driven once per engine tick with an injected UTC clock.
 mod polling;
 #[cfg(test)]
+mod release_tests;
+#[cfg(test)]
 mod tests;
 mod updates;
 
@@ -189,28 +191,24 @@ impl Hub {
     }
     pub fn remember(&mut self, message: &Message) {
         if let Some(topic) = message.message_thread_id {
-            let key = (message.chat.id, message.message_id);
-            if self.messages.insert(key, topic).is_none() {
-                self.message_order.push_back(key);
-            }
-            if self.message_order.len() > 10_000
-                && let Some(old) = self.message_order.pop_front()
-            {
-                self.messages.remove(&old);
-            }
+            self.remember_topic(message.chat.id, message.message_id, topic);
         }
         if let Some(reply) = &message.reply_to_message
             && let Some(topic) = reply.message_thread_id.or(message.message_thread_id)
         {
-            let key = (message.chat.id, reply.message_id);
-            if self.messages.insert(key, topic).is_none() {
-                self.message_order.push_back(key);
-            }
-            if self.message_order.len() > 10_000
-                && let Some(old) = self.message_order.pop_front()
-            {
-                self.messages.remove(&old);
-            }
+            self.remember_topic(message.chat.id, reply.message_id, topic);
+        }
+    }
+
+    fn remember_topic(&mut self, chat: i64, message: i64, topic: i64) {
+        let key = (chat, message);
+        if self.messages.insert(key, topic).is_none() {
+            self.message_order.push_back(key);
+        }
+        if self.message_order.len() > 10_000
+            && let Some(old) = self.message_order.pop_front()
+        {
+            self.messages.remove(&old);
         }
     }
     pub fn reply_topic(&self, chat: i64, message: i64) -> Option<i64> {

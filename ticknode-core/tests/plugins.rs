@@ -13,8 +13,12 @@ use ticknode_core::*;
 use ticknode_shared::*;
 
 fn plugin_bytes(name: &str) -> Option<Vec<u8>> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../target/wasm32-wasip2/debug/{name}.wasm"));
+    let dir = std::env::var_os("TICKNODE_TEST_PLUGINS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/wasm32-wasip2/debug")
+        });
+    let path = dir.join(format!("{name}.wasm"));
     match std::fs::read(&path) {
         Ok(bytes) => Some(bytes),
         Err(_) if std::env::var_os("TICKNODE_REQUIRE_PLUGINS").is_none() => {

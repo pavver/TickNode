@@ -240,14 +240,14 @@ impl Actor {
                 let _ = reply.send(self.snapshot(sheet));
             }
             Command::OpenSheet { sheet, reply } => {
-                if let Some(id) = sheet {
-                    if !self.sheets.iter().any(|s| s.id == id) {
-                        let _ = reply.send(Err(UiMessage::new(
-                            "error-sheet-not-found",
-                            "Sheet not found",
-                        )));
-                        return false;
-                    }
+                if let Some(id) = sheet
+                    && !self.sheets.iter().any(|s| s.id == id)
+                {
+                    let _ = reply.send(Err(UiMessage::new(
+                        "error-sheet-not-found",
+                        "Sheet not found",
+                    )));
+                    return false;
                 }
                 let _ = reply.send(Ok(self.snapshot(sheet)));
             }

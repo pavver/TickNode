@@ -1,51 +1,15 @@
+use super::index::BlobIndex;
 use super::{BLOB_STORE_QUOTA, BlobError, BlobInfo, BlobStore};
-use chrono::Utc;
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tracing::{error, info, warn};
-
-struct Inner {
-    blobs: BTreeMap<String, BlobInfo>,
-    total_size: u64,
-    quota: u64,
-}
-
-impl Inner {
-    fn evict_oldest(&mut self, dir: &Path) {
-        let oldest = self
-            .blobs
-            .values()
-            .min_by(|a, b| (a.created, &a.id).cmp(&(b.created, &b.id)))
-            .map(|b| (b.id.clone(), b.size));
-
-        if let Some((id, size)) = oldest {
-            info!(id = %id, size = size, "evicted blob");
-            self.blobs.remove(&id);
-            self.total_size = self.total_size.saturating_sub(size);
-
-            let data_path = dir.join(&id);
-            let meta_path = dir.join(format!("{id}.json"));
-            if let Err(e) = fs::remove_file(&data_path)
-                && e.kind() != std::io::ErrorKind::NotFound
-            {
-                error!(id = %id, error = %e, "failed to delete evicted blob file");
-            }
-            if let Err(e) = fs::remove_file(&meta_path)
-                && e.kind() != std::io::ErrorKind::NotFound
-            {
-                error!(id = %id, error = %e, "failed to delete evicted blob sidecar");
-            }
-        }
-    }
-}
+use tracing::{error, warn};
 
 /// Filesystem-backed blob store.
 pub struct FileBlobStore {
     dir: PathBuf,
-    inner: Mutex<Inner>,
+    inner: Mutex<BlobIndex<()>>,
 }
 
 impl FileBlobStore {
@@ -57,92 +21,9 @@ impl FileBlobStore {
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir)?;
 
-        let mut blobs = BTreeMap::new();
-        let mut total_size = 0u64;
-
-        if let Ok(entries) = fs::read_dir(&dir) {
-            let mut files = Vec::new();
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    files.push(name.to_string());
-                }
-            }
-
-            // Remove any leftover temporary files.
-            for name in &files {
-                if name.ends_with(".tmp") {
-                    let _ = fs::remove_file(dir.join(name));
-                }
-            }
-
-            // Inspect sidecar JSON files and correlate with data files.
-            for name in &files {
-                if !name.ends_with(".json") || name.ends_with(".json.tmp") {
-                    continue;
-                }
-                let id = match name.strip_suffix(".json") {
-                    Some(s) => s,
-                    None => continue,
-                };
-                let meta_path = dir.join(name);
-                let data_path = dir.join(id);
-
-                let meta_bytes = match fs::read(&meta_path) {
-                    Ok(b) => b,
-                    Err(_) => {
-                        let _ = fs::remove_file(&meta_path);
-                        let _ = fs::remove_file(&data_path);
-                        continue;
-                    }
-                };
-
-                let info: BlobInfo = match serde_json::from_slice(&meta_bytes) {
-                    Ok(i) => i,
-                    Err(e) => {
-                        warn!(file = %meta_path.display(), error = %e, "invalid blob sidecar metadata");
-                        let _ = fs::remove_file(&meta_path);
-                        let _ = fs::remove_file(&data_path);
-                        continue;
-                    }
-                };
-
-                let Ok(data_meta) = fs::metadata(&data_path) else {
-                    let _ = fs::remove_file(&meta_path);
-                    continue;
-                };
-
-                if data_meta.len() != info.size {
-                    warn!(id = %id, "blob data file size mismatch with sidecar; removing");
-                    let _ = fs::remove_file(&meta_path);
-                    let _ = fs::remove_file(&data_path);
-                    continue;
-                }
-
-                total_size = total_size.saturating_add(info.size);
-                blobs.insert(info.id.clone(), info);
-            }
-
-            // Remove any data files lacking a sidecar.
-            for name in &files {
-                if name.ends_with(".json") || name.ends_with(".tmp") {
-                    continue;
-                }
-                if !blobs.contains_key(name) {
-                    let _ = fs::remove_file(dir.join(name));
-                }
-            }
-        }
-
-        let mut inner = Inner {
-            blobs,
-            total_size,
-            quota,
-        };
-
-        // Enforce quota during startup.
-        while inner.total_size > inner.quota {
-            inner.evict_oldest(&dir);
+        let mut inner = scan(&dir, quota)?;
+        for info in inner.make_room(0)? {
+            remove_blob_files(&dir, &info.id);
         }
 
         Ok(Self {
@@ -165,49 +46,12 @@ impl BlobStore for FileBlobStore {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        if size > inner.quota {
-            return Err(BlobError::TooLarge(size, inner.quota));
+        for info in inner.make_room(size)? {
+            remove_blob_files(&self.dir, &info.id);
         }
-
-        while inner.total_size.saturating_add(size) > inner.quota {
-            inner.evict_oldest(&self.dir);
-        }
-
-        let id = uuid::Uuid::new_v4().to_string();
-        let created = Utc::now();
-        let info = BlobInfo {
-            id: id.clone(),
-            size,
-            content_type,
-            file_name,
-            created,
-        };
-
-        let data_tmp = self.dir.join(format!("{id}.tmp"));
-        let meta_tmp = self.dir.join(format!("{id}.json.tmp"));
-        let data_final = self.dir.join(&id);
-        let meta_final = self.dir.join(format!("{id}.json"));
-
-        let write_result = (|| -> Result<(), BlobError> {
-            fs::write(&data_tmp, &bytes)?;
-            let meta_json = serde_json::to_vec_pretty(&info)?;
-            fs::write(&meta_tmp, &meta_json)?;
-            fs::rename(&data_tmp, &data_final)?;
-            fs::rename(&meta_tmp, &meta_final)?;
-            Ok(())
-        })();
-
-        if let Err(e) = write_result {
-            let _ = fs::remove_file(&data_tmp);
-            let _ = fs::remove_file(&meta_tmp);
-            let _ = fs::remove_file(&data_final);
-            let _ = fs::remove_file(&meta_final);
-            return Err(e);
-        }
-
-        inner.total_size = inner.total_size.saturating_add(size);
-        inner.blobs.insert(id, info.clone());
-
+        let info = BlobInfo::new(size, content_type, file_name);
+        self.write_blob(&info, &bytes)?;
+        inner.insert(info.clone(), ());
         Ok(info)
     }
 
@@ -216,25 +60,14 @@ impl BlobStore for FileBlobStore {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-
-        let info = inner
+        let (info, _) = inner
             .blobs
             .get(id)
             .ok_or_else(|| BlobError::NotFound(id.to_string()))?;
-
         if offset >= info.size {
             return Ok(Vec::new());
         }
-
-        let file_path = self.dir.join(id);
-        let mut file = match fs::File::open(&file_path) {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(BlobError::NotFound(id.to_string()));
-            }
-            Err(e) => return Err(BlobError::Io(e)),
-        };
-
+        let mut file = fs::File::open(self.dir.join(id)).map_err(|e| read_error(id, e))?;
         file.seek(SeekFrom::Start(offset))?;
         let to_read = (info.size - offset).min(len as u64) as usize;
         let mut buf = vec![0u8; to_read];
@@ -247,7 +80,7 @@ impl BlobStore for FileBlobStore {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        inner.blobs.get(id).cloned()
+        inner.blobs.get(id).map(|(info, _)| info.clone())
     }
 
     fn read_all(&self, id: &str) -> Result<Vec<u8>, BlobError> {
@@ -260,13 +93,92 @@ impl BlobStore for FileBlobStore {
             return Err(BlobError::NotFound(id.to_string()));
         }
 
-        let file_path = self.dir.join(id);
-        match fs::read(&file_path) {
-            Ok(b) => Ok(b),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                Err(BlobError::NotFound(id.to_string()))
-            }
-            Err(e) => Err(BlobError::Io(e)),
+        fs::read(self.dir.join(id)).map_err(|e| read_error(id, e))
+    }
+}
+
+fn read_error(id: &str, error: std::io::Error) -> BlobError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        BlobError::NotFound(id.to_string())
+    } else {
+        BlobError::Io(error)
+    }
+}
+
+fn remove_blob_files(dir: &Path, id: &str) {
+    for path in [dir.join(id), dir.join(format!("{id}.json"))] {
+        if let Err(error) = fs::remove_file(path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            error!(id, %error, "failed to delete blob file");
         }
+    }
+}
+
+fn scan(dir: &Path, quota: u64) -> Result<BlobIndex<()>, BlobError> {
+    let files = fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect::<Vec<_>>();
+    let mut index = BlobIndex::new(quota);
+    for name in &files {
+        if name.ends_with(".tmp") {
+            let _ = fs::remove_file(dir.join(name));
+        } else if let Some(id) = name.strip_suffix(".json") {
+            if let Some(info) = read_sidecar(dir, id) {
+                index.insert(info, ());
+            } else {
+                remove_blob_files(dir, id);
+            }
+        }
+    }
+    remove_orphan_files(dir, &files, &index);
+    Ok(index)
+}
+
+fn remove_orphan_files(dir: &Path, files: &[String], index: &BlobIndex<()>) {
+    for name in files {
+        if !name.ends_with(".json") && !name.ends_with(".tmp") && !index.blobs.contains_key(name) {
+            let _ = fs::remove_file(dir.join(name));
+        }
+    }
+}
+
+fn read_sidecar(dir: &Path, id: &str) -> Option<BlobInfo> {
+    let meta_path = dir.join(format!("{id}.json"));
+    let bytes = fs::read(&meta_path).ok()?;
+    let info: BlobInfo = serde_json::from_slice(&bytes)
+        .inspect_err(
+            |error| warn!(file = %meta_path.display(), %error, "invalid blob sidecar metadata"),
+        )
+        .ok()?;
+    let data = fs::symlink_metadata(dir.join(id)).ok()?;
+    if info.id != id || !data.is_file() || data.len() != info.size {
+        warn!(id, "blob data or identity does not match sidecar; removing");
+        return None;
+    }
+    Some(info)
+}
+
+impl FileBlobStore {
+    fn write_blob(&self, info: &BlobInfo, bytes: &[u8]) -> Result<(), BlobError> {
+        let id = &info.id;
+        let data_tmp = self.dir.join(format!("{id}.tmp"));
+        let meta_tmp = self.dir.join(format!("{id}.json.tmp"));
+        let data_final = self.dir.join(id);
+        let meta_final = self.dir.join(format!("{id}.json"));
+        let result = (|| -> Result<(), BlobError> {
+            fs::write(&data_tmp, bytes)?;
+            fs::write(&meta_tmp, serde_json::to_vec_pretty(info)?)?;
+            fs::rename(&data_tmp, &data_final)?;
+            fs::rename(&meta_tmp, &meta_final)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            for path in [&data_tmp, &meta_tmp, &data_final, &meta_final] {
+                let _ = fs::remove_file(path);
+            }
+        }
+        result
     }
 }

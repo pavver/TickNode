@@ -49,10 +49,8 @@ impl TickEngine {
             return val;
         }
 
-        if let Some(cached_node_vals) = self.pure_cache.get(&node_id)
-            && let Some(val) = cached_node_vals.get(&pin_id)
-        {
-            return Some(val.clone());
+        if let Some(cached_node_vals) = self.pure_cache.get(&node_id) {
+            return cached_node_vals.get(&pin_id).cloned();
         }
 
         let is_pure = self
@@ -135,6 +133,16 @@ impl TickEngine {
                 .entry(PinId(*pin))
                 .or_insert_with(|| Some(value.clone()));
         }
+        self.pull_bound_variables(node_id, &mut inputs);
+        self.assemble_split_inputs(node_id, &mut inputs);
+        inputs
+    }
+
+    fn pull_bound_variables(
+        &mut self,
+        node_id: NodeId,
+        inputs: &mut HashMap<PinId, Option<DataValue>>,
+    ) {
         let bound_vars: Vec<(u32, VariableRef)> = self
             .input_variables
             .get(&node_id)
@@ -158,56 +166,65 @@ impl TickEngine {
                 let Some(PinType::Data(pin_type)) = pin_def.map(|p| &p.pin_type) else {
                     continue;
                 };
-                let var = self
-                    .variables
-                    .resolve(&var_ref.name, var_ref.lookup, sheet)
-                    .and_then(|k| self.variables.get(&k));
-                let mut value = None;
-                if let Some(var) = var {
-                    if self.types.compatible(&var.data_type, pin_type) {
-                        value = Some(var.value.clone());
-                    } else if let Some(conversion) =
-                        self.types.convertible(&var.data_type, pin_type)
-                    {
-                        value = conversion.apply_with_display(
-                            var.value.clone(),
-                            &self.host_state.display,
-                            crate::quantity::labels(&self.host_state.locale),
-                        );
-                    }
-                    if value
-                        .as_ref()
-                        .is_some_and(|v| !self.types.identifier_value_fits(pin_type, v))
-                    {
-                        value = None;
-                    }
-                }
+                let value = self.bound_variable_value(&var_ref, pin_type, sheet);
                 if value.is_none()
-                    && let Some(p) = pin_def.filter(|p| p.required)
-                    && self.required_reported.insert(node_id)
+                    && let Some(pin_def) = pin_def
                 {
-                    self.host_state.error(
-                        node_id,
-                        UiMessage::new(
-                            "error-node-required-variable",
-                            format!(
-                                r#"Required input "{}" variable "{}" is not available"#,
-                                p.name, var_ref
-                            ),
-                        )
-                        .arg("pin", &p.name)
-                        .arg("variable", var_ref.to_str()),
-                        format!(
-                            r#"[ERROR] Required input "{}" variable "{}" is not available"#,
-                            p.name, var_ref
-                        ),
-                    );
+                    self.report_missing_variable(node_id, pin_def, &var_ref);
                 }
                 inputs.insert(pin, value);
             }
         }
-        self.assemble_split_inputs(node_id, &mut inputs);
-        inputs
+    }
+
+    fn bound_variable_value(
+        &self,
+        var_ref: &VariableRef,
+        pin_type: &DataType,
+        sheet: Option<SheetId>,
+    ) -> Option<DataValue> {
+        let key = self
+            .variables
+            .resolve(&var_ref.name, var_ref.lookup, sheet)?;
+        let var = self.variables.get(&key)?;
+        let value = if self.types.compatible(&var.data_type, pin_type) {
+            Some(var.value.clone())
+        } else {
+            self.types
+                .convertible(&var.data_type, pin_type)?
+                .apply_with_display(
+                    var.value.clone(),
+                    &self.host_state.display,
+                    crate::quantity::labels(&self.host_state.locale),
+                )
+        };
+        value.filter(|v| self.types.identifier_value_fits(pin_type, v))
+    }
+
+    fn report_missing_variable(
+        &mut self,
+        node_id: NodeId,
+        p: &PinDefinition,
+        var_ref: &VariableRef,
+    ) {
+        if p.required && self.required_reported.insert(node_id) {
+            self.host_state.error(
+                node_id,
+                UiMessage::new(
+                    "error-node-required-variable",
+                    format!(
+                        r#"Required input "{}" variable "{}" is not available"#,
+                        p.name, var_ref
+                    ),
+                )
+                .arg("pin", &p.name)
+                .arg("variable", var_ref.to_str()),
+                format!(
+                    r#"[ERROR] Required input "{}" variable "{}" is not available"#,
+                    p.name, var_ref
+                ),
+            );
+        }
     }
 
     fn pull_pure(
@@ -242,6 +259,17 @@ impl TickEngine {
         self.nodes.insert(node_id, node);
         stack.pop();
 
+        let node_outputs = self.pure_output_values(node_id, outputs);
+        let target_val = node_outputs.get(&pin_id).cloned();
+        self.pure_cache.insert(node_id, node_outputs);
+        self.record_trace(node_id, traced, Vec::new());
+        target_val
+    }
+    fn pure_output_values(
+        &mut self,
+        node_id: NodeId,
+        outputs: Vec<NodeOutput>,
+    ) -> HashMap<PinId, DataValue> {
         let mut node_outputs = HashMap::new();
         let mut had_exec_output = false;
         for out in outputs {
@@ -275,9 +303,6 @@ impl TickEngine {
         if !had_exec_output {
             self.pure_exec_reported.remove(&node_id);
         }
-        let target_val = node_outputs.get(&pin_id).cloned();
-        self.pure_cache.insert(node_id, node_outputs);
-        self.record_trace(node_id, traced, Vec::new());
-        target_val
+        node_outputs
     }
 }

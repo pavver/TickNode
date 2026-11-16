@@ -3,7 +3,9 @@ use ticknode_shared::*;
 use tracing::warn;
 
 pub(super) fn encode_value(value: &DataValue) -> wit::Value {
-    postcard::to_allocvec(value).expect("DataValue always serializes")
+    postcard::to_allocvec(value)
+        .inspect_err(|_| tracing::error!("Could not serialize a node value"))
+        .unwrap_or_default()
 }
 
 pub(super) fn decode_value(bytes: &[u8]) -> Option<DataValue> {
@@ -76,25 +78,7 @@ pub(super) fn from_wit_definition(
         properties: d
             .properties
             .into_iter()
-            .map(|p| PropertyDefinition {
-                input: p.input.map(PinId),
-                name: p.name,
-                title: p.title,
-                description: p.description,
-                kind: match p.kind {
-                    wit::PropertyKind::Duration(signed) => PropertyKind::Duration { signed },
-                    wit::PropertyKind::Time => PropertyKind::Time,
-                    wit::PropertyKind::MultiSelect(options) => PropertyKind::MultiSelect(options),
-                    wit::PropertyKind::Multiline => PropertyKind::Multiline,
-                    wit::PropertyKind::Hidden => PropertyKind::Hidden,
-                    wit::PropertyKind::Text => PropertyKind::Text,
-                    wit::PropertyKind::Select(options) => PropertyKind::Select(options),
-                    wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic {
-                        source,
-                        plugin: plugin.to_string(),
-                    },
-                },
-            })
+            .map(|p| from_wit_property(p, plugin))
             .collect(),
         type_name: d.type_name,
         title: d.title,
@@ -116,19 +100,7 @@ pub(super) fn from_wit_definition(
                     true
                 }
             })
-            .map(|p| PinDefinition {
-                id: PinId(p.id),
-                required: p.required,
-                name: p.name,
-                pin_type: match p.pin_type {
-                    wit::PinType::Exec => PinType::Exec,
-                    wit::PinType::Data(t) => PinType::Data(from_wit_data_type(t)),
-                },
-                direction: match p.direction {
-                    wit::PinDirection::Input => PinDirection::Input,
-                    wit::PinDirection::Output => PinDirection::Output,
-                },
-            })
+            .map(from_wit_pin)
             .collect(),
     };
     let has_exec_pins = definition.pins.iter().any(|p| p.pin_type == PinType::Exec);
@@ -142,6 +114,44 @@ pub(super) fn from_wit_definition(
         pure = false;
     }
     (definition, d.polls, pure)
+}
+
+fn from_wit_property(p: wit::PropertyDefinition, plugin: &str) -> PropertyDefinition {
+    PropertyDefinition {
+        input: p.input.map(PinId),
+        name: p.name,
+        title: p.title,
+        description: p.description,
+        kind: match p.kind {
+            wit::PropertyKind::Duration(signed) => PropertyKind::Duration { signed },
+            wit::PropertyKind::Time => PropertyKind::Time,
+            wit::PropertyKind::MultiSelect(options) => PropertyKind::MultiSelect(options),
+            wit::PropertyKind::Multiline => PropertyKind::Multiline,
+            wit::PropertyKind::Hidden => PropertyKind::Hidden,
+            wit::PropertyKind::Text => PropertyKind::Text,
+            wit::PropertyKind::Select(options) => PropertyKind::Select(options),
+            wit::PropertyKind::Dynamic(source) => PropertyKind::Dynamic {
+                source,
+                plugin: plugin.to_string(),
+            },
+        },
+    }
+}
+
+fn from_wit_pin(p: wit::Pin) -> PinDefinition {
+    PinDefinition {
+        id: PinId(p.id),
+        required: p.required,
+        name: p.name,
+        pin_type: match p.pin_type {
+            wit::PinType::Exec => PinType::Exec,
+            wit::PinType::Data(t) => PinType::Data(from_wit_data_type(t)),
+        },
+        direction: match p.direction {
+            wit::PinDirection::Input => PinDirection::Input,
+            wit::PinDirection::Output => PinDirection::Output,
+        },
+    }
 }
 
 pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {

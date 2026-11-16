@@ -25,27 +25,15 @@ impl PluginNode for ComposeNode {
     }
 
     fn properties(&self) -> Vec<(String, DataValue)> {
-        self.definition()
-            .properties
-            .into_iter()
-            .map(|p| {
-                let value = self.props.get(&p.name).cloned().unwrap_or_default();
-                (p.name, value.into())
-            })
-            .collect()
+        validation::node_properties(self.definition(), &self.props)
     }
 
     fn set_property(&mut self, name: &str, value: DataValue) {
-        if let DataValue::String(text) = value {
-            self.props.insert(name.into(), text);
-        }
+        validation::set_text_property(&mut self.props, name, value);
     }
 
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {
-        let DataValue::String(text) = value else {
-            return Err(validation::error("property", "Expected a text property"));
-        };
-        validation::property("compose", name, text, &self.props)
+        validation::node_property("compose", name, value, &self.props)
     }
 
     fn execute(&mut self, _: Trigger, inputs: &Inputs) -> Vec<Output> {
@@ -55,61 +43,6 @@ impl PluginNode for ComposeNode {
             _ => None,
         };
         let media_input = inputs.get(PinId(2));
-
-        if text_input.is_none() && media_input.is_none() {
-            let err = validation::error("compose-empty", "Message requires either text or media");
-            self.error = Some(err.clone());
-            runtime::report_error(&err, true);
-            return vec![];
-        }
-
-        if let Some(media_val) = media_input {
-            let is_media = match media_val {
-                DataValue::Object {
-                    type_name: Some(name),
-                    ..
-                } => matches!(
-                    name.as_str(),
-                    "media.photo" | "media.audio" | "media.video" | "media.document"
-                ),
-                _ => false,
-            };
-            let file_id = field_string(media_val, "file_id").filter(|s| !s.trim().is_empty());
-            let blob = field_string(media_val, "blob").filter(|s| !s.trim().is_empty());
-            let url = field_string(media_val, "url").filter(|s| !s.trim().is_empty());
-            if !is_media || (file_id.is_none() && blob.is_none() && url.is_none()) {
-                let err =
-                    validation::error("media", "A media value must have url, file_id, or blob set");
-                self.error = Some(err.clone());
-                runtime::report_error(&err, true);
-                return vec![];
-            }
-            if let Some(t) = &text_input
-                && t.chars().count() > 1024
-            {
-                let err =
-                    validation::error("caption", "Telegram caption cannot exceed 1024 characters");
-                self.error = Some(err.clone());
-                runtime::report_error(&err, true);
-                return vec![];
-            }
-        } else {
-            let Some(t) = &text_input else {
-                let err = validation::error("text", "Message text is required");
-                self.error = Some(err.clone());
-                runtime::report_error(&err, true);
-                return vec![];
-            };
-            if t.is_empty() || t.chars().count() > 4096 {
-                let err = validation::error(
-                    "length",
-                    "Telegram message text must contain 1–4096 characters",
-                );
-                self.error = Some(err.clone());
-                runtime::report_error(&err, true);
-                return vec![];
-            }
-        }
 
         let keyboard_input = inputs.get(PinId(3));
         let parse_mode = self.props.get("parse_mode").map_or("plain", |s| s.as_str());
@@ -127,6 +60,12 @@ impl PluginNode for ComposeNode {
             out = out.field("silent", true);
         }
 
-        vec![Output::Data(PinId(0), out.build())]
+        let value = out.build();
+        if let Err(error) = crate::outgoing::parse_outgoing(&value) {
+            self.error = Some(error.clone());
+            runtime::report_error(&error);
+            return vec![];
+        }
+        vec![Output::Data(PinId(0), value)]
     }
 }

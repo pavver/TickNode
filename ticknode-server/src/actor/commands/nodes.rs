@@ -21,7 +21,10 @@ impl Actor {
         Ok((
             vec![(
                 Some(sheet),
-                ServerMessage::NodeAdded(self.instance(id).expect("the node was just created")),
+                ServerMessage::NodeAdded(
+                    self.instance(id)
+                        .ok_or_else(|| EngineError::NodeNotFound(id).ui_message())?,
+                ),
             )],
             Some(vec![id]),
         ))
@@ -56,7 +59,10 @@ impl Actor {
         Ok((
             vec![(
                 Some(sheet),
-                ServerMessage::NodeAdded(self.instance(id).expect("the node was just created")),
+                ServerMessage::NodeAdded(
+                    self.instance(id)
+                        .ok_or_else(|| EngineError::NodeNotFound(id).ui_message())?,
+                ),
             )],
             Some(vec![id]),
         ))

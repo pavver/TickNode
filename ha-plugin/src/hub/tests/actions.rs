@@ -12,12 +12,14 @@ fn call(
 ) -> Vec<Output> {
     if let Some(outputs) = rig.hub.action(
         node(5),
-        domain,
-        service,
-        target,
-        fields,
-        false,
-        skip,
+        crate::hub::ActionRequest {
+            domain,
+            service,
+            entity: target,
+            data: fields,
+            response: false,
+            skip_unchanged: skip,
+        },
         rig.now,
         &mut rig.env,
     ) {
@@ -31,17 +33,14 @@ fn call(
 }
 
 fn cache_event(rig: &Rig, entity: &str, state: &str) -> Value {
-    json!({"id":rig.cache_id.unwrap(),"type":"event","event":{
-        "event_type":"state_changed","data":{
-            "entity_id":entity,"old_state":ha_state(entity,"off"),"new_state":ha_state(entity,state)
-        },"origin":"LOCAL","time_fired":"2026-10-28T14:45:09Z","context":{"id":"01X"}
-    }})
+    rig.change(entity, "off", state)
 }
 
 #[test]
 fn skipping_fires_done_logs_and_follows_live_changes_and_disconnects() {
     let mut rig = Rig::new();
     rig.states = vec![ha_state("light.a", "on")];
+    rig.hub.track(node(77), ["light.a"], rig.now);
     rig.connect();
     let outputs = call(&mut rig, "light", "turn_on", "light.a", json!({}), true);
     assert!(has_exec(&outputs, DONE));
@@ -53,7 +52,7 @@ fn skipping_fires_done_logs_and_follows_live_changes_and_disconnects() {
             .iter()
             .any(|message| message.contains("Skipped light.turn_on"))
     );
-    // The shared state_changed subscription updates the decision immediately.
+    // The shared entity trigger updates the decision immediately.
     rig.recv(vec![cache_event(&rig, "light.a", "off")]);
     assert!(has_exec(
         &call(&mut rig, "light", "turn_on", "light.a", json!({}), true),
@@ -77,6 +76,7 @@ fn skipping_fires_done_logs_and_follows_live_changes_and_disconnects() {
 fn unresolved_targets_extra_fields_and_partial_multi_target_matches_still_call_ha() {
     let mut rig = Rig::new();
     rig.states = vec![ha_state("light.a", "on"), ha_state("light.b", "on")];
+    rig.hub.track(node(77), ["light.a", "light.b"], rig.now);
     rig.connect();
     call(
         &mut rig,
@@ -225,11 +225,13 @@ fn node_quantity_snapshot_converts_before_calling_or_comparing_in_both_target_mo
     state["attributes"] = json!({"unit_of_measurement":"kW","device_class":"power"});
     rig.states = vec![state];
     rig.services = json!({"number":{"set_value":{"target":{},"fields":{"value":{"required":true,"selector":{"number":{}}}}}}});
+    rig.hub.track(node(77), ["number.power"], rig.now);
     rig.connect();
     // Use the same setter/snapshot path as the WASM node, with the scripted hub's live catalog.
     crate::with_hub(|hub, _| {
         hub.services = rig.hub.services.clone();
-        hub.live.snapshot(&rig.hub.live.all_states());
+        hub.catalog = rig.hub.catalog.clone();
+        hub.catalog_index = rig.hub.catalog_index.clone();
     });
     let mut action = ActionNode::new(node(5));
     action.set_property("target", "number.power".into());
@@ -313,6 +315,7 @@ fn climate_without_an_entity_unit_uses_the_ha_configuration_unit() {
 fn a_call_awaiting_its_state_update_is_never_skipped_against_the_stale_cache() {
     let mut rig = Rig::new();
     rig.states = vec![ha_state("switch.psu", "off")];
+    rig.hub.track(node(77), ["switch.psu"], rig.now);
     rig.connect();
     call(&mut rig, "switch", "turn_on", "switch.psu", json!({}), true);
     assert_eq!(rig.calls.len(), 1);
@@ -343,6 +346,7 @@ fn a_call_awaiting_its_state_update_is_never_skipped_against_the_stale_cache() {
 fn input_target_set_state_uses_bool_snapshot_and_skip_unchanged() {
     let mut rig = Rig::new();
     rig.states = vec![ha_state("lock.door", "locked")];
+    rig.hub.track(node(77), ["lock.door"], rig.now);
     rig.connect();
     let mut action = ActionNode::new(node(5));
     action.set_property("action", "lock.set_state".into());

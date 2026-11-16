@@ -1232,6 +1232,7 @@ dependencies = [
  "chrono",
  "ha-core-client",
  "log",
+ "serde",
  "serde_json",
  "ticknode-plugin-sdk",
  "ticknode-shared",

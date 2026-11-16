@@ -1,12 +1,15 @@
 //! The entity picker options: one per Home Assistant entity, built from a `get_states` answer.
 
+mod catalog;
+pub use catalog::{CatalogEntry, EntityMetadata};
+
 use std::collections::BTreeMap;
 
+#[cfg(test)]
 use ha_core_client::State;
 use ticknode_plugin_sdk::PropertyOption;
 
 use crate::actions::{Service, service_matches};
-use crate::icons::entity_icon;
 
 /// Name of the option source used by the `entity_id` property of `ha/entity`.
 pub const ENTITIES_SOURCE: &str = "entities";
@@ -30,8 +33,8 @@ fn is_diagnostic(
     ) {
         return true;
     }
-    if let Some(dc) = device_class {
-        if matches!(
+    if let Some(dc) = device_class
+        && matches!(
             dc,
             "battery"
                 | "battery_charging"
@@ -41,9 +44,9 @@ fn is_diagnostic(
                 | "power_factor"
                 | "timestamp"
                 | "duration"
-        ) {
-            return true;
-        }
+        )
+    {
+        return true;
     }
     let lower = name.to_lowercase();
     [
@@ -103,7 +106,8 @@ fn is_physical_sensor(device_class: Option<&str>, name: &str) -> bool {
 }
 
 /// Priority rank of an entity (smaller = higher priority / more frequently used in automations).
-pub fn entity_rank(state: &State) -> u8 {
+pub fn entity_rank(state: &impl EntityMetadata) -> u8 {
+    let state = state.metadata();
     let id = &state.entity_id;
     let (domain, name) = id.split_once('.').unwrap_or(("", id));
     let device_class: Option<String> = state.attributes.get_as("device_class");
@@ -152,7 +156,8 @@ pub fn entity_rank(state: &State) -> u8 {
 
 /// Option of one entity: value and detail are the entity id, the label is its `friendly_name`
 /// (the entity id when there is none), the icon is the `icon` attribute or the frontend's default.
-pub fn entity_option(state: &State) -> PropertyOption {
+pub fn entity_option(state: &impl EntityMetadata) -> PropertyOption {
+    let state = state.metadata();
     let id = &state.entity_id;
     let label = state
         .attributes
@@ -160,23 +165,16 @@ pub fn entity_option(state: &State) -> PropertyOption {
         .map(str::trim)
         .filter(|n| !n.is_empty())
         .unwrap_or(id);
-    let device_class: Option<String> = state.attributes.get_as("device_class");
-    let icon = entity_icon(
-        id,
-        &state.state,
-        device_class.as_deref(),
-        state.attributes.icon(),
-    );
     PropertyOption {
         value: id.clone(),
         label: label.to_string(),
         detail: id.clone(),
-        icon: Some(icon),
+        icon: Some(state.icon.clone()),
     }
 }
 
 /// Options of all entities, sorted by priority rank, then by label (case-insensitive), then by entity id.
-pub fn entity_options(states: &[State]) -> Vec<PropertyOption> {
+pub fn entity_options(states: &[impl EntityMetadata]) -> Vec<PropertyOption> {
     let mut items: Vec<(u8, PropertyOption)> = states
         .iter()
         .map(|s| (entity_rank(s), entity_option(s)))
@@ -191,10 +189,10 @@ pub fn entity_options(states: &[State]) -> Vec<PropertyOption> {
 
 /// Options of entities that can execute at least one action from the services catalog.
 pub fn action_target_options(
-    states: &[State],
+    states: &[impl EntityMetadata],
     services: &BTreeMap<String, Service>,
 ) -> Vec<PropertyOption> {
-    let filtered: Vec<&State> = if services.is_empty() {
+    let filtered: Vec<_> = if services.is_empty() {
         states.iter().collect()
     } else {
         states
@@ -202,7 +200,7 @@ pub fn action_target_options(
             .filter(|state| {
                 services
                     .values()
-                    .any(|s| service_matches(s, Some((&state.entity_id, Some(state)))))
+                    .any(|s| service_matches(s, Some((&state.metadata().entity_id, Some(*state)))))
             })
             .collect()
     };
@@ -219,7 +217,9 @@ pub fn action_target_options(
 }
 
 /// Publishes the complete catalog and domain-specific pickers with identical labels and icons.
-pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption>)> {
+pub fn option_sources(
+    states: &[impl EntityMetadata + Clone],
+) -> Vec<(&'static str, Vec<PropertyOption>)> {
     let all = entity_options(states);
     let subset = |domains: &[&str]| {
         all.iter()
@@ -230,6 +230,7 @@ pub fn option_sources(states: &[State]) -> Vec<(&'static str, Vec<PropertyOption
     let timed: Vec<_> = states
         .iter()
         .filter(|state| {
+            let state = state.metadata();
             state.entity_id.starts_with("input_datetime.")
                 || (state.entity_id.starts_with("sensor.")
                     && state.attributes.get_as::<String>("device_class").as_deref()
@@ -346,7 +347,7 @@ mod tests {
         }
         assert_eq!(sets[ENTITIES_SOURCE].len(), 5);
         assert!(
-            option_sources(&[])
+            option_sources(&[] as &[CatalogEntry])
                 .iter()
                 .all(|(_, options)| options.is_empty())
         );

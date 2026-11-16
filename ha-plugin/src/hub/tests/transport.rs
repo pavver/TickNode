@@ -117,10 +117,11 @@ fn changing_the_entity_and_dropping_the_node_unsubscribe() {
 
     rig.hub
         .set_entity(a, serial, "light.b", rig.now, &mut rig.env);
-    // The old subscription is cancelled and a new one is made
+    // The old subscription remains in grace and a new one is made
     let sent = rig.env.sent.clone();
     assert!(
-        sent.iter()
+        !sent
+            .iter()
             .any(|m| m["type"] == "unsubscribe_events" && m["subscription"] == first_trigger),
         "{sent:?}"
     );
@@ -145,12 +146,10 @@ fn changing_the_entity_and_dropping_the_node_unsubscribe() {
     assert!(rig.env.sent.is_empty());
     let second_trigger = rig.triggers["light.b"];
     rig.hub.remove_watch(a, serial, rig.now, &mut rig.env);
-    assert!(
-        rig.env
-            .sent
-            .iter()
-            .any(|m| m["type"] == "unsubscribe_events" && m["subscription"] == second_trigger)
-    );
+    assert!(!rig.unsubscribed.contains(&second_trigger));
+    rig.advance(super::super::tracking::TRACK_GRACE);
+    assert!(rig.unsubscribed.contains(&first_trigger));
+    assert!(rig.unsubscribed.contains(&second_trigger));
     rig.serve();
     let late = rig.change("light.b", "on", "off");
     assert!(rig.recv(vec![late]).is_empty());

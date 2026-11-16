@@ -30,7 +30,12 @@ impl Env for Fake {
     }
 
     fn ws_send(&mut self, _: WsId, text: &str) -> Result<(), String> {
-        self.sent.push(serde_json::from_str(text).unwrap());
+        let request: Value = serde_json::from_str(text).unwrap();
+        assert!(
+            !(request["type"] == "subscribe_events" && request["event_type"] == "state_changed"),
+            "the plugin must never subscribe to all state changes"
+        );
+        self.sent.push(request);
         Ok(())
     }
 
@@ -92,8 +97,10 @@ struct Rig {
     get_states_requests: usize,
     services: Value,
     get_services_requests: usize,
-    cache_id: Option<u64>,
+    registry_id: Option<u64>,
     render_ids: Vec<u64>,
+    sequence: std::cell::Cell<i64>,
+    baseline_reads: Vec<Vec<String>>,
 }
 
 impl Rig {
@@ -113,8 +120,10 @@ impl Rig {
             get_states_requests: 0,
             services: json!({}),
             get_services_requests: 0,
-            cache_id: None,
+            registry_id: None,
             render_ids: Vec::new(),
+            sequence: std::cell::Cell::new(0),
+            baseline_reads: Vec::new(),
         };
         rig.hub.configure(URL, "tok", rig.now, &mut rig.env);
         rig
@@ -182,8 +191,8 @@ impl Rig {
                             Some(message) => json!({"id":id,"type":"result","success":false,"error":{"code":"invalid_format","message":message}}),
                         });
                     }
-                    "subscribe_events" if request["event_type"] == "state_changed" => {
-                        self.cache_id = Some(id);
+                    "subscribe_events" if request["event_type"] == "entity_registry_updated" => {
+                        self.registry_id = Some(id);
                         replies.push(ok(Value::Null));
                     }
                     "get_config" => replies.push(ok(
@@ -203,9 +212,35 @@ impl Rig {
                         replies.push(ok(Value::Null));
                     }
                     "subscribe_entities" => {
-                        let entity = request["entity_ids"][0].as_str().unwrap();
+                        let ids: Vec<String> = request["entity_ids"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|id| id.as_str().unwrap().to_string())
+                            .collect();
+                        self.baseline_reads.push(ids.clone());
+                        let mut states = serde_json::Map::new();
+                        for entity in ids {
+                            let state = self
+                                .states
+                                .iter()
+                                .find(|s| s["entity_id"] == entity)
+                                .cloned()
+                                .unwrap_or_else(|| ha_state(&entity, "off"));
+                            let timestamp = chrono::DateTime::parse_from_rfc3339(
+                                state["last_updated"].as_str().unwrap(),
+                            )
+                            .unwrap()
+                            .timestamp_millis() as f64
+                                / 1000.0;
+                            states.insert(
+                                entity,
+                                json!({"s":state["state"], "a":state["attributes"],
+                                "c":"01X", "lc":timestamp, "lu":timestamp}),
+                            );
+                        }
                         replies.push(ok(Value::Null));
-                        replies.push(json!({"id": id, "type": "event", "event": {"a": {entity: {"s": "off", "a": {}, "c": "01X", "lc": 1.0, "lu": 1.0}}}}));
+                        replies.push(json!({"id":id,"type":"event","event":{"a":states}}));
                     }
                     "call_service" => {
                         self.calls.push(request.clone());
@@ -245,9 +280,16 @@ impl Rig {
 
     /// A state change of `entity` as Home Assistant's trigger subscription reports it.
     fn change(&self, entity: &str, from: &str, to: &str) -> Value {
+        self.sequence.set(self.sequence.get() + 1);
+        let at = chrono::DateTime::parse_from_rfc3339("2026-10-28T14:45:09.185007Z").unwrap()
+            + chrono::TimeDelta::microseconds(self.sequence.get() * 2000);
+        let mut from_state = ha_state(entity, from);
+        let mut to_state = ha_state(entity, to);
+        from_state["last_updated"] = json!(at.to_rfc3339());
+        to_state["last_updated"] = json!(at.to_rfc3339());
         json!({"id": self.triggers[entity], "type": "event", "event": {"variables": {"trigger": {
             "id": "0", "idx": "0", "alias": null, "platform": "state", "entity_id": entity,
-            "from_state": ha_state(entity, from), "to_state": ha_state(entity, to), "for": null, "attribute": null,
+            "from_state": from_state, "to_state": to_state, "for": null, "attribute": null,
         }}, "context": {"id": "01X", "parent_id": null, "user_id": null}}})
     }
 
@@ -260,7 +302,7 @@ impl Rig {
     }
 }
 
-fn data<'a>(outputs: &'a [Output], pin: PinId) -> &'a DataValue {
+fn data(outputs: &[Output], pin: PinId) -> &DataValue {
     outputs
         .iter()
         .find_map(|o| match o {
@@ -289,5 +331,6 @@ mod catalog;
 mod conditions;
 mod entity;
 mod quantities;
+mod tracking;
 mod transport;
 mod triggers;

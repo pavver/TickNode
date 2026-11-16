@@ -121,7 +121,6 @@ impl Hub {
         self.entities.insert(
             node,
             EntityWatch {
-                reply: None,
                 value_type: Default::default(),
                 fire_on: Default::default(),
                 unit_warning: false,
@@ -134,6 +133,7 @@ impl Hub {
     pub fn remove_watch(&mut self, node: NodeId, serial: u64, now: Instant, env: &mut impl Env) {
         if self.watches.get(&node).is_some_and(|w| w.serial == serial) {
             self.entities.remove(&node);
+            self.untrack(node, now);
             if let Some(watch) = self.watches.remove(&node) {
                 self.cancel(watch.sub, now);
             }
@@ -157,13 +157,14 @@ impl Hub {
         }
         watch.config = entity.to_string();
         watch.queue.clear();
-        watch.snapshot_due = false;
+        watch.snapshot_due = true;
         if let Some(entity) = self.entities.get_mut(&node) {
-            entity.reply = None;
             entity.unit_warning = false;
         }
         let old = std::mem::replace(&mut watch.sub, Sub::Idle);
         self.cancel(old, now);
+        self.track(node, [entity], now);
+        self.tick_tracking(now, env);
         self.ensure_subscriptions(now);
         self.flush(now, env);
     }
@@ -182,8 +183,8 @@ impl Hub {
             if entity.value_type != value_type {
                 entity.unit_warning = false;
             }
-            // A new type re-reads the current state, so Value is not left in the old type until the next change.
-            if entity.value_type != value_type && matches!(watch.sub, Sub::Active(_)) {
+            // A new type republishes the current tracked state without waiting for a change.
+            if entity.value_type != value_type {
                 watch.snapshot_due = true;
             }
             entity.value_type = value_type;
@@ -268,18 +269,10 @@ impl Hub {
 
     pub(super) fn ensure_subscriptions(&mut self, now: Instant) {
         let Some(link) = &mut self.link else { return };
-        for watch in self.watches.values_mut() {
-            if !watch.config.is_empty() {
-                watch.ensure(now, &mut link.session, |entity| {
-                    Source::entity(entity.as_str()).without_merging()
-                });
-            }
-        }
         for watch in self.triggers.values_mut() {
-            if watch.config.is_some() {
-                watch.ensure(now, &mut link.session, |config| {
-                    Source::trigger(config.as_ref().expect("checked above").trigger.clone())
-                });
+            if let Some(config) = &watch.config {
+                let source = Source::trigger(config.trigger.clone());
+                watch.ensure(now, &mut link.session, |_| source);
             }
         }
     }

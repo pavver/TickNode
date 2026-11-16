@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 use ticknode_plugin_sdk::{Emission, NodeId, Output};
 
 impl Hub {
-    pub fn add_condition(&mut self, node: NodeId) -> u64 {
+    pub fn add_condition(&mut self, node: NodeId, now: Instant) -> u64 {
+        self.untrack(node, now);
         self.next_serial += 1;
         self.conditions.insert(node, self.next_serial);
         self.next_serial
@@ -39,6 +40,7 @@ impl Hub {
         self.cancel_templates(node, serial, now, env);
         if self.conditions.get(&node) == Some(&serial) {
             self.conditions.remove(&node);
+            self.untrack(node, now);
         }
     }
 
@@ -57,12 +59,10 @@ impl Hub {
             env.warn("Template condition cannot render: empty template, disconnected, or too many pending requests; returning No");
             return crate::conditions::outputs(false);
         }
-        let sub = self
-            .link
-            .as_mut()
-            .unwrap()
-            .session
-            .subscribe(now, Source::template(template));
+        let Some(link) = &mut self.link else {
+            return crate::conditions::outputs(false);
+        };
+        let sub = link.session.subscribe(now, Source::template(template));
         self.templates.push(TemplateCall {
             node,
             serial,

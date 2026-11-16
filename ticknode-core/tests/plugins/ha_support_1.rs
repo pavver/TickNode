@@ -125,6 +125,9 @@ impl FakeHa {
                                 "subscribe_events" if request["event_type"] == "state_changed" => {
                                     subs.lock().unwrap().insert("__cache".into(), id.as_u64().unwrap());
                                 }
+                                "subscribe_events" if request["event_type"] == "entity_registry_updated" => {
+                                    subs.lock().unwrap().insert("__registry".into(), id.as_u64().unwrap());
+                                }
                                 "get_config" => {
                                     replies = vec![json!({"id":id,"type":"result","success":true,"result":{"time_zone":"Europe/Kyiv"}})];
                                 }

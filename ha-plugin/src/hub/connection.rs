@@ -35,14 +35,15 @@ impl Hub {
         self.services_reply = None;
         self.services.clear();
         self.entity_options.clear();
-        self.action_targets.clear();
+        self.catalog.clear();
+        self.catalog_index.clear();
+        self.catalog_loaded = false;
+        self.registry = None;
+        self.reset_tracking();
         env.set_options("actions", &[]);
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &[]);
         for source in std::mem::take(&mut self.domain_sources) {
             env.set_options(&source, &[]);
-        }
-        for entity in self.entities.values_mut() {
-            entity.reply = None;
         }
     }
 
@@ -88,12 +89,11 @@ impl Hub {
             Self::pump_actions(link, now, env);
         }
         self.ensure_subscriptions(now);
-        if let Some(link) = &mut self.link
-            && self.live.tick(now, &mut link.session, env)
-        {
-            self.entities_reply = None;
-            self.entities_due = None;
+        if let Some(link) = &mut self.link {
+            self.live.tick(now, &mut link.session, env);
         }
+        self.tick_tracking(now, env);
+        self.tick_registry(now, env);
         let mut emissions = self.collect(now, env);
         emissions.extend(self.collect_templates(now, env));
         self.refresh_entities(now, env);

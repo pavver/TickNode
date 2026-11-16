@@ -175,7 +175,10 @@ fn ha_plugin_publishes_entity_options_for_the_picker() {
     for _ in 0..300 {
         engine.tick();
         sets.extend(engine.take_property_option_changes());
-        if sets.iter().any(|s| s.source == "entities") {
+        // The catalog and the service list arrive in any order; per-entity actions need both.
+        if sets.iter().any(|s| s.source == "entities")
+            && sets.iter().any(|s| s.source == "actions:light.kitchen")
+        {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));

@@ -158,7 +158,7 @@ impl PluginNode for Entity {
             "entity_id" => {
                 self.entity = text;
                 if let Some(inferred) =
-                    with_hub(|hub, _| hub.live.get(&self.entity).map(infer_value_type))
+                    with_hub(|hub, _| hub.metadata(&self.entity).map(|entry| entry.value_type))
                 {
                     self.value_type = inferred;
                 }

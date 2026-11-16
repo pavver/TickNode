@@ -36,7 +36,8 @@ fn trigger_definitions_are_non_adaptive_and_have_standard_pins() {
 
 #[test]
 fn every_platform_builds_the_expected_typed_trigger() {
-    let cases: &[(Platform, &[(&str, &str)], Value)] = &[
+    type TriggerCase = (Platform, &'static [(&'static str, &'static str)], Value);
+    let cases: &[TriggerCase] = &[
         (
             Platform::Time,
             &[("at", "07:30")],

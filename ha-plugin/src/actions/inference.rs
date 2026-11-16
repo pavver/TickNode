@@ -1,13 +1,12 @@
 //! Target-unit inference is performed only when selecting or explicitly refreshing an action.
 
 use super::Service;
-use ha_core_client::State;
 use ticknode_plugin_sdk::DataType;
 
 pub(super) fn infer_units(
     action: &str,
     service: &mut Service,
-    state: Option<&State>,
+    state: Option<&crate::entities::CatalogEntry>,
     temperature_unit: Option<&str>,
 ) {
     let Some(state) = state else { return };
@@ -31,7 +30,15 @@ pub(super) fn infer_units(
         unit.and_then(|unit| crate::units::mapping(&unit, Some("temperature")))
             .filter(|(name, _)| *name == "quantity.temperature")
     } else {
-        crate::units::state_unit(state)
+        state
+            .attributes
+            .get_as::<String>("unit_of_measurement")
+            .and_then(|unit| {
+                crate::units::mapping(
+                    &unit,
+                    state.attributes.get_as::<String>("device_class").as_deref(),
+                )
+            })
     };
     let Some((name, unit)) = mapped else { return };
     for field in &mut service.fields {

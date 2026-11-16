@@ -340,8 +340,12 @@ fn ha_plugin_template_condition_completes_asynchronously_and_unsubscribes() {
     let yes = sink(&mut engine, gate, 1);
     let no = sink(&mut engine, gate, 2);
     run_until(&mut engine, |_| {
-        ha.subs.lock().unwrap().contains_key("__cache")
+        ha.subs.lock().unwrap().contains_key("__registry")
     });
+    assert!(
+        !ha.subs.lock().unwrap().contains_key("__cache"),
+        "the plugin must never subscribe to every state change"
+    );
     let before = ha.unsubscribed.load(Ordering::SeqCst);
     engine.trigger_node(gate, PinId(0));
     engine.tick();

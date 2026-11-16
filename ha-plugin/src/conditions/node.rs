@@ -32,7 +32,8 @@ impl ConditionNode {
                 )
             })
             .collect();
-        let serial = (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_condition(node)));
+        let serial =
+            (!node.0.is_nil()).then(|| with_hub(|hub, _| hub.add_condition(node, Instant::now())));
         Self {
             node,
             serial,
@@ -106,7 +107,11 @@ impl PluginNode for ConditionNode {
             self.invalid_reported = None;
         }
         if let Some(serial) = self.serial {
-            with_hub(|hub, env| hub.cancel_templates(self.node, serial, Instant::now(), env));
+            with_hub(|hub, env| {
+                let now = Instant::now();
+                hub.cancel_templates(self.node, serial, now, env);
+                hub.set_condition_entities(self.node, serial, self.kind, &self.properties, now);
+            });
         }
     }
     fn validate_property(&self, name: &str, value: &DataValue) -> Result<(), UiError> {

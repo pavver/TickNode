@@ -171,7 +171,9 @@ fn entity_settings_control_typed_emissions_and_attribute_only_pulses() {
     assert!(has_exec(&emissions[0].outputs, PinId(0)));
     rig.hub
         .set_entity_options(id, serial, ValueType::Text, FireOn::State);
-    let event = rig.change("sensor.voltage", "230", "unavailable");
+    let mut event = rig.change("sensor.voltage", "230", "unavailable");
+    event["event"]["variables"]["trigger"]["to_state"]["last_updated"] =
+        json!("2026-10-28T14:45:11Z");
     let emissions = rig.recv(vec![event]);
     assert!(emissions[0].outputs.contains(&Output::Clear(PinId(1))));
     assert_eq!(

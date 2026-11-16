@@ -22,12 +22,17 @@ pub struct EntityFilter {
 }
 
 impl EntityFilter {
-    pub fn matches(&self, entity_domain: &str, state: Option<&ha_core_client::State>) -> bool {
+    pub fn matches(
+        &self,
+        entity_domain: &str,
+        state: Option<&dyn crate::entities::EntityMetadata>,
+    ) -> bool {
+        let state = state.map(|s| s.metadata());
         if !self.domains.is_empty() && !self.domains.iter().any(|d| d == entity_domain) {
             return false;
         }
         if !self.device_classes.is_empty()
-            && let Some(state) = state
+            && let Some(state) = &state
             && !state
                 .attributes
                 .get_as::<String>("device_class")
@@ -36,7 +41,7 @@ impl EntityFilter {
             return false;
         }
         if !self.supported_features.is_empty()
-            && let Some(state) = state
+            && let Some(state) = &state
             && let Some(features) = state.attributes.get_as::<u64>("supported_features")
             && !self
                 .supported_features

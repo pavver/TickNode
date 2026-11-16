@@ -29,9 +29,18 @@ fn entity_options_are_published_after_connecting_and_refreshed() {
     // Not asked again before the refresh interval has passed
     rig.advance(Duration::from_secs(60));
     assert_eq!(rig.get_states_requests, 1);
-    // Then refreshed with the new list
     rig.states.push(ha_state("switch.new", "off"));
-    rig.advance(ENTITIES_REFRESH);
+    rig.advance(Duration::from_secs(360));
+    assert_eq!(rig.get_states_requests, 1);
+    let event = json!({"id":rig.registry_id.unwrap(),"type":"event","event":{
+        "event_type":"entity_registry_updated", "data":{"action":"create"},
+        "origin":"LOCAL","time_fired":"2026-10-30T10:00:00Z","context":{"id":"t"}}});
+    rig.recv(vec![event.clone()]);
+    rig.advance(Duration::from_secs(6));
+    rig.recv(vec![event]);
+    rig.advance(Duration::from_secs(9));
+    assert_eq!(rig.get_states_requests, 1);
+    rig.advance(Duration::from_secs(1));
     assert_eq!(rig.get_states_requests, 2);
     assert_eq!(rig.env.options[ENTITIES_SOURCE].len(), 3);
 }
@@ -67,8 +76,7 @@ fn a_failed_entity_list_request_is_retried_later() {
     // The request fails: nothing is published, it is repeated after the retry delay
     let ws = rig.ws;
     // Keep the connection alive, but do not answer `get_states` itself
-    rig.advance(ENTITIES_REFRESH - Duration::from_secs(20));
-    rig.now += Duration::from_secs(20);
+    rig.hub.entities_due = Some(rig.now);
     rig.tick(vec![]);
     let id = rig
         .env
@@ -126,12 +134,14 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
         rig.hub
             .action(
                 node(5),
-                "light",
-                "turn_on",
-                "light.a",
-                json!({"brightness":120}),
-                false,
-                true,
+                crate::hub::ActionRequest {
+                    domain: "light",
+                    service: "turn_on",
+                    entity: "light.a",
+                    data: json!({"brightness":120}),
+                    response: false,
+                    skip_unchanged: true
+                },
                 rig.now,
                 &mut rig.env
             )
@@ -144,12 +154,14 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
         rig.hub
             .action(
                 node(5),
-                "weather",
-                "get_forecasts",
-                "weather.home",
-                json!({}),
-                false,
-                true,
+                crate::hub::ActionRequest {
+                    domain: "weather",
+                    service: "get_forecasts",
+                    entity: "weather.home",
+                    data: json!({}),
+                    response: false,
+                    skip_unchanged: true
+                },
                 rig.now,
                 &mut rig.env
             )
@@ -161,7 +173,7 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
         ticknode_plugin_sdk::field_number(data(&emissions[0].outputs, RESPONSE), "answer"),
         Some(42.0)
     );
-    rig.advance(ENTITIES_REFRESH);
+    rig.advance(SERVICES_REFRESH);
     assert_eq!(rig.get_services_requests, 2);
     let ws = rig.ws;
     rig.tick(vec![WsEvent::Closed(ws, "gone".into())]);
@@ -169,12 +181,14 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
         .hub
         .action(
             node(5),
-            "light",
-            "turn_on",
-            "",
-            json!({}),
-            false,
-            true,
+            crate::hub::ActionRequest {
+                domain: "light",
+                service: "turn_on",
+                entity: "",
+                data: json!({}),
+                response: false,
+                skip_unchanged: true,
+            },
             rig.now,
             &mut rig.env,
         )
@@ -189,12 +203,12 @@ fn actions_refresh_and_calls_request_response_only_when_supported() {
 fn action_picker_sources_remain_until_the_last_target_user_is_removed() {
     let mut hub = Hub::default();
     let mut env = Fake::default();
-    hub.set_action_target(node(1), "light.hall", &mut env);
+    hub.set_action_target(node(1), "light.hall", Instant::now(), &mut env);
     assert!(env.options.is_empty(), "no catalog yet");
     hub.services = crate::actions::services(
         &json!({"light":{"turn_on":{"name":"Turn on","target":{"entity":{"domain":"light"}}}}}),
     );
-    hub.set_action_target(node(1), " light.hall ", &mut env);
+    hub.set_action_target(node(1), " light.hall ", Instant::now(), &mut env);
     assert_eq!(
         env.options["actions:light.hall"]
             .iter()
@@ -202,23 +216,23 @@ fn action_picker_sources_remain_until_the_last_target_user_is_removed() {
             .collect::<Vec<_>>(),
         ["light.turn_on", "light.set_state"]
     );
-    hub.set_action_target(node(2), "light.hall", &mut env);
-    hub.remove_action_target(node(1), &mut env);
+    hub.set_action_target(node(2), "light.hall", Instant::now(), &mut env);
+    hub.remove_action_target(node(1), Instant::now(), &mut env);
     assert_eq!(env.options["actions:light.hall"].len(), 2);
-    hub.remove_action_target(node(2), &mut env);
+    hub.remove_action_target(node(2), Instant::now(), &mut env);
     assert!(env.options["actions:light.hall"].is_empty());
-    hub.remove_action_target(node(2), &mut env);
-    hub.set_action_target(node(3), "light.hall", &mut env);
+    hub.remove_action_target(node(2), Instant::now(), &mut env);
+    hub.set_action_target(node(3), "light.hall", Instant::now(), &mut env);
     hub.entity_options.push(crate::entities::entity_option(
         &crate::entities::test_state("light.hall", "on", json!({})),
     ));
-    hub.remove_action_target(node(3), &mut env);
+    hub.remove_action_target(node(3), Instant::now(), &mut env);
     assert_eq!(
         env.options["actions:light.hall"].len(),
         2,
         "catalog still uses the source"
     );
-    hub.set_action_target(node(4), "light.hall", &mut env);
-    hub.set_action_target(node(4), " ", &mut env);
+    hub.set_action_target(node(4), "light.hall", Instant::now(), &mut env);
+    hub.set_action_target(node(4), " ", Instant::now(), &mut env);
     assert!(!hub.action_targets.contains_key(&node(4)));
 }

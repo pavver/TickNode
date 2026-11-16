@@ -52,7 +52,9 @@ impl ActionNode {
 impl Drop for ActionNode {
     fn drop(&mut self) {
         if !self.node.0.is_nil() {
-            crate::try_with_hub(|hub, env| hub.remove_action_target(self.node, env));
+            crate::try_with_hub(|hub, env| {
+                hub.remove_action_target(self.node, Instant::now(), env)
+            });
         }
     }
 }
@@ -226,12 +228,14 @@ impl ActionNode {
         }
         hub.action(
             self.node,
-            domain,
-            service,
-            target,
-            Value::Object(data),
-            self.service.response,
-            self.skip_unchanged,
+            crate::hub::ActionRequest {
+                domain,
+                service,
+                entity: target,
+                data: Value::Object(data),
+                response: self.service.response,
+                skip_unchanged: self.skip_unchanged,
+            },
             now,
             env,
         )
@@ -253,7 +257,7 @@ impl ActionNode {
                 super::inference::infer_units(
                     &self.action,
                     &mut service,
-                    hub.live.get(self.target.trim()),
+                    hub.metadata(self.target.trim()).as_ref(),
                     hub.live.temperature_unit(),
                 );
                 Some(service)
@@ -269,10 +273,17 @@ impl ActionNode {
             self.target = target;
             let clear = with_hub(|hub, env| {
                 if !self.node.0.is_nil() {
-                    hub.set_action_target(self.node, &self.target, env);
+                    hub.set_action_target(self.node, &self.target, Instant::now(), env);
                 }
-                let target_ctx = (!self.target.is_empty())
-                    .then(|| (self.target.as_str(), hub.live.get(&self.target)));
+                let metadata = hub.metadata(&self.target);
+                let target_ctx = (!self.target.is_empty()).then(|| {
+                    (
+                        self.target.as_str(),
+                        metadata
+                            .as_ref()
+                            .map(|s| s as &dyn crate::entities::EntityMetadata),
+                    )
+                });
                 changed
                     && !self.action.is_empty()
                     && hub

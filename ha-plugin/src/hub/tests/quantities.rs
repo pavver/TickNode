@@ -57,6 +57,7 @@ fn quantity_emissions_clear_mismatched_units_and_warn_once_per_node_until_recove
     );
     rig.hub
         .set_entity(other, serial, "sensor.power", rig.now, &mut rig.env);
+    rig.tick(vec![]);
     rig.serve();
     assert_eq!(warnings(&rig), 3);
 }

@@ -12,7 +12,7 @@ const COMMAND_SETTLE: Duration = Duration::from_secs(10);
 pub(super) struct Commanded {
     at: Instant,
     /// Cache revision of the target when the call was sent.
-    seen: u64,
+    seen: Option<u64>,
 }
 
 pub(super) fn action_result(
@@ -25,20 +25,32 @@ pub(super) fn action_result(
     )
 }
 
+pub(crate) struct ActionRequest<'a> {
+    pub domain: &'a str,
+    pub service: &'a str,
+    pub entity: &'a str,
+    pub data: serde_json::Value,
+    pub response: bool,
+    pub skip_unchanged: bool,
+}
+
 impl Hub {
     /// Session has no typed response-call helper, so use its one-shot command API.
     pub fn action(
         &mut self,
         node: NodeId,
-        domain: &str,
-        service: &str,
-        entity: &str,
-        mut data: serde_json::Value,
-        response: bool,
-        skip_unchanged: bool,
+        request: ActionRequest<'_>,
         now: Instant,
         env: &mut impl Env,
     ) -> Option<Vec<Output>> {
+        let ActionRequest {
+            domain,
+            service,
+            entity,
+            mut data,
+            response,
+            skip_unchanged,
+        } = request;
         let Some(link) = &self.link else {
             return Some(crate::actions::outputs(Err(NOT_CONFIGURED.into())));
         };
@@ -46,14 +58,21 @@ impl Hub {
             Ok(service) => service,
             Err(error) => return Some(crate::actions::outputs(Err(error))),
         };
+        let connected = link.session.is_connected();
         let ids = crate::actions::entity_ids(entity).unwrap_or_default();
+        self.live.now = Some(now);
+        for id in &ids {
+            self.touch_action_target(node, id, now);
+        }
+        self.tick_tracking(now, env);
         let stamp = |live: &crate::live::Live, id: &str| live.revision(id);
-        self.commanded
-            .retain(|id, c| now < c.at + COMMAND_SETTLE && stamp(&self.live, id) == c.seen);
+        self.commanded.retain(|id, c| {
+            now < c.at + COMMAND_SETTLE && c.seen.is_none_or(|seen| stamp(&self.live, id) == seen)
+        });
         let settled = ids.iter().all(|id| !self.commanded.contains_key(*id));
         if skip_unchanged
             && settled
-            && link.session.is_connected()
+            && connected
             && crate::actions::unchanged(&self.live, domain, service, entity, &data)
         {
             env.info(&format!(
@@ -74,17 +93,15 @@ impl Hub {
             request["return_response"] = serde_json::Value::Bool(true);
         }
         for id in &ids {
-            let seen = stamp(&self.live, id);
+            // A baseline requested before this call cannot confirm its effect.
+            let seen = self.live.get(id).map(|_| stamp(&self.live, id));
             self.commanded
                 .insert((*id).to_string(), Commanded { at: now, seen });
         }
-        let mut reply = match self
-            .link
-            .as_mut()
-            .expect("configured")
-            .session
-            .command(now, request)
-        {
+        let Some(link) = &mut self.link else {
+            return Some(crate::actions::outputs(Err(NOT_CONFIGURED.into())));
+        };
+        let mut reply = match link.session.command(now, request) {
             Ok(reply) => reply,
             Err(e) => return Some(crate::actions::outputs(Err(e.to_string()))),
         };

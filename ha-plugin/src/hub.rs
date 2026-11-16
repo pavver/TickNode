@@ -6,11 +6,14 @@ mod collection;
 mod connection;
 mod env;
 mod options;
+mod registry;
 mod requests;
 mod subscriptions;
 mod templates;
+mod tracking;
 
 pub use env::Env;
+pub(crate) use requests::ActionRequest;
 
 use crate::queue::ChangeQueue;
 use crate::triggers::TriggerConfig;
@@ -24,8 +27,8 @@ use ticknode_plugin_sdk::{NodeId, PropertyOption, WsId};
 
 /// How long to wait before subscribing again after a subscription failed (for example, the entity does not exist).
 const RESUBSCRIBE_DELAY: Duration = Duration::from_secs(30);
-/// How often the entity list for the picker is refreshed while connected.
-const ENTITIES_REFRESH: Duration = Duration::from_secs(5 * 60);
+/// How often the service schemas are refreshed while connected.
+const SERVICES_REFRESH: Duration = Duration::from_secs(5 * 60);
 /// Wait before asking for the entity list again after a failed request.
 const ENTITIES_RETRY: Duration = Duration::from_secs(30);
 
@@ -71,7 +74,6 @@ struct TemplateCall {
 }
 
 struct EntityWatch {
-    reply: Option<Reply<State>>,
     value_type: crate::entity::ValueType,
     fire_on: crate::entity::FireOn,
     unit_warning: bool,
@@ -80,6 +82,12 @@ struct EntityWatch {
 #[derive(Default)]
 pub struct Hub {
     pub live: crate::live::Live,
+    tracked: HashMap<String, tracking::Tracked>,
+    catalog: Vec<crate::entities::CatalogEntry>,
+    /// Entity id -> position in `catalog`, so lookups stay O(1) on large installations.
+    catalog_index: HashMap<String, usize>,
+    registry: Option<Watch<ha_core_client::BusEvent, ()>>,
+    catalog_loaded: bool,
     conditions: HashMap<NodeId, u64>,
     templates: Vec<TemplateCall>,
     link: Option<Link>,
@@ -99,7 +107,7 @@ pub struct Hub {
     entity_options: Vec<PropertyOption>,
     domain_sources: BTreeSet<String>,
     action_targets: HashMap<NodeId, String>,
-    /// Entity data nodes share the watch lifecycle and additionally read a baseline after (re)subscribe.
+    /// Entity data nodes consume the shared tracked baseline and retain their own output settings.
     entities: HashMap<NodeId, EntityWatch>,
     /// Entities targeted by a sent action whose resulting state has not arrived yet (see `requests.rs`).
     commanded: HashMap<String, requests::Commanded>,

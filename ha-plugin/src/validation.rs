@@ -12,10 +12,10 @@ pub(crate) fn schema(def: &NodeDefinition, name: &str, value: &DataValue) -> Res
     let DataValue::String(text) = value else {
         return Err(error("property-text", "The property must be text"));
     };
-    if let PropertyKind::Select(options) = &property.kind {
-        if !options.iter().any(|(v, _)| v == text) {
-            return Err(error("property-option", "Choose an available option"));
-        }
+    if let PropertyKind::Select(options) = &property.kind
+        && !options.iter().any(|(v, _)| v == text)
+    {
+        return Err(error("property-option", "Choose an available option"));
     }
     ticknode_shared::property::normalize_property_value(&property.kind, value).map_err(|_| {
         let (key, fallback) = match property.kind {

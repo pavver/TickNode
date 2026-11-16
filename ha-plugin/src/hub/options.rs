@@ -1,6 +1,6 @@
 //! Entity/service catalog refresh and dynamic option publishing.
 
-use super::{ENTITIES_REFRESH, ENTITIES_RETRY, Env, Hub};
+use super::{ENTITIES_RETRY, Env, Hub, SERVICES_REFRESH};
 use crate::entities::option_sources;
 use ha_core_client::ConnectionState;
 use std::collections::BTreeSet;
@@ -8,14 +8,21 @@ use std::time::Instant;
 use ticknode_plugin_sdk::NodeId;
 
 impl Hub {
-    /// Keeps the entity picker's options fresh: asks for all states once the connection is up (also after
-    /// every reconnect) and then every [`ENTITIES_REFRESH`]; publishes the answer through [`Env::set_options`].
+    pub fn metadata(&self, id: &str) -> Option<crate::entities::CatalogEntry> {
+        self.live
+            .get(id)
+            .map(crate::entities::CatalogEntry::from)
+            .or_else(|| self.catalog.get(*self.catalog_index.get(id)?).cloned())
+    }
+
+    /// Reads picker metadata after connect and debounced registry changes.
     pub(super) fn refresh_entities(&mut self, now: Instant, env: &mut impl Env) {
         let Some(link) = &self.link else { return };
-        if link.session.connection_state() != ConnectionState::Connected || !self.live.active() {
+        if link.session.connection_state() != ConnectionState::Connected {
             // The answer to a request made on a lost connection never comes; ask again after the reconnect
             self.entities_reply = None;
             self.entities_due = None;
+            self.catalog_loaded = false;
             return;
         }
         if let Some(reply) = &mut self.entities_reply {
@@ -23,7 +30,7 @@ impl Hub {
                 None => return,
                 Some(Ok(states)) => {
                     self.publish_entities(&states, env);
-                    self.entities_due = Some(now + ENTITIES_REFRESH);
+                    self.catalog_loaded = true;
                 }
                 Some(Err(e)) => {
                     env.warn(&format!("Could not read the list of entities: {e}"));
@@ -32,21 +39,28 @@ impl Hub {
             }
             self.entities_reply = None;
         }
-        if self.entities_due.is_none_or(|due| now >= due) {
-            self.live.begin_snapshot();
-            self.entities_reply = Some(
-                self.link
-                    .as_mut()
-                    .expect("connected")
-                    .session
-                    .get_states(now),
-            );
+        if self.entities_due.is_some_and(|due| now >= due)
+            || (!self.catalog_loaded && self.entities_due.is_none())
+        {
+            self.entities_due = None;
+            if let Some(link) = &mut self.link {
+                self.entities_reply = Some(link.session.get_states(now));
+            }
         }
     }
 
     fn publish_entities(&mut self, states: &[ha_core_client::State], env: &mut impl Env) {
-        self.live.snapshot(states);
-        for (source, options) in option_sources(states) {
+        self.catalog = states
+            .iter()
+            .map(crate::entities::CatalogEntry::from)
+            .collect();
+        self.catalog_index = self
+            .catalog
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (e.entity_id.clone(), i))
+            .collect();
+        for (source, options) in option_sources(&self.catalog) {
             env.set_options(source, &options);
             if source == "entities" {
                 self.entity_options = options;
@@ -70,7 +84,7 @@ impl Hub {
                     self.services = crate::actions::services(&json);
                     self.publish_action_targets(env);
                     self.publish_action_sources(env);
-                    self.services_due = Some(now + ENTITIES_REFRESH);
+                    self.services_due = Some(now + SERVICES_REFRESH);
                 }
                 Some(Err(e)) => {
                     env.warn(&format!("Could not read the list of actions: {e}"));
@@ -79,24 +93,16 @@ impl Hub {
             }
             self.services_reply = None;
         }
-        if self.services_due.is_none_or(|due| now >= due) {
-            self.services_reply = Some(
-                self.link
-                    .as_mut()
-                    .expect("connected")
-                    .session
-                    .get_services(now),
-            );
+        if self.services_due.is_none_or(|due| now >= due)
+            && let Some(link) = &mut self.link
+        {
+            self.services_reply = Some(link.session.get_services(now));
         }
     }
 
     /// Publishes actionable entities for `ha/action` (`"action_targets"`).
     fn publish_action_targets(&mut self, env: &mut impl Env) {
-        let states = self.live.all_states();
-        if states.is_empty() {
-            return;
-        }
-        let options = crate::entities::action_target_options(&states, &self.services);
+        let options = crate::entities::action_target_options(&self.catalog, &self.services);
         env.set_options(crate::entities::ACTION_TARGETS_SOURCE, &options);
     }
 
@@ -122,8 +128,16 @@ impl Hub {
         let mut sources = BTreeSet::new();
         for entity_id in targets {
             let source = crate::actions::action_source(&entity_id);
-            let state = self.live.get(&entity_id);
-            let options = crate::actions::options_for(&self.services, Some((&entity_id, state)));
+            let state = self.metadata(&entity_id);
+            let options = crate::actions::options_for(
+                &self.services,
+                Some((
+                    &entity_id,
+                    state
+                        .as_ref()
+                        .map(|s| s as &dyn crate::entities::EntityMetadata),
+                )),
+            );
             env.set_options(&source, &options);
             sources.insert(source);
         }
@@ -133,8 +147,19 @@ impl Hub {
         self.domain_sources = sources;
     }
 
-    pub fn set_action_target(&mut self, node: NodeId, target: &str, env: &mut impl Env) {
+    pub fn set_action_target(
+        &mut self,
+        node: NodeId,
+        target: &str,
+        now: Instant,
+        env: &mut impl Env,
+    ) {
         let target = target.trim();
+        self.track(
+            node,
+            crate::actions::entity_ids(target).unwrap_or_default(),
+            now,
+        );
         if target.is_empty() {
             self.action_targets.remove(&node);
             return;
@@ -145,13 +170,22 @@ impl Hub {
         }
         let source = crate::actions::action_source(target);
         if self.domain_sources.insert(source.clone()) {
-            let state = self.live.get(target);
-            let options = crate::actions::options_for(&self.services, Some((target, state)));
+            let state = self.metadata(target);
+            let options = crate::actions::options_for(
+                &self.services,
+                Some((
+                    target,
+                    state
+                        .as_ref()
+                        .map(|s| s as &dyn crate::entities::EntityMetadata),
+                )),
+            );
             env.set_options(&source, &options);
         }
     }
 
-    pub fn remove_action_target(&mut self, node: NodeId, env: &mut impl Env) {
+    pub fn remove_action_target(&mut self, node: NodeId, now: Instant, env: &mut impl Env) {
+        self.untrack(node, now);
         if let Some(target) = self.action_targets.remove(&node) {
             let source = crate::actions::action_source(&target);
             if !self.action_targets.values().any(|t| t == &target)

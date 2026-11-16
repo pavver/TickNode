@@ -13,7 +13,7 @@ pub fn action_source(target: &str) -> String {
 /// or `None` for input mode, which offers every action).
 pub fn service_matches(
     service: &Service,
-    target: Option<(&str, Option<&ha_core_client::State>)>,
+    target: Option<(&str, Option<&dyn crate::entities::EntityMetadata>)>,
 ) -> bool {
     match target {
         Some((entity_id, state)) => {
@@ -53,7 +53,7 @@ pub fn action_rank(id: &str) -> u16 {
 
 pub fn options_for(
     services: &BTreeMap<String, Service>,
-    target: Option<(&str, Option<&ha_core_client::State>)>,
+    target: Option<(&str, Option<&dyn crate::entities::EntityMetadata>)>,
 ) -> Vec<PropertyOption> {
     let entity_domain = target.map(|(entity_id, _)| crate::icons::domain_of(entity_id.trim()));
     let mut options: Vec<_> = services

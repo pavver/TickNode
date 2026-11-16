@@ -4,33 +4,16 @@ use super::*;
 fn live_cache_applies_pushes_removals_and_invalidates_on_disconnect() {
     let mut rig = Rig::new();
     rig.states = vec![ha_state("light.test", "off")];
+    rig.hub.track(node(99), ["light.test"], rig.now);
     rig.connect();
     assert_eq!(rig.hub.live.state("light.test").unwrap().state, "off");
     assert_eq!(rig.hub.live.offset().unwrap().local_minus_utc(), 7200);
-    let id = rig.cache_id.unwrap();
-    let event = |state: Value| {
-        json!({"id":id,"type":"event","event":{"event_type":"state_changed",
-        "data":{"entity_id":"light.test","old_state":ha_state("light.test","off"),"new_state":state},
-        "origin":"LOCAL","time_fired":"2026-10-30T10:00:00Z","context":{"id":"t"}}})
-    };
-    rig.recv(vec![event(ha_state("light.test", "on"))]);
+    rig.recv(vec![rig.change("light.test", "off", "on")]);
     assert_eq!(rig.hub.live.state("light.test").unwrap().state, "on");
-    // An event racing a get_states response wins over the older snapshot.
-    rig.hub.live.begin_snapshot();
-    rig.recv(vec![event(ha_state("light.test", "newer"))]);
-    rig.hub
-        .live
-        .snapshot(&[serde_json::from_value(ha_state("light.test", "old")).unwrap()]);
-    assert_eq!(rig.hub.live.state("light.test").unwrap().state, "newer");
-    rig.hub.live.begin_snapshot();
-    rig.recv(vec![event(Value::Null)]);
-    rig.hub
-        .live
-        .snapshot(&[serde_json::from_value(ha_state("light.test", "old")).unwrap()]);
-    assert!(
-        rig.hub.live.state("light.test").is_err(),
-        "removal must win over a stale snapshot"
-    );
+    let mut removal = rig.change("light.test", "on", "off");
+    removal["event"]["variables"]["trigger"]["to_state"] = Value::Null;
+    rig.recv(vec![removal]);
+    assert!(rig.hub.live.state("light.test").is_err());
     rig.tick(vec![WsEvent::Closed(rig.ws, "gone".into())]);
     assert!(rig.hub.live.state("light.test").is_err());
     assert!(rig.hub.live.offset().is_err());
@@ -41,7 +24,7 @@ fn template_condition_first_render_errors_timeout_cancellation_and_disconnect() 
     let mut rig = Rig::new();
     rig.connect();
     let node = node(700);
-    let serial = rig.hub.add_condition(node);
+    let serial = rig.hub.add_condition(node, rig.now);
     let start = |rig: &mut Rig| {
         assert!(
             rig.hub

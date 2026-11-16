@@ -14,7 +14,7 @@ use wasmtime::{Config, Engine, Store, StoreLimitsBuilder};
 use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 
 /// Instruction budget per plugin call (guards against infinite loops).
-const FUEL_PER_CALL: u64 = 2_000_000_000;
+pub(super) const FUEL_PER_CALL: u64 = 2_000_000_000;
 const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
 /// Pause before `plugin-tick` is called again after the plugin trapped in it.
 const TICK_BACKOFF_TICKS: u64 = 50;
@@ -50,6 +50,8 @@ pub(super) struct Runtime {
     /// on every tick would otherwise be recreated and reconnected every tick).
     pub(super) tick_backoff_until: u64,
     pub(super) options: Arc<Mutex<OptionStore>>,
+    pub(super) values: Arc<Mutex<super::values::ValueStore>>,
+    pub(super) sent_watches: std::collections::BTreeSet<String>,
     pub(crate) metrics: PluginUsageMetrics,
     pub(super) blob_store: Arc<dyn crate::blobs::BlobStore>,
 }
@@ -88,6 +90,7 @@ impl Runtime {
                 ws: WsHub::new(self.tokio.clone()),
                 http: super::http::Tasks::new(self.tokio.clone(), Some(self.blob_store.clone())),
                 options: self.options.clone(),
+                values: self.values.clone(),
                 blob_store: self.blob_store.clone(),
             };
             let mut store = Store::new(engine()?, state);
@@ -119,6 +122,7 @@ impl Runtime {
                 self.metrics.traps = self.metrics.traps.saturating_add(1);
             }
             self.configure_error = res?.err().map(|e| self.ui_error(e));
+            self.restore_value_watches(store, plugin)?;
         }
         Ok(())
     }
@@ -155,6 +159,7 @@ impl Runtime {
             })
             .collect();
         self.settings = Some(props.clone());
+        super::lock(&self.values).invalidate();
         let fresh = self.instance.is_none();
         self.instantiate()
             .map_err(|e| crash_message(&short_error(&e)))?;
@@ -171,6 +176,10 @@ impl Runtime {
         self.record_fuel(outcome.is_err());
         match outcome {
             Ok(result) => {
+                if let Err(error) = self.deliver_value_watches(true) {
+                    self.discard();
+                    return Err(crash_message(&short_error(&error)));
+                }
                 let result = result.map_err(|e| self.ui_error(e));
                 self.configure_error = result.clone().err();
                 result
@@ -195,41 +204,45 @@ impl Runtime {
         }
         self.tokio = host.runtime.clone();
         self.blob_store = host.blob_store.clone();
-        let outcome = self.api().map(|_| ()).and_then(|()| {
-            let (store, plugin) = self
-                .instance
-                .as_mut()
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance is unavailable"))?;
-            let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);
-            let mut events: Vec<wit::WsEvent> = store
-                .data_mut()
-                .ws
-                .drain(ws::MAX_EVENTS_PER_TICK.saturating_sub(http_events.len()))
-                .into_iter()
-                .map(|e| match e {
-                    ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
-                    ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
-                    ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
-                })
-                .collect();
-            events.extend(http_events);
-            store.set_fuel(FUEL_PER_CALL)?;
-            // Plugin-level logs are not tied to a node: they carry the nil node id
-            store.data_mut().call = Some(CallCtx {
-                node_id: NodeId(uuid::Uuid::nil()),
-                host: std::mem::take(host),
+        let outcome = self
+            .api()
+            .map(|_| ())
+            .and_then(|()| self.deliver_value_watches(false))
+            .and_then(|()| {
+                let (store, plugin) = self
+                    .instance
+                    .as_mut()
+                    .ok_or_else(|| wasmtime::Error::msg("Plugin instance is unavailable"))?;
+                let http_events = store.data_mut().http.drain(ws::MAX_EVENTS_PER_TICK);
+                let mut events: Vec<wit::WsEvent> = store
+                    .data_mut()
+                    .ws
+                    .drain(ws::MAX_EVENTS_PER_TICK.saturating_sub(http_events.len()))
+                    .into_iter()
+                    .map(|e| match e {
+                        ws::WsEvent::Opened(id) => wit::WsEvent::Opened(id),
+                        ws::WsEvent::Message(id, text) => wit::WsEvent::Message((id, text)),
+                        ws::WsEvent::Closed(id, reason) => wit::WsEvent::Closed((id, reason)),
+                    })
+                    .collect();
+                events.extend(http_events);
+                store.set_fuel(FUEL_PER_CALL)?;
+                // Plugin-level logs are not tied to a node: they carry the nil node id
+                store.data_mut().call = Some(CallCtx {
+                    node_id: NodeId(uuid::Uuid::nil()),
+                    host: std::mem::take(host),
+                });
+                let result = plugin
+                    .ticknode_plugin_nodes()
+                    .call_plugin_tick(&mut *store, &events);
+                *host = store
+                    .data_mut()
+                    .call
+                    .take()
+                    .ok_or_else(|| wasmtime::Error::msg("Plugin call context is unavailable"))?
+                    .host;
+                result
             });
-            let result = plugin
-                .ticknode_plugin_nodes()
-                .call_plugin_tick(&mut *store, &events);
-            *host = store
-                .data_mut()
-                .call
-                .take()
-                .ok_or_else(|| wasmtime::Error::msg("Plugin call context is unavailable"))?
-                .host;
-            result
-        });
         self.record_fuel(outcome.is_err());
         outcome.map_err(|e| {
             warn!("Plugin crashed during plugin-tick: {e:?}");
@@ -253,6 +266,8 @@ impl Runtime {
     /// from the dead `Store` are never passed to a new instance (in particular from `WasmNode::drop`).
     pub(super) fn discard(&mut self) {
         self.instance = None;
+        self.sent_watches.clear();
+        super::lock(&self.values).invalidate();
         self.generation += 1;
     }
 }

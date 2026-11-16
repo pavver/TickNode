@@ -190,6 +190,7 @@ interface types {
         capabilities: list<capability>,
         settings: list<setting-definition>,
         resources: list<resource-collection>,
+        values-namespace: option<string>,
     }
 
     variant part-data {
@@ -293,6 +294,19 @@ interface types {
         outputs: list<output>,
     }
 
+    record value-field {
+        path: string,
+        title: string,
+        data-type: data-type,
+    }
+
+    record value-entry {
+        key: string,
+        title: string,
+        icon: option<string>,
+        fields: list<value-field>,
+    }
+
     enum log-level { debug, info, warn, error }
 
     /// Translatable message for the user (shown in the UI, e.g. a `configure` error). `key` is a Fluent
@@ -308,7 +322,7 @@ interface types {
 /// Host services. Task-starting functions work only during `execute`/`poll`
 /// (the task belongs to the currently executing node).
 interface host {
-    use types.{log-level, task-id, http-request, ws-id, property-option, ui-error, blob-info as blob-meta};
+    use types.{log-level, task-id, http-request, ws-id, property-option, ui-error, blob-info as blob-meta, value-entry, value};
 
     /// Log message to the editor console (on behalf of the current node). Logs are never translated:
     /// always write them in English.
@@ -358,6 +372,11 @@ interface host {
 
     /// Returns metadata of a blob in the host store.
     blob-info: func(id: string) -> option<blob-meta>;
+
+    /// Replaces the read-only value catalog of this plugin.
+    set-value-catalog: func(entries: list<value-entry>);
+    /// Publishes a watched entry; none makes it unavailable.
+    set-value: func(key: string, value: option<value>);
 }
 
 interface nodes {
@@ -405,6 +424,9 @@ interface nodes {
     /// stays queued). Returned emissions are applied as if the target node had executed; the host drops
     /// emissions for nodes that do not exist or belong to another plugin, and invalid pins or values.
     plugin-tick: func(events: list<ws-event>) -> list<emission>;
+
+    /// Entry keys relative to the namespace; restored in full after configure/restart.
+    watch-values: func(added: list<string>, removed: list<string>);
 }
 
 world plugin {

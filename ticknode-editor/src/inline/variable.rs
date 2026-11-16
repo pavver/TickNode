@@ -79,6 +79,7 @@ pub fn resolve_variable<'a>(
     variables: &'a BTreeMap<VariableKey, Variable>,
 ) -> Option<&'a Variable> {
     match vref.lookup {
+        VariableLookup::Plugin => None,
         VariableLookup::Auto => {
             if let Some(sheet_id) = open_sheet {
                 let key = VariableKey::sheet(sheet_id, &vref.name);

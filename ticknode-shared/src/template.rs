@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod ago;
 pub mod dates;
 pub mod duration;
+mod namespace;
 pub mod plural;
 #[cfg(test)]
 mod tests;
@@ -131,6 +132,13 @@ pub fn validate(source: &str) -> Result<(), TemplateError> {
 
 /// Derives undeclared variable names from the template in order of first appearance.
 pub fn variables(source: &str) -> Result<Vec<String>, TemplateError> {
+    variables_with_namespaces(source, &[])
+}
+
+pub fn variables_with_namespaces(
+    source: &str,
+    namespaces: &[String],
+) -> Result<Vec<String>, TemplateError> {
     let mut env = environment();
     env.add_template("template", source)
         .map_err(|err| TemplateError::from_minijinja(&err, source))?;
@@ -148,7 +156,9 @@ pub fn variables(source: &str) -> Result<Vec<String>, TemplateError> {
                     .map(str::to_string)
             }),
     );
-    names.retain(|name| !env.globals().any(|(global, _)| global == name));
+    names.retain(|name| {
+        !namespaces.contains(name) && !env.globals().any(|(global, _)| global == name)
+    });
     let mut ordered = Vec::new();
     let mut attribute = false;
     let mut tokens = tokenize(source, false, Default::default(), Default::default()).peekable();
@@ -186,6 +196,8 @@ pub struct RenderEnv {
     pub now: DateTime<Utc>,
     pub to_text: ToTextFn,
     pub variables: Vec<crate::Variable>,
+    pub plugin_values: Vec<(String, Option<DataValue>, DataType)>,
+    pub namespaces: Vec<String>,
 }
 
 impl RenderEnv {
@@ -199,6 +211,8 @@ impl RenderEnv {
             now,
             to_text,
             variables: Vec::new(),
+            plugin_values: Vec::new(),
+            namespaces: Vec::new(),
         }
     }
 
@@ -223,6 +237,8 @@ impl Default for RenderEnv {
                 )
             }),
             variables: Vec::new(),
+            plugin_values: Vec::new(),
+            namespaces: Vec::new(),
         }
     }
 }
@@ -258,6 +274,14 @@ impl CompiledTemplate {
             source: source.to_string(),
             insertions,
         })
+    }
+
+    /// Static paths, with local set/for bindings excluded by MiniJinja.
+    pub fn static_paths(&self) -> Vec<String> {
+        self.env
+            .get_template("template")
+            .map(|t| t.undeclared_variables(true).into_iter().collect())
+            .unwrap_or_default()
     }
 
     /// The original template source.
@@ -322,6 +346,7 @@ impl CompiledTemplate {
         text_fields.push(("var".to_string(), Value::from_iter(text_var_map)));
         text_fields.push(("sheet".to_string(), Value::from_iter(text_sheet_map)));
         text_fields.push(("global".to_string(), Value::from_iter(text_global_map)));
+        namespace::register(&mut env, &env_ctx, &mut text_fields, format);
         env.add_global("text", Value::from_iter(text_fields));
         let zero = runtime_text(&DataValue::Number(crate::NumberValue::Int(0)));
         let int_decimal_suffix = zero.strip_prefix('0').unwrap_or("").to_string();
@@ -348,7 +373,7 @@ impl CompiledTemplate {
             .collect();
         let template = env
             .get_template("template")
-            .expect("compiled template is registered");
+            .map_err(|err| TemplateError::from_minijinja(&err, &self.source))?;
         template.render(context).map_err(|err| {
             TemplateError::from_minijinja_mapped(&err, &self.source, &self.insertions)
         })

@@ -14,6 +14,7 @@ fn state() -> PluginState {
         ws: WsHub::new(None),
         http: super::super::http::Tasks::new(None, None),
         options: Arc::new(Mutex::new(OptionStore::default())),
+        values: Arc::default(),
         blob_store: Arc::new(crate::blobs::MemoryBlobStore::new()),
     }
 }

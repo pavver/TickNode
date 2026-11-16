@@ -11,7 +11,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Option<DataValue> {
     postcard::from_bytes(bytes).ok()
 }
 
-fn to_wit_data_type(mut t: &DataType) -> wit::DataType {
+pub(crate) fn to_wit_data_type(mut t: &DataType) -> wit::DataType {
     let mut list_depth = 0u8;
     while let DataType::List(inner) = t {
         list_depth += 1;

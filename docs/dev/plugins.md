@@ -33,3 +33,19 @@ Definitions with `pure: true` that declare exec pins or `polls: true` are invali
 - **Resource collections.** `PluginManifest.resources: Vec<ResourceCollection { id, title, icon, source, actions: Vec<ResourceAction { title, type_name, property, requires_source }> }}` (builders `ResourceCollection::new(id, title, source).icon("mdi:..").action(ResourceAction::new(title, type_name, property).requires_source(src))`, `PluginManifest::resource(..)`). Exposed in `PluginInfo.resources` for the editor. Host validation at `add_plugin` drops (with an English warning log naming the plugin) collections with an empty/duplicate id or empty source, actions whose `type_name` is not among the plugin's node types or whose `property` is empty, and collections left without actions.
 - **Enable/disable at runtime.** `TickEngine::add_plugin` only compiles the plugin and reads its manifest; `enable_plugin(name, settings)` registers its node types (`NodeRegistry::register_owned`) and data types (`TypeRegistry`, owners in `type_owners`), calls `configure` and turns its stubs into real nodes (invalid pin connections are detached and returned in `PluginChange.detached`; other removals remain in `PluginChange.removed`); `disable_plugin(name)` replaces the plugin's nodes with stubs, removes its types from the registries and drops the instance. Disabling is refused when another enabled plugin uses its types (in node pins or type fields). `load_plugin` = `add_plugin` + `enable_plugin` with default settings (for tests).
 - **Stub nodes (`StubNode`)** keep `type_name`, all properties (including `in:*`) and the last known definition, so connections stay and `export_graph` is unchanged. A stub does not run (it logs "plugin <name> unavailable"); `set_node_property`/`set_input_value` return `EngineError::PluginUnavailable`. **An unknown type in `load_graph`/`import_snippet` also becomes a stub** (pins are restored from the graph's connections, a data pin's type from the other end or `Any`), so a graph with a node of an unknown plugin never loses it on save. When the type appears in the registry, the stub comes back to life.
+
+## Read-only value namespaces
+
+A plugin may append `values_namespace` to its manifest and publish `ValueEntry` catalogs through SDK `host::set_value_catalog`.
+The host ignores invalid roots and roots conflicting with scoped variables, `text`, `loop`, MiniJinja globals, or another loaded plugin, logging an English warning.
+Each entry has a dotted key relative to its namespace and flattened `ValueField` paths carrying declared TickNode types.
+Catalog paths name object fields only; a list field declares `List(element)` without enumerating numeric indices.
+The host replaces immutable `Arc<ValueCatalogIndex>` snapshots with hashed entry and field-type lookups, sharing each snapshot with nodes.
+Editors receive only entry keys, titles and icons, requesting one entry's fields through `ValueEntryFields` when needed.
+Catalog replacement is diffed; publication accepts at most 20,000 entries, 256 fields per entry, and 512 bytes per metadata string, dropping invalid or duplicate paths with English warnings.
+SDK `host::set_value(key, Some(value))` publishes a watched entry; `None` marks it unavailable, and values are limited to 64 KiB postcard payloads.
+The host ignores values outside the plugin's accepted namespace or requested entry set.
+`Plugin::watch_values(added, removed)` receives relative entry keys, batched once per tick, with the full requested set restored after configure and instance recreation.
+The runtime mailbox survives instance recreation, invalidates old values on traps/configure, and is cleared on disable.
+The engine reads its own `PluginValues` store during pulls without calling WASM.
+The WIT change updates the automatically computed `PLUGIN_API` fingerprint and requires rebuilding all components and the Telegram test fixture.

@@ -123,6 +123,14 @@ impl TickEngine {
             );
         }
 
+        if let Some(namespace) = &self.plugins[name].manifest.values_namespace {
+            self.plugin_values
+                .catalogs
+                .entry(namespace.clone())
+                .or_default();
+        }
+        self.refresh_all_value_usage();
+        self.prepare_value_watches();
         let settings_error = self.apply_settings(name, settings);
         let slot = self
             .plugins
@@ -131,6 +139,7 @@ impl TickEngine {
         slot.active = true;
         slot.settings_error = settings_error;
 
+        self.sync_plugin_values();
         let (replaced, removed, detached) = self.revive_stubs();
         Ok(PluginChange {
             replaced,
@@ -206,6 +215,17 @@ impl TickEngine {
             rt.discard();
             lock(&rt.options).clear();
         }
+        let namespace = slot.manifest.values_namespace.clone();
+        {
+            let rt = lock(&slot.runtime);
+            let mut store = lock(&rt.values);
+            store.catalog = Default::default();
+            store.pending.clear();
+            store.watched.clear();
+        }
+        if let Some(namespace) = namespace {
+            self.remove_values_namespace(&namespace);
+        }
         Ok(PluginChange {
             replaced,
             removed: RemovedConnections::default(),
@@ -239,7 +259,9 @@ impl TickEngine {
         for id in ids {
             self.clear_node_error(id);
         }
+        self.prepare_value_watches();
         let error = self.apply_settings(name, settings);
+        self.sync_plugin_values();
         let slot = self
             .plugins
             .get_mut(name)

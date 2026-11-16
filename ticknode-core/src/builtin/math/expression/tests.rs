@@ -149,7 +149,7 @@ fn test_validation_rejects_syntax_errors() {
             .is_err()
     );
     assert!(
-        node.validate_property("expression", &DataValue::String("other.x + 1".into()))
+        node.validate_property("expression", &DataValue::String("text.x + 1".into()))
             .is_err()
     );
     assert!(

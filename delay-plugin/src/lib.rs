@@ -89,6 +89,7 @@ impl Plugin for DelayPlugin {
             requested_capabilities: vec![],
             settings: vec![],
             resources: vec![],
+            values_namespace: None,
         }
     }
 

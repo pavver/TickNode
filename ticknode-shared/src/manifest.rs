@@ -86,9 +86,16 @@ pub struct PluginManifest {
     pub settings: Vec<SettingDefinition>,
     #[serde(default)]
     pub resources: Vec<ResourceCollection>,
+    #[serde(default)]
+    pub values_namespace: Option<String>,
 }
 
 impl PluginManifest {
+    pub fn values_namespace(mut self, namespace: &str) -> Self {
+        self.values_namespace = Some(namespace.into());
+        self
+    }
+
     pub fn new(name: &str, version: &str, author: &str) -> Self {
         Self {
             name: name.into(),
@@ -97,6 +104,7 @@ impl PluginManifest {
             requested_capabilities: Vec::new(),
             settings: Vec::new(),
             resources: Vec::new(),
+            values_namespace: None,
         }
     }
 

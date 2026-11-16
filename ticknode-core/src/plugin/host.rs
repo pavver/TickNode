@@ -36,6 +36,7 @@ pub(super) struct PluginState {
     pub(super) ws: WsHub,
     pub(super) http: super::http::Tasks,
     pub(super) options: Arc<Mutex<OptionStore>>,
+    pub(super) values: Arc<Mutex<super::values::ValueStore>>,
     pub(super) blob_store: Arc<dyn crate::blobs::BlobStore>,
 }
 
@@ -200,6 +201,20 @@ impl bindings::ticknode::plugin::host::Host for PluginState {
 
     fn ws_close(&mut self, id: wit::WsId) {
         self.ws.close(id);
+    }
+
+    fn set_value_catalog(&mut self, entries: Vec<wit::ValueEntry>) {
+        let warnings = lock(&self.values).catalog(entries);
+        for warning in warnings {
+            self.log(wit::LogLevel::Warn, warning);
+        }
+    }
+
+    fn set_value(&mut self, key: String, value: Option<Vec<u8>>) {
+        let result = lock(&self.values).value(key, value);
+        if let Err(error) = result {
+            self.log(wit::LogLevel::Warn, error);
+        }
     }
 
     fn set_options(&mut self, source: String, options: Vec<wit::PropertyOption>) {

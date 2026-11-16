@@ -69,10 +69,12 @@ pub enum VariableLookup {
     Sheet,
     /// Global or persistent scope.
     Global,
+    /// Read-only plugin path stored in full in VariableRef::name.
+    Plugin,
 }
 
 /// A reference to a variable using scoped syntax:
-/// `var.<name>` (Auto lookup), `sheet.<name>` (Sheet only), or `global.<name>` (Global only).
+/// `var.<name>` (Auto), `sheet.<name>`, `global.<name>`, or a full read-only plugin path.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct VariableRef {
     pub lookup: VariableLookup,
@@ -99,13 +101,18 @@ impl VariableRef {
         Self::new(VariableLookup::Global, name)
     }
 
-    /// Parses a variable reference with syntax `var.<name>`, `sheet.<name>`, or `global.<name>`.
+    /// Parses scoped variable references or dotted paths under non-reserved plugin roots.
     pub fn parse(s: &str) -> Option<Self> {
         let (prefix, name) = s.split_once('.')?;
         let lookup = match prefix {
             "var" => VariableLookup::Auto,
             "sheet" => VariableLookup::Sheet,
             "global" => VariableLookup::Global,
+            _ if crate::plugin_values::valid_path(s)
+                && !crate::plugin_values::reserved_root(prefix) =>
+            {
+                return Some(Self::new(VariableLookup::Plugin, s));
+            }
             _ => return None,
         };
         if valid_variable_name(name) {
@@ -123,11 +130,16 @@ impl VariableRef {
             VariableLookup::Auto => "var",
             VariableLookup::Sheet => "sheet",
             VariableLookup::Global => "global",
+            VariableLookup::Plugin => "",
         }
     }
 
     pub fn to_str(&self) -> String {
-        format!("{}.{}", self.prefix(), self.name)
+        if self.lookup == VariableLookup::Plugin {
+            self.name.clone()
+        } else {
+            format!("{}.{}", self.prefix(), self.name)
+        }
     }
 }
 

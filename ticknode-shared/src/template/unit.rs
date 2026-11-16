@@ -386,6 +386,12 @@ pub fn register(
             }
         }
     }
+    for (path, value, ty) in &env_ctx.plugin_values {
+        path_types.insert(path.clone(), ty.clone());
+        if let Some(value) = value {
+            path_values.insert(path.clone(), value.clone());
+        }
+    }
     let to_text_fn = env_ctx.to_text.clone();
     env.add_filter(
         "unit",

@@ -23,3 +23,16 @@ Keep it current when the described code changes.
 - After connecting, the server sends `ServerMessage::Init` (definitions, types, plugins, open sheet graph, sheet summaries, and active `open_sheet`), then change events (`NodeAdded`, `NodeUpdated`, `DataConnected`, …) and telemetry (`Executed`, `Log` from Console/Debug) at a fixed rate independent of the tick (`actor/telemetry.rs`: every 100 ms, traces merged per node with the union of fired pins, at most 1000 log lines per interval plus one "dropped" line). The server is the source of truth: the editor sends `ClientMessage`s and applies changes only from server events (events may be duplicated, so handle them idempotently). Errors go only to the client that caused them (`Error(UiMessage)`).
 - `Created(ids)` goes only to the initiator of `AddNode` / `AddNodeConnected` / `Paste`, after the matching `NodeAdded`s: the actor replies after broadcasting, and `ws.rs` (`select!` with `biased`) delivers events first.
 - Plugins: `Init` contains `plugins: Vec<PluginInfo>`; a state or settings change is announced to every editor with `PluginUpdated(PluginInfo)`, a change in the set of nodes/types (enable, disable) with `Catalog { definitions, types }` plus `NodeUpdated` for converted nodes (and `Detached` for pin connections that became invalid). The client sends `SetPluginEnabled { name, enabled }` and `ConfigurePlugin { name, values: [(key, SettingUpdate)] }`, where `SettingUpdate` is `Set(value)` / `Keep` / `Clear`. **Secrets (`SettingKind::Secret`) never reach the editor**: `PluginInfo.values` holds only `Secret { is_set }` for them. `NodeInstance.unavailable: Option<UiMessage>` explains a stub node; `PluginInfo.error` / `settings_error` are `UiMessage`s too.
+
+## Plugin value catalogs and telemetry
+
+Appended `Init.value_catalogs` contains enabled namespace catalogs with slim `ValueEntrySummary { key, title, icon }` entries, and `Init.plugin_values` contains only entries used by nodes on the open sheet.
+Appended `ServerMessage::ValueCatalogs` carries changed namespaces only; an empty entries list removes the catalog.
+Catalog changes are flushed after engine commands and ticks alongside dynamic property options.
+`ClientMessage::ValueEntryFields { namespace, key }` requests the full field tree of one entry, answered only to the requester with `ServerMessage::ValueEntryFields { namespace, key, fields }`.
+An unknown namespace or entry returns an empty field list; the request works without an open sheet, creates no history, and is rejected inside Batch.
+The editor caches these answers by namespace and entry key, clears the affected namespace on catalog changes, and clears all cached fields on Init.
+Appended `ServerMessage::PluginValues` carries a full snapshot of entries used on the receiving sheet, including `None` for unavailable entries.
+The telemetry flush compares sheet snapshots, emits only changes at its normal interval, and routes them to sessions viewing that sheet.
+Unreferenced plugin entries never appear in value telemetry.
+All fields and variants are appended to preserve postcard ordering.

@@ -46,6 +46,15 @@ impl Actor {
                 let events = self.configure_plugin(&name, values)?;
                 Ok(ControlFlow::Break((events, None)))
             }
+            ClientMessage::ValueEntryFields { namespace, key } => {
+                let fields = self.engine.value_entry_fields(&namespace, &key);
+                let _ = reply.send(ServerMessage::ValueEntryFields {
+                    namespace,
+                    key,
+                    fields,
+                });
+                Ok(ControlFlow::Break((vec![], None)))
+            }
             ClientMessage::GetUsage => {
                 let report = self.engine.usage_report(chrono::Utc::now().timestamp());
                 let _ = reply.send(ServerMessage::Usage(report));

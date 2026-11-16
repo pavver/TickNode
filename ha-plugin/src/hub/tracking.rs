@@ -203,6 +203,14 @@ impl Hub {
                 entry.baseline = None;
                 match result {
                     Ok(state) => {
+                        super::values::publish_tracked(
+                            &self.value_watches,
+                            &mut self.published_values,
+                            id,
+                            Some(&state),
+                            self.live.temperature_unit(),
+                            env,
+                        );
                         self.live.put(id, Some(state));
                         entry.waiting = false;
                         for watch in self.watches.values_mut().filter(|w| w.config == *id) {
@@ -226,6 +234,14 @@ impl Hub {
                     }) {
                         continue;
                     }
+                    super::values::publish_tracked(
+                        &self.value_watches,
+                        &mut self.published_values,
+                        id,
+                        change.new_state.as_ref(),
+                        self.live.temperature_unit(),
+                        env,
+                    );
                     self.live.put(id, change.new_state.clone());
                     for watch in self.watches.values_mut().filter(|w| w.config == *id) {
                         if watch.queue.push(change.clone()) > 0 {

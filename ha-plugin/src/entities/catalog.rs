@@ -10,6 +10,7 @@ pub struct CatalogEntry {
     pub entity_id: String,
     pub attributes: MetadataAttributes,
     pub icon: String,
+    pub value_fields: std::sync::Arc<[ticknode_shared::ValueField]>,
     pub value_type: crate::entity::ValueType,
 }
 #[derive(Clone, Debug)]
@@ -37,6 +38,14 @@ impl EntityMetadata for State {
 }
 impl From<&State> for CatalogEntry {
     fn from(state: &State) -> Self {
+        Self::with_fields(state, crate::values::tree(state, None).1.into())
+    }
+}
+impl CatalogEntry {
+    pub fn with_fields(
+        state: &State,
+        value_fields: std::sync::Arc<[ticknode_shared::ValueField]>,
+    ) -> Self {
         let attributes = [
             "friendly_name",
             "device_class",
@@ -59,6 +68,7 @@ impl From<&State> for CatalogEntry {
                 state.attributes.icon(),
             ),
             value_type: crate::entity::infer_value_type(state),
+            value_fields,
         }
     }
 }

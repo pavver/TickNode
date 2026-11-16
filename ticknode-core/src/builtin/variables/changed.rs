@@ -80,6 +80,7 @@ impl Node for VariableChangedNode {
 
     fn poll(&mut self, host: &mut HostState) -> Option<PinId> {
         let changed = match self.lookup {
+            VariableLookup::Plugin => false,
             VariableLookup::Sheet => self
                 .sheet
                 .is_some_and(|s| is_sheet_changed(s, &self.name, host)),

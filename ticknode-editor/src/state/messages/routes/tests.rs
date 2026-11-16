@@ -92,6 +92,8 @@ fn init_replaces_all_routes_including_an_empty_snapshot() {
         plugins: vec![],
         translations: vec![],
         property_options: vec![],
+        value_catalogs: vec![],
+        plugin_values: vec![],
         history: HistoryState::default(),
         wire_routes,
         detached_connections: Vec::new(),

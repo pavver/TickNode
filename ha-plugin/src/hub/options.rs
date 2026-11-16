@@ -11,7 +11,14 @@ impl Hub {
     pub fn metadata(&self, id: &str) -> Option<crate::entities::CatalogEntry> {
         self.live
             .get(id)
-            .map(crate::entities::CatalogEntry::from)
+            .map(|state| {
+                crate::entities::CatalogEntry::with_fields(
+                    state,
+                    crate::values::tree(state, self.live.temperature_unit())
+                        .1
+                        .into(),
+                )
+            })
             .or_else(|| self.catalog.get(*self.catalog_index.get(id)?).cloned())
     }
 
@@ -50,9 +57,21 @@ impl Hub {
     }
 
     fn publish_entities(&mut self, states: &[ha_core_client::State], env: &mut impl Env) {
+        let mut shapes =
+            std::collections::HashSet::<std::sync::Arc<[ticknode_shared::ValueField]>>::new();
         self.catalog = states
             .iter()
-            .map(crate::entities::CatalogEntry::from)
+            .map(|state| {
+                let fields = crate::values::tree(state, self.live.temperature_unit()).1;
+                let fields = if let Some(shared) = shapes.get(fields.as_slice()) {
+                    shared.clone()
+                } else {
+                    let shared: std::sync::Arc<[ticknode_shared::ValueField]> = fields.into();
+                    shapes.insert(shared.clone());
+                    shared
+                };
+                crate::entities::CatalogEntry::with_fields(state, fields)
+            })
             .collect();
         self.catalog_index = self
             .catalog
@@ -66,6 +85,7 @@ impl Hub {
                 self.entity_options = options;
             }
         }
+        self.publish_value_catalog(env);
         self.publish_action_targets(env);
         self.publish_action_sources(env);
     }

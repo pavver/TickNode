@@ -19,6 +19,7 @@ mod runtime;
 mod triggers;
 mod units;
 mod validation;
+mod values;
 
 use convert::STATE_TYPE;
 use runtime::{install_core_logger, try_with_hub, with_hub};
@@ -69,6 +70,7 @@ impl Plugin for HomeAssistant {
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("home_assistant", "0.1.0", "TickNode")
+            .values_namespace("ha")
             .capability(Capability::WebSocket { allowed_hosts: vec!["*".into()] })
             .setting(
                 SettingDefinition::url("url", "URL")
@@ -154,6 +156,10 @@ impl Plugin for HomeAssistant {
         validate_connection(&url, &token)?;
         with_hub(|hub, env| hub.configure(&url, &token, now, env));
         Ok(())
+    }
+
+    fn watch_values(added: Vec<String>, removed: Vec<String>) {
+        with_hub(|hub, env| hub.watch_values(added, removed, Instant::now(), env));
     }
 
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {

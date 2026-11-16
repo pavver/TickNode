@@ -92,3 +92,15 @@ Keep it current when the described code changes.
 - Node positions belong to the server, not the engine; they are written into `NodeModel.position` only when saving.
 
 Media Fetch rejects invalid Kind edits before changing its properties or output type.
+
+## Plugin namespace paths
+
+Templates reserve every accepted plugin namespace as a global, so `{{ ha.light.kitchen.attributes.brightness }}` creates no HA input pin.
+`{{ text.ha.sensor.power.state }}` formats the declared field type using project units and engine locale, and `{{ ha.sensor.power.state | unit }}` uses the same contract.
+Only static entry paths are watched; dynamic entry selection such as `ha[name]` is outside the namespace contract.
+Missing or unavailable fields are undefined, with the same rendering behavior as missing variables.
+Formulas accept dotted paths such as `ha.sensor.power.state * 2`, retain quantity inference, and report existing translated variable errors when unavailable or non-numeric.
+Input `var:<pin>` properties and `SetInputVariable` also accept full plugin paths such as `ha.sensor.power.state`.
+These bindings are read-only, persist with the graph, and yield to connected wires.
+Formula nodes share immutable catalog indexes and look up only their referenced namespace field types, including after formula edits.
+The editor stores slim namespace catalogs, a per-entry field cache invalidated on namespace replacement, and sheet value telemetry; completion, lints and preview integration are deferred to task B.

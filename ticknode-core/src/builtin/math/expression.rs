@@ -1,5 +1,7 @@
+mod lookup;
 use super::numeric_type;
 use crate::{Node, NodeContext};
+use lookup::*;
 use std::collections::HashMap;
 use ticknode_shared::*;
 
@@ -36,6 +38,7 @@ pub struct MathExpressionNode {
     pub restoration_started: bool,
     pub had_pin_ids: bool,
     pub reported: bool,
+    catalogs: crate::value_catalog::ValueCatalogs,
 }
 
 impl MathExpressionNode {
@@ -51,6 +54,7 @@ impl MathExpressionNode {
             restoration_started: false,
             had_pin_ids: false,
             reported: false,
+            catalogs: Default::default(),
         };
         node.compile();
         node
@@ -120,6 +124,20 @@ impl MathExpressionNode {
             .collect();
     }
 
+    fn referenced_types(&self) -> HashMap<String, DataType> {
+        self.compiled
+            .iter()
+            .flat_map(|compiled| compiled.references())
+            .filter_map(|reference| {
+                if reference.lookup != VariableLookup::Plugin {
+                    return None;
+                }
+                let ty = crate::value_catalog::catalog_type(&self.catalogs, &reference.name)?;
+                Some((reference.name, ty.clone()))
+            })
+            .collect()
+    }
+
     fn effective_output_type(&self) -> DataType {
         if self.value_type != "auto"
             && let Some(t) = parse_data_type(&self.value_type).filter(numeric_type)
@@ -127,11 +145,12 @@ impl MathExpressionNode {
             return t;
         }
         if let Some(compiled) = &self.compiled {
-            let map: HashMap<String, DataType> = self
+            let mut map: HashMap<String, DataType> = self
                 .pins
                 .iter()
                 .map(|(n, _, ty)| (n.clone(), ty.clone()))
                 .collect();
+            map.extend(self.referenced_types());
             if let Ok(inferred) = compiled.infer_type(&map) {
                 return inferred;
             }
@@ -155,6 +174,16 @@ impl MathExpressionNode {
                 map.insert(format!("var.{}", v.key.name), v.data_type.clone());
                 map.insert(format!("{}.{}", v.key.prefix(), v.key.name), v.data_type);
             }
+            for reference in compiled
+                .references()
+                .into_iter()
+                .filter(|r| r.lookup == VariableLookup::Plugin)
+            {
+                if let Some((_, ty)) = ctx.plugin_values.resolve(&reference.name) {
+                    map.insert(reference.name, ty);
+                }
+            }
+            map.extend(self.referenced_types());
             if let Ok(inferred) = compiled.infer_type(&map) {
                 return inferred;
             }
@@ -177,6 +206,9 @@ impl MathExpressionNode {
 }
 
 impl Node for MathExpressionNode {
+    fn values_catalogs_changed(&mut self, catalogs: &crate::value_catalog::ValueCatalogs) {
+        self.catalogs = catalogs.clone();
+    }
     fn id(&self) -> NodeId {
         self.id
     }
@@ -396,73 +428,5 @@ pub fn expression_variables(expression: &str) -> HashMap<String, PinId> {
         .collect()
 }
 
-fn lookup_pin_value(
-    pins: &[(String, PinId, DataType)],
-    inputs: &HashMap<PinId, Option<DataValue>>,
-    var_name: &str,
-) -> Option<FormulaValue> {
-    let (_, pin, _) = pins.iter().find(|(n, _, _)| n == var_name)?;
-    match inputs.get(pin) {
-        Some(Some(DataValue::Number(n))) => Some(FormulaValue::Number(*n)),
-        Some(Some(DataValue::Bool(b))) => Some(FormulaValue::Bool(*b)),
-        _ => Some(FormulaValue::Number(NumberValue::Int(0))),
-    }
-}
-
-fn lookup_var_value(
-    ctx: &NodeContext,
-    expr_len: usize,
-    vref: &VariableRef,
-) -> Result<FormulaValue, FormulaError> {
-    let var = ctx.variable(&vref.name, vref.lookup).ok_or_else(|| {
-        FormulaError::new(
-            0..expr_len,
-            "error-variable-missing",
-            format!("Variable \"{}\" not found", vref.name),
-        )
-        .with_arg("name", &vref.name)
-    })?;
-    match &var.value {
-        DataValue::Number(n) => Ok(FormulaValue::Number(*n)),
-        DataValue::Bool(b) => Ok(FormulaValue::Bool(*b)),
-        _ => Err(FormulaError::new(
-            0..expr_len,
-            "error-formula-variable-type",
-            format!("Variable '{}' has non-numeric type", vref.name),
-        )
-        .with_arg("name", &vref.name)),
-    }
-}
-
-fn restore_pin_ids(elements: Vec<DataValue>) -> Vec<(String, PinId, DataType)> {
-    let mut pins = Vec::new();
-    for val in elements {
-        let DataValue::String(s) = val else { continue };
-        if let Some((name, pin, ty)) = parse_pin_id_element(&s)
-            && !pins
-                .iter()
-                .any(|(n, p, _): &(String, PinId, DataType)| *n == name || *p == pin)
-        {
-            pins.push((name, pin, ty));
-        }
-    }
-    pins
-}
-
-fn parse_pin_id_element(s: &str) -> Option<(String, PinId, DataType)> {
-    let parts: Vec<&str> = s.split(':').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-    let pin = parts[0]
-        .parse::<u32>()
-        .ok()
-        .filter(|&p| (1..=0x7fff_ffff).contains(&p))?;
-    let var_name = parts[1].to_string();
-    let ty = if parts.len() >= 3 {
-        parse_data_type(parts[2]).unwrap_or(DataType::Number)
-    } else {
-        DataType::Number
-    };
-    Some((var_name, PinId(pin), ty))
-}
+#[cfg(test)]
+mod catalog_tests;

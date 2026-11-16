@@ -25,3 +25,20 @@ The UTC offset template stream and HA configuration reads remain independent of 
 The plugin reads `get_states` once per connection and subscribes once to `entity_registry_updated`, debouncing registry events for ten seconds before another catalog read.
 Failed catalog reads retry after thirty seconds; there is no periodic full-state polling or global `state_changed` subscription.
 Action option builders and unit inference use tracked metadata when loaded, falling back to the slim catalog.
+
+## Read-only `ha` namespace
+
+The Home Assistant manifest declares the generic `ha` value namespace.
+The slim catalog retains flattened field contracts alongside picker metadata, never state values or arbitrary attributes for untracked entities.
+Each `get_states` snapshot publishes entity keys such as `sensor.kitchen_temperature` and their field contracts.
+Only connection and debounced registry refreshes replace the catalog; tracked value changes never republish it, even when attributes appear or change type.
+Identical field vectors are interned as `Arc<[ValueField]>` within each snapshot, so entities with the same shape share their contracts.
+An engine-values owner joins the existing tracking registry, sharing the same entity subscription and baseline with entity nodes, conditions, actions and lazy reads.
+Removing an engine watch releases only that owner and retains the registry's existing grace period.
+Baselines and tracked changes publish nested entry objects containing `entity_id`, `name`, typed `state`, raw `state_text`, typed `attributes`, `last_changed`, and `last_updated`.
+State inference and canonical unit conversion are shared with `ha/entity`; the legacy `ha.state` structure is unchanged.
+`ha-core-client` deserializes states through its domain-specific `AttributeSet::for_entity` internally; namespace conversion uses those normalized attributes, converts known units, colors and timestamps recursively, and falls back to `json_to_value` for unknown scalar attributes.
+Catalog field paths describe the converted object tree; list fields describe element types without numeric index paths.
+A live field absent from the snapshot catalog falls back to the current value's type until a later catalog refresh.
+Disconnects and entity removals publish unavailable entries; reconnects wait for the shared tracker baseline.
+Engine watches add no `get_states` polling and no global `state_changed` subscription.

@@ -35,6 +35,37 @@ pub struct CompiledFormula {
 }
 
 impl CompiledFormula {
+    pub fn references(&self) -> Vec<crate::VariableRef> {
+        fn visit(expr: &Expr, out: &mut Vec<crate::VariableRef>) {
+            match &expr.kind {
+                ExprKind::VariableRef(r) => out.push(r.clone()),
+                ExprKind::Unary { expr, .. } => visit(expr, out),
+                ExprKind::Binary { left, right, .. } => {
+                    visit(left, out);
+                    visit(right, out);
+                }
+                ExprKind::Ternary {
+                    cond,
+                    then_expr,
+                    else_expr,
+                } => {
+                    visit(cond, out);
+                    visit(then_expr, out);
+                    visit(else_expr, out);
+                }
+                ExprKind::Call { args, .. } => {
+                    for arg in args {
+                        visit(arg, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut refs = Vec::new();
+        visit(&self.ast, &mut refs);
+        refs
+    }
+
     pub fn new(source: &str) -> Result<Self, FormulaError> {
         compile(source)
     }

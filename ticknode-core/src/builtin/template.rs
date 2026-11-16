@@ -31,6 +31,7 @@ pub struct TemplateNode {
     /// Parsed once per edit; `None` while the template has a syntax error.
     compiled: Option<template::CompiledTemplate>,
     pins: Vec<(String, PinId)>,
+    namespaces: Vec<String>,
     next_pin: u32,
     restoring: bool,
     restoration_started: bool,
@@ -45,6 +46,7 @@ impl TemplateNode {
             trim_blocks: false,
             compiled: None,
             pins: Vec::new(),
+            namespaces: Vec::new(),
             next_pin: 1,
             restoring: true,
             restoration_started: false,
@@ -59,7 +61,8 @@ impl TemplateNode {
             trim_blocks: self.trim_blocks,
         };
         self.compiled = template::CompiledTemplate::new_with(&self.template, options).ok();
-        let Ok(ordered) = template::variables(&self.template) else {
+        let Ok(ordered) = template::variables_with_namespaces(&self.template, &self.namespaces)
+        else {
             return;
         };
         let old = std::mem::take(&mut self.pins);
@@ -166,6 +169,8 @@ impl TemplateNode {
                 now: ctx.host_state.now(),
                 to_text: to_text_closure,
                 variables: ctx.variables.for_sheet_and_global(ctx.sheet),
+                plugin_values: ctx.plugin_values.snapshot(),
+                namespaces: ctx.plugin_values.namespaces(),
             },
             ctx.types,
         )
@@ -173,6 +178,11 @@ impl TemplateNode {
 }
 
 impl Node for TemplateNode {
+    fn values_namespaces_changed(&mut self, namespaces: &[String]) {
+        self.namespaces = namespaces.to_vec();
+        self.compile();
+    }
+
     fn id(&self) -> NodeId {
         self.id
     }

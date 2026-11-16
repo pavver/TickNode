@@ -167,6 +167,7 @@ impl TickEngine {
             self.validate_data_types(&c)?;
         }
         self.connections.set_data(c);
+        self.refresh_value_usage(dst_node);
         self.pure_cache.clear();
         Ok(())
     }
@@ -176,6 +177,7 @@ impl TickEngine {
             .connections
             .remove_data_input(dst_node, dst_pin)
             .is_some();
+        self.refresh_value_usage(dst_node);
         self.pure_cache.clear();
         removed
     }

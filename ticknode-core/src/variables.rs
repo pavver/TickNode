@@ -84,6 +84,7 @@ impl VariableStore {
         sheet: Option<SheetId>,
     ) -> Option<VariableKey> {
         match lookup {
+            VariableLookup::Plugin => None,
             VariableLookup::Auto => {
                 if let Some(s) = sheet {
                     let k = VariableKey::sheet(s, name);

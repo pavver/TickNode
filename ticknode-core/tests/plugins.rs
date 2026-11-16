@@ -88,3 +88,5 @@ include!("plugins/telegram.rs");
 include!("plugins/struct_snapshot.rs");
 include!("plugins/pure_nodes.rs");
 include!("plugins/blobs.rs");
+
+include!("plugins/values.rs");

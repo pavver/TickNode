@@ -68,6 +68,8 @@ impl TickEngine {
 
         let mut manifest = from_wit_manifest(manifest);
         self.validate_plugin_name(&manifest)?;
+        self.validate_values_namespace(&mut manifest);
+        super::lock(&runtime.values).namespace = manifest.values_namespace.clone();
         let definitions: Vec<(NodeDefinition, bool, bool)> = definitions
             .into_iter()
             .map(|d| from_wit_definition(d, &manifest.name))
@@ -171,6 +173,8 @@ fn unprivileged_runtime(wasm: &[u8]) -> Result<Runtime, UiMessage> {
         tokio: None,
         tick_backoff_until: 0,
         options: Arc::default(),
+        values: Arc::default(),
+        sent_watches: Default::default(),
         metrics: Default::default(),
         blob_store: Arc::new(crate::blobs::MemoryBlobStore::default()),
     })

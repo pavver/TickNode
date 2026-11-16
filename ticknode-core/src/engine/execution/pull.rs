@@ -2,7 +2,8 @@ use super::*;
 
 impl TickEngine {
     pub(super) fn input_source_types(&mut self, node_id: NodeId) -> HashMap<PinId, DataType> {
-        self.connections
+        let mut result: HashMap<PinId, DataType> = self
+            .connections
             .data_into(node_id)
             .to_vec()
             .into_iter()
@@ -17,7 +18,27 @@ impl TickEngine {
                 };
                 Some((c.dst_pin, ty.clone()))
             })
-            .collect()
+            .collect();
+        for (pin, reference) in self.input_variables.get(&node_id).into_iter().flatten() {
+            let ty = if reference.lookup == VariableLookup::Plugin {
+                self.plugin_values
+                    .resolve(&reference.name)
+                    .map(|(_, ty)| ty)
+            } else {
+                self.variables
+                    .resolve(
+                        &reference.name,
+                        reference.lookup,
+                        self.node_sheets.get(&node_id).copied(),
+                    )
+                    .and_then(|key| self.variables.get(&key))
+                    .map(|var| var.data_type.clone())
+            };
+            if let Some(ty) = ty {
+                result.entry(PinId(*pin)).or_insert(ty);
+            }
+        }
+        result
     }
 
     pub(crate) fn pull_data(
@@ -26,6 +47,7 @@ impl TickEngine {
         pin_id: PinId,
         stack: &mut Vec<NodeId>,
     ) -> Option<DataValue> {
+        self.sync_plugin_values();
         if self.is_disabled(node_id) || self.skip_frozen(node_id) {
             return None;
         }
@@ -183,17 +205,22 @@ impl TickEngine {
         pin_type: &DataType,
         sheet: Option<SheetId>,
     ) -> Option<DataValue> {
-        let key = self
-            .variables
-            .resolve(&var_ref.name, var_ref.lookup, sheet)?;
-        let var = self.variables.get(&key)?;
-        let value = if self.types.compatible(&var.data_type, pin_type) {
-            Some(var.value.clone())
+        let (original, data_type) = if var_ref.lookup == VariableLookup::Plugin {
+            self.plugin_values.resolve(&var_ref.name)?
+        } else {
+            let key = self
+                .variables
+                .resolve(&var_ref.name, var_ref.lookup, sheet)?;
+            let var = self.variables.get(&key)?;
+            (&var.value, var.data_type.clone())
+        };
+        let value = if self.types.compatible(&data_type, pin_type) {
+            Some(original.clone())
         } else {
             self.types
-                .convertible(&var.data_type, pin_type)?
+                .convertible(&data_type, pin_type)?
                 .apply_with_display(
-                    var.value.clone(),
+                    original.clone(),
                     &self.host_state.display,
                     crate::quantity::labels(&self.host_state.locale),
                 )
@@ -249,6 +276,7 @@ impl TickEngine {
             node_id,
             inputs,
             input_types,
+            plugin_values: &self.plugin_values,
             variables: &self.variables,
             types: &self.types,
             sheet,
@@ -257,6 +285,7 @@ impl TickEngine {
         let outputs = node.execute(None, &mut ctx);
         self.charge_node(node_id, definition.cost);
         self.nodes.insert(node_id, node);
+        self.sync_plugin_values();
         stack.pop();
 
         let node_outputs = self.pure_output_values(node_id, outputs);

@@ -22,6 +22,8 @@ fn init(timers: Vec<NodeTimer>) -> ServerMessage {
         plugins: vec![],
         translations: vec![],
         property_options: vec![],
+        value_catalogs: vec![],
+        plugin_values: vec![],
         history: HistoryState::default(),
         wire_routes: vec![],
         detached_connections: vec![],

@@ -22,6 +22,7 @@ pub(crate) struct Telemetry {
     index: HashMap<NodeId, usize>,
     logs: Vec<(NodeId, String)>,
     dropped_logs: usize,
+    sheet_values: HashMap<SheetId, Vec<ticknode_shared::PluginValue>>,
     next_flush: Instant,
     sheet_timers: HashMap<Option<SheetId>, Vec<(NodeId, ticknode_core::TaskId, u32)>>,
 }
@@ -33,6 +34,7 @@ impl Telemetry {
             index: HashMap::new(),
             logs: Vec::new(),
             dropped_logs: 0,
+            sheet_values: HashMap::new(),
             next_flush: now,
             sheet_timers: HashMap::new(),
         }
@@ -164,6 +166,29 @@ impl Telemetry {
             }
             for (sheet, (set, removed)) in sheet_changes {
                 messages.push((sheet, ServerMessage::VariablesChanged { set, removed }));
+            }
+        }
+
+        let sheets: BTreeSet<_> = node_sheet
+            .values()
+            .copied()
+            .chain(self.sheet_values.keys().copied())
+            .collect();
+        for sheet in sheets {
+            let values = engine.plugin_values.for_sheet(sheet, node_sheet);
+            if self
+                .sheet_values
+                .get(&sheet)
+                .is_none_or(|old| *old != values)
+            {
+                if !values.is_empty() || self.sheet_values.contains_key(&sheet) {
+                    messages.push((Some(sheet), ServerMessage::PluginValues(values.clone())));
+                }
+                if values.is_empty() {
+                    self.sheet_values.remove(&sheet);
+                } else {
+                    self.sheet_values.insert(sheet, values);
+                }
             }
         }
 

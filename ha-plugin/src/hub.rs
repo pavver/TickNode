@@ -11,6 +11,7 @@ mod requests;
 mod subscriptions;
 mod templates;
 mod tracking;
+mod values;
 
 pub use env::Env;
 pub(crate) use requests::ActionRequest;
@@ -81,6 +82,8 @@ struct EntityWatch {
 
 #[derive(Default)]
 pub struct Hub {
+    value_watches: BTreeSet<String>,
+    published_values: BTreeMap<String, Option<ticknode_shared::DataValue>>,
     pub live: crate::live::Live,
     tracked: HashMap<String, tracking::Tracked>,
     catalog: Vec<crate::entities::CatalogEntry>,

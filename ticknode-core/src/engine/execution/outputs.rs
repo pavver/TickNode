@@ -47,6 +47,7 @@ impl TickEngine {
         outputs: Vec<NodeOutput>,
         next_tick_queue: &mut VecDeque<(NodeId, PinId)>,
     ) {
+        self.sync_plugin_values();
         let mut state_changed = false;
         let mut fired = Vec::new();
         for output in outputs {

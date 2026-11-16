@@ -27,6 +27,7 @@ impl Hub {
             watch.queue.clear();
             watch.errors.clear();
         }
+        self.clear_values(env);
         self.logged = None;
         self.live.reset();
         self.entities_reply = None;
@@ -97,6 +98,7 @@ impl Hub {
         let mut emissions = self.collect(now, env);
         emissions.extend(self.collect_templates(now, env));
         self.refresh_entities(now, env);
+        self.publish_values(env);
         self.refresh_services(now, env);
         self.flush(now, env);
         self.log_connection_state(env);

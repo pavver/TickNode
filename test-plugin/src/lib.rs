@@ -11,6 +11,7 @@ mod identifiers;
 mod properties;
 mod settings;
 mod typed;
+mod values;
 mod websocket;
 
 use execution::{
@@ -72,6 +73,7 @@ impl Plugin for TestPlugin {
                 None => Ok(()),
             }
         });
+        values::configure();
         http::configure(settings);
         identifiers::publish(setting_str(settings, "greeting").unwrap_or("Hello"));
         CONFIG.with(|c| {
@@ -97,6 +99,10 @@ impl Plugin for TestPlugin {
         }
     }
 
+    fn watch_values(added: Vec<String>, removed: Vec<String>) {
+        values::watch(added, removed);
+    }
+
     fn tick(events: Vec<WsEvent>) -> Vec<Emission> {
         CONFIG.with(|c| match c.borrow().greeting.as_str() {
             "tick-clock" => host::log(&format!("Plugin tick {}", host::current_tick())),
@@ -117,6 +123,7 @@ impl Plugin for TestPlugin {
             }
             _ => {}
         });
+        values::tick();
         WS.with(|w| w.borrow_mut().events += events.len() as i64);
         let mut emissions = http::tick(&events);
         for event in events {
@@ -168,6 +175,7 @@ impl Plugin for TestPlugin {
 
     fn manifest() -> PluginManifest {
         PluginManifest::new("test_plugin", "0.1.0", "TickNode")
+            .values_namespace("ha")
             .capability(Capability::Http {
                 allowed_domains: vec!["*".into()],
             })

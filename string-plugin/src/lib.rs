@@ -197,6 +197,7 @@ impl Plugin for StringPlugin {
             requested_capabilities: vec![],
             settings: vec![],
             resources: vec![],
+            values_namespace: None,
         }
     }
 

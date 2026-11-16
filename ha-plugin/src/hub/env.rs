@@ -4,6 +4,8 @@ use ticknode_plugin_sdk::{PropertyOption, WsId};
 
 /// What the hub needs from the host.
 pub trait Env {
+    fn set_value_catalog(&mut self, entries: &[ticknode_shared::ValueEntry]);
+    fn set_value(&mut self, key: &str, value: Option<&ticknode_shared::DataValue>);
     fn ws_connect(&mut self, url: &str) -> Result<WsId, String>;
     fn ws_send(&mut self, id: WsId, text: &str) -> Result<(), String>;
     fn ws_close(&mut self, id: WsId);

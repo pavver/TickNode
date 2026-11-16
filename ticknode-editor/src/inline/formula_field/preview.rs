@@ -99,6 +99,7 @@ pub fn FormulaStatusRow(node: NodeId) -> impl IntoView {
                     ticknode_shared::VariableLookup::Sheet => v.key.scope == ticknode_shared::VariableScope::Sheet,
                     ticknode_shared::VariableLookup::Global => v.key.scope != ticknode_shared::VariableScope::Sheet,
                     ticknode_shared::VariableLookup::Auto => true,
+                    ticknode_shared::VariableLookup::Plugin => false,
                 }
             }).ok_or_else(|| {
                 ticknode_shared::formula::FormulaError::new(

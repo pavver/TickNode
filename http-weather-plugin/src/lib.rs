@@ -85,6 +85,7 @@ impl Plugin for WeatherPlugin {
             }],
             settings: vec![],
             resources: vec![],
+            values_namespace: None,
         }
     }
 

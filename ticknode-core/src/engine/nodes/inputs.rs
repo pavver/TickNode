@@ -70,6 +70,7 @@ impl TickEngine {
                 values.remove(&pin.0);
             }
         }
+        self.refresh_value_usage(node_id);
         self.pure_cache.clear();
         self.clear_node_error(node_id);
         Ok(())
@@ -107,6 +108,7 @@ impl TickEngine {
                 vars.remove(&pin.0);
             }
         }
+        self.refresh_value_usage(node_id);
         self.pure_cache.clear();
         self.clear_node_error(node_id);
         Ok(())

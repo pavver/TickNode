@@ -235,6 +235,8 @@ pub fn evaluate_preview(
                 now: chrono::Utc::now(),
                 to_text: to_text_closure,
                 variables: visible_vars,
+                plugin_values: Vec::new(),
+                namespaces: Vec::new(),
             },
             &types.borrow(),
         )

@@ -7,6 +7,7 @@ pub struct NodeContext<'a> {
     pub inputs: HashMap<PinId, Option<DataValue>>,
     /// Declared output contracts of connected sources, including quantities on Any inputs.
     pub input_types: HashMap<PinId, DataType>,
+    pub plugin_values: &'a crate::PluginValues,
     pub variables: &'a VariableStore,
     pub types: &'a TypeRegistry,
     pub sheet: Option<SheetId>,
@@ -71,6 +72,11 @@ pub trait Node: Send + Sync {
     /// Called when the engine's type registry changes (or when the node is created/restored),
     /// allowing nodes that depend on custom types to update their definition, pins, and options.
     fn types_changed(&mut self, _types: &TypeRegistry) {}
+    /// Reserved plugin roots do not become template input pins.
+    fn values_namespaces_changed(&mut self, _namespaces: &[String]) {}
+    fn values_catalogs_changed(&mut self, catalogs: &crate::value_catalog::ValueCatalogs) {
+        self.values_namespaces_changed(&catalogs.keys().cloned().collect::<Vec<_>>());
+    }
     /// Scenario sheet this node belongs to, if known.
     fn set_sheet(&mut self, _sheet: Option<SheetId>) {}
     /// Whether the node is an event source polled (and charged) at the start of every tick.

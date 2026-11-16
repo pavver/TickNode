@@ -34,6 +34,7 @@ pub(super) fn format_lookup(lookup: VariableLookup) -> &'static str {
         VariableLookup::Auto => "auto",
         VariableLookup::Sheet => "sheet",
         VariableLookup::Global => "global",
+        VariableLookup::Plugin => "plugin",
     }
 }
 

@@ -110,6 +110,7 @@ impl TickEngine {
                 node_id,
                 inputs,
                 input_types,
+                plugin_values: &self.plugin_values,
                 variables: &self.variables,
                 types: &self.types,
                 sheet,
@@ -145,6 +146,7 @@ impl TickEngine {
                 node_id,
                 inputs,
                 input_types,
+                plugin_values: &self.plugin_values,
                 variables: &self.variables,
                 types: &self.types,
                 sheet,
@@ -176,6 +178,7 @@ impl TickEngine {
                 self.successful.insert(id);
                 fired.push((id, pin));
             }
+            self.sync_plugin_values();
         }
         for (id, pin) in fired {
             self.trigger_node(id, pin);

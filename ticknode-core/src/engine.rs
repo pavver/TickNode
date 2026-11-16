@@ -55,6 +55,7 @@ pub struct TickEngine {
     pub data_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
     pub pure_cache: HashMap<NodeId, HashMap<PinId, DataValue>>,
     pub variables: VariableStore,
+    pub plugin_values: crate::PluginValues,
     pub node_sheets: HashMap<NodeId, SheetId>,
     pub current_tick_changed_variables: std::collections::HashSet<VariableKey>,
     /// Values of unconnected inputs set in the editor (`in:<pin>` properties).
@@ -112,6 +113,7 @@ impl TickEngine {
             data_cache: HashMap::new(),
             pure_cache: HashMap::new(),
             variables: VariableStore::new(),
+            plugin_values: Default::default(),
             node_sheets: HashMap::new(),
             current_tick_changed_variables: std::collections::HashSet::new(),
             input_values: HashMap::new(),

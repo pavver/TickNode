@@ -119,6 +119,11 @@ pub enum ClientMessage {
         pin: PinId,
         variable: Option<String>,
     },
+    /// Requests the field tree of one plugin value entry.
+    ValueEntryFields {
+        namespace: String,
+        key: String,
+    },
 }
 
 /// An existing endpoint from which a connection is dragged.
@@ -204,6 +209,10 @@ pub enum ServerMessage {
         variables: Vec<Variable>,
         #[serde(default)]
         server_settings: ServerSettings,
+        #[serde(default)]
+        value_catalogs: Vec<crate::ValueCatalog>,
+        #[serde(default)]
+        plugin_values: Vec<crate::PluginValue>,
     },
     NodeAdded(NodeInstance),
     NodeRemoved(NodeId),
@@ -271,4 +280,13 @@ pub enum ServerMessage {
     },
     ServerSettingsChanged(ServerSettings),
     Usage(crate::UsageReport),
+    /// Changed namespaces only; empty entries remove a catalog.
+    ValueCatalogs(Vec<crate::ValueCatalog>),
+    /// Full snapshot of values used by nodes on the receiving sheet.
+    PluginValues(Vec<crate::PluginValue>),
+    ValueEntryFields {
+        namespace: String,
+        key: String,
+        fields: Vec<crate::ValueField>,
+    },
 }

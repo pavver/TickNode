@@ -31,6 +31,8 @@ pub use types::*;
 pub use ui_message::*;
 pub use usage::*;
 
+pub mod plugin_values;
+pub use plugin_values::{PluginValue, ValueCatalog, ValueEntry, ValueEntrySummary, ValueField};
 pub mod variables;
 pub use variables::*;
 

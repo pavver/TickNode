@@ -229,11 +229,8 @@ fn test_variables_extraction() {
     assert_eq!(variables("var.my_var + 1").unwrap(), Vec::<String>::new());
     assert_eq!(variables("sheet.x * 2 + a").unwrap(), vec!["a".to_string()]);
 
-    // Rejection of invalid dotted names
-    assert!(matches!(
-        variables("other.my_var + 1"),
-        Err(FormulaError { ref message, .. }) if message.key == "error-formula-reserved-name"
-    ));
+    // Plugin paths are read-only references, never input pins.
+    assert!(variables("other.my_var + 1").unwrap().is_empty());
 }
 
 #[test]

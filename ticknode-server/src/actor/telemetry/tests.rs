@@ -236,3 +236,64 @@ fn node_errors_emit_changes_once_per_interval_and_preserve_counts() {
             .is_empty()
     );
 }
+
+#[test]
+fn plugin_value_telemetry_contains_only_references_on_its_own_sheet() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/wasm32-wasip2/debug/test_plugin.wasm");
+    let Ok(bytes) = std::fs::read(path) else {
+        return;
+    };
+    let mut engine = ticknode_core::TickEngine::new();
+    engine.load_plugin(&bytes, None, |_| vec![]).unwrap();
+    let first = SheetId::generate();
+    let second = SheetId::generate();
+    let mut node_sheet = HashMap::new();
+    for (sheet, path) in [
+        (first, "ha.sensor.one.state"),
+        (second, "ha.sensor.two.state"),
+    ] {
+        let node = NodeId::generate();
+        engine
+            .create_node(
+                node,
+                "math/expression",
+                &[("expression".into(), path.into())],
+            )
+            .unwrap();
+        engine.set_node_sheet(node, Some(sheet));
+        node_sheet.insert(node, sheet);
+    }
+    engine.tick();
+    let now = Instant::now();
+    let mut telemetry = Telemetry::new(now);
+    let messages = telemetry.flush(now, &mut engine, &node_sheet);
+    let values: HashMap<_, _> = messages
+        .into_iter()
+        .filter_map(|(sheet, message)| {
+            if let ServerMessage::PluginValues(values) = message {
+                Some((sheet.unwrap(), values))
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(values[&first].len(), 1);
+    assert_eq!(values[&first][0].path, "ha.sensor.one");
+    assert_eq!(values[&second].len(), 1);
+    assert_eq!(values[&second][0].path, "ha.sensor.two");
+    assert!(
+        telemetry
+            .flush(now + INTERVAL, &mut engine, &node_sheet)
+            .iter()
+            .all(|(_, message)| !matches!(message, ServerMessage::PluginValues(_)))
+    );
+    for node in engine.node_ids() {
+        engine.remove_node(node);
+    }
+    node_sheet.clear();
+    let messages = telemetry.flush(now + INTERVAL * 2, &mut engine, &node_sheet);
+    let cleared = messages.iter().filter(|(_, message)| matches!(message, ServerMessage::PluginValues(values) if values.is_empty())).count();
+    assert_eq!(cleared, 2);
+    assert!(telemetry.sheet_values.is_empty());
+}

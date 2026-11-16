@@ -24,7 +24,10 @@ impl TickEngine {
         self.confirmed_pins
             .entry(id)
             .or_insert_with(|| pin_signature(&node.definition()));
+        let mut node = node;
+        node.values_catalogs_changed(&self.plugin_values.catalogs());
         self.nodes.insert(id, node);
+        self.refresh_value_usage(id);
         self.update_roles(id);
     }
 
@@ -81,6 +84,7 @@ impl TickEngine {
             .create_node(type_name, id)
             .ok_or_else(|| EngineError::UnknownNodeType(type_name.to_string()))?;
         node.types_changed(&self.types);
+        node.values_catalogs_changed(&self.plugin_values.catalogs());
         let mut inputs = Vec::new();
         for (name, value) in properties {
             if let Some(pin) = parse_input_value_property(name) {
@@ -268,6 +272,7 @@ impl TickEngine {
         self.clear_node_error(node_id);
         self.invalidate_definition(node_id);
         self.nodes.remove(&node_id);
+        self.plugin_values.set_usage(node_id, Default::default());
         self.confirmed_pins.remove(&node_id);
         self.frozen.remove(&node_id);
         self.frozen_reported.remove(&node_id);
@@ -287,10 +292,14 @@ impl TickEngine {
         self.host_state.cancel_node_tasks(node_id);
         self.set_node_sheet(node_id, None);
 
-        self.connections.retain(
+        let removed = self.connections.retain(
             |c| c.src_node != node_id && c.dst_node != node_id,
             |c| c.src_node != node_id && c.dst_node != node_id,
-        )
+        );
+        for connection in &removed.data {
+            self.refresh_value_usage(connection.dst_node);
+        }
+        removed
     }
 
     /// Sets a node property. If pins changed as a result, invalid connections are pruned.
@@ -357,6 +366,7 @@ impl TickEngine {
             vars.retain(|pin, _| input_pin_type(&definition, PinId(*pin)).is_some());
         }
 
+        self.refresh_value_usage(node_id);
         Ok(self.prune_connections(|c| c.src_node == node_id || c.dst_node == node_id))
     }
 
@@ -379,8 +389,13 @@ impl TickEngine {
             .filter(|c| touching(c) && self.validate_data_types(c).is_err())
             .copied()
             .collect();
-        self.connections
-            .retain(|c| !invalid_exec.contains(c), |c| !invalid_data.contains(c))
+        let removed = self
+            .connections
+            .retain(|c| !invalid_exec.contains(c), |c| !invalid_data.contains(c));
+        for connection in &removed.data {
+            self.refresh_value_usage(connection.dst_node);
+        }
+        removed
     }
 }
 

@@ -20,3 +20,18 @@ Pure caches (`TickEngine::pure_cache`) are cleared whenever variables change, in
 
 Pure node results, including absent outputs, are cached for the current tick.
 Repeated reads of an absent output do not execute or charge the node again until cache invalidation.
+
+## Plugin value reads
+
+`TickEngine::plugin_values` keeps read-only catalogs and current entry values next to `VariableStore`.
+Each namespace catalog is an immutable shared `Arc<ValueCatalogIndex>`; creating or refreshing nodes copies handles only.
+Path resolution tries dotted entry prefixes through hash lookups and resolves declared field types through a per-entry hash index.
+Formula type inference resolves only operands referenced by the compiled formula; fields absent from a catalog use the current value's type.
+A per-node usage index reference-counts static namespace paths from templates, formula operands, and unconnected input bindings.
+Node creation, removal, property edits, binding edits, and connection changes reconcile usage; watch deltas reach each owning plugin once per tick.
+Catalog changes reconcile existing nodes too, including references created before the plugin catalog arrived.
+Templates receive nested namespace globals and typed presentation trees under `text.<namespace>`; namespace roots are excluded from input derivation.
+Formulas resolve dotted plugin references as numeric, quantity, or boolean values and use the existing translated missing-variable and non-numeric errors.
+Bindings project entry fields and use the same registry compatibility/conversion rules as variables; missing values block required inputs with a throttled translated error.
+Value publications and unavailability invalidate pure caches, while active output caches remain intact.
+Disabling a plugin removes its namespace and current values.

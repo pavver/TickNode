@@ -171,6 +171,7 @@ pub(super) fn from_wit_manifest(m: wit::PluginManifest) -> PluginManifest {
             })
             .collect(),
         settings: m.settings.into_iter().map(from_wit_setting).collect(),
+        values_namespace: m.values_namespace,
         resources: m
             .resources
             .into_iter()

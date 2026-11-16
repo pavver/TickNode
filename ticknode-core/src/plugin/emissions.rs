@@ -12,6 +12,7 @@ impl TickEngine {
         &mut self,
         next_tick_queue: &mut std::collections::VecDeque<(NodeId, PinId)>,
     ) {
+        self.prepare_value_watches();
         let active: Vec<(String, Arc<Mutex<Runtime>>)> = self
             .plugins
             .iter()
@@ -28,16 +29,14 @@ impl TickEngine {
                     .and_then(|(store, _)| store.data_mut().settings_error.take());
                 (result, error)
             };
-            if let Some(error) = settings_error {
-                let slot = self
-                    .plugins
-                    .get_mut(&name)
-                    .expect("the active plugin exists");
-                if slot.settings_error.as_ref() != Some(&error) {
-                    slot.settings_error = Some(error);
-                    slot.settings_changed = true;
-                }
+            if let Some(error) = settings_error
+                && let Some(slot) = self.plugins.get_mut(&name)
+                && slot.settings_error.as_ref() != Some(&error)
+            {
+                slot.settings_error = Some(error);
+                slot.settings_changed = true;
             }
+            self.sync_plugin_values();
             match result {
                 Ok(emissions) => self.apply_emissions(&name, emissions, next_tick_queue),
                 Err(reason) => self.host_state.log(

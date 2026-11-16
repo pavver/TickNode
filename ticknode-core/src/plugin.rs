@@ -24,6 +24,8 @@ mod node;
 mod options;
 mod outputs;
 mod runtime;
+mod value_engine;
+mod values;
 
 use bindings::exports::ticknode::plugin::nodes::Guest as NodesApi;
 use bindings::ticknode::plugin::types as wit;

@@ -69,7 +69,7 @@ pub use ticknode_shared::{
     Capability, DataType, DataValue, EnumValue, FieldDefinition, NodeId, NumberValue, ObjectField,
     PinDefinition, PinDirection, PinId, PinType, PluginManifest, PropertyDefinition, PropertyKind,
     PropertyOption, ResourceAction, ResourceCollection, SettingDefinition, SettingKind, TimeDelta,
-    TypeDefinition, TypeKind, UiMessage, fluent_slug as slug, quantity,
+    TypeDefinition, TypeKind, UiMessage, ValueEntry, ValueField, fluent_slug as slug, quantity,
 };
 
 mod definition;

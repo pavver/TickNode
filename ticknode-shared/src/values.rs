@@ -112,7 +112,7 @@ impl From<f64> for NumberValue {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum DataType {
     Bool,
     Number,

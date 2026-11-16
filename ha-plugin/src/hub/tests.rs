@@ -17,9 +17,19 @@ struct Fake {
     /// Latest options per source and how many times the complete entity list was published.
     options: HashMap<String, Vec<PropertyOption>>,
     option_calls: usize,
+    value_catalog: Vec<ticknode_shared::ValueEntry>,
+    value_catalog_calls: usize,
+    values: BTreeMap<String, Option<DataValue>>,
 }
 
 impl Env for Fake {
+    fn set_value_catalog(&mut self, entries: &[ticknode_shared::ValueEntry]) {
+        self.value_catalog_calls += 1;
+        self.value_catalog = entries.to_vec();
+    }
+    fn set_value(&mut self, key: &str, value: Option<&DataValue>) {
+        self.values.insert(key.into(), value.cloned());
+    }
     fn ws_connect(&mut self, url: &str) -> Result<WsId, String> {
         if self.fail_connect {
             return Err("refused".into());
@@ -334,3 +344,5 @@ mod quantities;
 mod tracking;
 mod transport;
 mod triggers;
+
+mod values;

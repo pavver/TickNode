@@ -28,6 +28,8 @@ pub(super) async fn recv(ws: &mut Socket) -> ServerMessage {
                 ServerMessage::Executed(_)
                     | ServerMessage::Log { .. }
                     | ServerMessage::PropertyOptions { .. }
+                    | ServerMessage::ValueCatalogs(_)
+                    | ServerMessage::PluginValues(_)
                     | ServerMessage::History(_)
             ) {
                 return msg;
@@ -66,6 +68,8 @@ pub(super) async fn recv_logged(ws: &mut Socket, seen: &mut Vec<u8>) -> ServerMe
                 ServerMessage::Executed(_)
                     | ServerMessage::Log { .. }
                     | ServerMessage::PropertyOptions { .. }
+                    | ServerMessage::ValueCatalogs(_)
+                    | ServerMessage::PluginValues(_)
                     | ServerMessage::History(_)
             ) {
                 return msg;
@@ -138,3 +142,4 @@ mod settings;
 mod telemetry;
 
 mod startup;
+mod values;

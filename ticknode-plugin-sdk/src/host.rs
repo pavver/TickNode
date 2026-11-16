@@ -154,3 +154,32 @@ pub fn set_options(source: &str, options: &[PropertyOption]) {
 pub fn cancel(task: TaskId) -> bool {
     wit_host::cancel_task(task)
 }
+
+/// Replaces this plugin's read-only value catalog.
+pub fn set_value_catalog(entries: &[ticknode_shared::ValueEntry]) {
+    use crate::bindings::ticknode::plugin::{host, types as wit};
+    let entries: Vec<_> = entries
+        .iter()
+        .map(|entry| wit::ValueEntry {
+            key: entry.key.clone(),
+            title: entry.title.clone(),
+            icon: entry.icon.clone(),
+            fields: entry
+                .fields
+                .iter()
+                .map(|field| wit::ValueField {
+                    path: field.path.clone(),
+                    title: field.title.clone(),
+                    data_type: crate::convert::to_wit_data_type(&field.data_type),
+                })
+                .collect(),
+        })
+        .collect();
+    host::set_value_catalog(&entries);
+}
+
+/// Publishes a watched value, or marks it unavailable.
+pub fn set_value(key: &str, value: Option<&DataValue>) {
+    let encoded = value.map(crate::convert::encode);
+    crate::bindings::ticknode::plugin::host::set_value(key, encoded.as_deref());
+}

@@ -27,6 +27,27 @@ impl Editor {
             self.frames.update(|all| frames::apply(all, &msg));
         }
         match msg {
+            ServerMessage::ValueEntryFields {
+                namespace,
+                key,
+                fields,
+            } => {
+                self.value_entry_fields.update(|all| {
+                    all.insert((namespace, key), fields);
+                });
+            }
+            ServerMessage::PluginValues(values) => self.plugin_values.set(values),
+            ServerMessage::ValueCatalogs(catalogs) => self.value_catalogs.update(|all| {
+                for catalog in catalogs {
+                    self.value_entry_fields.update(|fields| {
+                        fields.retain(|(namespace, _), _| namespace != &catalog.namespace)
+                    });
+                    all.retain(|c| c.namespace != catalog.namespace);
+                    if !catalog.entries.is_empty() {
+                        all.push(catalog);
+                    }
+                }
+            }),
             ServerMessage::Init {
                 definitions,
                 nodes,
@@ -42,8 +63,13 @@ impl Editor {
                 open_sheet,
                 variables,
                 server_settings,
+                value_catalogs,
+                plugin_values,
                 ..
             } => {
+                self.value_entry_fields.set(HashMap::new());
+                self.value_catalogs.set(value_catalogs);
+                self.plugin_values.set(plugin_values);
                 self.sheets.set(sheets.clone());
                 self.sheets_received_at.set(now_ms());
                 self.open_sheet.set(open_sheet);
@@ -309,3 +335,6 @@ fn update_options(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod values_tests;

@@ -33,6 +33,18 @@ pub(super) fn remove_watch(node: NodeId, serial: Option<u64>) {
 pub(super) struct HostEnv;
 
 impl Env for HostEnv {
+    fn set_value_catalog(&mut self, entries: &[ticknode_shared::ValueEntry]) {
+        #[cfg(target_arch = "wasm32")]
+        host::set_value_catalog(entries);
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = entries;
+    }
+    fn set_value(&mut self, key: &str, value: Option<&DataValue>) {
+        #[cfg(target_arch = "wasm32")]
+        host::set_value(key, value);
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = (key, value);
+    }
     fn ws_connect(&mut self, url: &str) -> Result<WsId, String> {
         host::ws_connect(url, &[])
     }

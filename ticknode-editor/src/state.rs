@@ -303,6 +303,11 @@ pub struct Editor {
     pub pending_paste: RwSignal<Option<PendingPaste>>,
     pub copied_settings: RwSignal<Option<CopiedSettings>>,
     pub tooltip: RwSignal<Option<Tooltip>>,
+    /// Namespace entry metadata without field trees.
+    pub value_catalogs: RwSignal<Vec<ticknode_shared::ValueCatalog>>,
+    /// On-demand fields; invalidated when their namespace catalog is replaced.
+    pub value_entry_fields: RwSignal<HashMap<(String, String), Vec<ticknode_shared::ValueField>>>,
+    pub plugin_values: RwSignal<Vec<ticknode_shared::PluginValue>>,
     /// Options of dynamic properties; the server is the source (`Init` replaces all, `PropertyOptions` one source).
     pub property_options: RwSignal<PropertyOptions>,
     /// The open property picker popup.
@@ -389,6 +394,9 @@ impl Editor {
             pending_paste: RwSignal::new(None),
             copied_settings: RwSignal::new(None),
             tooltip: RwSignal::new(None),
+            value_catalogs: RwSignal::new(Vec::new()),
+            value_entry_fields: RwSignal::new(HashMap::new()),
+            plugin_values: RwSignal::new(Vec::new()),
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),
             template_completion: RwSignal::new(None),

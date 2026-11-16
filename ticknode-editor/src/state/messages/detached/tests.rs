@@ -58,6 +58,8 @@ fn reconnect_snapshot_replaces_detached_wires_including_empty_snapshots() {
         plugins: vec![],
         translations: vec![],
         property_options: vec![],
+        value_catalogs: vec![],
+        plugin_values: vec![],
         history: HistoryState::default(),
         wire_routes: vec![],
         detached_connections,

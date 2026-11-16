@@ -263,6 +263,10 @@ impl Actor {
     }
 
     fn broadcast_option_changes(&mut self) {
+        let catalogs = self.engine.take_value_catalog_changes();
+        if !catalogs.is_empty() {
+            self.broadcast(None, &ServerMessage::ValueCatalogs(catalogs));
+        }
         for set in self.engine.take_property_option_changes() {
             self.broadcast(
                 None,
@@ -430,6 +434,10 @@ impl Actor {
             open_sheet: active_sheet,
             variables,
             server_settings: self.server_settings.clone(),
+            value_catalogs: self.engine.value_catalogs(),
+            plugin_values: active_sheet
+                .map(|sheet| self.engine.plugin_values.for_sheet(sheet, &self.node_sheet))
+                .unwrap_or_default(),
         }
     }
 

@@ -28,6 +28,9 @@ pub trait PluginNode: 'static {
 }
 
 pub trait Plugin: 'static {
+    /// Reconciles read-only entry subscriptions.
+    fn watch_values(_added: Vec<String>, _removed: Vec<String>) {}
+
     /// All node types provided by the plugin; palette definitions come from `create(type).definition()`.
     const NODE_TYPES: &'static [&'static str];
     fn manifest() -> PluginManifest;

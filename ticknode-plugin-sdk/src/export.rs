@@ -59,6 +59,7 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
                 })
                 .collect(),
             settings: m.settings.into_iter().map(to_wit_setting).collect(),
+            values_namespace: m.values_namespace,
             resources: m
                 .resources
                 .into_iter()
@@ -102,6 +103,10 @@ impl<P: Plugin> wit_nodes::Guest for Exporter<P> {
         P::create(&type_name, node_id_from_wit(node))
             .map(|node| wit_nodes::Node::new(NodeHandle(RefCell::new(node))))
             .ok_or_else(|| format!("Unknown node type: {type_name}"))
+    }
+
+    fn watch_values(added: Vec<String>, removed: Vec<String>) {
+        P::watch_values(added, removed);
     }
 
     fn plugin_tick(events: Vec<wit::WsEvent>) -> Vec<wit::Emission> {

@@ -152,6 +152,76 @@ pub fn variable_tooltip(
     }
 }
 
+pub(crate) struct BindingPresentation {
+    pub label: String,
+    pub icon: String,
+    pub tooltip: String,
+    pub state: ControlState,
+}
+
+/// A catalog field contract remains useful when the watched value is unavailable.
+pub(crate) fn binding_presentation(
+    ed: Editor,
+    text: &str,
+    destination: &DataType,
+    required: bool,
+) -> BindingPresentation {
+    let reference = VariableRef::parse(text);
+    let resolved = reference.as_ref().and_then(|r| ed.variable_value(r));
+    let source_type = reference.as_ref().and_then(|r| ed.reference_type(r));
+    let incompatible = source_type.as_ref().is_some_and(|src| {
+        ed.types.with(|types| {
+            !types.compatible(src, destination) && types.convertible(src, destination).is_none()
+        })
+    });
+    let state = if incompatible || (required && resolved.is_none()) {
+        ControlState::Error
+    } else {
+        ControlState::Idle
+    };
+    let mut tooltip = reference.as_ref().map_or_else(
+        || t!("inline-variable-not-found", name = text.to_string()),
+        |r| variable_tooltip(r, resolved.as_ref().map(|(v, ty)| (v, ty)), &ed.types.get()),
+    );
+    let label = reference.as_ref().and_then(|r| ed.binding_label(r));
+    let (mut label, icon) = label.unwrap_or_else(|| (text.to_string(), None));
+    if reference
+        .as_ref()
+        .is_some_and(|r| r.lookup == VariableLookup::Plugin)
+    {
+        if let Some(ty) = &source_type {
+            label = format!("{label} · {}", ed.type_title(ty));
+        }
+        tooltip = t!(
+            "inline-plugin-value-tooltip",
+            name = label.clone(),
+            path = text.to_string(),
+            value = resolved
+                .as_ref()
+                .map(|(v, ty)| i18n::value_as_text(v, ty))
+                .unwrap_or_else(|| t!("inline-binding-unavailable"))
+        );
+    }
+    if incompatible {
+        tooltip = t!(
+            "inline-binding-type-error",
+            source = source_type
+                .as_ref()
+                .map(|ty| ed.type_title(ty))
+                .unwrap_or_default(),
+            target = ed.type_title(destination)
+        );
+    }
+    BindingPresentation {
+        label,
+        tooltip,
+        state,
+        icon: icon
+            .map(|s| s.replace("mdi:", "mdi-"))
+            .unwrap_or_else(|| "mdi-variable".into()),
+    }
+}
+
 /// In-place text editor opened by clicking a bound variable chip.
 #[component]
 pub fn BoundInputEditor(

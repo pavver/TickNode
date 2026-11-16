@@ -266,6 +266,7 @@ fn make_filter_item(
     let (insert, caret) = super::snippets::filter_snippet(name);
     CompletionItem {
         label: name.to_string(),
+        icon: None,
         kind: CompletionKind::Filter,
         detail,
         insert,
@@ -355,6 +356,7 @@ pub fn test_items_for(input: &ValueKind) -> Vec<CompletionItem> {
             let help = super::docs::find_doc(super::docs::DocKind::Test, name).map(|d| d.help());
             CompletionItem {
                 label: name.to_string(),
+                icon: None,
                 kind: CompletionKind::Test,
                 detail: "test".to_string(),
                 insert: name.to_string(),
@@ -370,6 +372,7 @@ pub fn loop_attribute_items() -> Vec<CompletionItem> {
         .iter()
         .map(|&attr| CompletionItem {
             label: attr.to_string(),
+            icon: None,
             kind: CompletionKind::Attribute,
             detail: "loop attribute".to_string(),
             insert: attr.to_string(),
@@ -386,6 +389,7 @@ pub fn tag_keyword_items(is_closed: bool) -> Vec<CompletionItem> {
             let (insert, caret) = super::snippets::tag_keyword_snippet(kw, is_closed);
             CompletionItem {
                 label: kw.to_string(),
+                icon: None,
                 kind: CompletionKind::Keyword,
                 detail: "keyword".to_string(),
                 insert,
@@ -405,6 +409,7 @@ pub fn function_items() -> Vec<CompletionItem> {
             let (insert, caret) = super::snippets::function_snippet(name);
             CompletionItem {
                 label: name.to_string(),
+                icon: None,
                 kind: CompletionKind::Function,
                 detail: sig.to_string(),
                 insert,
@@ -420,6 +425,7 @@ pub fn keyword_operator_items() -> Vec<CompletionItem> {
         .iter()
         .map(|&kw| CompletionItem {
             label: kw.to_string(),
+            icon: None,
             kind: CompletionKind::Keyword,
             detail: "keyword".to_string(),
             insert: kw.to_string(),

@@ -103,7 +103,9 @@ pub fn replace_range(
         fallback.push_str(text);
         fallback.push_str(&current[end_byte..]);
         textarea.set_value(&fallback);
-        if let Ok(ev) = web_sys::Event::new("input") {
+        let options = web_sys::EventInit::new();
+        options.set_bubbles(true);
+        if let Ok(ev) = web_sys::Event::new_with_event_init_dict("input", &options) {
             let _ = textarea.dispatch_event(&ev);
         }
     }

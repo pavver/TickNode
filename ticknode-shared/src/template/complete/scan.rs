@@ -276,6 +276,7 @@ pub(crate) fn resolve_dot_context(
                 .iter()
                 .map(|(name, data_type)| CompletionItem {
                     label: name.clone(),
+                    icon: None,
                     kind: CompletionKind::Variable,
                     detail: type_label(data_type, types),
                     insert: name.clone(),
@@ -287,6 +288,7 @@ pub(crate) fn resolve_dot_context(
                 for scope in ["var", "sheet", "global"] {
                     items.push(CompletionItem {
                         label: scope.to_string(),
+                        icon: None,
                         kind: CompletionKind::Variable,
                         detail: format!("{scope} variables"),
                         insert: scope.to_string(),
@@ -355,6 +357,7 @@ pub(crate) fn resolve_dot_context(
                     .iter()
                     .map(|f| CompletionItem {
                         label: f.name.clone(),
+                        icon: None,
                         kind: CompletionKind::Field,
                         detail: type_label(&f.data_type, types),
                         insert: f.name.clone(),

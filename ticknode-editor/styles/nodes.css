@@ -464,3 +464,8 @@
     .duration-value > .inline-value.duration-unit,
     .node > .pins.in > .pin > .inline-value.select { width: auto; }
 }
+
+/* Preserve pin row geometry while observing the inline editor's input events. */
+.inline-binding {
+    display: contents;
+}

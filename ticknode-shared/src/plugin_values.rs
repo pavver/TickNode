@@ -2,6 +2,9 @@
 use crate::{DataType, DataValue};
 use serde::{Deserialize, Serialize};
 
+pub mod editor;
+pub mod lint;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ValueField {
     pub path: String,

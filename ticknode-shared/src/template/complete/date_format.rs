@@ -174,6 +174,7 @@ fn complete_unit_arg(
         if seen.insert(&u.symbol) && u.symbol.starts_with(partial) {
             items.push(CompletionItem {
                 label: u.symbol.clone(),
+                icon: None,
                 kind: CompletionKind::Format,
                 detail: u.id.clone(),
                 insert: u.symbol.clone(),
@@ -228,6 +229,7 @@ fn complete_date_arg(
                 };
                 items.push(CompletionItem {
                     label: preset.to_string(),
+                    icon: None,
                     kind: CompletionKind::Format,
                     detail,
                     insert: preset.to_string(),
@@ -250,6 +252,7 @@ fn complete_date_arg(
             };
             items.push(CompletionItem {
                 label: token.to_string(),
+                icon: None,
                 kind: CompletionKind::Format,
                 detail,
                 insert: token.to_string(),
@@ -265,6 +268,7 @@ fn complete_date_arg(
     if partial.is_empty() {
         items.push(CompletionItem {
             label: "[text]".to_string(),
+            icon: None,
             kind: CompletionKind::Format,
             detail: String::new(),
             insert: "[]".to_string(),
@@ -318,6 +322,7 @@ fn complete_strftime_arg(
             };
             items.push(CompletionItem {
                 label: token.to_string(),
+                icon: None,
                 kind: CompletionKind::Format,
                 detail,
                 insert: token.to_string(),
@@ -368,6 +373,7 @@ fn complete_duration_arg(
                 let detail = crate::template::duration::example(preset, input.labels);
                 items.push(CompletionItem {
                     label: preset.to_string(),
+                    icon: None,
                     kind: CompletionKind::Format,
                     detail,
                     insert: preset.to_string(),
@@ -386,6 +392,7 @@ fn complete_duration_arg(
             let detail = crate::template::duration::example(token, input.labels);
             items.push(CompletionItem {
                 label: token.to_string(),
+                icon: None,
                 kind: CompletionKind::Format,
                 detail,
                 insert: token.to_string(),
@@ -401,6 +408,7 @@ fn complete_duration_arg(
     if partial.is_empty() {
         items.push(CompletionItem {
             label: "[text]".to_string(),
+            icon: None,
             kind: CompletionKind::Format,
             detail: String::new(),
             insert: "[]".to_string(),

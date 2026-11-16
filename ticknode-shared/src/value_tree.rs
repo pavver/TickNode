@@ -128,7 +128,12 @@ pub fn field_hint(
         );
     }
     let ty = effective_type(value, &parent, name, types).unwrap_or(DataType::Any);
-    if let Some(def) = types.definition_of(&ty) {
+    type_hint(&ty, types)
+}
+
+/// Type metadata for a field whose contract came from an on-demand catalog.
+pub fn type_hint(ty: &DataType, types: &TypeRegistry) -> crate::UiMessage {
+    if let Some(def) = types.definition_of(ty) {
         let (suffix, fallback) = if def.description.is_empty() {
             ("title", &def.title)
         } else {
@@ -139,7 +144,7 @@ pub fn field_hint(
             fallback,
         )
     } else {
-        let name = crate::data_type_name(&ty);
+        let name = crate::data_type_name(ty);
         crate::UiMessage::new(format!("type-{}", crate::fluent_slug(&name)), name)
     }
 }

@@ -188,14 +188,7 @@ pub fn TemplateHighlightLayer(
                     .cloned()
                     .collect::<Vec<_>>()
             });
-            let lints = ed.types.with(|types| {
-                ticknode_shared::template::lint_with_variables(
-                    &text,
-                    &typed_inputs,
-                    types,
-                    &visible_vars,
-                )
-            });
+            let lints = ed.template_lints(&text, &typed_inputs, &visible_vars);
             lints.into_iter().map(|l| l.range).collect::<Vec<_>>()
         } else {
             Vec::new()

@@ -161,3 +161,25 @@ pub fn lint(source: &str, inputs: &[(String, DataType)]) -> Vec<Lint> {
 
     lints
 }
+
+/// Includes namespace references in diagnostics and physical quantity inference.
+pub fn lint_with_catalog(
+    source: &str,
+    inputs: &[(String, DataType)],
+    types: &crate::TypeRegistry,
+    ctx: &crate::plugin_values::editor::ValueTreeContext,
+) -> Vec<Lint> {
+    let mut typed = inputs.to_vec();
+    if let Ok(compiled) = super::compile(source) {
+        for reference in compiled.references() {
+            if let Some(ty) = ctx.field_type(&reference.to_str(), types) {
+                typed.push((reference.to_str(), ty));
+            }
+        }
+    }
+    let mut result = lint(source, &typed);
+    result.extend(crate::plugin_values::lint::lint_paths(
+        source, false, ctx, types, inputs,
+    ));
+    result
+}

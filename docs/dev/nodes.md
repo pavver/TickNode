@@ -119,3 +119,9 @@ Field help is derived on demand from the registered structure field description,
 Template completion uses available value trees alongside declarations, including under `text.` and variable roots.
 Formula result contracts follow effective live reference and bound input types after evaluation, and the editor uses these reference contracts for preview and trace labels.
 Static numeric list indices in template paths retain element contracts in both `text.value.items[0]` and `value.items[0] | unit`.
+
+Namespace paths have the same editor completion in templates, expressions and unconnected inline inputs as variable references.
+Completion walks domains, entry keys and arbitrarily nested fields, including `text.ha.<key>.<field>`, using only the slim catalog and on-demand field trees.
+Field suggestions use TickNode types rather than integration state strings, with declared catalog contracts taking precedence over runtime metadata.
+Unknown namespace keys and fetched fields produce translated reference diagnostics; pending field requests do not produce false unknown-field warnings.
+Inline namespace bindings keep their declared field contract while values are unavailable, and their chips display entity titles and field types with compatibility feedback.

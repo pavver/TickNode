@@ -1,4 +1,5 @@
 use super::properties::default_value;
+use super::variable::variable_tooltip;
 use super::*;
 
 #[test]

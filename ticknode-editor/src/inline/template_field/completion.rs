@@ -18,6 +18,7 @@ pub struct TemplateCompletionState {
     pub caret_top: f64,
     pub completion: Completion,
     pub selected: usize,
+    pub binding: Option<ticknode_shared::PinId>,
 }
 
 /// Checks whether the user typed a trigger character: identifier, `.`, `|`, `'`, `"`, `%`,
@@ -77,6 +78,13 @@ pub fn accept_completion_item(
     item: &CompletionItem,
     range: std::ops::Range<usize>,
 ) {
+    let binding = ed
+        .template_completion
+        .with_untracked(|s| s.as_ref().and_then(|s| s.binding));
+    if let Some(pin) = binding {
+        crate::inline::binding_completion::accept(ed, node, pin, item, range);
+        return;
+    }
     ed.template_completion.set(None);
 
     #[cfg(target_arch = "wasm32")]
@@ -186,21 +194,24 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
                 .collect::<Vec<_>>()
         });
 
-        let mut values = super::preview::node_preview_inputs(ed, node);
-        values.extend(ed.template_values());
-        let completion = ed.types.with_untracked(|types| {
-            ticknode_shared::template::complete::complete_with_values(
-                &ticknode_shared::template::CompletionInput {
-                    source: &current_text,
-                    caret: caret_byte,
-                    inputs: &input_pins,
-                    types,
-                    now: Some(chrono::Local::now()),
-                    labels: Some(&crate::i18n::UiQuantityLabels),
-                    variables: &visible_vars,
-                },
-                &values,
-            )
+        let values = super::preview::node_preview_inputs(ed, node);
+        ed.request_value_fields(&current_text, true);
+        let completion = ed.with_value_tree(|ctx| {
+            ed.types.with_untracked(|types| {
+                ticknode_shared::template::complete::complete_with_catalog(
+                    &ticknode_shared::template::CompletionInput {
+                        source: &current_text,
+                        caret: caret_byte,
+                        inputs: &input_pins,
+                        types,
+                        now: Some(chrono::Local::now()),
+                        labels: Some(&crate::i18n::UiQuantityLabels),
+                        variables: &visible_vars,
+                    },
+                    &values,
+                    Some(ctx),
+                )
+            })
         });
 
         if let Some(completion) = completion
@@ -215,6 +226,7 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
                 caret_top,
                 completion,
                 selected: 0,
+                binding: None,
             }));
             return;
         }
@@ -313,7 +325,7 @@ fn TemplateCompletionPopup(state: TemplateCompletionState) -> impl IntoView {
                     let is_active = row == selected_index;
                     let item_clone = item.clone();
                     let range_clone = range.clone();
-                    let icon = completion_kind_icon(&item.kind);
+                    let icon = item.icon.as_deref().map(|icon| icon.replace("mdi:", "mdi-")).unwrap_or_else(|| completion_kind_icon(&item.kind).into());
                     view! {
                         <div
                             id=format!("tpl-opt-{row}")

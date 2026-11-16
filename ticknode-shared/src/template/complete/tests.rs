@@ -99,7 +99,7 @@ fn test_struct_field_completion() {
     let labels: Vec<_> = c_all.items.iter().map(|i| i.label.as_str()).collect();
     assert_eq!(labels, vec!["id", "name"]);
     assert_eq!(c_all.items[0].detail, "Number");
-    assert_eq!(c_all.items[1].detail, "String");
+    assert_eq!(c_all.items[1].detail, "Text");
 
     let (source, res_prefix) = complete_at("{{ u.na|^| }}", &inputs, &types);
     let c_prefix = res_prefix.expect("should complete na prefix");
@@ -154,7 +154,7 @@ fn test_text_root_completion() {
     let c = res.expect("text. should offer input names");
     let labels: Vec<_> = c.items.iter().map(|i| i.label.as_str()).collect();
     assert_eq!(labels, vec!["label", "voltage"]);
-    assert_eq!(c.items[0].detail, "String");
+    assert_eq!(c.items[0].detail, "Text");
     assert_eq!(c.items[1].detail, "Number");
 }
 

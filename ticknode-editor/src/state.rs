@@ -18,6 +18,7 @@ mod graph_tests;
 pub use graph::is_required_missing;
 mod messages;
 pub mod timers;
+mod value_completion;
 mod values;
 mod wires;
 pub use wires::{WireContext, WireKey, WireRoutes};
@@ -308,6 +309,8 @@ pub struct Editor {
     pub value_catalogs: RwSignal<Vec<ticknode_shared::ValueCatalog>>,
     /// On-demand fields; invalidated when their namespace catalog is replaced.
     pub value_entry_fields: RwSignal<HashMap<(String, String), Vec<ticknode_shared::ValueField>>>,
+    pub(crate) value_catalog_index: RwSignal<plugin_values::editor::ValueCatalogTree>,
+    pub(crate) value_fields_pending: StoredValue<BTreeSet<(String, String)>>,
     pub plugin_values: RwSignal<Vec<ticknode_shared::PluginValue>>,
     /// Options of dynamic properties; the server is the source (`Init` replaces all, `PropertyOptions` one source).
     pub property_options: RwSignal<PropertyOptions>,
@@ -397,6 +400,8 @@ impl Editor {
             tooltip: RwSignal::new(None),
             value_catalogs: RwSignal::new(Vec::new()),
             value_entry_fields: RwSignal::new(HashMap::new()),
+            value_catalog_index: RwSignal::new(plugin_values::editor::ValueCatalogTree::default()),
+            value_fields_pending: StoredValue::new(BTreeSet::new()),
             plugin_values: RwSignal::new(Vec::new()),
             property_options: RwSignal::new(HashMap::new()),
             picker: RwSignal::new(None),

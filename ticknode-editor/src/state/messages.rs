@@ -32,13 +32,18 @@ impl Editor {
                 key,
                 fields,
             } => {
+                self.value_fields_pending.update_value(|pending| {
+                    pending.remove(&(namespace.clone(), key.clone()));
+                });
                 self.value_entry_fields.update(|all| {
                     all.insert((namespace, key), fields);
                 });
+                super::value_completion::refresh_completion(*self);
             }
             ServerMessage::PluginValues(values) => self.plugin_values.set(values),
             ServerMessage::ValueCatalogs(catalogs) => self.value_catalogs.update(|all| {
                 for catalog in catalogs {
+                    self.replace_value_catalog(&catalog);
                     self.value_entry_fields.update(|fields| {
                         fields.retain(|(namespace, _), _| namespace != &catalog.namespace)
                     });
@@ -68,6 +73,12 @@ impl Editor {
                 ..
             } => {
                 self.value_entry_fields.set(HashMap::new());
+                self.value_fields_pending.set_value(BTreeSet::new());
+                self.value_catalog_index
+                    .set(plugin_values::editor::ValueCatalogTree::default());
+                for catalog in &value_catalogs {
+                    self.replace_value_catalog(catalog);
+                }
                 self.value_catalogs.set(value_catalogs);
                 self.plugin_values.set(plugin_values);
                 self.sheets.set(sheets.clone());

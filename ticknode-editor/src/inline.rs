@@ -8,6 +8,7 @@ use crate::i18n::{self, t};
 use crate::state::{ClientNode, Editor, LogKind, use_editor};
 use crate::ui::{ControlState, flash};
 
+pub(crate) mod binding_completion;
 pub(crate) mod duration;
 pub(crate) mod formula_field;
 mod identifier;
@@ -24,7 +25,7 @@ pub use properties::*;
 pub use template_field::{
     TemplateCompletionLayer, TemplateDraft, TemplateField, TemplateSamplesLayer, TemplateStatusRow,
 };
-pub use variable::{BoundInputEditor, InputCommit, decide_input_commit, variable_tooltip};
+pub use variable::{BoundInputEditor, InputCommit, decide_input_commit};
 
 #[cfg(test)]
 pub use variable::resolve_variable;
@@ -292,22 +293,12 @@ pub fn PinValue(
     });
 
     view! {
+        <binding_completion::BindingCompletion ed=ed node=node pin=pin>
         {move || {
             if let Some(ref_text) = bound_var.get() {
                 if !is_editing.get() {
-                    let vref = VariableRef::parse(&ref_text);
-                    let resolved = vref.as_ref().and_then(|vr| ed.variable_value(vr));
-                    let missing_required = is_required && resolved.is_none();
-                    let state = if missing_required {
-                        ControlState::Error
-                    } else {
-                        ControlState::Idle
-                    };
-                    let tooltip = vref.as_ref().map_or_else(
-                        || t!("inline-variable-not-found", name = ref_text.clone()),
-                        |vr| variable_tooltip(vr, resolved.as_ref().map(|(v, ty)| (v, ty)), &ed.types.get()),
-                    );
-
+                    let variable::BindingPresentation { label, icon, tooltip, state } =
+                        variable::binding_presentation(ed, &ref_text, &value_type, is_required);
                     view! {
                         <div
                             class=move || format!("inline-chip {}", state.class())
@@ -324,8 +315,8 @@ pub fn PinValue(
                                     }
                                 }
                             >
-                                <span class="mdi mdi-variable" aria-hidden="true"></span>
-                                <span class="inline-chip-text">{ref_text.clone()}</span>
+                                <span class=format!("mdi {icon}") aria-hidden="true"></span>
+                                <span class="inline-chip-text">{label}</span>
                             </button>
                             {(!is_unavailable).then(|| {
                                 view! {
@@ -384,6 +375,7 @@ pub fn PinValue(
                 }.into_any()
             }
         }}
+        </binding_completion::BindingCompletion>
     }
     .into_any()
 }

@@ -10,8 +10,29 @@ pub(super) fn tooltip(ed: Editor, node: NodeId, path: &[String]) -> Option<Strin
         path
     };
     let full = parts.join(".");
-    let mut inputs = super::preview::node_preview_inputs(ed, node);
-    inputs.extend(ed.template_values());
+    let inputs = super::preview::node_preview_inputs(ed, node);
+    if !inputs
+        .iter()
+        .any(|(name, _, _)| parts.first() == Some(name))
+    {
+        ed.request_value_fields(&full, false);
+        let tooltip = ed.with_value_tree(|ctx| {
+            ed.types.with(|types| {
+                let (namespace, entry, suffix) = ctx.catalog.entry(&full)?;
+                let ty = ctx.field_type(&full, types)?;
+                let value = ctx
+                    .value(namespace, &entry.key)
+                    .and_then(|v| plugin_values::project(v, suffix));
+                let title = crate::i18n::data_type_title(types, &ty);
+                let text = super::hover::format_field_tooltip(path, &ty, value, &title);
+                let hint = value_tree::type_hint(&ty, types);
+                Some(format!("{text}\n{}", crate::i18n::ui_text(&hint)))
+            })
+        });
+        if tooltip.is_some() {
+            return tooltip;
+        }
+    }
     let root = inputs
         .into_iter()
         .filter(|(name, _, _)| full.starts_with(&format!("{name}.")))

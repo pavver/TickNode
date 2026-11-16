@@ -30,8 +30,8 @@ impl Editor {
         })
     }
 
-    pub(crate) fn bound_input(&self, node: NodeId, pin: PinId) -> Option<(DataValue, DataType)> {
-        let reference = self.node_tracked(node)?.instance.with(|i| {
+    pub(crate) fn bound_reference(&self, node: NodeId, pin: PinId) -> Option<VariableRef> {
+        self.node_tracked(node)?.instance.with(|i| {
             i.model
                 .properties
                 .iter()
@@ -43,8 +43,15 @@ impl Editor {
                         None
                     }
                 })
-        })?;
-        self.variable_value(&reference)
+        })
+    }
+
+    pub(crate) fn bound_input_type(&self, node: NodeId, pin: PinId) -> Option<DataType> {
+        self.reference_type(&self.bound_reference(node, pin)?)
+    }
+
+    pub(crate) fn bound_input(&self, node: NodeId, pin: PinId) -> Option<(DataValue, DataType)> {
+        self.variable_value(&self.bound_reference(node, pin)?)
     }
 
     pub(crate) fn variable_value(&self, reference: &VariableRef) -> Option<(DataValue, DataType)> {
@@ -131,12 +138,12 @@ impl Editor {
             types.insert(
                 input.name.clone(),
                 wired
-                    .or_else(|| self.bound_input(node, input.id).map(|(_, ty)| ty))
+                    .or_else(|| self.bound_input_type(node, input.id))
                     .unwrap_or_else(|| ty.clone()),
             );
         }
         for reference in compiled.references() {
-            if let Some((_, ty)) = self.variable_value(&reference) {
+            if let Some(ty) = self.reference_type(&reference) {
                 types.insert(reference.to_str(), ty);
             }
         }
@@ -145,10 +152,29 @@ impl Editor {
 
     pub(crate) fn template_values(&self) -> Vec<(String, Option<DataValue>, DataType)> {
         self.plugin_values.with(|values| {
-            values
-                .iter()
-                .map(|v| (v.path.clone(), v.value.clone(), DataType::Object))
-                .collect()
+            self.value_entry_fields.with(|cache| {
+                let mut result = Vec::new();
+                for value in values {
+                    result.push((value.path.clone(), value.value.clone(), DataType::Object));
+                    let Some((namespace, key)) = value.path.split_once('.') else {
+                        continue;
+                    };
+                    if let Some(fields) = cache.get(&(namespace.into(), key.into())) {
+                        for field in fields {
+                            result.push((
+                                format!("{}.{}", value.path, field.path),
+                                value
+                                    .value
+                                    .as_ref()
+                                    .and_then(|v| project(v, &field.path))
+                                    .cloned(),
+                                field.data_type.clone(),
+                            ));
+                        }
+                    }
+                }
+                result
+            })
         })
     }
 }

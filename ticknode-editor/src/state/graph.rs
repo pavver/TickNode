@@ -100,7 +100,7 @@ impl Editor {
                 .map(|c| (c.src_node, c.src_pin))
         });
         let Some(src) = src else {
-            return self.bound_input(node, pin).map(|(_, ty)| ty);
+            return self.bound_input_type(node, pin);
         };
         self.output_type(src.0, src.1)
     }

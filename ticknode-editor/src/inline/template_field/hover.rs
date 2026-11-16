@@ -243,9 +243,7 @@ pub fn resolve_hover_tooltip_with_context(
                 .cloned()
                 .collect::<Vec<_>>()
         });
-        let lints = ed.types.with(|types| {
-            ticknode_shared::template::lint_with_variables(src, &inputs, types, &visible_vars)
-        });
+        let lints = ed.template_lints(src, &inputs, &visible_vars);
         if let Some(lint) = lints
             .iter()
             .find(|l| l.range.start < range.end && range.start < l.range.end)

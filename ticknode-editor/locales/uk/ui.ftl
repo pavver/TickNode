@@ -939,3 +939,7 @@ formula-lint-unknown-function = Невідома функція «{ $name }»
 formula-lint-unknown-function-suggest = Невідома функція «{ $name }». Можливо, ви мали на увазі «{ $suggestion }»?
 formula-lint-wrong-arity = Функція «{ $name }» очікує { $expected } аргументів, отримано { $got }
 
+
+inline-plugin-value-tooltip = { $name } ({ $path }): { $value }
+inline-binding-unavailable = Недоступно
+inline-binding-type-error = Неможливо прив'язати { $source } до { $target }

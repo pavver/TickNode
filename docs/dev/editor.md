@@ -38,3 +38,15 @@ Universal Make Object and Break Object nodes translate field labels using the se
 - The inspector shows a node's last execution from `NodeTrace` (inputs, outputs, fired exec pins, "N seconds ago"). The server sends traces in `Executed` (every telemetry interval) and the latest ones with their age in ms in `Init`; they live only in memory.
 - Named types in the editor: `Editor::types`, `geometry::type_color` (the type's `color`, otherwise a hash of the name), `Editor::type_title`; an unconnected enum input is a drop-down (`InlineValue`).
 - **Internationalization (`i18n.rs`, Mozilla Fluent).** Locales `en` and `uk`. The editor's own texts live in `ticknode-editor/locales/{en,uk}/ui.ftl` (UI, categories, data types, Match operators, `error-*` keys for engine errors) and are embedded with `include_str!`; texts of nodes, types, categories and plugin settings come from the server (see *Translations*) and are added to the bundles with `set_runtime_translations` (`ui.ftl` ids win on a clash). The active locale is `RwSignal<Locale>` in the Leptos context (`Editor::locale`), stored in `localStorage` (`ticknode.locale`; default — the browser language: `uk*` → `uk`, otherwise `en`). **Every new UI string goes through `t!("key")` / `t!("key", arg = val)` and must exist in both locales.** For node/type/setting texts use `i18n::node_title`, `node_description`, `node_help`, `node_pin_label`, `type_def_title`, `enum_value_title`, `setting_title`/`setting_description`/`setting_option_label`, `category_label`; a `UiMessage` is shown with `i18n::ui_text`. Without a translation the definition's own (English) text is shown. The editor tests check `ui.ftl` syntax, identical key sets in both locales, that every `t!("...")` key exists, and the runtime-resource lookup order.
+
+### Plugin value completion
+
+Template, expression and inline binding fields share hierarchical completion for plugin namespaces, including formatted `text.<namespace>` paths.
+The editor indexes only slim catalog keys, titles and icons when a namespace changes, and queries the matching prefix at one level with at most 50 results.
+It requests a referenced entry's field tree through `ClientMessage::ValueEntryFields`, deduplicates pending requests and keeps answers in the existing per-entry cache until that namespace changes.
+A field answer refreshes the focused completion without requiring another keystroke.
+Nested completion, reference diagnostics and bound input contracts reuse `ticknode_shared::effective_type`, declared catalog fields and hidden runtime field metadata.
+Diagnostics wait for a missing field tree before treating a field as unknown.
+Entity suggestions carry their title and icon, and field suggestions show localized TickNode type titles, including quantity units and list element types.
+Bound namespace chips show the entity title, field path and effective type, and flag incompatible destination contracts even when telemetry is unavailable.
+Template previews consume only open-sheet namespace telemetry and cached field contracts; trace views retain the same bound source type contracts.

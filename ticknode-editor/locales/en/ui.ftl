@@ -924,3 +924,7 @@ formula-lint-unknown-function = Unknown function '{ $name }'
 formula-lint-unknown-function-suggest = Unknown function '{ $name }'. Did you mean '{ $suggestion }'?
 formula-lint-wrong-arity = Function '{ $name }' expects { $expected } arguments, got { $got }
 
+
+inline-plugin-value-tooltip = { $name } ({ $path }): { $value }
+inline-binding-unavailable = Unavailable
+inline-binding-type-error = Cannot bind { $source } to { $target }

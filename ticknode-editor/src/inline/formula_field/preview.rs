@@ -8,7 +8,7 @@ use crate::inline::template_field::samples::TemplateSamplesState;
 use crate::state::use_editor;
 use leptos::prelude::*;
 use std::collections::HashMap;
-use ticknode_shared::formula::{FormulaValue, compile, infer_type, lint, validate};
+use ticknode_shared::formula::{FormulaValue, compile, infer_type, validate};
 use ticknode_shared::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
@@ -48,7 +48,7 @@ pub fn FormulaStatusRow(node: NodeId) -> impl IntoView {
             .collect();
 
         // 2. Lint check (unknown function with suggestion, arity, quantity mismatches)
-        let lints = lint(trimmed, &typed_inputs);
+        let lints = ed.formula_lints(trimmed, &typed_inputs);
         if let Some(first_lint) = lints.first() {
             return FormulaPreviewStatus::Warning(ui_text(&first_lint.message));
         }

@@ -408,3 +408,20 @@ fn check_struct_fields(
         }
     }
 }
+
+/// Namespace-aware diagnostics use the same cached field contracts as tree completion.
+pub fn lint_with_catalog(
+    source: &str,
+    inputs: &[(String, DataType)],
+    types: &TypeRegistry,
+    variables: &[crate::Variable],
+    ctx: &crate::plugin_values::editor::ValueTreeContext,
+) -> Vec<Lint> {
+    let mut result = lint_with_variables(source, inputs, types, variables);
+    if crate::template::validate(source).is_ok() {
+        result.extend(crate::plugin_values::lint::lint_paths(
+            source, true, ctx, types, inputs,
+        ));
+    }
+    result
+}

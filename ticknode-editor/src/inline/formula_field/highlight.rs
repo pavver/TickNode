@@ -133,7 +133,7 @@ pub fn FormulaHighlightLayer(
                     .into_iter()
                     .map(|(name, _, ty)| (name, ty))
                     .collect::<Vec<_>>();
-            let lints = ticknode_shared::formula::lint(&text, &typed_inputs);
+            let lints = ed.formula_lints(&text, &typed_inputs);
             lints.into_iter().map(|l| l.range).collect::<Vec<_>>()
         } else {
             Vec::new()

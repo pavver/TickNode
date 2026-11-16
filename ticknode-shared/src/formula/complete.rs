@@ -76,6 +76,7 @@ fn collect_inputs(
             let detail = crate::template::complete::type_label(data_type, &Default::default());
             items.push(CompletionItem {
                 label: name.clone(),
+                icon: None,
                 kind: CompletionKind::Variable,
                 detail,
                 insert: name.clone(),
@@ -113,6 +114,7 @@ fn collect_variables(
             {
                 items.push(CompletionItem {
                     label: cand.clone(),
+                    icon: None,
                     kind: CompletionKind::Variable,
                     detail: detail.clone(),
                     insert: cand,
@@ -129,6 +131,7 @@ fn collect_constants(prefix: &str, prefix_lower: &str, items: &mut Vec<Completio
         if prefix.is_empty() || name.starts_with(prefix_lower) {
             items.push(CompletionItem {
                 label: (*name).to_string(),
+                icon: None,
                 kind: CompletionKind::Constant,
                 detail: (*detail).to_string(),
                 insert: (*name).to_string(),
@@ -144,6 +147,7 @@ fn collect_functions(prefix: &str, prefix_lower: &str, items: &mut Vec<Completio
         if prefix.is_empty() || doc.name.to_ascii_lowercase().starts_with(prefix_lower) {
             items.push(CompletionItem {
                 label: doc.name.to_string(),
+                icon: None,
                 kind: CompletionKind::Function,
                 detail: doc.signature.to_string(),
                 insert: format!("{}(", doc.name),
@@ -158,6 +162,7 @@ fn collect_functions(prefix: &str, prefix_lower: &str, items: &mut Vec<Completio
             if prefix.is_empty() || alias.to_ascii_lowercase().starts_with(prefix_lower) {
                 items.push(CompletionItem {
                     label: (*alias).to_string(),
+                    icon: None,
                     kind: CompletionKind::Function,
                     detail: doc.signature.to_string(),
                     insert: format!("{alias}("),
@@ -170,4 +175,30 @@ fn collect_functions(prefix: &str, prefix_lower: &str, items: &mut Vec<Completio
             }
         }
     }
+}
+
+/// Reuses template tree completion for namespace paths, including on-demand declared fields.
+pub fn complete_with_catalog(
+    input: &crate::template::CompletionInput,
+    ctx: &crate::plugin_values::editor::ValueTreeContext,
+) -> Completion {
+    let mut result =
+        complete_with_variables(input.source, input.caret, input.inputs, input.variables);
+    let prefix = &input.source[result.range.clone()];
+    if let Some((before, partial)) = prefix.rsplit_once('.') {
+        let before = format!("{before}.");
+        if let Some(items) =
+            crate::template::complete::tree::namespace_items(&before, partial, input, ctx)
+        {
+            result.range.start += before.len();
+            result.items = items;
+        }
+    } else {
+        result
+            .items
+            .extend(crate::template::complete::tree::namespace_roots(
+                ctx, prefix,
+            ));
+    }
+    result
 }

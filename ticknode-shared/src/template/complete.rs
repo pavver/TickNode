@@ -17,7 +17,7 @@ pub mod signature;
 pub mod snippets;
 #[cfg(test)]
 mod tests;
-mod tree;
+pub(crate) mod tree;
 
 pub use docs::{Doc, DocKind, find_doc};
 pub use kinds::{ValueKind, kind_of};
@@ -52,6 +52,7 @@ pub enum CompletionKind {
 pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionKind,
+    pub icon: Option<String>,
     pub detail: String,
     pub insert: String,
     pub help: Option<crate::UiMessage>,
@@ -69,7 +70,7 @@ pub fn type_label(data_type: &DataType, types: &TypeRegistry) -> String {
     match data_type {
         DataType::Bool => "Bool".to_string(),
         DataType::Number => "Number".to_string(),
-        DataType::String => "String".to_string(),
+        DataType::String => "Text".to_string(),
         DataType::Time => "Time".to_string(),
         DataType::DateTime => "DateTime".to_string(),
         DataType::Duration => "Duration".to_string(),
@@ -87,6 +88,36 @@ pub fn type_label(data_type: &DataType, types: &TypeRegistry) -> String {
     }
 }
 
+/// Localized TickNode type title, including list element contracts and quantity unit kind.
+pub fn localized_type_label(ty: &DataType, input: &CompletionInput) -> String {
+    if let DataType::List(inner) = ty {
+        let inner = localized_type_label(inner, input);
+        return input
+            .labels
+            .and_then(|l| l.message_args("type-list-of", &[("inner", inner.clone())]))
+            .unwrap_or_else(|| format!("List: {inner}"));
+    }
+    let key = match ty {
+        DataType::Named(name) => format!("type-{}-title", crate::fluent_slug(name)),
+        _ => format!("type-{}", crate::data_type_name(ty)),
+    };
+    let title = input
+        .labels
+        .and_then(|l| l.message(&key))
+        .unwrap_or_else(|| type_label(ty, input.types));
+    if let DataType::Named(name) = ty
+        && let Some(kind) = input
+            .types
+            .get(name)
+            .and_then(|def| def.quantity())
+            .or_else(|| crate::quantity::kind(name))
+        && let Some(unit) = kind.units.iter().find(|u| u.id == kind.canonical)
+    {
+        return format!("{title} ({})", unit.symbol);
+    }
+    title
+}
+
 pub fn complete(input: &CompletionInput) -> Option<Completion> {
     complete_with_values(input, &[])
 }
@@ -95,6 +126,15 @@ pub fn complete(input: &CompletionInput) -> Option<Completion> {
 pub fn complete_with_values(
     input: &CompletionInput,
     values: &[(String, Option<crate::DataValue>, DataType)],
+) -> Option<Completion> {
+    complete_with_catalog(input, values, None)
+}
+
+/// Completes a slim namespace catalog and cached field trees without expanding other entries.
+pub fn complete_with_catalog(
+    input: &CompletionInput,
+    values: &[(String, Option<crate::DataValue>, DataType)],
+    catalog: Option<&crate::plugin_values::editor::ValueTreeContext<'_>>,
 ) -> Option<Completion> {
     let mut caret = input.caret.min(input.source.len());
     while !input.source.is_char_boundary(caret) {
@@ -154,10 +194,20 @@ pub fn complete_with_values(
 
     // Context 1: after `.`
     if before.ends_with('.') {
+        if let Some(items) = catalog.and_then(|ctx| {
+            let path = scan::parse_dotted_path(before.trim_end_matches('.'))?;
+            let root = path.first()?;
+            if for_stack.iter().any(|scope| scope.vars.contains(root)) || set_vars.contains(root) {
+                return None;
+            }
+            tree::namespace_items(before, partial, input, ctx)
+        }) {
+            return Some(Completion { range, items });
+        }
         if let Some(items) = tree::dot_items(before, partial, input, values) {
             return Some(Completion { range, items });
         }
-        let items = scan::resolve_dot_context(
+        let mut items = scan::resolve_dot_context(
             before,
             partial,
             input.inputs,
@@ -165,6 +215,11 @@ pub fn complete_with_values(
             &for_stack,
             input.variables,
         );
+        if before.trim() == "text."
+            && let Some(ctx) = catalog
+        {
+            items.extend(tree::namespace_roots(ctx, partial));
+        }
         return Some(Completion { range, items });
     }
 
@@ -205,6 +260,7 @@ pub fn complete_with_values(
         if !for_in || kind.is_iterable() {
             raw_items.push(CompletionItem {
                 label: name.clone(),
+                icon: None,
                 kind: CompletionKind::Variable,
                 detail: type_label(data_type, input.types),
                 insert: name.clone(),
@@ -230,6 +286,7 @@ pub fn complete_with_values(
             for var in &scope.vars {
                 raw_items.push(CompletionItem {
                     label: var.clone(),
+                    icon: None,
                     kind: CompletionKind::Variable,
                     detail: detail.clone(),
                     insert: var.clone(),
@@ -244,6 +301,7 @@ pub fn complete_with_values(
     for var in &set_vars {
         raw_items.push(CompletionItem {
             label: var.clone(),
+            icon: None,
             kind: CompletionKind::Variable,
             detail: String::new(),
             insert: var.clone(),
@@ -256,6 +314,7 @@ pub fn complete_with_values(
     if !for_stack.is_empty() && !for_in {
         raw_items.push(CompletionItem {
             label: "loop".to_string(),
+            icon: None,
             kind: CompletionKind::Variable,
             detail: "loop context".to_string(),
             insert: "loop".to_string(),
@@ -268,6 +327,7 @@ pub fn complete_with_values(
     if !for_in {
         raw_items.push(CompletionItem {
             label: "text".to_string(),
+            icon: None,
             kind: CompletionKind::Variable,
             detail: "formatted inputs".to_string(),
             insert: "text".to_string(),
@@ -277,6 +337,7 @@ pub fn complete_with_values(
         for scope_name in ["var", "sheet", "global"] {
             raw_items.push(CompletionItem {
                 label: scope_name.to_string(),
+                icon: None,
                 kind: CompletionKind::Variable,
                 detail: format!("{scope_name} variables"),
                 insert: format!("{scope_name}."),
@@ -286,11 +347,16 @@ pub fn complete_with_values(
         }
     }
 
+    if let Some(ctx) = catalog {
+        raw_items.extend(tree::namespace_roots(ctx, partial));
+    }
+
     // Functions
     if for_in {
         let help = docs::find_doc(docs::DocKind::Function, "range").map(|d| d.help());
         raw_items.push(CompletionItem {
             label: "range".to_string(),
+            icon: None,
             kind: CompletionKind::Function,
             detail: "range([start], stop, [step])".to_string(),
             insert: "range()".to_string(),
@@ -365,6 +431,7 @@ pub(crate) fn variable_items(
     map.into_iter()
         .map(|(name, ty)| CompletionItem {
             label: name.clone(),
+            icon: None,
             kind: CompletionKind::Variable,
             detail: type_label(&ty, types),
             insert: name,

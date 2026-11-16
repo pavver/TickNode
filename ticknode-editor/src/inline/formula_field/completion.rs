@@ -86,12 +86,23 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
                 .collect::<Vec<_>>()
         });
 
-        let completion = ticknode_shared::formula::complete_with_variables(
-            &current_text,
-            caret_byte,
-            &typed_inputs,
-            &visible_vars,
-        );
+        ed.request_value_fields(&current_text, false);
+        let completion = ed.with_value_tree(|ctx| {
+            ed.types.with(|types| {
+                ticknode_shared::formula::complete::complete_with_catalog(
+                    &ticknode_shared::template::CompletionInput {
+                        source: &current_text,
+                        caret: caret_byte,
+                        inputs: &typed_inputs,
+                        variables: &visible_vars,
+                        types,
+                        now: None,
+                        labels: Some(&crate::i18n::UiQuantityLabels),
+                    },
+                    ctx,
+                )
+            })
+        });
 
         if completion.items.is_empty() {
             ed.template_completion.set(None);
@@ -111,6 +122,7 @@ pub fn request_completion(ed: Editor, node: NodeId, is_explicit: bool) {
             caret_top,
             completion,
             selected: 0,
+            binding: None,
         }));
     }
     #[cfg(not(target_arch = "wasm32"))]

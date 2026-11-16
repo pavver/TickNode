@@ -12,7 +12,7 @@ pub struct FormulaHoverToken {
 }
 
 fn is_ident_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_' || b == b':'
+    b.is_ascii_alphanumeric() || b == b'_' || b == b':' || b == b'.'
 }
 
 /// Finds all identifier token ranges in a formula string.
@@ -137,5 +137,14 @@ pub fn resolve_hover_tooltip(ed: Editor, node: NodeId, token_name: &str) -> Opti
         return Some(format!("{token_name}: {type_label}"));
     }
 
+    if let Some(reference) = VariableRef::parse(token_name) {
+        let ty = ed.reference_type(&reference)?;
+        let title = ed.type_title(&ty);
+        let label = ed
+            .binding_label(&reference)
+            .map(|(label, _)| label)
+            .unwrap_or_else(|| token_name.into());
+        return Some(format!("{label}: {title}"));
+    }
     None
 }

@@ -107,7 +107,10 @@
     font-size: 12px;
     color: var(--text-secondary);
 }
-.prop-row > .prop-label { flex: 0 1 auto; min-width: 0; max-width: none; }
+/* Rows with a value field share one label column (`NodeLayout::label_width`, `--label-w`), so their
+   fields start on one line; a longer label keeps its width. The input row's socket and gap are
+   0.25 DU wider than the property row's padding (input rule in canvas-extras.css). */
+.prop-row > .prop-label { flex: 0 1 auto; min-width: var(--label-w); max-width: none; }
 .prop-row .inline-value { flex: 1 0 72px; min-width: 72px; width: 0; max-width: none; }
 .prop-row .inline-value.select { flex: none; width: var(--selected-width, auto); min-width: 0; max-width: calc(var(--du) * 40); margin-left: auto; }
 .prop-row .switch { margin-left: auto; }
@@ -172,7 +175,6 @@
 .pin .inline-value { margin-left: auto; }
 /* An input row gives its spare width to the value field, not to the label: the label keeps its
    text width and shrinks with an ellipsis, a text or number field takes the rest of the row. */
-.pin.in > .ellipsis { flex: 0 1 auto; min-width: 0; }
 .pin.in > .inline-binding > input.inline-value, .pin.in > .inline-binding > textarea.inline-value { flex: 1 1 0; width: 0; min-width: calc(var(--du) * 13); max-width: none; }
 .duration-value { display: flex; gap: 2px; flex: 1 0 auto; min-width: min-content; height: var(--node-control); }
 .pin .duration-value { margin-left: auto; }

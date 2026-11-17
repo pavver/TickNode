@@ -153,6 +153,7 @@ fn match_outputs_sit_on_case_headers() {
 #[test]
 fn detached_anchor_uses_pin_then_clamped_directional_rows_and_outward_offset() {
     let layout = NodeLayout {
+        label_width: 0.0,
         pin_widths: vec![],
         width: NODE_WIDTH,
         height: 180.0,

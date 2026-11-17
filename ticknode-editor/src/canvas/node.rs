@@ -39,8 +39,8 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
     let style = move || {
         let p = node.pos.get();
         def.with(|d| format!(
-            "left:{}px;top:{}px;width:{}px;height:{}px;--node-width:{}px;--default-node-width:{}px;--cat-color:{}",
-            p.x, p.y, layout.with(|l| l.width), layout.with(|l| l.height), layout.with(|l| l.width), node_width(&d.type_name), category_color(&d.category)
+            "left:{}px;top:{}px;width:{}px;height:{}px;--node-width:{}px;--default-node-width:{}px;--label-w:{}px;--cat-color:{}",
+            p.x, p.y, layout.with(|l| l.width), layout.with(|l| l.height), layout.with(|l| l.width), node_width(&d.type_name), layout.with(|l| l.label_width), category_color(&d.category)
         ))
     };
     let pins_style = move || format!("top:{}px", layout.with(|l| l.pins_top));

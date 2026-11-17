@@ -6,6 +6,8 @@ pub(super) const CHAR_WIDTH: f64 = 12.0 * 1200.0 / 2048.0;
 pub(super) const FIELD_MIN: f64 = 18.0 * DU;
 const SELECT_CHROME: f64 = 24.0;
 pub(crate) const CHIP_CHROME: f64 = 6.0 * DU;
+/// Widest shared label column; longer labels keep their own width on their row.
+pub(super) const LABEL_COLUMN_MAX: f64 = 30.0 * DU;
 
 pub(super) fn text_width(text: &str) -> f64 {
     text.chars().count() as f64 * CHAR_WIDTH
@@ -43,6 +45,7 @@ fn pin_width(
     pin: &PinDefinition,
     connected: &[PinId],
     properties: &[(String, DataValue)],
+    column: f64,
 ) -> f64 {
     let label = i18n::node_pin_label_with_properties(&def.type_name, properties, pin.id, &pin.name);
     let field = if shows_inline_value(def, pin, connected) {
@@ -51,7 +54,12 @@ fn pin_width(
         0.0
     };
     let is_field = ticknode_shared::split_field_parent(pin.id).is_some();
-    text_width(&label)
+    let label = if field > 0.0 {
+        text_width(&label).max(column)
+    } else {
+        text_width(&label)
+    };
+    label
         + field
         + 24.0
         + if is_field || i18n::pin_can_split(pin) {
@@ -115,18 +123,49 @@ fn inline_pin_width(pin: &PinDefinition, properties: &[(String, DataValue)]) -> 
     }
 }
 
+fn property_row_label(def: &NodeDefinition, name: &str) -> String {
+    def.properties.iter().find(|p| p.name == name).map_or_else(
+        || property_label(name),
+        |p| i18n::property_title(&def.type_name, p),
+    )
+}
+
+/// Shared label column of the rows that have a value field (property rows and unconnected inputs
+/// with an inline value): the widest such label, capped at [`LABEL_COLUMN_MAX`].
+pub(super) fn label_column(
+    def: &NodeDefinition,
+    properties: &[(String, DataValue)],
+    connected: &[PinId],
+) -> f64 {
+    let properties_width = property_rows_connected(def, properties, connected)
+        .into_iter()
+        .map(|(name, _)| text_width(&property_row_label(def, name)));
+    let inputs_width = pins(def, PinDirection::Input)
+        .filter(|p| shows_inline_value(def, p, connected) && inline_pin_width(p, properties) > 0.0)
+        .map(|p| {
+            text_width(&i18n::node_pin_label_with_properties(
+                &def.type_name,
+                properties,
+                p.id,
+                &p.name,
+            ))
+        });
+    properties_width
+        .chain(inputs_width)
+        .fold(0.0, f64::max)
+        .min(LABEL_COLUMN_MAX)
+}
+
 pub(super) fn automatic_width(
     def: &NodeDefinition,
     properties: &[(String, DataValue)],
     connected: &[PinId],
 ) -> f64 {
     let mut width = node_width(&def.type_name).max(header_width(def));
+    let column = label_column(def, properties, connected);
     for (name, value) in property_rows_connected(def, properties, connected) {
         let described = def.properties.iter().find(|p| p.name == *name);
-        let label = described.map_or_else(
-            || property_label(name),
-            |p| i18n::property_title(&def.type_name, p),
-        );
+        let label = property_row_label(def, name);
         let field = match described.map(|p| &p.kind) {
             Some(PropertyKind::Select(options)) => {
                 let selected = match value {
@@ -159,7 +198,7 @@ pub(super) fn automatic_width(
             _ if matches!(value, DataValue::Bool(_)) => 8.5 * DU,
             _ => FIELD_MIN,
         };
-        width = width.max(text_width(&label) + field + 28.0);
+        width = width.max(text_width(&label).max(column) + field + 28.0);
     }
     let inputs: Vec<_> = pins(def, PinDirection::Input).collect();
     let outputs: Vec<_> = pins(def, PinDirection::Output).collect();
@@ -167,10 +206,10 @@ pub(super) fn automatic_width(
         width = width.max(
             inputs
                 .get(row)
-                .map_or(0.0, |p| pin_width(def, p, connected, properties))
+                .map_or(0.0, |p| pin_width(def, p, connected, properties, column))
                 + outputs
                     .get(row)
-                    .map_or(0.0, |p| pin_width(def, p, connected, properties))
+                    .map_or(0.0, |p| pin_width(def, p, connected, properties, column))
                 + 16.0,
         );
     }
@@ -186,14 +225,15 @@ pub(super) fn row_widths(
 ) -> Vec<(PinId, PinDirection, f64)> {
     let inputs: Vec<_> = pins(def, PinDirection::Input).collect();
     let outputs: Vec<_> = pins(def, PinDirection::Output).collect();
+    let column = label_column(def, properties, connected);
     let mut widths = Vec::new();
     for row in 0..inputs.len().max(outputs.len()) {
         let a = inputs
             .get(row)
-            .map_or(0.0, |p| pin_width(def, p, connected, properties));
+            .map_or(0.0, |p| pin_width(def, p, connected, properties, column));
         let b = outputs
             .get(row)
-            .map_or(0.0, |p| pin_width(def, p, connected, properties));
+            .map_or(0.0, |p| pin_width(def, p, connected, properties, column));
         let scale = ((width - 16.0) / (a + b)).min(1.0);
         if let Some(p) = inputs.get(row) {
             widths.push((p.id, p.direction, (width - 16.0 - b * scale).max(0.0)));

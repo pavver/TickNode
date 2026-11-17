@@ -9,6 +9,8 @@ use ticknode_shared::{NodeSize, PropertyKind};
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeLayout {
     pub width: f64,
+    /// Shared label column of rows with a value field, at most 40% of the width (0 for Match).
+    pub label_width: f64,
     pub(super) pin_widths: Vec<(PinId, PinDirection, f64)>,
     pub natural_height: f64,
     pub(super) properties: Vec<(String, f64)>,
@@ -63,6 +65,7 @@ impl NodeLayout {
                 properties: vec![],
                 input_heights: vec![],
                 pin_widths: vec![],
+                label_width: 0.0,
                 width: automatic_width(def, properties, &[]),
                 height: y + BODY_PAD,
                 pins_top,
@@ -82,6 +85,7 @@ impl NodeLayout {
             properties: vec![],
             input_heights: vec![],
             pin_widths: vec![],
+            label_width: 0.0,
             width: automatic_width(def, properties, &[]),
             height,
             pins_top,
@@ -120,6 +124,7 @@ impl NodeLayout {
         if def.type_name == "match" {
             return layout;
         }
+        layout.label_width = label_column(def, properties, connected).min(0.4 * layout.width);
         // Free text rows grow in proportion to their wrapped text; empty ones keep the row height.
         let chars_per_line = ((layout.width - 24.0 * DU) / width::CHAR_WIDTH).max(8.0);
         let text_of = |name: &str| {
@@ -313,7 +318,7 @@ mod growth_tests;
 mod tests;
 
 mod width;
-use width::{automatic_width, row_widths};
+use width::{automatic_width, label_column, row_widths};
 
 pub(crate) use width::compact_select_width;
 

@@ -54,6 +54,7 @@
 .node > .pins.in > .pin > .inline-value.select { flex: none; width: var(--selected-width, auto); min-width: 0; max-width: calc(var(--du) * 40); margin-left: auto; }
 .node > .pins.in > .pin > .inline-value.bool { flex: none; width: auto; min-width: 0; margin-left: auto; }
 .node > .pins.in > .pin > .ellipsis { flex: 0 1 auto; min-width: 0; }
+.node > .pins.in > .pin:has(> .inline-binding) > .ellipsis { min-width: calc(var(--label-w) - var(--du) * 0.25); }
 .prop-row.grown, .pin.grown { align-items: flex-start; }
 .prop-row.grown > .prop-label, .pin.grown > .ellipsis { line-height: var(--node-row); }
 .prop-row.grown > .inline-value.select { margin-top: calc(var(--du) * .75); min-width: 0; }
@@ -276,7 +277,6 @@
     font-size: calc(var(--tu) * 11);
     line-height: calc(var(--tu) * 14);
 }
-.prop-row > .prop-label { min-width: 0; }
 .prop-row > .inline-value.select { min-width: 0; }
 
 /* Runtime status overlays keep the node and wire geometry unchanged. */

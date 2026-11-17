@@ -376,3 +376,5 @@ body:has(.palette-ghost) { cursor: copy; }
 .node-help .panel-section { padding: 0; }
 .info-icon { display: inline-grid; place-items: center; color: var(--text-secondary); cursor: help; }
 .info-icon:hover, .info-icon:focus-visible { color: var(--accent); }
+
+.plugin-save { width: 100%; }

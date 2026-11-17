@@ -927,3 +927,5 @@ home-rail-usage = Metrics
 home-rail-settings = Settings
 left-tabs-label = Left panel
 palette-categories-label = Node categories
+
+plugins-enabled = Plugin enabled

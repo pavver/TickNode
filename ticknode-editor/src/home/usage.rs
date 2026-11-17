@@ -7,7 +7,7 @@ use ticknode_shared::*;
 
 use crate::i18n::{self, t};
 use crate::state::use_editor;
-use crate::ui::{IconButton, icons};
+use operator_ui::prelude::{IconButton, icons};
 
 pub fn format_number(val: u64, locale: &str) -> String {
     let s = val.to_string();
@@ -231,11 +231,14 @@ pub fn UsageSection() -> impl IntoView {
                             {move || t!("usage-window-hours")}
                         </button>
                     </div>
-                    <IconButton
-                        icon=icons::REFRESH
-                        title=Signal::derive(move || t!("usage-refresh"))
-                        on_click=Callback::new(move |_| ed.request_usage())
-                    />
+                    {move || view! {
+                        <IconButton
+                            size=9.0
+                            icon=icons::REFRESH
+                            label=t!("usage-refresh")
+                            on_click=Callback::new(move |_| ed.request_usage())
+                        />
+                    }}
                 </div>
             </div>
 

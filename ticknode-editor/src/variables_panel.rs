@@ -8,10 +8,10 @@ mod value_editor;
 
 use crate::i18n::t;
 use crate::state::use_editor;
-use crate::ui::{TextField, icons};
 use create_form::CreateVariableForm;
 use leptos::prelude::*;
 use logic::group_and_filter_variables;
+use operator_ui::prelude::SearchField;
 use row::VariableRow;
 use ticknode_shared::SheetId;
 
@@ -50,12 +50,15 @@ pub fn VariablesList(sheet: Option<SheetId>) -> impl IntoView {
         <div class="variables-panel" class:home-mode=is_home>
             <div class="variables-toolbar">
                 <div class="variables-search">
-                    <TextField
-                        value=Signal::derive(String::new)
-                        placeholder=Signal::derive(move || t!("variables-search-placeholder"))
-                        icon=icons::SEARCH
-                        on_input=Callback::new(move |v| query.set(v))
-                    />
+                    {move || view! {
+                        <SearchField
+                            value=query
+                            placeholder=Signal::derive(move || t!("variables-search-placeholder"))
+                            label=t!("variables-search-placeholder")
+                            debounce_ms=0
+                            on_search=Callback::new(move |v| query.set(v))
+                        />
+                    }}
                 </div>
                 <button
                     class="btn primary ctl btn-sm var-new-btn"

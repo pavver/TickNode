@@ -9,7 +9,8 @@ use crate::i18n::t;
 use crate::panels::relative_time;
 use crate::route::{Route, navigate};
 use crate::state::use_editor;
-use crate::ui::Switch;
+use crate::ui::{ControlState, confirmed_toggle, flash, to_op};
+use operator_ui::prelude::AsyncSwitch;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CardMode {
@@ -78,6 +79,30 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
             .with(|list| list.iter().find(|s| s.info.id == id).cloned())
             .unwrap_or_else(|| summary.clone())
     });
+    let toggling = RwSignal::new(ControlState::Idle);
+    let enabled = Memo::new(move |_| summary.with(|s| s.info.enabled));
+    let checked = Signal::from(enabled);
+    // Summaries arrive after every run, so only a changed `enabled` confirms the toggle.
+    Effect::new(move |_| {
+        enabled.track();
+        if toggling.get_untracked() == ControlState::Pending {
+            toggling.set(ControlState::Idle);
+        }
+    });
+    Effect::new(move |_| {
+        ed.error_seq.track();
+        if toggling.get_untracked() == ControlState::Pending {
+            flash(toggling, ControlState::Error);
+        }
+    });
+    let toggle = confirmed_toggle(
+        checked,
+        toggling,
+        Callback::new(move |enabled| {
+            let info = summary.get_untracked().info;
+            ed.send(ClientMessage::UpdateSheet(SheetInfo { enabled, ..info }));
+        }),
+    );
     let mode = RwSignal::new(CardMode::Normal);
     let draft_title = RwSignal::new(summary.with_untracked(|s| s.info.title.clone()));
     let draft_caption = RwSignal::new(summary.with_untracked(|s| s.info.caption.clone()));
@@ -132,35 +157,24 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
             on:click=on_card_click
         >
             {move || {
-                // Forms must not rebuild (and lose focus) on every summary update.
-                let s = if mode.get() == CardMode::Normal { summary.get() } else { summary.get_untracked() };
+                // Keep the async switch and edit forms mounted across server summary updates.
+                let s = summary.get_untracked();
                 match mode.get() {
                     CardMode::Normal => {
-                        let title = s.info.title;
-                        let caption = s.info.caption;
-                        let enabled = s.info.enabled;
-                        let nodes = s.nodes;
-                        let errors = s.errors;
-                        let card_id = s.info.id;
-                        let toggle_title = title.clone();
-                        let toggle_caption = caption.clone();
-
+                        let toggle = toggle.clone();
                         view! {
                             <div class="sheet-card-body">
                                 <div class="sheet-card-head">
-                                    <span class="sheet-title ellipsis">{title}</span>
+                                    <span class="sheet-title ellipsis">{move || summary.with(|s| s.info.title.clone())}</span>
                                     <div class="sheet-switch" on:click=|ev| ev.stop_propagation()>
-                                        <Switch
-                                            checked=Signal::derive(move || enabled)
-                                            on_toggle=Callback::new(move |new_enabled| {
-                                                ed.send(ClientMessage::UpdateSheet(SheetInfo {
-                                                    id: card_id,
-                                                    title: toggle_title.clone(),
-                                                    caption: toggle_caption.clone(),
-                                                    enabled: new_enabled,
-                                                }));
-                                            })
-                                        />
+                                        {move || view! {
+                                            <AsyncSwitch
+                                                checked=checked
+                                                label=t!("sheet-enabled")
+                                                state=Signal::derive(move || Some(to_op(toggling.get())))
+                                                on_toggle=toggle.clone()
+                                            />
+                                        }}
                                         <span class="sheet-switch-label">{move || t!("sheet-enabled")}</span>
                                     </div>
                                     <div class="sheet-card-actions" on:click=|ev| ev.stop_propagation()>
@@ -176,7 +190,7 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
                                             class="icon-btn ctl"
                                             title=move || t!("sheet-duplicate")
                                             aria-label=move || t!("sheet-duplicate")
-                                            on:click=move |_| ed.send(ClientMessage::DuplicateSheet(card_id))
+                                            on:click=move |_| ed.send(ClientMessage::DuplicateSheet(id))
                                         >
                                             <span class="mdi mdi-content-copy" aria-hidden="true"></span>
                                         </button>
@@ -189,7 +203,7 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
                                             on:click=move |_| {
                                                 let idx = index();
                                                 if can_move_up(idx) {
-                                                    ed.send(ClientMessage::MoveSheet { id: card_id, index: (idx - 1) as u32 });
+                                                    ed.send(ClientMessage::MoveSheet { id, index: (idx - 1) as u32 });
                                                 }
                                             }
                                         >
@@ -204,7 +218,7 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
                                             on:click=move |_| {
                                                 let idx = index();
                                                 if can_move_down(idx, total()) {
-                                                    ed.send(ClientMessage::MoveSheet { id: card_id, index: (idx + 1) as u32 });
+                                                    ed.send(ClientMessage::MoveSheet { id, index: (idx + 1) as u32 });
                                                 }
                                             }
                                         >
@@ -221,16 +235,16 @@ fn SheetCard(summary: SheetSummary) -> impl IntoView {
                                     </div>
                                 </div>
                                 <div class="sheet-caption">
-                                    {if caption.trim().is_empty() {
+                                    {move || if summary.with(|s| s.info.caption.trim().is_empty()) {
                                         view! { <span class="sheet-no-caption">{move || t!("sheet-no-caption")}</span> }.into_any()
                                     } else {
-                                        view! { <span class="sheet-caption-text">{caption}</span> }.into_any()
+                                        view! { <span class="sheet-caption-text">{move || summary.with(|s| s.info.caption.clone())}</span> }.into_any()
                                     }}
                                 </div>
                                 <div class="sheet-stats">
-                                    <span class="sheet-stat">{move || t!("sheet-nodes", count = nodes)}</span>
-                                    {(errors > 0).then(|| view! {
-                                        <span class="chip st-error">{move || t!("sheet-errors", count = errors)}</span>
+                                    <span class="sheet-stat">{move || t!("sheet-nodes", count = summary.with(|s| s.nodes))}</span>
+                                    {move || (summary.with(|s| s.errors) > 0).then(|| view! {
+                                        <span class="chip st-error">{move || t!("sheet-errors", count = summary.with(|s| s.errors))}</span>
                                     })}
                                     <span class="sheet-stat">{move || last_run()}</span>
                                 </div>

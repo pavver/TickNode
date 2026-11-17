@@ -8,9 +8,9 @@ mod usage;
 use crate::i18n::t;
 use crate::plugins_panel::PluginCard;
 use crate::state::use_editor;
-use crate::ui::{IconButton, Terminal, icons};
+use crate::ui::{log_text, op_icons};
 use leptos::prelude::*;
-use operator_ui::prelude::{NavigationRail, RailItem};
+use operator_ui::prelude::{ConsoleTerminal, IconButton, NavigationRail, RailItem};
 use settings::SettingsSection;
 use sheets::SheetsSection;
 use usage::UsageSection;
@@ -193,13 +193,16 @@ fn HomeLog() -> impl IntoView {
             <div class="console-bar">
                 <span class="t-section" style="flex:1">{move || t!("home-log")}</span>
                 <span class="t-caption">{move || t!("console-lines", count = ed.logs.with(|l| l.len()))}</span>
-                <IconButton
-                    icon=icons::BROOM
-                    title=Signal::derive(move || t!("console-clear"))
-                    on_click=Callback::new(move |_| ed.logs.set(Vec::new()))
-                />
+                {move || view! {
+                    <IconButton
+                        icon=op_icons::BROOM
+                        label=t!("console-clear")
+                        size=7.0
+                        on_click=Callback::new(move |_| ed.logs.set(Vec::new()))
+                    />
+                }}
             </div>
-            <Terminal lines=ed.logs />
+            <ConsoleTerminal logs=Signal::derive(move || ed.logs.with(|logs| logs.iter().map(log_text).collect::<Vec<_>>())) />
         </div>
     }
 }

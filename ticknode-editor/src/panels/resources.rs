@@ -12,7 +12,7 @@ use crate::categories::category_color;
 use crate::i18n::{self, t};
 use crate::picker::{filter_options, mdi_class};
 use crate::state::{PaletteDrag, PropertyOptions, use_editor};
-use crate::ui::{TextField, icons};
+use operator_ui::prelude::SearchField;
 
 const RESOURCE_LIMIT: usize = 100;
 const COLLAPSED_KEY: &str = "ticknode.resources-collapsed";
@@ -87,12 +87,15 @@ pub fn ResourcesPanel() -> impl IntoView {
     view! {
         <div class="palette-main">
             <div class="panel-section palette-search">
-                <TextField
-                    value=Signal::derive(String::new)
-                    placeholder=Signal::derive(move || t!("picker-search-placeholder"))
-                    icon=icons::SEARCH
-                    on_input=Callback::new(move |v| query.set(v))
-                />
+                {move || view! {
+                    <SearchField
+                        value=query
+                        placeholder=Signal::derive(move || t!("picker-search-placeholder"))
+                        label=t!("picker-search-placeholder")
+                        debounce_ms=0
+                        on_search=Callback::new(move |v| query.set(v))
+                    />
+                }}
             </div>
             <div class="palette-list">
                 {move || {

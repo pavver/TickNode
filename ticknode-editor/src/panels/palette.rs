@@ -16,8 +16,8 @@ use crate::categories::{
 use crate::geometry::{DU, node_width, pin_color};
 use crate::i18n::{self, t};
 use crate::state::{PaletteDrag, use_editor};
-use crate::ui::*;
-use operator_ui::prelude::{NavigationRail, RailItem, TabItem, Tabs};
+use crate::ui::Icon;
+use operator_ui::prelude::{NavigationRail, RailItem, SearchField, TabItem, Tabs};
 
 mod drag;
 pub use drag::*;
@@ -228,12 +228,15 @@ fn NodesPanel() -> impl IntoView {
             />
             <div class="palette-main">
                 <div class="panel-section palette-search">
-                    <TextField
-                        value=Signal::derive(String::new)
-                        placeholder=Signal::derive(move || t!("palette-search-placeholder"))
-                        icon=icons::SEARCH
-                        on_input=Callback::new(move |v| query.set(v))
-                    />
+                    {move || view! {
+                        <SearchField
+                            value=query
+                            placeholder=Signal::derive(move || t!("palette-search-placeholder"))
+                            label=t!("palette-search-placeholder")
+                            debounce_ms=0
+                            on_search=Callback::new(move |v| query.set(v))
+                        />
+                    }}
                 </div>
                 <div class="palette-list" node_ref=list on:scroll=move |_| update_active()>
                     {move || {

@@ -1,12 +1,12 @@
-//! Operator UI components (NotifiApp design system), ported from Kotlin/Compose to Leptos.
+//! Compact canvas controls and adapters for the Operator UI shell components.
 
 use std::time::Duration;
 
-use leptos::html;
 use leptos::prelude::*;
 
-use crate::i18n::t;
-use crate::state::{LogKind, LogLine};
+pub mod op_icons;
+mod operator;
+pub use operator::{confirmed_toggle, log_text, to_op};
 
 /// Duration of the active Success/Error phase (followed by a 500 ms border fade-out in CSS).
 const RESULT_FLASH: Duration = Duration::from_millis(800);
@@ -46,12 +46,9 @@ pub fn flash(state: RwSignal<ControlState>, result: ControlState) {
 
 pub mod icons {
     // Material glyphs in a 24x24 viewBox (matching OperatorIcons.kt).
-    pub const ADD: &str = "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z";
     pub const DELETE: &str =
         "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z";
     pub const CLOSE: &str = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
-    pub const CHECK: &str = "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
-    pub const SEARCH: &str = "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z";
     pub const PLAY: &str = "M8 5v14l11-7z";
     pub const TERMINAL: &str =
         "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z";
@@ -75,27 +72,12 @@ pub mod icons {
     pub const SCIENCE: &str = "M19.8 18.4 14 10.67V6.5l1.35-1.69c.26-.33.03-.81-.39-.81H9.04c-.42 0-.65.48-.39.81L10 6.5v4.17L4.2 18.4c-.49.66-.02 1.6.8 1.6h14c.82 0 1.29-.94.8-1.6z";
     pub const EXTENSION: &str = "M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z";
     pub const BROOM: &str = "M16 11h-1V3c0-1.1-.9-2-2-2h-2c-1.1 0-2 .9-2 2v8H8c-2.76 0-5 2.24-5 5v7h18v-7c0-2.76-2.24-5-5-5zm3 10h-2v-3c0-.55-.45-1-1-1s-1 .45-1 1v3h-2v-3c0-.55-.45-1-1-1s-1 .45-1 1v3H9v-3c0-.55-.45-1-1-1s-1 .45-1 1v3H5v-5c0-1.65 1.35-3 3-3h8c1.65 0 3 1.35 3 3v5z";
-    pub const REFRESH: &str = "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z";
 }
 
 #[component]
 pub fn Icon(path: &'static str) -> impl IntoView {
     view! {
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d=path /></svg>
-    }
-}
-
-/// Animated border segment for Pending (25% of the perimeter, clockwise).
-#[component]
-fn PendingRun(state: Signal<ControlState>) -> impl IntoView {
-    move || {
-        (state.get() == ControlState::Pending).then(|| {
-            view! {
-                <svg class="sb-run" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                    <rect x="0" y="0" width="100" height="100" pathLength="100" vector-effect="non-scaling-stroke" />
-                </svg>
-            }
-        })
     }
 }
 
@@ -108,139 +90,6 @@ fn effective(
         Some(s) if s != ControlState::Idle => s,
         _ => local.get(),
     })
-}
-
-/// OperatorActionButton: rectangular stateful button; width remains constant during Pending/flash.
-#[component]
-pub fn ActionButton(
-    #[prop(into)] text: Signal<String>,
-    on_click: Callback<()>,
-    #[prop(optional)] icon: Option<&'static str>,
-    #[prop(optional)] danger: bool,
-    #[prop(optional)] full: bool,
-    #[prop(optional, into)] state: Option<Signal<ControlState>>,
-    /// Action without server confirmation: immediately flash Success.
-    #[prop(optional)]
-    flash_on_click: bool,
-    #[prop(optional, into)] disabled: Option<Signal<bool>>,
-) -> impl IntoView {
-    let local = RwSignal::new(ControlState::Idle);
-    let state = effective(state, local);
-    let is_disabled = move || disabled.is_some_and(|d| d.get());
-    let click = move |_| {
-        if is_disabled() || state.get_untracked() == ControlState::Pending {
-            return;
-        }
-        on_click.run(());
-        if flash_on_click {
-            flash(local, ControlState::Success);
-        }
-    };
-    view! {
-        <button
-            // Single-string class attribute: separate `class:` bindings would be wiped on state change
-            class=move || format!(
-                "btn ctl {}{}{}{}",
-                state.get().class(),
-                if danger { " danger" } else { "" },
-                if full { " full" } else { "" },
-                if is_disabled() { " st-disabled" } else { "" },
-            )
-            disabled=is_disabled
-            on:click=click
-        >
-            <span class="btn-content">{icon.map(|p| view! { <Icon path=p /> })}<span>{move || text.get()}</span></span>
-            <span class="btn-overlay">
-                {move || match state.get() {
-                    ControlState::Pending => Some(view! { <span class="spinner"></span> }.into_any()),
-                    ControlState::Success => Some(view! { <Icon path=icons::CHECK /> }.into_any()),
-                    ControlState::Error => Some(view! { <Icon path=icons::CLOSE /> }.into_any()),
-                    _ => None,
-                }}
-            </span>
-            <PendingRun state=state />
-        </button>
-    }
-}
-
-/// OperatorIconButton: 9 DU square icon button.
-#[component]
-pub fn IconButton(
-    icon: &'static str,
-    #[prop(into)] title: Signal<String>,
-    on_click: Callback<()>,
-    #[prop(optional, into)] selected: Option<Signal<bool>>,
-) -> impl IntoView {
-    view! {
-        <button
-            class="icon-btn ctl"
-            class:st-selected=move || selected.is_some_and(|s| s.get())
-            title=move || title.get()
-            aria-label=move || title.get()
-            on:click=move |_| on_click.run(())
-        >
-            <Icon path=icon />
-        </button>
-    }
-}
-
-/// OperatorTextField: text input with a SAVE button that appears when the value is modified.
-#[component]
-pub fn TextField(
-    /// Saved value (from the server).
-    #[prop(into)]
-    value: Signal<String>,
-    #[prop(optional, into)] placeholder: Signal<String>,
-    #[prop(optional, into)] state: Option<Signal<ControlState>>,
-    /// Without `on_save`, the field acts as a live search input via `on_input`.
-    #[prop(optional)]
-    on_save: Option<Callback<String>>,
-    #[prop(optional)] on_input: Option<Callback<String>>,
-    #[prop(optional)] icon: Option<&'static str>,
-    #[prop(optional)] numeric: bool,
-) -> impl IntoView {
-    let draft = RwSignal::new(value.get_untracked());
-    // A new value from the server replaces the draft
-    Effect::new(move |_| draft.set(value.get()));
-
-    let local = RwSignal::new(ControlState::Idle);
-    let state = effective(state, local);
-    let dirty = move || on_save.is_some() && draft.get() != value.get();
-    let save = move || {
-        if let Some(cb) = on_save {
-            if draft.get_untracked() != value.get_untracked() {
-                cb.run(draft.get_untracked());
-            }
-        }
-    };
-
-    view! {
-        <div class=move || format!("text-field ctl {}", state.get().class())>
-            {icon.map(|p| view! { <span class="icon-slot"><Icon path=p /></span> })}
-            <input
-                type="text"
-                inputmode=if numeric { "decimal" } else { "text" }
-                placeholder=move || placeholder.get()
-                prop:value=move || draft.get()
-                on:input=move |ev| {
-                    let v = event_target_value(&ev);
-                    draft.set(v.clone());
-                    if let Some(cb) = on_input {
-                        cb.run(v);
-                    }
-                }
-                on:keydown=move |ev| {
-                    if ev.key() == "Enter" {
-                        save();
-                    } else if ev.key() == "Escape" {
-                        draft.set(value.get_untracked());
-                    }
-                }
-            />
-            {move || dirty().then(|| view! { <button class="save-btn" on:click=move |_| save()>{move || t!("ui-save")}</button> })}
-            <PendingRun state=state />
-        </div>
-    }
 }
 
 /// OperatorAsyncSwitch: thumb position changes only after confirmation (server value update).
@@ -277,34 +126,6 @@ pub fn Switch(
 #[component]
 pub fn StatusDot(#[prop(into)] class: Signal<&'static str>) -> impl IntoView {
     view! { <span class=move || format!("status-dot {}", class.get())></span> }
-}
-
-/// OperatorConsoleTerminal with auto-scroll when the user is already near the bottom.
-#[component]
-pub fn Terminal(#[prop(into)] lines: Signal<Vec<LogLine>>) -> impl IntoView {
-    let el = NodeRef::<html::Div>::new();
-    Effect::new(move |_| {
-        lines.track();
-        if let Some(div) = el.get_untracked() {
-            let near_bottom = div.scroll_height() - div.scroll_top() - div.client_height() < 48;
-            if near_bottom {
-                request_animation_frame(move || div.set_scroll_top(div.scroll_height()));
-            }
-        }
-    });
-    view! {
-        <div class="terminal" node_ref=el>
-            <For each=move || lines.get() key=|l| l.id let:line>
-                <div class=format!("terminal-line {}", match line.kind {
-                    LogKind::Error => "error",
-                    LogKind::System => "system",
-                    LogKind::Node => "",
-                })>
-                    <span class="ts">{line.time}" "</span>{line.text}
-                </div>
-            </For>
-        </div>
-    }
 }
 
 #[cfg(test)]

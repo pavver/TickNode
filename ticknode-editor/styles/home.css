@@ -199,10 +199,6 @@
 .home-log-section .console-bar {
     border-bottom: var(--border-w) solid var(--divider);
 }
-.home-log-section .terminal {
-    flex: 1;
-    height: 100%;
-}
 
 /* Usage section */
 .home-usage-section {

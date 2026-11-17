@@ -939,3 +939,5 @@ home-rail-usage = Метрики
 home-rail-settings = Параметри
 left-tabs-label = Ліва панель
 palette-categories-label = Категорії нод
+
+plugins-enabled = Плагін увімкнено

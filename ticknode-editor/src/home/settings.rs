@@ -6,9 +6,12 @@ pub mod logic;
 use crate::i18n::{Locale, t};
 use crate::node_status;
 use crate::state::{Theme, use_editor};
-use crate::ui::{ActionButton, ControlState, Switch, icons};
+use crate::ui::{ControlState, to_op};
 use leptos::prelude::*;
 use logic::EngineSettingsDraft;
+use operator_ui::prelude::{
+    ActionButton, ActionResult, AsyncAction, AsyncSwitch, ControlState as OpState, icons,
+};
 use ticknode_shared::ClientMessage;
 
 #[cfg(test)]
@@ -74,10 +77,17 @@ fn InterfaceGroup() -> impl IntoView {
             <div class="settings-row">
                 <div class="settings-row-head">
                     <span class="settings-label">{move || t!("settings-show-values")}</span>
-                    <Switch
-                        checked=Signal::derive(move || ed.show_values.get())
-                        on_toggle=Callback::new(move |checked| node_status::set_show_values(ed, checked))
-                    />
+                    {move || view! {
+                        <AsyncSwitch
+                            checked=Signal::derive(move || ed.show_values.get())
+                            label=t!("settings-show-values")
+                            state=Signal::stored(Some(OpState::Idle))
+                            on_toggle=AsyncAction::new(move |checked| {
+                            node_status::set_show_values(ed, checked);
+                            async { ActionResult::Success }
+                            })
+                        />
+                    }}
                 </div>
                 <span class="settings-description">{move || t!("settings-show-values-description")}</span>
             </div>
@@ -187,9 +197,12 @@ fn EngineGroup() -> impl IntoView {
                 <ActionButton
                     text=Signal::derive(move || t!("settings-save"))
                     icon=icons::CHECK
-                    disabled=Signal::derive(move || !can_save.get())
-                    state=Signal::derive(move || saving.get())
-                    on_click=on_save
+                    enabled=can_save
+                    state=Signal::derive(move || Some(to_op(saving.get())))
+                    on_click=AsyncAction::new(move |()| {
+                        on_save.run(());
+                        async { ActionResult::Success }
+                    })
                 />
                 <button
                     class="btn ctl"

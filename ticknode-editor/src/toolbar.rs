@@ -7,8 +7,9 @@ use crate::i18n::t;
 use crate::logo::Logo;
 use crate::route::{Route, navigate};
 use crate::state::{ConnStatus, Theme, use_editor};
-use crate::ui::{IconButton, StatusDot, icons};
+use crate::ui::{StatusDot, op_icons};
 use leptos::prelude::*;
+use operator_ui::prelude::{ControlState, IconButton, icons};
 use ticknode_shared::ClientMessage;
 
 #[component]
@@ -84,23 +85,29 @@ pub fn Header() -> impl IntoView {
                     >
                         <span class="mdi mdi-redo" aria-hidden="true"></span>
                     </button>
-                    <IconButton
-                        icon=icons::ADD
-                        title=Signal::derive(move || t!("toolbar-palette"))
-                        selected=Signal::derive(move || ed.show_palette.get())
-                        on_click=Callback::new(move |_| ed.show_palette.update(|v| *v = !*v))
-                    />
+                    {move || view! {
+                        <IconButton
+                            size=9.0
+                            icon=icons::ADD
+                            label=t!("toolbar-palette")
+                            state=Signal::derive(move || ed.show_palette.get().then_some(ControlState::Selected))
+                            on_click=Callback::new(move |_| ed.show_palette.update(|v| *v = !*v))
+                        />
+                    }}
                     <button class="icon-btn ctl" class:st-selected=move || ed.show_values.get()
                         title=move || t!("toolbar-show-values") aria-label=move || t!("toolbar-show-values")
                         aria-pressed=move || ed.show_values.get().to_string()
                         on:click=move |_| crate::node_status::toggle_show_values(ed)>
                         <span class=move || if ed.show_values.get() { "mdi mdi-eye-outline" } else { "mdi mdi-eye-off-outline" } aria-hidden="true"></span>
                     </button>
-                    <IconButton
-                        icon=icons::FIT
-                        title=Signal::derive(move || t!("toolbar-fit"))
-                        on_click=Callback::new(move |_| fit_view(ed))
-                    />
+                    {move || view! {
+                        <IconButton
+                            size=9.0
+                            icon=op_icons::FIT
+                            label=t!("toolbar-fit")
+                            on_click=Callback::new(move |_| fit_view(ed))
+                        />
+                    }}
                     <button
                         class="icon-btn ctl"
                         title=move || t!("toolbar-add-frame")
@@ -110,18 +117,24 @@ pub fn Header() -> impl IntoView {
                         <span class="mdi mdi-selection-drag" aria-hidden="true"></span>
                     </button>
                     <ControlsHelp />
-                    <IconButton
-                        icon=icons::TERMINAL
-                        title=Signal::derive(move || t!("toolbar-console"))
-                        selected=Signal::derive(move || ed.show_console.get())
-                        on_click=Callback::new(move |_| ed.show_console.update(|v| *v = !*v))
-                    />
+                    {move || view! {
+                        <IconButton
+                            size=9.0
+                            icon=op_icons::TERMINAL
+                            label=t!("toolbar-console")
+                            state=Signal::derive(move || ed.show_console.get().then_some(ControlState::Selected))
+                            on_click=Callback::new(move |_| ed.show_console.update(|v| *v = !*v))
+                        />
+                    }}
                 })}
-                <IconButton
-                    icon=icons::THEME
-                    title=Signal::derive(move || t!("toolbar-theme"))
-                    on_click=Callback::new(move |_| ed.theme.update(|t| *t = if *t == Theme::Dark { Theme::Light } else { Theme::Dark }))
-                />
+                {move || view! {
+                    <IconButton
+                        size=9.0
+                        icon=op_icons::THEME
+                        label=t!("toolbar-theme")
+                        on_click=Callback::new(move |_| ed.theme.update(|t| *t = if *t == Theme::Dark { Theme::Light } else { Theme::Dark }))
+                    />
+                }}
                 <button
                     class="icon-btn ctl lang-btn"
                     title=move || t!("toolbar-language")

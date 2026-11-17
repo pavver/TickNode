@@ -114,7 +114,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* --- State border (operatorStateBorder) ---
    Base border is an inset ::after (does not affect layout),
-   Pending is an animated SVG segment, Success/Error pulse a thick border. */
+   Success/Error pulse a thick border. */
 .ctl { position: relative; }
 .ctl::after {
     content: "";
@@ -134,38 +134,6 @@ button, input, select { font: inherit; color: inherit; }
     0%, 100% { opacity: 1; }
     50% { opacity: .55; }
 }
-
-.sb-run {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: 1;
-}
-.sb-run rect {
-    fill: none;
-    stroke: var(--pending);
-    stroke-width: calc(var(--border-w) * 3);
-    stroke-dasharray: 25 75;
-    animation: sb-run 1200ms linear infinite;
-}
-@keyframes sb-run {
-    from { stroke-dashoffset: 100; }
-    to { stroke-dashoffset: 0; }
-}
-
-.spinner {
-    width: calc(var(--du) * 4);
-    height: calc(var(--du) * 4);
-    border: calc(var(--du) * 0.375) solid transparent;
-    border-top-color: var(--pending);
-    border-right-color: var(--pending);
-    border-radius: 50%;
-    animation: spin 800ms linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* --- OperatorActionButton --- */
 .btn {
@@ -188,9 +156,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn:active:not(.st-pending):not(.st-disabled) { background: var(--pressed); }
 .btn:active:not(.st-pending):not(.st-disabled)::after { --sb-color: var(--border-strong); }
 .btn .btn-content { display: inline-flex; align-items: center; gap: calc(var(--du) * 1.5); }
-.btn .btn-overlay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; }
 .btn.st-pending { cursor: default; }
-.btn.st-pending .btn-content, .btn.st-success .btn-content, .btn.st-error .btn-content { opacity: 0; }
 .btn.st-success { background: color-mix(in srgb, var(--success) 15%, var(--surface)); color: var(--success); }
 .btn.st-error { background: color-mix(in srgb, var(--error) 15%, var(--surface)); color: var(--error); }
 .btn.danger { background: color-mix(in srgb, var(--error) 15%, var(--surface)); color: var(--error); }
@@ -219,36 +185,6 @@ button, input, select { font: inherit; color: inherit; }
 .icon-btn:disabled { background: var(--disabled-surface); color: var(--text-disabled); cursor: default; }
 .icon-btn.st-selected { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .icon-btn.lang-btn { font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.04em; user-select: none; }
-
-/* --- OperatorTextField --- */
-.text-field {
-    display: flex;
-    height: calc(var(--du) * 10);
-    background: var(--surface);
-    width: 100%;
-}
-.text-field input {
-    flex: 1;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    padding: 0 0 0 calc(var(--du) * 3);
-}
-.text-field input::placeholder { color: var(--text-disabled); }
-.text-field .icon-slot { display: flex; align-items: center; padding: 0 calc(var(--du) * 2); color: var(--text-secondary); }
-.text-field .save-btn {
-    height: 100%;
-    max-width: calc(var(--du) * 30);
-    border: 0;
-    border-left: var(--border-w) solid var(--border);
-    background: var(--surface);
-    color: var(--accent);
-    font-weight: 700;
-    padding: 0 calc(var(--du) * 3);
-    cursor: pointer;
-}
-.text-field .save-btn:active { background: var(--pressed); }
 
 /* --- OperatorAsyncSwitch --- */
 .switch {

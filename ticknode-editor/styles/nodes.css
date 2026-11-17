@@ -391,22 +391,14 @@
     padding: 0 calc(var(--du) * 1) 0 calc(var(--du) * 3);
     border-bottom: var(--border-w) solid var(--divider);
 }
-.console-bar .icon-btn { width: calc(var(--du) * 7); height: calc(var(--du) * 7); }
-.terminal {
+.console-bar { flex-shrink: 0; }
+.console .op-terminal,
+.home-log-section .op-terminal {
     flex: 1;
-    overflow-y: auto;
-    background: var(--terminal-background);
-    color: var(--terminal-foreground);
-    font-size: 12px;
-    line-height: 16px;
-    padding: calc(var(--du) * 2);
+    min-height: 0;
+    height: 100% !important;
     user-select: text;
 }
-.terminal-line { white-space: pre-wrap; word-break: break-word; }
-.terminal-line .ts { color: var(--terminal-bright-black); }
-.terminal-line.error { color: var(--terminal-bright-red); }
-.terminal-line.system { color: var(--terminal-bright-cyan); }
-.terminal-line.success { color: var(--terminal-bright-green); }
 
 /* --- Selection box (CAD-style): window is solid, crossing is dashed --- */
 .select-box {

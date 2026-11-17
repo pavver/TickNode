@@ -3318,6 +3318,7 @@ dependencies = [
  "console_error_panic_hook",
  "fluent-bundle",
  "fluent-syntax",
+ "futures",
  "ha-plugin",
  "js-sys",
  "leptos",

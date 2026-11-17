@@ -9,7 +9,10 @@ use ticknode_shared::*;
 
 use crate::i18n::{self, t};
 use crate::state::{LogKind, use_editor};
-use crate::ui::*;
+use crate::ui::{ControlState, confirmed_toggle, flash, to_op};
+use operator_ui::prelude::{
+    ActionButton, ActionResult, AsyncAction, AsyncSwitch, ControlState as OpState, icons,
+};
 
 /// Form field text for a stored setting value.
 fn draft_of(view: &SettingValueView) -> String {
@@ -131,14 +134,18 @@ pub fn PluginCard(name: String) -> impl IntoView {
     let settings_error = move || info.with(|i| i.as_ref().and_then(|i| i.settings_error.clone()));
     let load_error = move || info.with(|i| i.as_ref().and_then(|i| i.error.clone()));
 
+    let checked = Signal::derive(move || state() == PluginState::Enabled);
     let toggle_name = name.clone();
-    let on_toggle = Callback::new(move |enabled: bool| {
-        toggling.set(ControlState::Pending);
-        ed.send(ClientMessage::SetPluginEnabled {
-            name: toggle_name.clone(),
-            enabled,
-        });
-    });
+    let on_toggle = confirmed_toggle(
+        checked,
+        toggling,
+        Callback::new(move |enabled: bool| {
+            ed.send(ClientMessage::SetPluginEnabled {
+                name: toggle_name.clone(),
+                enabled,
+            });
+        }),
+    );
 
     let save_name = name.clone();
     let save_defs = initial.settings.clone();
@@ -174,11 +181,14 @@ pub fn PluginCard(name: String) -> impl IntoView {
                         {plugin_caption(&initial)}
                     </span>
                 </div>
-                <Switch
-                    checked=Signal::derive(move || state() == PluginState::Enabled)
-                    on_toggle=on_toggle
-                    state=Signal::derive(move || toggling.get())
-                />
+                {move || view! {
+                    <AsyncSwitch
+                        checked=checked
+                        label=t!("plugins-enabled")
+                        on_toggle=on_toggle.clone()
+                        state=Signal::derive(move || Some(to_op(toggling.get())))
+                    />
+                }}
             </div>
             <div class="chips">
                 <span class=move || format!("chip {}", chip().0.class())>{move || chip().1}</span>
@@ -200,7 +210,7 @@ pub fn PluginCard(name: String) -> impl IntoView {
             {has_settings.then(|| view! {
                 <div class="plugin-form" class:hidden=move || !expanded.get()>
                     {fields}
-                    <ActionButton text=Signal::derive(move || t!("plugins-save")) icon=icons::CHECK full=true state=Signal::derive(move || saving.get()) on_click=save />
+                    <ActionButton text=Signal::derive(move || t!("plugins-save")) icon=icons::CHECK class="plugin-save" state=Signal::derive(move || Some(to_op(saving.get()))) on_click=AsyncAction::new(move |()| { save.run(()); async { ActionResult::Success } }) />
                     {move || settings_error().map(|e| view! { <div class="plugin-error">{i18n::ui_text(&e)}</div> })}
                 </div>
             })}
@@ -267,10 +277,22 @@ fn SettingField(
             })
         }
     };
+    let (label_plugin, label_def) = (plugin.clone(), def.clone());
     let control = match def.kind.clone() {
-        SettingKind::Bool => view! {
-            <Switch checked=Signal::derive(move || draft.get() == "true") on_toggle=Callback::new(move |b: bool| set_draft(b.to_string())) />
-        }
+        SettingKind::Bool => (move || {
+            let set_draft = set_draft.clone();
+            view! {
+            <AsyncSwitch
+                checked=Signal::derive(move || draft.get() == "true")
+                label=i18n::setting_title(&label_plugin, &label_def)
+                state=Signal::stored(Some(OpState::Idle))
+                on_toggle=AsyncAction::new(move |b: bool| {
+                    set_draft(b.to_string());
+                    async { ActionResult::Success }
+                })
+            />
+            }
+        })
         .into_any(),
         SettingKind::Select(options) => {
             let unset = draft.get_untracked().is_empty();
@@ -290,7 +312,13 @@ fn SettingField(
         }
         SettingKind::Secret => {
             let secret_key = key.clone();
-            let is_set = Signal::derive(move || values.with(|v| v.iter().any(|(k, s)| *k == secret_key && matches!(s, SettingValueView::Secret { is_set: true }))));
+            let is_set = Signal::derive(move || {
+                values.with(|v| {
+                    v.iter().any(|(k, s)| {
+                        *k == secret_key && matches!(s, SettingValueView::Secret { is_set: true })
+                    })
+                })
+            });
             let clear_key = key.clone();
             let cleared_key = key.clone();
             let is_cleared = Signal::derive(move || cleared.with(|c| c.contains(&cleared_key)));

@@ -2,8 +2,9 @@
 
 use crate::i18n::t;
 use crate::state::use_editor;
-use crate::ui::*;
+use crate::ui::{log_text, op_icons};
 use leptos::prelude::*;
+use operator_ui::prelude::{ConsoleTerminal, IconButton, icons};
 
 // --- Console ---
 
@@ -15,10 +16,14 @@ pub fn ConsolePanel() -> impl IntoView {
             <div class="console-bar">
                 <span class="t-section" style="flex:1">{move || t!("console-title")}</span>
                 <span class="t-caption">{move || t!("console-lines", count = ed.logs.with(|l| l.len()))}</span>
-                <IconButton icon=icons::BROOM title=Signal::derive(move || t!("console-clear")) on_click=Callback::new(move |_| ed.logs.set(Vec::new())) />
-                <IconButton icon=icons::CLOSE title=Signal::derive(move || t!("console-hide")) on_click=Callback::new(move |_| ed.show_console.set(false)) />
+                {move || view! {
+                    <IconButton icon=op_icons::BROOM label=t!("console-clear") size=7.0 on_click=Callback::new(move |_| ed.logs.set(Vec::new())) />
+                }}
+                {move || view! {
+                    <IconButton icon=icons::CLOSE label=t!("console-hide") size=7.0 on_click=Callback::new(move |_| ed.show_console.set(false)) />
+                }}
             </div>
-            <Terminal lines=ed.logs />
+            <ConsoleTerminal logs=Signal::derive(move || ed.logs.with(|logs| logs.iter().map(log_text).collect::<Vec<_>>())) />
         </div>
     }
 }

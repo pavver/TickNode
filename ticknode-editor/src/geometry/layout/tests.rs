@@ -1,7 +1,7 @@
 use super::*;
 use ticknode_shared::{MAX_NODE_H, MAX_NODE_W, MIN_NODE_W, PropertyDefinition};
 
-fn definition(name: &str) -> NodeDefinition {
+pub(super) fn definition(name: &str) -> NodeDefinition {
     NodeDefinition {
         type_name: name.into(),
         title: name.into(),
@@ -38,11 +38,11 @@ fn definition(name: &str) -> NodeDefinition {
 }
 
 #[test]
-fn whole_extra_pixels_are_shared_and_last_growable_gets_the_remainder() {
+fn extra_height_follows_text_and_skips_empty_fields() {
     let def = definition("example");
     let props = vec![
         ("first".into(), DataValue::from("one")),
-        ("second".into(), DataValue::from("two")),
+        ("second".into(), DataValue::from("two\nlines")),
     ];
     let natural = NodeLayout::new(&def, &props);
     let layout = NodeLayout::sized(
@@ -57,25 +57,19 @@ fn whole_extra_pixels_are_shared_and_last_growable_gets_the_remainder() {
     assert_eq!(layout.width, 500.0);
     assert_eq!(layout.natural_height, natural.height);
     assert_eq!(layout.height, natural.height + 101.0);
+    // One line against two: a third and the rest; the empty input field keeps its row height.
     assert_eq!(layout.property_height("first"), ROW_H + 33.0);
-    assert_eq!(layout.property_height("second"), ROW_H + 33.0);
-    assert_eq!(
-        layout.pin_height(PinId(1), PinDirection::Input),
-        ROW_H + 35.0
-    );
+    assert_eq!(layout.property_height("second"), ROW_H + 68.0);
+    assert_eq!(layout.pin_height(PinId(1), PinDirection::Input), ROW_H);
     let anchor = |l: &NodeLayout, id, dir| l.anchor(Position::default(), PinId(id), dir).unwrap();
-    // Properties shift both columns; the grown input shifts only following inputs.
+    // Properties shift both columns.
     assert_eq!(
         anchor(&layout, 1, PinDirection::Input).1,
-        anchor(&natural, 1, PinDirection::Input).1 + 66.0
-    );
-    assert_eq!(
-        anchor(&layout, 2, PinDirection::Input).1,
-        anchor(&natural, 2, PinDirection::Input).1 + 101.0
+        anchor(&natural, 1, PinDirection::Input).1 + 101.0
     );
     assert_eq!(
         anchor(&layout, 3, PinDirection::Output),
-        (500.0, anchor(&natural, 3, PinDirection::Output).1 + 66.0)
+        (500.0, anchor(&natural, 3, PinDirection::Output).1 + 101.0)
     );
     assert_eq!(layout.pin_height(PinId(3), PinDirection::Output), ROW_H);
     assert_eq!(

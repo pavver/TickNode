@@ -91,7 +91,8 @@ impl NodeLayout {
         }
     }
 
-    /// Applies stored dimensions and distributes whole extra pixels over free text rows.
+    /// Applies stored dimensions and distributes whole extra pixels over free text rows, in
+    /// proportion to their wrapped text (see [`distribute_height`]).
     pub fn sized(
         def: &NodeDefinition,
         properties: &[(String, DataValue)],
@@ -119,56 +120,58 @@ impl NodeLayout {
         if def.type_name == "match" {
             return layout;
         }
+        // Free text rows grow in proportion to their wrapped text; empty ones keep the row height.
+        let chars_per_line = ((layout.width - 24.0 * DU) / width::CHAR_WIDTH).max(8.0);
+        let text_of = |name: &str| {
+            properties
+                .iter()
+                .find(|(n, _)| n == name)
+                .and_then(|(_, v)| match v {
+                    DataValue::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+        };
         let grow_props: Vec<_> = property_rows(def, properties)
             .into_iter()
             .map(|(name, value)| {
+                let grows = matches!(value, DataValue::String(_))
+                    && !is_type_property(def, name)
+                    && def
+                        .properties
+                        .iter()
+                        .find(|p| p.name == *name)
+                        .is_none_or(|p| {
+                            matches!(p.kind, PropertyKind::Text | PropertyKind::Multiline)
+                        });
+                let text = match value {
+                    DataValue::String(s) => s.as_str(),
+                    _ => "",
+                };
                 (
                     name.clone(),
-                    matches!(value, DataValue::String(_))
-                        && !is_type_property(def, name)
-                        && def
-                            .properties
-                            .iter()
-                            .find(|p| p.name == *name)
-                            .is_none_or(|p| {
-                                matches!(p.kind, PropertyKind::Text | PropertyKind::Multiline)
-                            }),
+                    grows.then(|| text_weight(text, chars_per_line)),
                 )
             })
             .collect();
         let grow_inputs: Vec<_> = pins(def, PinDirection::Input)
             .map(|p| {
-                (
-                    p.id,
-                    p.pin_type == PinType::Data(DataType::String)
-                        && !connected.contains(&p.id)
-                        && !def.properties.iter().any(|prop| prop.input == Some(p.id)),
-                )
+                let grows = p.pin_type == PinType::Data(DataType::String)
+                    && !connected.contains(&p.id)
+                    && !def.properties.iter().any(|prop| prop.input == Some(p.id));
+                let text = text_of(&ticknode_shared::input_value_property(p.id)).unwrap_or("");
+                (p.id, grows.then(|| text_weight(text, chars_per_line)))
             })
             .collect();
-        let count = grow_props.iter().filter(|(_, grow)| *grow).count()
-            + grow_inputs.iter().filter(|(_, grow)| *grow).count();
+        let weights: Vec<Option<f64>> = grow_props
+            .iter()
+            .map(|(_, w)| *w)
+            .chain(grow_inputs.iter().map(|(_, w)| *w))
+            .collect();
         let extra = (layout.height - layout.natural_height).floor();
-        let share = if count == 0 {
-            0.0
-        } else {
-            (extra / count as f64).floor()
-        };
-        let mut remaining = count;
-        let mut addition = |grow: bool| {
-            if !grow {
-                return 0.0;
-            }
-            remaining -= 1;
-            if remaining == 0 {
-                extra - share * (count - 1) as f64
-            } else {
-                share
-            }
-        };
+        let mut additions = distribute_height(extra, &weights).into_iter();
         let mut shift = 0.0;
-        for (name, grow) in grow_props {
-            let more = addition(grow);
+        for (name, _) in grow_props {
+            let more = additions.next().unwrap_or(0.0);
             layout.properties.push((name, ROW_H + more));
             shift += more;
         }
@@ -176,9 +179,9 @@ impl NodeLayout {
         for (_, y) in &mut layout.outputs {
             *y += shift;
         }
-        for ((id, grow), (_, y)) in grow_inputs.into_iter().zip(&mut layout.inputs) {
+        for ((id, _), (_, y)) in grow_inputs.into_iter().zip(&mut layout.inputs) {
             *y += shift;
-            let more = addition(grow);
+            let more = additions.next().unwrap_or(0.0);
             layout.input_heights.push((id, ROW_H + more));
             shift += more;
         }
@@ -246,6 +249,51 @@ impl NodeLayout {
     }
 }
 
+/// Content weight of a text field: its wrapped line count, or zero when it is empty.
+pub(super) fn text_weight(text: &str, chars_per_line: f64) -> f64 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    text.split('\n')
+        .map(|line| {
+            (line.chars().count() as f64 / chars_per_line)
+                .ceil()
+                .max(1.0)
+        })
+        .sum()
+}
+
+/// Splits `extra` whole pixels over rows: `None` rows never grow; growable rows get shares in
+/// proportion to their weights, the last weighted row takes the rounding remainder. When every
+/// growable row is empty (weight zero) they share equally, so resizing still gives them room.
+pub(super) fn distribute_height(extra: f64, weights: &[Option<f64>]) -> Vec<f64> {
+    let total: f64 = weights.iter().flatten().sum();
+    let weights: Vec<Option<f64>> = if total > 0.0 {
+        weights.to_vec()
+    } else {
+        weights.iter().map(|w| w.map(|_| 1.0)).collect()
+    };
+    let total: f64 = weights.iter().flatten().sum();
+    let last = weights.iter().rposition(|w| w.is_some_and(|w| w > 0.0));
+    let mut given = 0.0;
+    weights
+        .iter()
+        .enumerate()
+        .map(|(i, w)| match w {
+            Some(w) if *w > 0.0 && total > 0.0 => {
+                let share = if Some(i) == last {
+                    extra - given
+                } else {
+                    (extra * w / total).floor()
+                };
+                given += share;
+                share
+            }
+            _ => 0.0,
+        })
+        .collect()
+}
+
 /// Snaps a drag to design units while enforcing content and absolute bounds.
 pub fn resize_size(origin: NodeSize, delta: (f64, f64), natural_height: f64) -> NodeSize {
     use ticknode_shared::{MAX_NODE_H, MAX_NODE_W, MIN_NODE_W};
@@ -259,6 +307,8 @@ pub fn resize_size(origin: NodeSize, delta: (f64, f64), natural_height: f64) -> 
     }
 }
 
+#[cfg(test)]
+mod growth_tests;
 #[cfg(test)]
 mod tests;
 

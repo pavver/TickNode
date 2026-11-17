@@ -25,102 +25,66 @@
     --border-thick: calc(var(--du) * 0.5);
 
     --font: "Cascadia Code", "Cascadia Mono", ui-monospace, monospace;
-
-    --terminal-background: #0C0C0C;
-    --terminal-foreground: #CCCCCC;
-    --terminal-bright-red: #E74856;
-    --terminal-bright-green: #16C60C;
-    --terminal-bright-yellow: #F9F1A5;
-    --terminal-bright-blue: #3B78FF;
-    --terminal-bright-cyan: #61D6D6;
-    --terminal-bright-black: #767676;
 }
 
-:root[data-theme="dark"] {
-    color-scheme: dark;
-    --background: #0E1116;
-    --surface: #151A21;
-    --surface-alt: #1B222B;
-    --border: #3E4A5C;
-    --border-strong: #3A4656;
-    --divider: #252C36;
-    --text-primary: #E6EDF3;
-    --text-secondary: #9AA7B4;
-    --text-disabled: #5F6B78;
-    --icon: #D7E0EA;
-    --accent: #00B7C2;
-    --accent-muted: #164D55;
-    --success: #3DDC84;
-    --warning: #FFB020;
-    --error: #FF5C5C;
-    --info: #4DA3FF;
-    --pending: #00B7C2;
-    --pressed: #22313D;
-    --selection: #193B45;
-    --disabled-surface: #151A21;
-    --disabled-border: #1F252E;
-    --switch-checked-track: #193B2D;
-    --switch-unchecked-track: #3B1E1E;
-    --grid: #1A2029;
-    --magenta: #C678DD;
+/* Page background before the app mounts: the design system `background` token of each mode. */
+:root[data-theme="dark"] { color-scheme: dark; background: #181818; }
+:root[data-theme="light"] { color-scheme: light; background: #F8F8F8; }
+
+/* Editor colour names are aliases of the design system tokens (generated from tokens.toml and
+   injected by ThemeRoot on .op-root); only canvas-specific names live here. */
+.op-root {
+    --background: var(--op-background);
+    --surface: var(--op-surface);
+    --surface-alt: var(--op-surface-alt);
+    --border: var(--op-border);
+    --border-strong: var(--op-border-strong);
+    --divider: var(--op-divider);
+    --text-primary: var(--op-text-primary);
+    --text-secondary: var(--op-text-secondary);
+    --text-disabled: var(--op-text-disabled);
+    --icon: var(--op-icon);
+    --accent: var(--op-accent);
+    --accent-muted: var(--op-accent-muted);
+    --success: var(--op-success);
+    --warning: var(--op-warning);
+    --error: var(--op-error);
+    --info: var(--op-info);
+    --pending: var(--op-pending);
+    --pressed: var(--op-pressed);
+    --selection: var(--op-selection);
+    --disabled-surface: var(--op-disabled-surface);
+    --disabled-border: var(--op-disabled-border);
+    --switch-checked-track: var(--op-switch-checked-track);
+    --switch-unchecked-track: var(--op-switch-unchecked-track);
+    --grid: var(--op-divider);
+    --magenta: var(--op-syntax-number);
+
+    --terminal-background: var(--op-term-background);
+    --terminal-foreground: var(--op-term-foreground);
+    --terminal-bright-red: var(--op-term-bright-red);
+    --terminal-bright-green: var(--op-term-bright-green);
+    --terminal-bright-yellow: var(--op-term-bright-yellow);
+    --terminal-bright-blue: var(--op-term-bright-blue);
+    --terminal-bright-cyan: var(--op-term-bright-cyan);
+    --terminal-bright-black: var(--op-term-bright-black);
 
     --text: var(--text-primary);
-    --tk-delimiter: #8B949E;
-    --tk-keyword: var(--magenta);
-    --tk-input: var(--accent);
-    --tk-variable: #79C0FF;
-    --tk-field: #61D6D6;
-    --tk-filter: var(--info);
-    --tk-test: #FF7B72;
-    --tk-function: #E5C07B;
-    --tk-string: #7EE787;
-    --tk-number: var(--warning);
-    --tk-operator: var(--text-secondary);
-    --tk-comment: #6E7681;
+    --tk-delimiter: var(--op-syntax-punctuation);
+    --tk-keyword: var(--op-syntax-keyword);
+    --tk-input: var(--op-accent);
+    --tk-variable: var(--op-syntax-property);
+    --tk-field: var(--op-syntax-type);
+    --tk-filter: var(--op-syntax-function);
+    --tk-test: var(--op-syntax-constant);
+    --tk-function: var(--op-syntax-function);
+    --tk-string: var(--op-syntax-string);
+    --tk-number: var(--op-syntax-number);
+    --tk-operator: var(--op-text-secondary);
+    --tk-comment: var(--op-syntax-comment);
 }
 
-:root[data-theme="light"] {
-    color-scheme: light;
-    --background: #F4F6F8;
-    --surface: #FFFFFF;
-    --surface-alt: #EAEFF4;
-    --border: #B2C0CE;
-    --border-strong: #9EADBC;
-    --divider: #DDE3EA;
-    --text-primary: #1B1F24;
-    --text-secondary: #5E6B78;
-    --text-disabled: #9AA3AD;
-    --icon: #2B333C;
-    --accent: #007C89;
-    --accent-muted: #D4F1F4;
-    --success: #15803D;
-    --warning: #B7791F;
-    --error: #C62828;
-    --info: #1976D2;
-    --pending: #007C89;
-    --pressed: #E0EEF2;
-    --selection: #D4F1F4;
-    --disabled-surface: #F4F6F8;
-    --disabled-border: #D9E0E7;
-    --switch-checked-track: #C8E6C9;
-    --switch-unchecked-track: #FFCDD2;
-    --grid: #E3E8EE;
-    --magenta: #9C27B0;
-
-    --text: var(--text-primary);
-    --tk-delimiter: #6E7781;
-    --tk-keyword: var(--magenta);
-    --tk-input: var(--accent);
-    --tk-variable: #0550AE;
-    --tk-field: #0969DA;
-    --tk-filter: var(--info);
-    --tk-test: #CF222E;
-    --tk-function: #953800;
-    --tk-string: #116329;
-    --tk-number: var(--warning);
-    --tk-operator: var(--text-secondary);
-    --tk-comment: #8C959F;
-}
+.app-root { height: 100%; }
 
 * { box-sizing: border-box; }
 
@@ -128,7 +92,6 @@ html, body {
     margin: 0;
     height: 100%;
     overflow: hidden;
-    background: var(--background);
     color: var(--text-primary);
     font-family: var(--font);
     font-size: 14px;

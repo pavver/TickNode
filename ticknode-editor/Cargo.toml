@@ -11,7 +11,7 @@ postcard = { workspace = true, features = ["alloc"] }
 serde = { workspace = true }
 serde_json = "1.0"
 leptos = { version = "0.8.22", features = ["csr"] }
-wasm-bindgen = "0.2.100"
+wasm-bindgen = "0.2.130"
 js-sys = "0.3.77"
 console_error_panic_hook = "0.1.7"
 web-sys = { version = "0.3.77", features = [
@@ -22,6 +22,13 @@ web-sys = { version = "0.3.77", features = [
     "ScrollLogicalPosition", "CssStyleDeclaration", "Text",
 ] }
 uuid = { workspace = true }
+# Operator design system: only the components the editor uses.
+operator-ui = { git = "https://github.com/pavver/operator-design-system", branch = "main", default-features = false, features = [
+    "action-button", "icon-button", "text-field", "switch", "console-terminal", "hover-card",
+    "tooltip", "menu", "combobox", "dropdown-menu", "tabs", "search-field", "tree", "virtual-list",
+    "navigation-rail", "number-field", "duration-field", "time-field", "date-time-field",
+    "color-field", "graph", "code-field",
+] }
 fluent-bundle = "0.16.0"
 fluent-syntax = "0.12.0"
 unic-langid = "0.9.6"

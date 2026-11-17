@@ -161,7 +161,9 @@ fn App() -> impl IntoView {
         i18n::persist_locale(locale.get());
     });
 
+    let dark = RwSignal::new(true);
     Effect::new(move |_| {
+        dark.set(editor.theme.get() == Theme::Dark);
         let name = match editor.theme.get() {
             Theme::Dark => "dark",
             Theme::Light => "light",
@@ -226,6 +228,7 @@ fn App() -> impl IntoView {
     connection::connect(editor);
 
     view! {
+        <operator_ui::prelude::ThemeRoot dark=dark class="app-root">
         <div class="app">
             <Header />
             {move || if editor.open_sheet.get().is_some() {
@@ -253,6 +256,7 @@ fn App() -> impl IntoView {
                 }.into_any()
             }}
         </div>
+        </operator_ui::prelude::ThemeRoot>
     }
 }
 

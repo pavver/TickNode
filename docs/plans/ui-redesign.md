@@ -129,3 +129,12 @@ Each phase is a shippable release step; later phases depend on earlier ones.
   Users who need larger canvas text zoom the canvas.
   Revisit after phase 4: with measured content rows a "canvas text size" setting can scale node text and let rows grow, and canvas fonts can then move to TU.
 * No EditableText component: renaming in place (sheet title, frame titles, variable names) is a TextField behind a pencil button or a plain TextField inside the node.
+
+## 7. Progress (2026-11-17)
+
+* Phase 1: done except token generation (the editor still mirrors `tokens.toml` as aliases of `--op-*` in `styles/base.css`) and the remaining raw `px` in canvas CSS.
+  The `ui.rs` copies are replaced by `operator-ui` in the shell; `ui.rs` keeps only the compact canvas controls.
+* Phase 3: done: ThemeRoot, inspector removed (info HoverCard, node context Menu, status icons with hover cards), sheet title rename, home NavigationRail, left Tabs and category rail, SearchField, ConsoleTerminal, AsyncSwitch and ActionButton on the home page and plugin cards.
+* Phase 4: partly done on the existing layout: input fields take the spare row width, rows with a field share one label column, resize growth follows the text, output labels keep their width at the width cap.
+  Not started: the `RowSpec` row stack with measured content rows, removing the Match and template layout branches, and TU fonts on the canvas.
+  This is the risky part and needs the maintainer's review of the current state first.

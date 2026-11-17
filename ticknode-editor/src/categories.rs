@@ -4,53 +4,76 @@
 
 use crate::i18n::t;
 use crate::ui::icons;
+use operator_ui::tokens::Icon;
 
 pub struct Category {
     pub name: &'static str,
     key: &'static str,
     pub color: &'static str,
-    pub icon: &'static str,
+    /// Material path in a 24-unit box, as a design-system icon.
+    pub icon: Icon,
 }
 
 const fn cat(
     name: &'static str,
     key: &'static str,
     color: &'static str,
-    icon: &'static str,
+    paths: &'static [&'static str],
 ) -> Category {
     Category {
         name,
         key,
         color,
-        icon,
+        icon: Icon {
+            name,
+            view_box: "0 0 24 24",
+            paths,
+        },
     }
 }
 
+/// Icon of plugin categories that are not listed.
+const FALLBACK_ICON: Icon = Icon {
+    name: "extension",
+    view_box: "0 0 24 24",
+    paths: &[icons::EXTENSION],
+};
+
 const CATEGORIES: [Category; 14] = [
-    cat("Events", "category-events", "#E6A700", icons::BOLT),
+    cat("Events", "category-events", "#E6A700", &[icons::BOLT]),
     cat(
         "Control Flow",
         "category-control-flow",
         "#F08A24",
-        icons::CALL_SPLIT,
+        &[icons::CALL_SPLIT],
     ),
-    cat("Time", "category-time", "#5C7CFA", icons::SCHEDULE),
-    cat("Actions", "category-actions", "#4C97FF", icons::SEND),
-    cat("Data", "category-data", "#9966FF", icons::STORAGE),
-    cat("Math", "category-math", "#4CAF50", icons::CALCULATE),
-    cat("Logic", "category-logic", "#26A69A", icons::ACCOUNT_TREE),
-    cat("String", "category-string", "#C25FC2", icons::TEXT_FIELDS),
-    cat("Lists", "category-lists", "#D9534F", icons::LIST),
-    cat("Objects", "category-objects", "#E8642C", icons::DATA_OBJECT),
+    cat("Time", "category-time", "#5C7CFA", &[icons::SCHEDULE]),
+    cat("Actions", "category-actions", "#4C97FF", &[icons::SEND]),
+    cat("Data", "category-data", "#9966FF", &[icons::STORAGE]),
+    cat("Math", "category-math", "#4CAF50", &[icons::CALCULATE]),
+    cat("Logic", "category-logic", "#26A69A", &[icons::ACCOUNT_TREE]),
+    cat(
+        "String",
+        "category-string",
+        "#C25FC2",
+        &[icons::TEXT_FIELDS],
+    ),
+    cat("Lists", "category-lists", "#D9534F", &[icons::LIST]),
+    cat(
+        "Objects",
+        "category-objects",
+        "#E8642C",
+        &[icons::DATA_OBJECT],
+    ),
     cat(
         "Variables",
         "category-variables",
         "#FF6680",
-        icons::TERMINAL,
+        &[icons::TERMINAL],
     ),
-    cat("Network", "category-network", "#3FA7D6", icons::CLOUD),
-    cat("Debug", "category-debug", "#A0785A", icons::BUG),
-    cat("Test", "category-test", "#8A96A6", icons::SCIENCE),
+    cat("Network", "category-network", "#3FA7D6", &[icons::CLOUD]),
+    cat("Debug", "category-debug", "#A0785A", &[icons::BUG]),
+    cat("Test", "category-test", "#8A96A6", &[icons::SCIENCE]),
 ];
 /// Fallback colors for plugin categories not listed above.
 const EXTRA_COLORS: [&str; 6] = [
@@ -88,8 +111,18 @@ pub fn category_color(category: &str) -> &'static str {
     )
 }
 
+/// Category icon as a design-system icon (navigation rail).
+pub fn category_glyph(category: &str) -> Icon {
+    known(category).map_or(FALLBACK_ICON, |(_, c)| c.icon)
+}
+
+/// Category icon path for the editor's own `Icon`.
 pub fn category_icon(category: &str) -> &'static str {
-    known(category).map_or(icons::EXTENSION, |(_, c)| c.icon)
+    category_glyph(category)
+        .paths
+        .first()
+        .copied()
+        .unwrap_or(icons::EXTENSION)
 }
 
 #[cfg(test)]

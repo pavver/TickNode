@@ -1,37 +1,6 @@
 /* --- Palette (Scratch-style): category rail + colored blocks --- */
 .panel.left.palette { flex-direction: column; overflow: hidden; width: calc(var(--du) * 94); }
-.left-tabs {
-    display: flex;
-    flex-direction: row;
-    flex: none;
-    border-bottom: var(--border-w) solid var(--divider);
-    background: var(--surface);
-}
-.left-tab {
-    flex: 1;
-    height: calc(var(--du) * 9);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: calc(var(--du) * 1.5);
-    border: 0;
-    border-radius: 0;
-    background: none;
-    color: var(--text-secondary);
-    font: inherit;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    user-select: none;
-    --sb-color: transparent;
-    transition: color 150ms, background-color 150ms;
-}
-.left-tab .mdi { font-size: calc(var(--du) * 4.5); }
-.left-tab:hover { color: var(--text-primary); background: var(--surface-alt); }
-.left-tab.st-selected {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-}
+.left-tabs { flex: none; }
 .left-content {
     flex: 1;
     min-height: 0;
@@ -128,59 +97,9 @@
     text-align: center;
     font-style: italic;
 }
-.palette-rail {
-    flex: none;
-    width: calc(var(--du) * 20);
-    overflow-y: auto;
-    scrollbar-width: none;
-    display: flex;
-    flex-direction: column;
-    padding: calc(var(--du) * 1) 0;
-    border-right: var(--border-w) solid var(--divider);
-    background: var(--background);
-}
-.rail-item {
-    position: relative;
-    appearance: none;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-size: 10px;
-    line-height: 12px;
-    color: var(--text-secondary);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: calc(var(--du) * 1);
-    padding: calc(var(--du) * 2) calc(var(--du) * 1);
-    text-align: center;
-    cursor: pointer;
-}
-.rail-item:hover { color: var(--text-primary); background: var(--surface-alt); }
-.rail-item.active { color: var(--text-primary); background: color-mix(in srgb, var(--cat-color) 16%, var(--surface)); }
-.rail-item.active::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: calc(var(--du) * 1);
-    background: var(--cat-color);
-}
-.rail-swatch {
-    flex: none;
-    width: calc(var(--du) * 7);
-    height: calc(var(--du) * 7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--cat-color);
-    color: #fff;
-}
-.rail-swatch .icon { width: calc(var(--du) * 5); height: calc(var(--du) * 5); fill: currentColor; }
+.palette-nodes > .op-rail { flex: none; }
 .group-icon { display: flex; color: var(--cat-color); }
 .group-icon .icon { width: calc(var(--du) * 4.5); height: calc(var(--du) * 4.5); fill: currentColor; }
-.rail-label { overflow-wrap: anywhere; }
 .palette-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .palette-search { flex: none; border-bottom: var(--border-w) solid var(--divider); }
 .palette-list {

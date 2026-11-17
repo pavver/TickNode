@@ -10,11 +10,14 @@ use web_sys::PointerEvent;
 use super::resources::ResourcesPanel;
 use super::variables::VariablesPanel;
 use crate::canvas::view_center;
-use crate::categories::{category_color, category_icon, category_label, category_rank};
+use crate::categories::{
+    category_color, category_glyph, category_icon, category_label, category_rank,
+};
 use crate::geometry::{DU, node_width, pin_color};
 use crate::i18n::{self, t};
 use crate::state::{PaletteDrag, use_editor};
 use crate::ui::*;
+use operator_ui::prelude::{NavigationRail, RailItem, TabItem, Tabs};
 
 mod drag;
 pub use drag::*;
@@ -29,6 +32,18 @@ pub enum LeftTab {
     Nodes,
     Resources,
     Variables,
+}
+
+impl LeftTab {
+    const ALL: [Self; 3] = [Self::Nodes, Self::Resources, Self::Variables];
+
+    fn label(self) -> String {
+        match self {
+            Self::Nodes => t!("left-tab-nodes"),
+            Self::Resources => t!("left-tab-resources"),
+            Self::Variables => t!("left-tab-variables"),
+        }
+    }
 }
 
 fn load_left_tab() -> LeftTab {
@@ -62,11 +77,22 @@ fn save_left_tab(tab: LeftTab) {
 pub fn Palette() -> impl IntoView {
     let ed = use_editor();
     let active_tab = RwSignal::new(load_left_tab());
-
-    let set_tab = move |tab: LeftTab| {
-        active_tab.set(tab);
-        save_left_tab(tab);
-    };
+    let tab_index = RwSignal::new(
+        LeftTab::ALL
+            .iter()
+            .position(|t| *t == active_tab.get_untracked())
+            .unwrap_or(0),
+    );
+    Effect::new(move |_| {
+        let tab = LeftTab::ALL
+            .get(tab_index.get())
+            .copied()
+            .unwrap_or_default();
+        if tab != active_tab.get_untracked() {
+            active_tab.set(tab);
+            save_left_tab(tab);
+        }
+    });
 
     view! {
         <aside
@@ -74,38 +100,13 @@ pub fn Palette() -> impl IntoView {
             class:hidden=move || !ed.show_palette.get()
             class:dragging-out=move || ed.palette_drag.with(|d| d.as_ref().is_some_and(|d| d.active()))
         >
-            <nav class="left-tabs">
-                <button
-                    class="left-tab ctl"
-                    class:st-selected=move || active_tab.get() == LeftTab::Nodes
-                    title=move || t!("left-tab-nodes")
-                    on:click=move |_| set_tab(LeftTab::Nodes)
-                    on:pointerdown=|ev| ev.stop_propagation()
-                >
-                    <span class="mdi mdi-shape-outline" aria-hidden="true"></span>
-                    <span>{move || t!("left-tab-nodes")}</span>
-                </button>
-                <button
-                    class="left-tab ctl"
-                    class:st-selected=move || active_tab.get() == LeftTab::Resources
-                    title=move || t!("left-tab-resources")
-                    on:click=move |_| set_tab(LeftTab::Resources)
-                    on:pointerdown=|ev| ev.stop_propagation()
-                >
-                    <span class="mdi mdi-folder-search-outline" aria-hidden="true"></span>
-                    <span>{move || t!("left-tab-resources")}</span>
-                </button>
-                <button
-                    class="left-tab ctl"
-                    class:st-selected=move || active_tab.get() == LeftTab::Variables
-                    title=move || t!("left-tab-variables")
-                    on:click=move |_| set_tab(LeftTab::Variables)
-                    on:pointerdown=|ev| ev.stop_propagation()
-                >
-                    <span class="mdi mdi-variable" aria-hidden="true"></span>
-                    <span>{move || t!("left-tab-variables")}</span>
-                </button>
-            </nav>
+            <div class="left-tabs" on:pointerdown=|ev| ev.stop_propagation()>
+                {move || {
+                    ed.locale.track();
+                    let items = LeftTab::ALL.iter().map(|tab| TabItem::new(tab.label())).collect::<Vec<_>>();
+                    view! { <Tabs items=items selected=tab_index fill=true label=t!("left-tabs-label") /> }
+                }}
+            </div>
             <div class="left-content">
                 {move || match active_tab.get() {
                     LeftTab::Nodes => view! { <NodesPanel /> }.into_any(),
@@ -146,7 +147,7 @@ fn NodesPanel() -> impl IntoView {
             .collect::<Vec<_>>()
     });
     // Category currently scrolled into view (highlighted in the left rail)
-    let active = RwSignal::new(None::<String>);
+    let active = RwSignal::new(String::new());
     let list = NodeRef::<html::Div>::new();
 
     let update_active = move || {
@@ -168,7 +169,7 @@ fn NodesPanel() -> impl IntoView {
                 current = el.get_attribute("data-category");
             }
         }
-        active.set(current);
+        active.set(current.unwrap_or_default());
     };
     Effect::new(move |_| {
         groups.track();
@@ -190,7 +191,7 @@ fn NodesPanel() -> impl IntoView {
             });
         if let Some(section) = section {
             list.set_scroll_top(section.offset_top());
-            active.set(Some(category));
+            active.set(category);
         }
     };
 
@@ -213,26 +214,18 @@ fn NodesPanel() -> impl IntoView {
 
     view! {
         <div class="palette-nodes">
-            <nav class="palette-rail">
-                {move || groups.get().into_iter().map(|(category, _)| {
-                    let key = category.clone();
-                    let is_active = move || active.with(|a| a.as_deref() == Some(key.as_str()));
-                    let target = category.clone();
-                    let label_cat = category.clone();
-                    view! {
-                        <button
-                            class="rail-item"
-                            class:active=is_active
-                            style=format!("--cat-color:{}", category_color(&category))
-                            title=category.clone()
-                            on:click=move |_| scroll_to(target.clone())
-                        >
-                            <span class="rail-swatch"><Icon path=category_icon(&category) /></span>
-                            <span class="rail-label">{move || category_label(&label_cat)}</span>
-                        </button>
-                    }
-                }).collect_view()}
-            </nav>
+            <NavigationRail
+                items=Signal::derive(move || {
+                    ed.locale.track();
+                    groups.with(|g| g.iter().map(|(category, _)| {
+                        RailItem::new(category.clone(), category_label(category), category_glyph(category))
+                            .color(category_color(category))
+                    }).collect::<Vec<_>>())
+                })
+                selected=active
+                on_select=Callback::new(scroll_to)
+                label=t!("palette-categories-label")
+            />
             <div class="palette-main">
                 <div class="panel-section palette-search">
                     <TextField

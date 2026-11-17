@@ -925,3 +925,5 @@ home-rail-plugins = Plugins
 home-rail-log = Log
 home-rail-usage = Metrics
 home-rail-settings = Settings
+left-tabs-label = Left panel
+palette-categories-label = Node categories

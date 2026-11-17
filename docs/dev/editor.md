@@ -50,3 +50,4 @@ Diagnostics wait for a missing field tree before treating a field as unknown.
 Entity suggestions carry their title and icon, and field suggestions show localized TickNode type titles, including quantity units and list element types.
 Bound namespace chips show the entity title, field path and effective type, and flag incompatible destination contracts even when telemetry is unavailable.
 Template previews consume only open-sheet namespace telemetry and cached field contracts; trace views retain the same bound source type contracts.
+- **Text scaling**: the shell uses Type Units and follows the browser text size; canvas text follows only the canvas zoom, because node geometry (row heights, sockets, widths) is computed in Rust from DU constants (see `docs/plans/ui-redesign.md`, section 6).

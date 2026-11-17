@@ -1,6 +1,6 @@
 # UI/UX redesign plan
 
-Status: proposal (2026-11-17), scheduled for the release after 0.2.0.
+Status: in progress (2026-11-17), scheduled for the release after 0.2.0.
 Scope: move the editor onto the Operator design system ([../../../operator-design-system](../../../operator-design-system)) and fix the UX problems found on the way, not a cosmetic reskin.
 
 ## 1. Findings
@@ -120,7 +120,12 @@ Each phase is a shippable release step; later phases depend on earlier ones.
 * Draft components need the maintainer's review before TickNode can rely on them.
 * WASM size grows with `operator-ui`; enable only the needed component features.
 
-## 6. Open questions
+## 6. Decisions taken during the migration
 
-* Should the extension crates live in the design system repository (shared) or in TickNode until a second app needs them?
-* Canvas text scaling: follow the browser text size (TU) or only the canvas zoom?
+* Extension components live in the design system repository as the `graph` and `code-field` features of `operator-ui` (the `extensions` group, not part of `full`), not as separate crates.
+* Canvas text scaling (2026-11-17): **canvas text follows only the canvas zoom; everything outside the canvas follows the browser text size.**
+  The shell (header, panels, home page, menus, hover cards) uses Type Units (`--op-tu` is `0.0625rem`), so the browser or system text size scales it.
+  Node text keeps a fixed size relative to node geometry: row heights, socket positions and auto widths are computed in Rust from DU constants, so scaling text alone would overflow rows and break wire alignment, and a graph would look different for every viewer.
+  Users who need larger canvas text zoom the canvas.
+  Revisit after phase 4: with measured content rows a "canvas text size" setting can scale node text and let rows grow, and canvas fonts can then move to TU.
+* No EditableText component: renaming in place (sheet title, frame titles, variable names) is a TextField behind a pencil button or a plain TextField inside the node.

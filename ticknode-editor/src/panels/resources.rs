@@ -89,6 +89,7 @@ pub fn ResourcesPanel() -> impl IntoView {
             <div class="panel-section palette-search">
                 {move || view! {
                     <SearchField
+                        clear_label=Signal::derive(move || t!("search-clear"))
                         value=query
                         placeholder=Signal::derive(move || t!("picker-search-placeholder"))
                         label=t!("picker-search-placeholder")

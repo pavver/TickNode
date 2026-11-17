@@ -230,6 +230,7 @@ fn NodesPanel() -> impl IntoView {
                 <div class="panel-section palette-search">
                     {move || view! {
                         <SearchField
+                            clear_label=Signal::derive(move || t!("search-clear"))
                             value=query
                             placeholder=Signal::derive(move || t!("palette-search-placeholder"))
                             label=t!("palette-search-placeholder")

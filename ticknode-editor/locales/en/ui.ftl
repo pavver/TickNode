@@ -929,3 +929,5 @@ left-tabs-label = Left panel
 palette-categories-label = Node categories
 
 plugins-enabled = Plugin enabled
+
+search-clear = Clear search

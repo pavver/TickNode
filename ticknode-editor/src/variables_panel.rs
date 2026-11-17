@@ -52,6 +52,7 @@ pub fn VariablesList(sheet: Option<SheetId>) -> impl IntoView {
                 <div class="variables-search">
                     {move || view! {
                         <SearchField
+                            clear_label=Signal::derive(move || t!("search-clear"))
                             value=query
                             placeholder=Signal::derive(move || t!("variables-search-placeholder"))
                             label=t!("variables-search-placeholder")

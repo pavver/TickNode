@@ -20,8 +20,11 @@ pub(super) fn SheetTitle(
     let field = NodeRef::<leptos::html::Div>::new();
     let current = move || {
         ed.open_sheet.get().and_then(|id| {
-            ed.sheets
-                .with(|list| list.iter().find(|s| s.info.id == id).map(|s| s.info.clone()))
+            ed.sheets.with(|list| {
+                list.iter()
+                    .find(|s| s.info.id == id)
+                    .map(|s| s.info.clone())
+            })
         })
     };
     let start = Callback::new(move |()| {

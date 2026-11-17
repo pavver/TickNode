@@ -88,3 +88,14 @@ fn field_rows_share_a_capped_label_column() {
         width::LABEL_COLUMN_MAX.min(0.4 * capped.width)
     );
 }
+
+#[test]
+fn at_the_width_cap_the_output_label_wins_until_the_input_has_half() {
+    assert_eq!(width::output_share(200.0, 80.0, 60.0), 60.0);
+    // The input needs more than is left: the output keeps its label.
+    assert_eq!(width::output_share(200.0, 180.0, 60.0), 60.0);
+    // A long output stops at half of the row.
+    assert_eq!(width::output_share(200.0, 180.0, 150.0), 100.0);
+    // A short input leaves the rest to the output.
+    assert_eq!(width::output_share(200.0, 40.0, 190.0), 160.0);
+}

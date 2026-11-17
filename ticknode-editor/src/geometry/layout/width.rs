@@ -216,7 +216,17 @@ pub(super) fn automatic_width(
     ((width / DU).ceil() * DU).clamp(node_width(&def.type_name), 2.0 * NODE_WIDTH)
 }
 
-/// Allocate each directional row its content width; shrink both proportionally at the width cap.
+/// Width of the output side of a row with `available` space for an input needing `input` and an
+/// output needing `output`: the output keeps its label while the input still gets at least half
+/// of the row (its field shrinks first); only past that point the output is truncated.
+pub(super) fn output_share(available: f64, input: f64, output: f64) -> f64 {
+    if input + output <= available {
+        return output;
+    }
+    output.min(available - input.min(available / 2.0)).max(0.0)
+}
+
+/// Allocate each directional row its content width; at the width cap see [`output_share`].
 pub(super) fn row_widths(
     def: &NodeDefinition,
     connected: &[PinId],
@@ -234,12 +244,12 @@ pub(super) fn row_widths(
         let b = outputs
             .get(row)
             .map_or(0.0, |p| pin_width(def, p, connected, properties, column));
-        let scale = ((width - 16.0) / (a + b)).min(1.0);
+        let output = output_share(width - 16.0, a, b);
         if let Some(p) = inputs.get(row) {
-            widths.push((p.id, p.direction, (width - 16.0 - b * scale).max(0.0)));
+            widths.push((p.id, p.direction, (width - 16.0 - output).max(0.0)));
         }
         if let Some(p) = outputs.get(row) {
-            widths.push((p.id, p.direction, b * scale));
+            widths.push((p.id, p.direction, output));
         }
     }
     widths

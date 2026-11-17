@@ -170,6 +170,10 @@
 .inline-value.bool.on { color: var(--success); border-color: color-mix(in srgb, var(--success) 50%, var(--divider)); }
 .inline-value.bool.unset { color: var(--text-disabled); }
 .pin .inline-value { margin-left: auto; }
+/* An input row gives its spare width to the value field, not to the label: the label keeps its
+   text width and shrinks with an ellipsis, a text or number field takes the rest of the row. */
+.pin.in > .ellipsis { flex: 0 1 auto; min-width: 0; }
+.pin.in > .inline-binding > input.inline-value, .pin.in > .inline-binding > textarea.inline-value { flex: 1 1 0; width: 0; min-width: calc(var(--du) * 13); max-width: none; }
 .duration-value { display: flex; gap: 2px; flex: 1 0 auto; min-width: min-content; height: var(--node-control); }
 .pin .duration-value { margin-left: auto; }
 .input-row .duration-value, .cond-row .duration-value { flex: 1 1 80px; min-width: 0; }

@@ -224,10 +224,8 @@
 .palette-block:active { cursor: grabbing; }
 .block-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
 .block-head .block-title { flex: 1; min-width: 0; }
-.inspector-head { display: flex; align-items: center; gap: calc(var(--du) * 2); min-width: 0; }
-.inspector-head .t-row { flex: 1; min-width: 0; }
 
-/* --- Info button and tooltip --- */
+/* --- Info button --- */
 .info-btn {
     flex: none;
     display: inline-flex;
@@ -241,22 +239,6 @@
 }
 .info-btn .icon { width: calc(var(--du) * 4.5); height: calc(var(--du) * 4.5); fill: currentColor; }
 .info-btn:hover { color: var(--accent); }
-.tooltip {
-    position: fixed;
-    z-index: 200;
-    pointer-events: none;
-    max-height: calc(100vh - var(--du) * 4);
-    overflow: hidden;
-    padding: calc(var(--du) * 3);
-    background: var(--surface-alt);
-    border: var(--border-w) solid var(--accent);
-    box-shadow: 0 calc(var(--du) * 2) calc(var(--du) * 6) rgb(0 0 0 / .35);
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--du) * 2);
-}
-.tooltip-title { font-size: 13px; line-height: 16px; font-weight: 700; color: var(--text-primary); }
-.tooltip-text { font-size: 12px; line-height: 17px; color: var(--text-primary); white-space: pre-line; }
 
 .block-title { font-size: 13px; line-height: 16px; font-weight: 700; color: var(--text-primary); }
 .block-pins { display: flex; justify-content: space-between; gap: calc(var(--du) * 3); font-size: 11px; line-height: 14px; color: var(--text-secondary); }
@@ -295,7 +277,7 @@
 }
 body:has(.palette-ghost) { cursor: copy; }
 
-/* --- Pin values in inspector --- */
+/* --- Pin values in the node help card --- */
 .io-row { display: flex; flex-direction: column; gap: calc(var(--du) * .5); }
 .io-row + .io-row { padding-top: calc(var(--du) * 1); border-top: var(--border-w) solid var(--divider); }
 .io-value {
@@ -467,3 +449,11 @@ body:has(.palette-ghost) { cursor: copy; }
 }
 .hidden { display: none !important; }
 
+
+/* Node help hover card (info icon on nodes and palette blocks, canvas controls help). */
+.node-help { display: flex; flex-direction: column; gap: var(--op-dim-gap-micro); }
+.node-help-meta { color: var(--text-secondary); }
+.node-help-text { margin: 0; white-space: pre-line; }
+.node-help .panel-section { padding: 0; }
+.info-icon { display: inline-grid; place-items: center; color: var(--text-secondary); cursor: help; }
+.info-icon:hover, .info-icon:focus-visible { color: var(--accent); }

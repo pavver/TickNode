@@ -151,14 +151,6 @@ impl PaletteDrag {
     }
 }
 
-/// Node "info" tooltip: text and bounding rect of the button (client coordinates) to anchor next to.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Tooltip {
-    pub title: String,
-    pub text: String,
-    pub anchor: (f64, f64, f64, f64),
-}
-
 /// The open searchable picker of a dynamic property (`PropertyKind::Dynamic`): which property it edits
 /// and the field's bounding rect (client coordinates) to anchor the popup to.
 #[derive(Debug, Clone)]
@@ -304,7 +296,8 @@ pub struct Editor {
     pub palette_drag: RwSignal<Option<PaletteDrag>>,
     pub pending_paste: RwSignal<Option<PendingPaste>>,
     pub copied_settings: RwSignal<Option<CopiedSettings>>,
-    pub tooltip: RwSignal<Option<Tooltip>>,
+    /// Open node context menu: its screen position.
+    pub node_menu: RwSignal<Option<(f64, f64)>>,
     /// Namespace entry metadata without field trees.
     pub value_catalogs: RwSignal<Vec<ticknode_shared::ValueCatalog>>,
     /// On-demand fields; invalidated when their namespace catalog is replaced.
@@ -397,7 +390,7 @@ impl Editor {
             palette_drag: RwSignal::new(None),
             pending_paste: RwSignal::new(None),
             copied_settings: RwSignal::new(None),
-            tooltip: RwSignal::new(None),
+            node_menu: RwSignal::new(None),
             value_catalogs: RwSignal::new(Vec::new()),
             value_entry_fields: RwSignal::new(HashMap::new()),
             value_catalog_index: RwSignal::new(plugin_values::editor::ValueCatalogTree::default()),

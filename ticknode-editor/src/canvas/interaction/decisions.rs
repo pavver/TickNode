@@ -8,6 +8,8 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum NodeClick {
     CopySettings,
+    /// Opens the node context menu.
+    Menu,
     PasteSettings,
     ToggleSelect,
     Select,
@@ -23,6 +25,7 @@ pub(super) fn node_click_action(
 ) -> NodeClick {
     match (button, shift, ctrl) {
         (2, true, _) => NodeClick::CopySettings,
+        (2, false, _) => NodeClick::Menu,
         (0, _, true) => NodeClick::ToggleSelect,
         (0, true, false) if copied_type == Some(node_type) => NodeClick::PasteSettings,
         (0, true, false) => NodeClick::ToggleSelect,

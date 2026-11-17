@@ -1,16 +1,14 @@
-//! Side panels (palette, inspector) and console.
+//! Side panels (palette, resources), node help and console.
 
 mod console;
 mod execution;
 mod formatting;
-mod inspector;
+mod help;
 mod palette;
 mod resources;
-mod tooltip;
 mod variables;
 
 pub use console::*;
 pub use formatting::{display_value, display_value_in, property_label, relative_time};
-pub use inspector::*;
+pub use help::NodeHelp;
 pub use palette::*;
-pub use tooltip::*;

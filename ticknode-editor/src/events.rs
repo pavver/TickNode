@@ -39,17 +39,6 @@ pub fn keydown(editor: Editor, ev: web_sys::KeyboardEvent) {
     }
 }
 
-pub fn hide_tooltip(editor: Editor, ev: web_sys::PointerEvent) {
-    let on_info = ev
-        .target()
-        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
-        .and_then(|el| el.closest(".info-btn").ok().flatten())
-        .is_some();
-    if !on_info && editor.tooltip.with_untracked(|t| t.is_some()) {
-        editor.tooltip.set(None);
-    }
-}
-
 pub fn hide_picker(editor: Editor, ev: web_sys::PointerEvent) {
     let inside = ev
         .target()

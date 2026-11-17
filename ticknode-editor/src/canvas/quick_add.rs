@@ -37,7 +37,7 @@ impl Interaction {
                 || ed.variable_menu.with_untracked(|p| p.is_some())
                 || ed.wire_context.with_untracked(|p| p.is_some())
                 || ed.quick_add.with_untracked(|p| p.is_some())
-                || ed.tooltip.with_untracked(|p| p.is_some()),
+                || ed.node_menu.with_untracked(|p| p.is_some()),
         )
     }
 

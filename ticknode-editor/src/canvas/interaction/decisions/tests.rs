@@ -8,6 +8,7 @@ fn node_click_action_truth_table() {
                 for copied in [None, Some("math/expression"), Some("const")] {
                     let expected = match (button, shift, ctrl, copied) {
                         (2, true, _, _) => NodeClick::CopySettings,
+                        (2, false, _, _) => NodeClick::Menu,
                         (0, _, true, _) => NodeClick::ToggleSelect,
                         (0, true, false, Some("math/expression")) => NodeClick::PasteSettings,
                         (0, true, false, _) => NodeClick::ToggleSelect,

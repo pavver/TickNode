@@ -1,4 +1,4 @@
-//! Fixed-position menu for route points and detached wire removal.
+//! Fixed-position wire menu: disconnect, route points and detached wire removal.
 
 use leptos::prelude::*;
 use ticknode_shared::ClientMessage;
@@ -105,9 +105,19 @@ fn WireContextPopup(state: WireContext) -> impl IntoView {
                     ed.send(ClientMessage::RemoveDetached(d));
                     ed.wire_context.set(None);
                 }>{move || t!("wire-detached-remove")}</button> }.into_any()
-            } else { match state.index {
-                Some(index) => view! { <button node_ref=button class="picker-row" on:click=move |_| choose(PointEdit::Remove(index))>{move || t!("wire-point-remove")}</button> }.into_any(),
-                None => view! { <button node_ref=button class="picker-row" on:click=move |_| choose(PointEdit::Add)>{move || t!("wire-point-add")}</button> }.into_any(),
+            } else { view! {
+                <button node_ref=button class="picker-row" on:click=move |_| {
+                    ed.send(if state.exec {
+                        ClientMessage::DisconnectExec(state.connection)
+                    } else {
+                        ClientMessage::DisconnectData { dst_node: state.connection.dst_node, dst_pin: state.connection.dst_pin }
+                    });
+                    ed.wire_context.set(None);
+                }>{move || t!("conn-disconnect")}</button>
+            }.into_any() }}
+            {if state.detached.is_some() { ().into_any() } else { match state.index {
+                Some(index) => view! { <button class="picker-row" on:click=move |_| choose(PointEdit::Remove(index))>{move || t!("wire-point-remove")}</button> }.into_any(),
+                None => view! { <button class="picker-row" on:click=move |_| choose(PointEdit::Add)>{move || t!("wire-point-add")}</button> }.into_any(),
             }}}
             <Show when=has_points>
                 <button class="picker-row" on:click=move |_| choose(PointEdit::Clear)>{move || t!("wire-points-clear")}</button>

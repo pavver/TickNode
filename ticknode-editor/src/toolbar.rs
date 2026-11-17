@@ -116,6 +116,7 @@ pub fn Header() -> impl IntoView {
                     >
                         <span class="mdi mdi-selection-drag" aria-hidden="true"></span>
                     </button>
+                    <ControlsHelp />
                     <IconButton
                         icon=icons::TERMINAL
                         title=Signal::derive(move || t!("toolbar-console"))
@@ -138,5 +139,49 @@ pub fn Header() -> impl IntoView {
                 </button>
             </div>
         </header>
+    }
+}
+
+/// Hint keys shown in the canvas controls help, in order.
+const CONTROL_HINTS: [&str; 13] = [
+    "overview-hint-1",
+    "overview-hint-2",
+    "overview-hint-3",
+    "overview-hint-4",
+    "overview-hint-5",
+    "overview-hint-6",
+    "overview-hint-7",
+    "overview-hint-8",
+    "overview-hint-9",
+    "overview-hint-resize",
+    "overview-hint-quick-add",
+    "overview-hint-frame",
+    "overview-hint-nudge",
+];
+
+/// Toolbar help button: graph statistics and the canvas controls in a hover card.
+#[component]
+fn ControlsHelp() -> impl IntoView {
+    let ed = use_editor();
+    let stats = move || {
+        let nodes = ed.nodes.with(|n| n.len());
+        let conns = ed.exec.with(|e| e.len()) + ed.data.with(|d| d.len());
+        t!("overview-stats", nodes = nodes, connections = conns)
+    };
+    let card = move || {
+        view! {
+            <div class="node-help">
+                <div class="op-t-row-title">{move || t!("overview-title-controls")}</div>
+                <div class="op-t-caption node-help-meta">{stats}</div>
+                {CONTROL_HINTS.iter().map(|key| view! { <p class="node-help-text">{move || t!(key)}</p> }).collect_view()}
+            </div>
+        }
+    };
+    view! {
+        <operator_ui::prelude::HoverCard card=ViewFn::from(card) width=110.0 label=t!("toolbar-help")>
+            <button class="icon-btn ctl" aria-label=move || t!("toolbar-help")>
+                <span class="mdi mdi-help-circle-outline" aria-hidden="true"></span>
+            </button>
+        </operator_ui::prelude::HoverCard>
     }
 }

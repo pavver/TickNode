@@ -262,7 +262,6 @@ palette-empty = Нічого не знайдено
 palette-info-aria = Як працює нода
 
 # Graph overview and inspector
-overview-title-graph = Граф
 overview-stats = { $nodes } нод · { $connections } з'єднань
 overview-title-controls = Керування
 overview-hint-1 = Палітра: клік — нода в центр, перетягування — нода на місце
@@ -271,16 +270,11 @@ overview-hint-3 = Рамка ЛКМ: зліва направо — ноди по
 overview-hint-4 = Shift/Ctrl — додати до виділення; виділені ноди тягнуться разом
 overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — буфер, Ctrl+D — дублювати, Ctrl+A — усе; Ctrl/Cmd+Z — скасувати, Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y — повторити
 overview-hint-6 = Вставка їде за курсором: ЛКМ — поставити, ПКМ або Esc — скасувати, середня кнопка — зсув
-overview-hint-7 = Delete — видалити виділене, Esc — зняти виділення
+overview-hint-7 = Delete — видалити виділене, Esc — зняти виділення; ПКМ на ноді чи дроті — меню дій
 overview-hint-8 = Середня кнопка — зсув, колесо — масштаб, F — весь граф; на сенсорі — палець і два пальці
 overview-hint-9 = Shift + ПКМ — копіювати налаштування ноди; Shift + ЛКМ — вставити в ноду того самого типу; Esc — очистити скопійовані налаштування
 settings-copied = Налаштування скопійовано з ноди «{ $title }»
 error-settings-type-mismatch = Неможливо вставити налаштування з { $from } у { $to }
-
-inspector-node-not-found = Ноду не знайдено
-inspector-section-actions = Дії
-inspector-duplicate = Дублювати (Ctrl+D)
-inspector-delete-node = Видалити ноду
 
 exec-section-title = Виконання
 exec-section-inputs = Входи
@@ -298,27 +292,6 @@ exec-not-connected = не під'єднано
 exec-default-used-hint = Нода використала значення за замовчуванням
 exec-output-not-emitted-hint = Значення ще не видавалось
 
-group-selected =
-    { $count ->
-        [one] Виділено { $count } ноду
-        [few] Виділено { $count } ноди
-        [many] Виділено { $count } нод
-       *[other] Виділено { $count } нод
-    }
-group-hint = Тягніть будь-яку з них, щоб перемістити всі. Ctrl+V — вставити копію: ЛКМ ставить, ПКМ скасовує.
-group-copy = Копіювати (Ctrl+C)
-group-delete =
-    { $count ->
-        [one] Видалити { $count } ноду
-        [few] Видалити { $count } ноди
-        [many] Видалити { $count } нод
-       *[other] Видалити { $count } нод
-    }
-
-conn-type-exec = Exec-з'єднання
-conn-type-data = З'єднання даних
-conn-from = з
-conn-to = до
 conn-disconnect = Від'єднати
 
 # Console
@@ -395,7 +368,6 @@ pin-change-changed = Пін «{ $name }»: { $old } → { $new }
 pin-change-required = Новий обов’язковий вхід «{ $name }» ({ $kind })
 pin-direction-input = вхідний
 pin-direction-output = вихідний
-wire-detached-title = Дріт від'єднано: пін змінився
 wire-detached-remove = Видалити дріт
 
 node-resize-title = Тягніть, щоб змінити розмір; подвійний клік — автоматичний розмір
@@ -943,3 +915,15 @@ formula-lint-wrong-arity = Функція «{ $name }» очікує { $expected
 inline-plugin-value-tooltip = { $name } ({ $path }): { $value }
 inline-binding-unavailable = Недоступно
 inline-binding-type-error = Неможливо прив'язати { $source } до { $target }
+
+wire-detached-title = Дріт від'єднано: пін змінився
+node-menu-label = Дії з нодою
+node-menu-duplicate = Дублювати
+node-menu-copy = Копіювати
+node-menu-delete =
+    { $count ->
+        [one] Видалити { $count } ноду
+        [few] Видалити { $count } ноди
+       *[other] Видалити { $count } нод
+    }
+toolbar-help = Керування канвою

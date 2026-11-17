@@ -11,7 +11,7 @@ use crate::state::use_editor;
 
 /// When the node last executed and what values were on its pins.
 #[component]
-pub(super) fn ExecutionInfo(id: NodeId) -> impl IntoView {
+pub(crate) fn ExecutionInfo(id: NodeId) -> impl IntoView {
     let ed = use_editor();
     let Some(node) = ed.node(id) else {
         return ().into_any();

@@ -265,16 +265,16 @@ fn plurals_and_arguments_work_in_both_locales() {
         assert_eq!(t!("time-seconds-ago", count = 2), "2 секунди тому");
         assert_eq!(t!("time-seconds-ago", count = 5), "5 секунд тому");
         assert_eq!(t!("time-seconds-ago", count = 21), "21 секунду тому");
-        assert_eq!(t!("group-selected", count = 1), "Виділено 1 ноду");
-        assert_eq!(t!("group-selected", count = 3), "Виділено 3 ноди");
-        assert_eq!(t!("group-selected", count = 12), "Виділено 12 нод");
+        assert_eq!(t!("node-menu-delete", count = 1), "Видалити 1 ноду");
+        assert_eq!(t!("node-menu-delete", count = 3), "Видалити 3 ноди");
+        assert_eq!(t!("node-menu-delete", count = 12), "Видалити 12 нод");
     });
     with_locale(Locale::En, || {
         assert_eq!(t!("time-seconds-ago", count = 1), "1 second ago");
         assert_eq!(t!("time-seconds-ago", count = 2), "2 seconds ago");
         assert_eq!(t!("time-seconds-ago", count = 5), "5 seconds ago");
-        assert_eq!(t!("group-selected", count = 1), "1 node selected");
-        assert_eq!(t!("group-selected", count = 3), "3 nodes selected");
+        assert_eq!(t!("node-menu-delete", count = 1), "Delete node");
+        assert_eq!(t!("node-menu-delete", count = 3), "Delete 3 nodes");
         assert_eq!(t!("status-online", count = 1), "connected · 1 node");
         assert_eq!(t!("status-online", count = 4), "connected · 4 nodes");
     });

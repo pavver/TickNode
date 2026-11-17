@@ -81,6 +81,7 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                 <span class="node-cat ellipsis" class:node-unavailable=move || unavailable.with(Option::is_some)>
                     {move || if unavailable.with(Option::is_some) { t!("node-plugin-unavailable") } else { def.with(|d| category_label(&d.category)) }}
                 </span>
+                <crate::panels::NodeHelp def=def id=id />
                 {move || (!frozen.get() && !ed.node_errors.with(|errors| errors.contains_key(&id)) && def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))).then(|| view! {
                     <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
                 })}

@@ -8,7 +8,6 @@ use wasm_bindgen::JsCast;
 use web_sys::PointerEvent;
 
 use super::resources::ResourcesPanel;
-use super::tooltip::InfoButton;
 use super::variables::VariablesPanel;
 use crate::canvas::view_center;
 use crate::categories::{category_color, category_icon, category_label, category_rank};
@@ -346,7 +345,7 @@ fn PaletteBlock(
         >
             <div class="block-head">
                 <span class="block-title ellipsis">{move || i18n::node_title(&def_title)}</span>
-                <InfoButton def=def />
+                <super::help::NodeHelp def=Signal::stored(def) />
             </div>
             <div class="block-pins">
                 <span class="block-pins-side in">{in_chips}</span>

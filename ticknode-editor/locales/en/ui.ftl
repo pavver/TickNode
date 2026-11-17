@@ -249,7 +249,6 @@ palette-empty = Nothing found
 palette-info-aria = How this node works
 
 # Graph overview and inspector
-overview-title-graph = Graph
 overview-stats =
     { $nodes ->
         [one] { $nodes } node
@@ -265,16 +264,11 @@ overview-hint-3 = Left-drag box: left-to-right selects nodes fully inside, right
 overview-hint-4 = Shift/Ctrl adds to selection; selected nodes move together
 overview-hint-5 = Ctrl+C / Ctrl+X / Ctrl+V — clipboard, Ctrl+D — duplicate, Ctrl+A — select all; Ctrl/Cmd+Z — undo, Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y — redo
 overview-hint-6 = Paste follows the cursor: left-click places, right-click or Esc cancels, middle-drag pans
-overview-hint-7 = Delete removes selection, Esc clears selection
+overview-hint-7 = Delete removes selection, Esc clears selection; right-click a node or wire for its menu
 overview-hint-8 = Middle-drag to pan, wheel to zoom, F to fit graph; touch: one finger pans, two fingers zoom
 overview-hint-9 = Shift + right-click copies node settings; Shift + left-click pastes onto the same node type; Esc clears copied settings
 settings-copied = Settings copied from { $title }
 error-settings-type-mismatch = Cannot paste settings from { $from } to { $to }
-
-inspector-node-not-found = Node not found
-inspector-section-actions = Actions
-inspector-duplicate = Duplicate (Ctrl+D)
-inspector-delete-node = Delete node
 
 exec-section-title = Execution
 exec-section-inputs = Inputs
@@ -292,23 +286,6 @@ exec-not-connected = not connected
 exec-default-used-hint = Node used the default value
 exec-output-not-emitted-hint = No value emitted yet
 
-group-selected =
-    { $count ->
-        [one] { $count } node selected
-       *[other] { $count } nodes selected
-    }
-group-hint = Drag any of them to move all. Ctrl+V — paste a copy: left-click places, right-click cancels.
-group-copy = Copy (Ctrl+C)
-group-delete =
-    { $count ->
-        [one] Delete { $count } node
-       *[other] Delete { $count } nodes
-    }
-
-conn-type-exec = Exec connection
-conn-type-data = Data connection
-conn-from = from
-conn-to = to
 conn-disconnect = Disconnect
 
 # Console
@@ -389,7 +366,6 @@ pin-change-changed = Pin “{ $name }”: { $old } → { $new }
 pin-change-required = New required input “{ $name }” ({ $kind })
 pin-direction-input = input
 pin-direction-output = output
-wire-detached-title = Wire disconnected: the pin changed
 wire-detached-remove = Remove wire
 
 node-resize-title = Drag to resize, double-click to reset
@@ -928,3 +904,14 @@ formula-lint-wrong-arity = Function '{ $name }' expects { $expected } arguments,
 inline-plugin-value-tooltip = { $name } ({ $path }): { $value }
 inline-binding-unavailable = Unavailable
 inline-binding-type-error = Cannot bind { $source } to { $target }
+
+wire-detached-title = Wire disconnected: the pin changed
+node-menu-label = Node actions
+node-menu-duplicate = Duplicate
+node-menu-copy = Copy
+node-menu-delete =
+    { $count ->
+        [one] Delete node
+       *[other] Delete { $count } nodes
+    }
+toolbar-help = Canvas controls

@@ -13,6 +13,7 @@ pub mod i18n;
 mod inline;
 mod logo;
 mod match_editor;
+mod node_context;
 mod node_menu;
 mod node_status;
 mod panels;
@@ -38,7 +39,7 @@ use wasm_bindgen::JsCast;
 
 use crate::canvas::{Canvas, fit_view};
 use crate::inline::{TemplateCompletionLayer, TemplateSamplesLayer};
-use crate::panels::{ConsolePanel, Inspector, Palette, PaletteGhost, TooltipLayer};
+use crate::panels::{ConsolePanel, Palette, PaletteGhost};
 use crate::picker::PickerLayer;
 use crate::state::{Editor, LogKind, Theme, now_ms};
 use crate::toolbar::Header;
@@ -197,9 +198,6 @@ fn App() -> impl IntoView {
             editor.middle_button_at.set_value(now_ms());
         }
     });
-    // The "info" tooltip is dismissed by pressing anywhere outside the info button itself
-    let hide_tooltip =
-        window_event_listener(ev::pointerdown, move |ev| events::hide_tooltip(editor, ev));
     // The property picker popup closes on a press anywhere outside it and outside its field
     let hide_picker =
         window_event_listener(ev::pointerdown, move |ev| events::hide_picker(editor, ev));
@@ -218,7 +216,6 @@ fn App() -> impl IntoView {
         copy.remove();
         cut.remove();
         paste.remove();
-        hide_tooltip.remove();
         hide_picker.remove();
         middle_down.remove();
         middle_up.remove();
@@ -236,11 +233,10 @@ fn App() -> impl IntoView {
                     <div class="workspace">
                         <Palette />
                         <div class="canvas-wrap"><Canvas /></div>
-                        <Inspector />
                     </div>
                     <ConsolePanel />
                     <PaletteGhost />
-                    <TooltipLayer />
+                    <node_context::NodeContextLayer />
                     <PickerLayer />
                     <TemplateCompletionLayer />
                     <TemplateSamplesLayer />

@@ -47,6 +47,15 @@ impl Interaction {
                     });
                 }
             }
+            NodeClick::Menu => {
+                ev.prevent_default();
+                if !ed.is_selected(id) {
+                    ed.select_nodes(vec![id]);
+                }
+                // Open after this press: the menu's outside-press listener would see it and close.
+                let at = (f64::from(ev.client_x()), f64::from(ev.client_y()));
+                request_animation_frame(move || ed.node_menu.set(Some(at)));
+            }
             NodeClick::ToggleSelect => self.toggle_node(id),
             NodeClick::Select => self.start_nodes(id, start, world),
             NodeClick::Ignore => {}

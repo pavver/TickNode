@@ -53,3 +53,44 @@ pub fn NodeHelp(
         </span>
     }
 }
+
+/// Width of a status card in DU.
+const STATUS_WIDTH_DU: f32 = 70.0;
+
+/// Status icon on a node header (error, frozen pins, missing input) whose hover card explains it.
+#[component]
+pub fn StatusHint(
+    /// Explanation shown in the card; lines become paragraphs.
+    #[prop(into)]
+    text: Signal<String>,
+    /// Class of the trigger, which sets its colour.
+    class: &'static str,
+    /// Glyph of the trigger: a Material Design Icons class or plain text.
+    glyph: &'static str,
+) -> impl IntoView {
+    let card = move || {
+        view! {
+            <div class="node-help">
+                {move || text.get().lines().map(|line| view! { <p class="node-help-text">{line.to_string()}</p> }).collect_view()}
+            </div>
+        }
+    };
+    let icon = if glyph.starts_with("mdi-") {
+        view! { <span class=format!("mdi {glyph}") aria-hidden="true"></span> }.into_any()
+    } else {
+        view! { <span aria-hidden="true">{glyph}</span> }.into_any()
+    };
+    view! {
+        <span
+            class=format!("status-hint {class}")
+            on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
+            on:click=|ev: web_sys::MouseEvent| ev.stop_propagation()
+        >
+            <HoverCard card=ViewFn::from(card) width=STATUS_WIDTH_DU label=text.get_untracked()>
+                <span class="info-icon" role="button" tabindex="0" aria-label=move || text.get()>
+                    {icon}
+                </span>
+            </HoverCard>
+        </span>
+    }
+}

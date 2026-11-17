@@ -10,5 +10,5 @@ mod variables;
 
 pub use console::*;
 pub use formatting::{display_value, display_value_in, property_label, relative_time};
-pub use help::NodeHelp;
+pub use help::{NodeHelp, StatusHint};
 pub use palette::*;

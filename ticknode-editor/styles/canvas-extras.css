@@ -281,7 +281,10 @@
 
 /* Runtime status overlays keep the node and wire geometry unchanged. */
 .node.ctl.st-error::after { --sb-color: var(--error); }
-.node-error { border: 0; padding: 0; background: transparent; color: var(--error); cursor: help; flex: none; }
+.node-error { color: var(--error); }
+/* Node status icons open a hover card (`StatusHint`); the icon keeps the status colour. */
+.status-hint { flex: none; display: inline-flex; }
+.status-hint .info-icon, .status-hint .info-icon:hover { color: inherit; }
 .node-error .mdi { font-size: calc(var(--du) * 4); }
 .wire-value { pointer-events: none; font-family: var(--font); font-size: 11px; }
 .wire-value rect { fill: var(--surface); stroke: var(--border); stroke-width: var(--border-w); }

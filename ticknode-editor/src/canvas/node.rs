@@ -83,21 +83,15 @@ pub(super) fn NodeView(id: NodeId) -> impl IntoView {
                 </span>
                 <crate::panels::NodeHelp def=def id=id />
                 {move || (!frozen.get() && !ed.node_errors.with(|errors| errors.contains_key(&id)) && def.with(|d| d.pins.iter().any(|p| ed.required_missing(id, p)))).then(|| view! {
-                    <span class="node-warn" title=move || t!("node-missing-required-title")>"!"</span>
+                    <crate::panels::StatusHint class="node-warn" glyph="!" text=Signal::derive(move || t!("node-missing-required-title")) />
                 })}
                 <Show when=move || !frozen.get() && ed.node_errors.with(|errors| errors.contains_key(&id))>
-                    <button class="node-error"
-                        on:pointerenter=move |ev| crate::node_status::capture_title(&ev, || crate::node_status::error_text(ed, id))
-                        aria-label=move || crate::node_status::error_text(ed, id)
-                        on:pointerdown=|ev: web_sys::PointerEvent| ev.stop_propagation()
-                        on:click=|ev| ev.stop_propagation()>
-                        <span class="mdi mdi-alert-circle" aria-hidden="true"></span>
-                    </button>
+                    <crate::panels::StatusHint class="node-error" glyph="mdi-alert-circle" text=Signal::derive(move || crate::node_status::error_text(ed, id)) />
                 </Show>
                 <Show when=move || frozen.get()>
-                    <span class="mdi mdi-alert-outline node-frozen-warning" title=move || node.instance.with(|i| {
+                    <crate::panels::StatusHint class="node-frozen-warning" glyph="mdi-alert-outline" text=Signal::derive(move || node.instance.with(|i| {
                         i.frozen.iter().map(|change| crate::frozen::change_text(ed, &i.definition, change)).collect::<Vec<_>>().join("\n")
-                    })></span>
+                    })) />
                     <crate::frozen::ConfirmPins id=id compact=true />
                 </Show>
                 {move || trigger.get().map(|pin| view! {

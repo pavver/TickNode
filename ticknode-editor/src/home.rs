@@ -10,6 +10,7 @@ use crate::plugins_panel::PluginCard;
 use crate::state::use_editor;
 use crate::ui::{IconButton, Terminal, icons};
 use leptos::prelude::*;
+use operator_ui::prelude::{NavigationRail, RailItem};
 use settings::SettingsSection;
 use sheets::SheetsSection;
 use usage::UsageSection;
@@ -27,34 +28,98 @@ pub enum HomeSection {
     Settings,
 }
 
+impl HomeSection {
+    const ALL: [Self; 6] = [
+        Self::Sheets,
+        Self::Variables,
+        Self::Plugins,
+        Self::Log,
+        Self::Usage,
+        Self::Settings,
+    ];
+
+    /// Stable id: the navigation item id and the stored value.
+    fn id(self) -> &'static str {
+        match self {
+            Self::Sheets => "sheets",
+            Self::Variables => "variables",
+            Self::Plugins => "plugins",
+            Self::Log => "log",
+            Self::Usage => "usage",
+            Self::Settings => "settings",
+        }
+    }
+
+    fn from_id(id: &str) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|s| s.id() == id)
+            .unwrap_or_default()
+    }
+
+    /// Short label that fits the navigation rail.
+    fn label(self) -> String {
+        match self {
+            Self::Sheets => t!("home-rail-sheets"),
+            Self::Variables => t!("home-rail-variables"),
+            Self::Plugins => t!("home-rail-plugins"),
+            Self::Log => t!("home-rail-log"),
+            Self::Usage => t!("home-rail-usage"),
+            Self::Settings => t!("home-rail-settings"),
+        }
+    }
+
+    fn icon(self) -> operator_ui::tokens::Icon {
+        match self {
+            Self::Sheets => rail_icons::SHEETS,
+            Self::Variables => rail_icons::VARIABLES,
+            Self::Plugins => rail_icons::PLUGINS,
+            Self::Log => rail_icons::LOG,
+            Self::Usage => rail_icons::USAGE,
+            Self::Settings => operator_ui::prelude::icons::SETTINGS,
+        }
+    }
+}
+
+/// Home destinations drawn from the editor's 24-unit Material paths.
+mod rail_icons {
+    use crate::ui::icons;
+    use operator_ui::tokens::Icon;
+
+    const fn material(name: &'static str, paths: &'static [&'static str]) -> Icon {
+        Icon {
+            name,
+            view_box: "0 0 24 24",
+            paths,
+        }
+    }
+
+    pub const SHEETS: Icon = material("account_tree", &[icons::ACCOUNT_TREE]);
+    pub const VARIABLES: Icon = material("data_object", &[icons::DATA_OBJECT]);
+    pub const PLUGINS: Icon = material("extension", &[icons::EXTENSION]);
+    pub const LOG: Icon = material("list", &[icons::TERMINAL]);
+    pub const USAGE: Icon = material("schedule", &[icons::SCHEDULE]);
+}
+
+fn rail_items() -> Vec<RailItem> {
+    HomeSection::ALL
+        .into_iter()
+        .map(|s| RailItem::new(s.id(), s.label(), s.icon()))
+        .collect()
+}
+
 fn load_home_section() -> HomeSection {
-    match window()
+    window()
         .local_storage()
         .ok()
         .flatten()
         .and_then(|s| s.get_item(HOME_SECTION_KEY).ok().flatten())
-        .as_deref()
-    {
-        Some("variables") => HomeSection::Variables,
-        Some("plugins") => HomeSection::Plugins,
-        Some("log") => HomeSection::Log,
-        Some("usage") => HomeSection::Usage,
-        Some("settings") => HomeSection::Settings,
-        _ => HomeSection::Sheets,
-    }
+        .map_or_else(HomeSection::default, |id| HomeSection::from_id(&id))
 }
 
 fn save_home_section(sec: HomeSection) {
     if let Some(storage) = window().local_storage().ok().flatten() {
-        let val = match sec {
-            HomeSection::Sheets => "sheets",
-            HomeSection::Variables => "variables",
-            HomeSection::Plugins => "plugins",
-            HomeSection::Log => "log",
-            HomeSection::Usage => "usage",
-            HomeSection::Settings => "settings",
-        };
-        let _ = storage.set_item(HOME_SECTION_KEY, val);
+        let _ = storage.set_item(HOME_SECTION_KEY, sec.id());
     }
 }
 
@@ -62,6 +127,7 @@ fn save_home_section(sec: HomeSection) {
 pub fn HomePage() -> impl IntoView {
     let ed = use_editor();
     let section = RwSignal::new(load_home_section());
+    let selected = RwSignal::new(section.get_untracked().id().to_string());
 
     let select_section = move |s: HomeSection| {
         section.set(s);
@@ -70,62 +136,13 @@ pub fn HomePage() -> impl IntoView {
 
     view! {
         <div class="home-page" class:narrow=move || ed.narrow.get()>
-            <nav class="home-nav">
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Sheets
-                    title=move || t!("home-sheets")
-                    on:click=move |_| select_section(HomeSection::Sheets)
-                >
-                    <span class="mdi mdi-file-document-multiple-outline" aria-hidden="true"></span>
-                    <span>{move || t!("home-sheets")}</span>
-                </button>
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Variables
-                    title=move || t!("home-variables")
-                    on:click=move |_| select_section(HomeSection::Variables)
-                >
-                    <span class="mdi mdi-variable" aria-hidden="true"></span>
-                    <span>{move || t!("home-variables")}</span>
-                </button>
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Plugins
-                    title=move || t!("plugins-title")
-                    on:click=move |_| select_section(HomeSection::Plugins)
-                >
-                    <span class="mdi mdi-puzzle-outline" aria-hidden="true"></span>
-                    <span>{move || t!("plugins-title")}</span>
-                </button>
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Log
-                    title=move || t!("home-log")
-                    on:click=move |_| select_section(HomeSection::Log)
-                >
-                    <span class="mdi mdi-console" aria-hidden="true"></span>
-                    <span>{move || t!("home-log")}</span>
-                </button>
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Usage
-                    title=move || t!("home-usage")
-                    on:click=move |_| select_section(HomeSection::Usage)
-                >
-                    <span class="mdi mdi-chart-box-outline" aria-hidden="true"></span>
-                    <span>{move || t!("home-usage")}</span>
-                </button>
-                <button
-                    class="home-nav-item ctl"
-                    class:st-selected=move || section.get() == HomeSection::Settings
-                    title=move || t!("home-settings")
-                    on:click=move |_| select_section(HomeSection::Settings)
-                >
-                    <span class="mdi mdi-cog-outline" aria-hidden="true"></span>
-                    <span>{move || t!("home-settings")}</span>
-                </button>
-            </nav>
+            <NavigationRail
+                items=Signal::derive(rail_items)
+                selected=selected
+                on_select=Callback::new(move |id: String| select_section(HomeSection::from_id(&id)))
+                horizontal=Signal::derive(move || ed.narrow.get())
+                label=t!("home-navigation")
+            />
             <div class="home-content">
                 {move || match section.get() {
                     HomeSection::Sheets => view! { <SheetsSection /> }.into_any(),

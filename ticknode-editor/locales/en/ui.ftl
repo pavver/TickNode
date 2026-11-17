@@ -915,3 +915,6 @@ node-menu-delete =
        *[other] Delete { $count } nodes
     }
 toolbar-help = Canvas controls
+sheet-rename = Rename sheet
+sheet-title-label = Sheet title
+sheet-title-empty = The title cannot be empty

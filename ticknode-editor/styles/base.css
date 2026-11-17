@@ -312,7 +312,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .header .titles { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .header .subtitle { display: flex; align-items: center; gap: calc(var(--du) * 1.5); }
-.header .actions { display: flex; gap: calc(var(--du) * 1); }
+.header .actions { display: flex; gap: calc(var(--du) * 1); margin-left: auto; }
 
 .workspace { flex: 1; display: flex; min-height: 0; position: relative; }
 

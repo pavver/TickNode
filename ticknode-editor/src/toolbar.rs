@@ -1,5 +1,7 @@
 //! Workspace toolbar.
 
+mod title;
+
 use crate::canvas::fit_view;
 use crate::i18n::t;
 use crate::logo::Logo;
@@ -27,21 +29,6 @@ pub fn Header() -> impl IntoView {
 
     let is_sheet_page = move || ed.open_sheet.get().is_some();
 
-    let current_sheet = move || {
-        ed.open_sheet.get().and_then(|id| {
-            ed.sheets
-                .with(|list| list.iter().find(|s| s.info.id == id).cloned())
-        })
-    };
-
-    let sheet_title = move || {
-        current_sheet()
-            .map(|s| s.info.title)
-            .unwrap_or_else(|| "TickNode".to_string())
-    };
-
-    let is_sheet_disabled = move || current_sheet().is_some_and(|s| !s.info.enabled);
-
     view! {
         <header class="header">
             {move || is_sheet_page().then(|| view! {
@@ -55,20 +42,26 @@ pub fn Header() -> impl IntoView {
                 </button>
             })}
             <Logo />
-            <div class="titles">
-                <div class="header-title-row">
-                    <span class="t-app-title ellipsis">
-                        {move || if is_sheet_page() { sheet_title() } else { "TickNode".to_string() }}
-                    </span>
-                    {move || (is_sheet_page() && is_sheet_disabled()).then(|| view! {
-                        <span class="chip st-idle">{move || t!("sheet-disabled")}</span>
-                    })}
-                </div>
-                <span class="subtitle t-caption">
-                    <StatusDot class=Signal::derive(move || status().0) />
-                    <span class="ellipsis">{move || status().1}</span>
-                </span>
-            </div>
+            {move || if is_sheet_page() {
+                view! {
+                    <title::SheetTitle
+                        status_class=Signal::derive(move || status().0)
+                        status_text=Signal::derive(move || status().1)
+                    />
+                }.into_any()
+            } else {
+                view! {
+                    <div class="titles">
+                        <div class="header-title-row">
+                            <span class="t-app-title ellipsis">"TickNode"</span>
+                        </div>
+                        <span class="subtitle t-caption">
+                            <StatusDot class=Signal::derive(move || status().0) />
+                            <span class="ellipsis">{move || status().1}</span>
+                        </span>
+                    </div>
+                }.into_any()
+            }}
             <div class="actions">
                 {move || is_sheet_page().then(|| view! {
                     <button

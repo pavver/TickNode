@@ -393,3 +393,7 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+
+/* Sheet title being renamed: the text field replaces the title and status lines. */
+.header .titles.sheet-title-edit { flex: 0 1 calc(var(--du) * 100); justify-content: center; }
+.header-title-row .op-icon-btn { flex: none; }

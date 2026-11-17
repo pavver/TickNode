@@ -927,3 +927,6 @@ node-menu-delete =
        *[other] Видалити { $count } нод
     }
 toolbar-help = Керування канвою
+sheet-rename = Перейменувати аркуш
+sheet-title-label = Назва аркуша
+sheet-title-empty = Назва не може бути порожньою
